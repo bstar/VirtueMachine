@@ -18,6 +18,12 @@ Allowed exceptions:
 - None by default.
 - If an exception is ever required, it must be explicitly approved and documented in `docs/architecture/new/decision-log.md`.
 
+## Submodule Pinning
+
+- `legacy/u6-decompiled` is pinned to a specific commit by this repository.
+- Do not update the submodule pointer casually.
+- Any pointer bump must be an explicit, reviewed change with rationale and compatibility notes.
+
 ## Porting Workflow
 
 1. Read and analyze legacy code in `legacy/u6-decompiled/SRC/`.

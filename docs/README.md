@@ -33,3 +33,4 @@ This documentation system keeps legacy reverse-engineering context and modern ar
 ## Policy
 
 - `docs/policies/pristine-legacy-policy.md`
+- `docs/policies/legacy-submodule-update.md`

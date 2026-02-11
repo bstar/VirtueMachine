@@ -16,9 +16,32 @@ The legacy submodule tracks the original decompiled project:
 
 Keep this source immutable in day-to-day work and implement all new behavior under `modern/`.
 
+The exact legacy revision is pinned by this repository commit (git submodule commit SHA), so contributors get reproducible source snapshots.
+
+Quick check:
+
+```bash
+git submodule status
+```
+
 ## Workflow
 
 1. Analyze legacy behavior in `legacy/u6-decompiled/SRC/`.
 2. Record findings and symbol meaning in `docs/`.
 3. Implement modern systems only under `modern/`.
 4. Run policy checks to ensure legacy remains pristine.
+
+## Assets (Untracked)
+
+Original game assets are not committed. Keep them outside the repo (or under ignored `local/`).
+
+Sync required files into the local runtime assets folder:
+
+```bash
+./modern/tools/sync_assets.sh /home/bstar/projects/ULTIMA6/ultima6
+```
+
+Defaults:
+
+- Source: `../ultima6` (relative to repo root) unless `U6_ASSET_SRC` is set.
+- Destination: `modern/assets/runtime` unless `U6_ASSET_DEST` is set.

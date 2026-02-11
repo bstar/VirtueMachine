@@ -1,0 +1,5 @@
+# Optional assets. Missing files generate warnings but do not fail sync.
+# One file per line.
+
+u6face0.bmp
+stats.bmp
