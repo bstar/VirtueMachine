@@ -127,7 +127,8 @@ This checklist is intentionally mutable.
 
 #### Slice R2: Occlusion/Passability-Aware Composition
 
-- `[ ]` Implement tile/object composition rules for doorway openings, wall edges, and overlap priority
+- `[~]` Implement tile/object composition rules for doorway openings, wall edges, and overlap priority
+- `[x]` Add first-pass entity/NPC overlay render layer from legacy `savegame/objlist` actor records
 - `[ ]` Ensure interaction probes use the same object layer coordinates as renderer
 - `[ ]` Add regression cases for corner/edge overlaps and transparency correctness
 
@@ -171,4 +172,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Start R2 by implementing entity/NPC layer rendering with deterministic draw ordering over terrain/object layers.
+Harden R2 entity layering: add occlusion/order parity checks for actor-vs-wall/door transitions and document residual gaps.

@@ -15,6 +15,7 @@ Minimal browser client prototype:
 - overlay debug labels toggle (off by default; saved in browser `localStorage`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
+- first-pass legacy entity/NPC overlay layer from `savegame/objlist` actor records
 - deterministic `sim.tick`-driven `animdata` tile animation (water/swamp and other animated sets)
 - legacy VGA palette-cycle animation for fire/water hues (deterministic, tick-driven)
 - animation freeze toggle for render/occlusion debugging (`F` or UI dropdown)

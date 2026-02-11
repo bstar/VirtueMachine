@@ -23,6 +23,8 @@ const LEGACY_CORNER_TABLE = [
 ];
 const OBJ_COORD_USE_MASK = 0x18;
 const OBJ_COORD_USE_LOCXYZ = 0x00;
+const ENTITY_TYPE_ACTOR_MIN = 0x153;
+const ENTITY_TYPE_ACTOR_MAX = 0x1af;
 const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
 const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
 const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
@@ -90,6 +92,7 @@ const statClock = document.getElementById("statClock");
 const statDate = document.getElementById("statDate");
 const statTile = document.getElementById("statTile");
 const statObjects = document.getElementById("statObjects");
+const statEntities = document.getElementById("statEntities");
 const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
 const statHash = document.getElementById("statHash");
@@ -173,10 +176,12 @@ const state = {
   mapCtx: null,
   tileSet: null,
   objectLayer: null,
+  entityLayer: null,
   animData: null,
   animationFrozen: false,
   frozenAnimationTick: null,
   objectOverlayCount: 0,
+  entityOverlayCount: 0,
   showGrid: false,
   showOverlayDebug: false,
   enablePaletteFx: true,
@@ -654,6 +659,91 @@ class U6ObjectLayerJS {
 
   objectsAt(x, y, z) {
     return this.byCoord.get(this.coordKey(x, y, z)) ?? [];
+  }
+}
+
+class U6EntityLayerJS {
+  constructor(baseTiles) {
+    this.baseTiles = baseTiles;
+    this.entries = [];
+    this.totalLoaded = 0;
+  }
+
+  isRenderableEntityType(type) {
+    return type >= ENTITY_TYPE_ACTOR_MIN && type <= ENTITY_TYPE_ACTOR_MAX;
+  }
+
+  parseObjList(bytes) {
+    if (!bytes || bytes.length < 0x0900) {
+      return [];
+    }
+    const objStatusOff = 0x0000;
+    const objPosOff = 0x0100;
+    const objShapeOff = 0x0400;
+    const npcStatusOff = 0x0800;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const out = [];
+    for (let id = 0; id < 0x100; id += 1) {
+      const status = bytes[objStatusOff + id];
+      if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
+        continue;
+      }
+      const shapeType = dv.getUint16(objShapeOff + (id * 2), true);
+      if (shapeType === 0) {
+        continue;
+      }
+      const type = shapeType & 0x03ff;
+      if (!this.isRenderableEntityType(type)) {
+        continue;
+      }
+      const frame = shapeType >>> 10;
+      const pos = objPosOff + (id * 3);
+      const x = bytes[pos + 0] | ((bytes[pos + 1] & 0x03) << 8);
+      const y = (bytes[pos + 1] >> 2) | ((bytes[pos + 2] & 0x0f) << 6);
+      const z = (bytes[pos + 2] >> 4) & 0x0f;
+      const baseTile = this.baseTiles[type] ?? 0;
+      out.push({
+        id,
+        x,
+        y,
+        z,
+        status,
+        npcStatus: bytes[npcStatusOff + id],
+        type,
+        frame,
+        baseTile,
+        tileId: (baseTile + frame) & 0xffff,
+        order: id
+      });
+    }
+    out.sort((a, b) => a.order - b.order);
+    return out;
+  }
+
+  load(bytes) {
+    this.entries = this.parseObjList(bytes);
+    this.totalLoaded = this.entries.length;
+  }
+
+  entitiesInView(startX, startY, z, w, h) {
+    const endX = startX + w;
+    const endY = startY + h;
+    const out = [];
+    for (const e of this.entries) {
+      if (e.z !== z) {
+        continue;
+      }
+      if (e.x < startX || e.x >= endX || e.y < startY || e.y >= endY) {
+        continue;
+      }
+      out.push(e);
+    }
+    out.sort((a, b) => {
+      if (a.y !== b.y) return a.y - b.y;
+      if (a.x !== b.x) return a.x - b.x;
+      return a.order - b.order;
+    });
+    return out;
   }
 }
 
@@ -1534,6 +1624,7 @@ function drawTileGrid() {
   let centerAnimatedTile = 0;
   let centerPaletteBand = "none";
   let overlayCount = 0;
+  let entityCount = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
       const wx = startX + gx;
@@ -1639,7 +1730,27 @@ function drawTileGrid() {
       }
     }
   }
+  if (state.tileSet && state.entityLayer) {
+    const entities = state.entityLayer.entitiesInView(startX, startY, state.sim.world.map_z, VIEW_W, VIEW_H);
+    for (const e of entities) {
+      if (viewCtx && !viewCtx.visibleAtWorld(e.x, e.y)) {
+        continue;
+      }
+      const gx = e.x - startX;
+      const gy = e.y - startY;
+      if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+        continue;
+      }
+      const px = gx * TILE_SIZE;
+      const py = gy * TILE_SIZE;
+      const animEntityTile = resolveAnimatedObjectTile(e);
+      const ec = state.tileSet.tileCanvas(animEntityTile, renderPalette, renderPaletteKey);
+      ctx.drawImage(ec, px, py, TILE_SIZE, TILE_SIZE);
+      entityCount += 1;
+    }
+  }
   state.objectOverlayCount = overlayCount;
+  state.entityOverlayCount = entityCount;
   state.centerRawTile = centerRawTile;
   state.centerAnimatedTile = centerAnimatedTile || centerTile;
   state.centerPaletteBand = centerPaletteBand;
@@ -1664,6 +1775,13 @@ function updateStats() {
     statObjects.textContent = `${state.objectOverlayCount} / ${state.objectLayer.totalLoaded}`;
   } else {
     statObjects.textContent = "0 / 0";
+  }
+  if (statEntities) {
+    if (state.entityLayer) {
+      statEntities.textContent = `${state.entityOverlayCount} / ${state.entityLayer.totalLoaded}`;
+    } else {
+      statEntities.textContent = "0 / 0";
+    }
   }
   statHash.textContent = hashHex(simStateHash(state.sim));
   if (statPalettePhase) {
@@ -1866,7 +1984,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -1876,9 +1994,10 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/maptiles.vga"),
       fetch("../assets/runtime/objtiles.vga"),
       fetch("../assets/runtime/basetile"),
-      fetch("../assets/runtime/animdata")
+      fetch("../assets/runtime/animdata"),
+      fetch("../assets/runtime/savegame/objlist")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -1888,7 +2007,8 @@ async function loadRuntimeAssets() {
       mapTileRes.arrayBuffer(),
       objTileRes.arrayBuffer(),
       baseTileRes.arrayBuffer(),
-      animRes.arrayBuffer()
+      animRes.arrayBuffer(),
+      objListRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -1934,6 +2054,12 @@ async function loadRuntimeAssets() {
       const baseTiles = buildBaseTileTable(new Uint8Array(baseTileBuf));
       state.objectLayer = new U6ObjectLayerJS(baseTiles);
       await state.objectLayer.loadOutdoor((name) => fetch(`../assets/runtime/savegame/${name}`));
+      if (objListRes.ok && objListBuf.byteLength >= 0x0900) {
+        state.entityLayer = new U6EntityLayerJS(baseTiles);
+        state.entityLayer.load(new Uint8Array(objListBuf));
+      } else {
+        state.entityLayer = null;
+      }
       if (animRes.ok && animBuf.byteLength >= 2) {
         state.animData = U6AnimDataJS.fromBytes(new Uint8Array(animBuf));
       } else {
@@ -1941,6 +2067,7 @@ async function loadRuntimeAssets() {
       }
     } else {
       state.objectLayer = null;
+      state.entityLayer = null;
       state.animData = null;
     }
 
@@ -1955,9 +2082,11 @@ async function loadRuntimeAssets() {
     if (state.tileSet) {
       if (state.objectLayer && state.objectLayer.filesLoaded > 0) {
         if (state.animData) {
-          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files). Animated tile remaps active (${state.animData.entries.length} entries).`;
+          const entityMsg = state.entityLayer ? ` Entity layer active (${state.entityLayer.totalLoaded} objlist actors).` : "";
+          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files). Animated tile remaps active (${state.animData.entries.length} entries).${entityMsg}`;
         } else {
-          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files).`;
+          const entityMsg = state.entityLayer ? ` Entity layer active (${state.entityLayer.totalLoaded} objlist actors).` : "";
+          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files).${entityMsg}`;
         }
       } else {
         diagBox.textContent = "Runtime assets loaded with tile decoder path (tileindx/masktype/maptiles/objtiles). Rendering bitmap tiles.";
@@ -1971,6 +2100,7 @@ async function loadRuntimeAssets() {
     state.mapCtx = null;
     state.tileSet = null;
     state.objectLayer = null;
+    state.entityLayer = null;
     state.animData = null;
     state.palette = null;
     state.basePalette = null;
