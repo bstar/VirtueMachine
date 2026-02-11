@@ -1129,10 +1129,10 @@ async function loadRuntimeAssets() {
 
 window.addEventListener("keydown", (ev) => {
   const k = ev.key.toLowerCase();
-  if (k === "w") queueMove(0, -1);
-  else if (k === "s") queueMove(0, 1);
-  else if (k === "a") queueMove(-1, 0);
-  else if (k === "d") queueMove(1, 0);
+  if (k === "w" || k === "k") queueMove(0, -1);
+  else if (k === "s" || k === "j") queueMove(0, 1);
+  else if (k === "a" || k === "h") queueMove(-1, 0);
+  else if (k === "d" || k === "l") queueMove(1, 0);
   else if (k === "r") resetRun();
   else if (k === "v") verifyReplayStability();
   else return;
