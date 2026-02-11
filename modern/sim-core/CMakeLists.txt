@@ -2,6 +2,7 @@ add_library(sim_core STATIC
   src/sim_core.c
   src/u6_entities.c
   src/u6_interaction.c
+  src/u6_objblk.c
   src/u6_objlist.c
   src/u6_map.c
 )
@@ -42,6 +43,14 @@ add_executable(sim_core_u6_map_test
 target_link_libraries(sim_core_u6_map_test PRIVATE sim_core)
 
 add_test(NAME sim_core_u6_map_test COMMAND sim_core_u6_map_test)
+
+add_executable(sim_core_u6_objblk_test
+  tests/test_u6_objblk.c
+)
+
+target_link_libraries(sim_core_u6_objblk_test PRIVATE sim_core)
+
+add_test(NAME sim_core_u6_objblk_test COMMAND sim_core_u6_objblk_test)
 
 add_executable(sim_core_clock_rollover_test
   tests/test_clock_rollover.c

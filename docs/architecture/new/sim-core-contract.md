@@ -211,6 +211,25 @@ Deterministic fixtures validate success/failure paths and event codes:
 
 - `modern/sim-core/tests/test_interaction.c`
 
+## R1 Object Overlay Boundary Status
+
+Added read-only object block compatibility boundary:
+
+- `modern/sim-core/include/u6_objblk.h`
+- `modern/sim-core/src/u6_objblk.c`
+
+Current scope:
+
+- parse `savegame/objblk??` record payloads (`count + 8-byte records`)
+- decode packed legacy coord bits into `(x, y, z)`
+- derive shape `type/frame` from legacy `ObjShapeType`
+- load outdoor area files (`aa..hh`) from savegame directory
+- deterministic render-order sort helper for presentation stability
+
+Deterministic fixture coverage:
+
+- `modern/sim-core/tests/test_u6_objblk.c`
+
 ## Legacy Mapping Requirement
 
 For each implemented subsystem, add:

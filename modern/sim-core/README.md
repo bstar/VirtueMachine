@@ -8,15 +8,18 @@ Authoritative simulation prototype with deterministic tick stepping.
 - `include/u6_entities.h`: typed object/NPC subset containers and persistence helpers.
 - `include/u6_interaction.h`: deterministic interaction request/result boundary for talk/use/open flows.
 - `include/u6_objlist.h`: legacy `savegame/objlist` compatibility constants and helpers.
+- `include/u6_objblk.h`: legacy `savegame/objblk??` read-only parse/load helpers for static world objects.
 - `include/u6_map.h`: legacy `map`/`chunks` read-only compatibility API.
 - `src/sim_core.c`: deterministic tick loop, command application, state hash.
 - `src/u6_entities.c`: typed entity state helpers, deterministic patrol stepping, subset serialization.
 - `src/u6_interaction.c`: deterministic interaction flow handlers and result codes.
 - `src/u6_objlist.c`: extract/patch helpers for the legacy `objlist` tail block.
+- `src/u6_objblk.c`: read-only object-block parser/loader and deterministic render-order sort helper.
 - `src/u6_map.c`: read-only map window loading, chunk index decode, chunk/tile reads.
 - `tests/test_replay.c`: replay determinism + golden-hash regression check.
 - `tests/test_world_state_io.c`: world state serialization/deserialization + hash invariants.
 - `tests/test_objlist_compat.c`: legacy `objlist` compatibility and malformed-input checks.
+- `tests/test_u6_objblk.c`: `objblk` parse/load and deterministic ordering fixture tests.
 - `tests/test_u6_map.c`: synthetic fixture validation for map/chunk compatibility.
 - `tests/test_clock_rollover.c`: deterministic minute/hour/day/month/year rollover regression tests.
 - `tests/test_snapshot_persistence.c`: versioned snapshot roundtrip + corruption/error-path tests.

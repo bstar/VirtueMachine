@@ -120,9 +120,9 @@ This checklist is intentionally mutable.
 #### Slice R1: Static Object Layer Rendering (Doors/Fountains/Tables/Food)
 
 - `[x]` Identify and document legacy object placement source files/records for world map overlays
-- `[ ]` Add read-only loader for static world object placements into `sim-core` data surface
+- `[x]` Add read-only loader for static world object placements into `sim-core` data surface
 - `[x]` Render static object layer in `client-web` above terrain with deterministic ordering rules
-- `[ ]` Add fixture tests for placement decode and draw-order determinism
+- `[x]` Add fixture tests for placement decode and draw-order determinism
 - `[ ]` Capture parity screenshots at known coordinates (legacy reference vs web client)
 
 #### Slice R2: Occlusion/Passability-Aware Composition
@@ -167,4 +167,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `R1`: static object layer loader + renderer path for doors/fountains/tables/food.
+Capture R1 canonical parity screenshots (legacy reference vs web client) and document any visible gaps.

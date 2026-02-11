@@ -175,3 +175,15 @@ Impact on Port: enables faithful static object overlay rendering (doors/fountain
 Next Validation Step: compare selected known map locations against reference captures and refine draw ordering/occlusion rules for multi-object stacks.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../architecture/new/system-overview.md`, `../progress.md`
+
+Finding ID: FIND-0014
+Date: 2026-02-11
+Area: Read-Only `objblk` Compatibility Boundary in Sim-Core
+Legacy Source Ref: `SRC/seg_1184.c` (`C_1184_2DEF`, `__ObjectsDeserialize`), `SRC/u6.h` (`GetCoordX/GetCoordY/GetCoordZ`, `GetType/GetFrame`)
+Summary: added a deterministic parser/loader module for legacy `savegame/objblk??` records into a typed modern boundary, including stable render-order sorting.
+Evidence: `modern/sim-core/include/u6_objblk.h`, `modern/sim-core/src/u6_objblk.c`, and `modern/sim-core/tests/test_u6_objblk.c`.
+Confidence: high
+Impact on Port: removes client-only parsing assumptions and establishes a testable data source for world prop overlays and future interaction parity.
+Next Validation Step: replace direct JS `objblk` parsing path with data sourced through shared sim-core boundary.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../architecture/new/sim-core-contract.md`, `../progress.md`
