@@ -15,6 +15,12 @@ const TERRAIN_PALETTE_BASE = [
   0xc8, 0xd4, 0xe0, 0xe8,
   0xf0, 0xf4, 0xf8, 0xfc
 ];
+const LEGACY_CORNER_TABLE = [
+  0, 0, 1, 10,
+  0, 0, 2, 2,
+  1, 5, 1, 1,
+  11, 0, 2, 2
+];
 
 const HASH_OFFSET = 1469598103934665603n;
 const HASH_PRIME = 1099511628211n;
@@ -176,6 +182,10 @@ class U6TileSetJS {
     this.cache = new Map();
   }
 
+  maskTypeFor(tileId) {
+    return tileId >= 0 && tileId < this.maskType.length ? this.maskType[tileId] : 0;
+  }
+
   getTileOffset(tileId) {
     if (tileId < 0 || tileId >= (this.tileIndex.byteLength / 2)) {
       return -1;
@@ -218,7 +228,7 @@ class U6TileSetJS {
       return out;
     }
 
-    const mask = tileId < this.maskType.length ? this.maskType[tileId] : 0;
+    const mask = this.maskTypeFor(tileId);
     if (mask === 10) {
       return this.decodePixelBlockTile(tileId, off);
     }
@@ -230,8 +240,8 @@ class U6TileSetJS {
 
   buildTileCanvas(tileId) {
     const tilePixels = this.decodeTilePixels(tileId);
-    const mask = tileId < this.maskType.length ? this.maskType[tileId] : 0;
-    const transparent = (mask === 5 || mask === 10);
+    const mask = this.maskTypeFor(tileId);
+    const legacyCornerOverlay = tileId >= 0x100 && tileId < 0x120;
     const c = document.createElement("canvas");
     c.width = 16;
     c.height = 16;
@@ -241,7 +251,15 @@ class U6TileSetJS {
     for (let i = 0; i < 256; i += 1) {
       const palIdx = tilePixels[i];
       const rgb = this.palette[palIdx] ?? [0, 0, 0];
-      const a = (transparent && palIdx === 0xff) ? 0 : 255;
+      let a = 255;
+      if (mask === 10) {
+        a = (palIdx === 0xff || palIdx === 0x00) ? 0 : 255;
+      } else if (mask === 5) {
+        a = (palIdx === 0xff || palIdx === 0x00) ? 0 : 255;
+      } else if (legacyCornerOverlay) {
+        /* Corner overlay tiles in this range use 0 as transparent over base terrain. */
+        a = (palIdx === 0x00) ? 0 : 255;
+      }
       const p = i * 4;
       img.data[p + 0] = rgb[0];
       img.data[p + 1] = rgb[1];
@@ -618,6 +636,80 @@ function tilePaletteIndex(tileId) {
   return (base + (tileId & 0x03) + (weight >> 2)) & 0xff;
 }
 
+function terrainOf(tileId) {
+  if (!state.terrainType || tileId < 0 || tileId >= state.terrainType.length) {
+    return 0;
+  }
+  return state.terrainType[tileId];
+}
+
+function hasWallTerrain(tileId) {
+  return (terrainOf(tileId) & 0x04) !== 0;
+}
+
+function applyLegacyCornerVariant(tileId, wx, wy, wz) {
+  /* Heuristic guard: in the web prototype we don't have full AreaFlags/object
+     occlusion state from legacy `seg_1100`; remapping mid/high wall families
+     (notably 0xC0+) can incorrectly turn wood walls into stone variants. */
+  if (tileId >= 0x0c0 && tileId < 0x100) {
+    return tileId;
+  }
+
+  const t = terrainOf(tileId);
+  const terrainLow = t & 0x0f;
+  if (terrainLow !== (0x04 | 0x02)) {
+    return tileId;
+  }
+
+  let base = tileId & 0x0f0;
+  if (base < 0x090) {
+    base = 0x090;
+  }
+
+  const north = state.mapCtx.tileAt(wx, wy - 1, wz);
+  const east = state.mapCtx.tileAt(wx + 1, wy, wz);
+  const south = state.mapCtx.tileAt(wx, wy + 1, wz);
+  const west = state.mapCtx.tileAt(wx - 1, wy, wz);
+
+  /* Legacy code uses visibility flags; in the web slice we approximate with
+     wall-neighbor presence so corner variants still resolve consistently. */
+  let bp0c = 0;
+  if (hasWallTerrain(north)) bp0c |= 8;
+  if (hasWallTerrain(east)) bp0c |= 4;
+  if (hasWallTerrain(south)) bp0c |= 2;
+  if (hasWallTerrain(west)) bp0c |= 1;
+
+  if (bp0c === 0x0f || bp0c === 0x00) {
+    return tileId;
+  }
+
+  let imped = (t >> 4) & 0x0f;
+  if (imped & 4) {
+    const nt = terrainOf(north);
+    const nl = nt & 0x0f;
+    if (!(nl & 0x04) || !(nt & 0x20)) {
+      imped &= ~8;
+    }
+  }
+  if (imped & 2) {
+    const wt = terrainOf(west);
+    const wl = wt & 0x0f;
+    if (!(wl & 0x04) || !(wt & 0x40)) {
+      imped &= ~1;
+    }
+  }
+
+  if (imped === (4 | 2 | 1) || imped === (8 | 2 | 1) || imped > (8 | 4) || imped === bp0c) {
+    imped &= bp0c;
+    if (imped === (2 | 1) || imped === (8 | 4)) {
+      return 0x100 + (base >> 3) - (0x090 >> 3) + LEGACY_CORNER_TABLE[imped];
+    }
+    return base + LEGACY_CORNER_TABLE[imped];
+  }
+
+  return tileId;
+}
+
 function tileColor(t) {
   if (!state.palette) {
     const [r, g, b] = fallbackTileColor(t);
@@ -642,10 +734,14 @@ function drawTileGrid() {
       const wx = startX + gx;
       const wy = startY + gy;
       let t = 0;
+      let rawTile = 0;
       if (state.mapCtx) {
-        t = state.mapCtx.tileAt(wx, wy, state.sim.world.map_z);
+        rawTile = state.mapCtx.tileAt(wx, wy, state.sim.world.map_z);
+        t = rawTile;
+        t = applyLegacyCornerVariant(t, wx, wy, state.sim.world.map_z);
       } else {
         t = (wx * 7 + wy * 13) & 0xff;
+        rawTile = t;
       }
       if (gx === (VIEW_W >> 1) && gy === (VIEW_H >> 1)) {
         centerTile = t;
@@ -653,8 +749,10 @@ function drawTileGrid() {
       const px = gx * TILE_SIZE;
       const py = gy * TILE_SIZE;
       if (state.tileSet) {
-        const tc = state.tileSet.tileCanvas(t);
+        const baseTileCanvas = state.tileSet.tileCanvas(rawTile);
         ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(baseTileCanvas, px, py, TILE_SIZE, TILE_SIZE);
+        const tc = state.tileSet.tileCanvas(t);
         ctx.drawImage(tc, px, py, TILE_SIZE, TILE_SIZE);
       } else {
         ctx.fillStyle = tileColor(t);
