@@ -50,6 +50,12 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Or run the one-command local test script:
+
+```bash
+./modern/tools/test.sh
+```
+
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
 - `docs/policies/sandbox-escalation-policy.md`

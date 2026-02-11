@@ -38,8 +38,8 @@ Legend:
 
 ### Engineering Hygiene
 
-- `[ ]` Add a one-command local test runner script (for example `modern/tools/test.sh`)
-- `[ ]` Add CI job for CMake build + CTest in flake shell context (or equivalent environment)
+- `[x]` Add a one-command local test runner script (for example `modern/tools/test.sh`)
+- `[x]` Add CI job for CMake build + CTest in flake shell context (or equivalent environment)
 
 ## Known Blockers / Risks
 
@@ -49,4 +49,4 @@ Legend:
 
 ## Next Immediate Task
 
-Implement `M2 Slice 2` (`objlist` persistence compatibility boundary) before map/chunk/object streaming.
+Implement `M2 Slice 3`: start map/chunk streaming compatibility by porting a minimal read-only subset of legacy map loading behavior (`map` + `chunks`) into `sim-core`.
