@@ -371,6 +371,23 @@ body::before {
   padding: 0.25rem 0.35rem;
 }
 
+.control-btn {
+  width: 100%;
+  margin-top: 0.25rem;
+  border: 1px solid var(--line-strong);
+  background: var(--bg1);
+  color: var(--text);
+  font-family: var(--ui-font), "Silkscreen", monospace;
+  font-size: calc(var(--px-step) * 1.5);
+  padding: 0.25rem 0.35rem;
+  text-transform: lowercase;
+}
+
+.control-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .diag {
   border: 1px solid var(--line);
   background: var(--panel-soft);

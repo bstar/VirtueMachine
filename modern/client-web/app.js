@@ -70,6 +70,9 @@ const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
 const layoutSelect = document.getElementById("layoutSelect");
 const fontSelect = document.getElementById("fontSelect");
+const locationSelect = document.getElementById("locationSelect");
+const jumpButton = document.getElementById("jumpButton");
+const captureButton = document.getElementById("captureButton");
 
 const THEME_KEY = "vm_theme";
 const LAYOUT_KEY = "vm_layout";
@@ -94,6 +97,13 @@ const LAYOUTS = [
   "ledger-focus"
 ];
 const FONTS = ["blockblueprint", "kaijuz", "orangekid", "silkscreen"];
+const CAPTURE_PRESETS = [
+  { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
+  { id: "wood_corner_a", label: "Wood Corner A (355,411,0)", x: 355, y: 411, z: 0 },
+  { id: "wood_corner_b", label: "Wood Corner B (356,411,0)", x: 356, y: 411, z: 0 },
+  { id: "britain_core", label: "Britain Core (337,365,0)", x: 337, y: 365, z: 0 },
+  { id: "farmland", label: "Farmland Props (292,431,0)", x: 292, y: 431, z: 0 }
+];
 
 const INITIAL_WORLD = Object.freeze({
   is_on_quest: 0,
@@ -584,6 +594,51 @@ function initFont() {
       setFont(fontSelect.value);
     });
   }
+}
+
+function initCapturePresets() {
+  if (!locationSelect) {
+    return;
+  }
+  locationSelect.innerHTML = "";
+  for (const p of CAPTURE_PRESETS) {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.label;
+    locationSelect.appendChild(opt);
+  }
+}
+
+function activeCapturePreset() {
+  const id = locationSelect ? locationSelect.value : "";
+  return CAPTURE_PRESETS.find((p) => p.id === id) ?? CAPTURE_PRESETS[0];
+}
+
+function jumpToPreset() {
+  const p = activeCapturePreset();
+  if (!p) {
+    return;
+  }
+  state.queue.length = 0;
+  state.sim.world.map_x = p.x | 0;
+  state.sim.world.map_y = p.y | 0;
+  state.sim.world.map_z = p.z | 0;
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Moved camera focus to preset ${p.label}.`;
+}
+
+function captureViewportPng() {
+  const p = activeCapturePreset();
+  const tag = p ? p.id : "custom";
+  const filename = `virtuemachine-${tag}-${state.sim.world.map_x}-${state.sim.world.map_y}-${state.sim.world.map_z}.png`;
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Captured ${filename}`;
 }
 
 function cloneSimState(sim) {
@@ -1133,6 +1188,8 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "s" || k === "j") queueMove(0, 1);
   else if (k === "a" || k === "h") queueMove(-1, 0);
   else if (k === "d" || k === "l") queueMove(1, 0);
+  else if (k === "g") jumpToPreset();
+  else if (k === "p") captureViewportPng();
   else if (k === "r") resetRun();
   else if (k === "v") verifyReplayStability();
   else return;
@@ -1149,3 +1206,10 @@ loadRuntimeAssets().then(() => {
 initTheme();
 initLayout();
 initFont();
+initCapturePresets();
+if (jumpButton) {
+  jumpButton.addEventListener("click", jumpToPreset);
+}
+if (captureButton) {
+  captureButton.addEventListener("click", captureViewportPng);
+}

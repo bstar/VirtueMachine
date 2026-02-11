@@ -99,6 +99,13 @@
             <option value="silkscreen">Silkscreen Fallback</option>
           </select>
         </div>
+        <div class="stat">
+          <span>Capture Preset</span>
+          <label class="theme-label" for="locationSelect">Canonical Location</label>
+          <select id="locationSelect" class="theme-select"></select>
+          <button id="jumpButton" class="control-btn" type="button">jump to preset (G)</button>
+          <button id="captureButton" class="control-btn" type="button">capture viewport png (P)</button>
+        </div>
         <a class="replay-link disabled" id="replayDownload" href="#">download replay checkpoints.csv</a>
         <div class="diag" id="diagBox">
           awaiting runtime checks...
@@ -106,8 +113,10 @@
 
         <div class="help">
           <h2>Controls</h2>
-          <p>`W A S D` move</p>
+          <p>`W A S D` or `H J K L` move</p>
           <p>`R` recenter</p>
+          <p>`G` jump to selected capture preset</p>
+          <p>`P` capture viewport png</p>
           <p>`V` verify replay stability</p>
         </div>
       </aside>

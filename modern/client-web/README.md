@@ -3,7 +3,7 @@
 Minimal browser client prototype:
 
 - fixed-tick runtime loop
-- command-envelope-driven movement input (`W/A/S/D`)
+- command-envelope-driven movement input (`W/A/S/D` + `H/J/K/L`)
 - deterministic world clock/date progression in HUD
 - state hash display for replay/debug tracking
 - replay stability check (`V`) with downloadable checkpoint CSV
@@ -13,6 +13,7 @@ Minimal browser client prototype:
 - optional self-hosted retro fonts (`modern/client-web/fonts/README.md`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for select world props (doors, fountains, tables, food)
+- canonical capture presets + one-click viewport PNG export for parity screenshot workflow
 
 ## Run
 
@@ -50,8 +51,10 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 
 ## Controls
 
-- `W/A/S/D`: queue movement commands
+- `W/A/S/D` or `H/J/K/L`: queue movement commands
 - `R`: reset run state to initial seed/world
+- `G`: jump to selected canonical capture preset
+- `P`: capture viewport PNG
 - `V`: run replay determinism verification for current command log and produce downloadable checkpoints CSV
 
 ## Layout Variants
