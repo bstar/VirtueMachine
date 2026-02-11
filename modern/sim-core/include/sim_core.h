@@ -73,6 +73,15 @@ int sim_step_ticks(SimState *state,
 
 uint64_t sim_state_hash(const SimState *state);
 
+size_t sim_command_wire_size(void);
+int sim_command_serialize(const SimCommand *cmd, uint8_t *out, size_t out_size);
+int sim_command_deserialize(SimCommand *cmd, const uint8_t *in, size_t in_size);
+int sim_command_stream_deserialize(SimCommand *out,
+                                   size_t out_capacity,
+                                   const uint8_t *in,
+                                   size_t in_size,
+                                   size_t *out_count);
+
 size_t sim_world_state_size(void);
 int sim_world_serialize(const SimWorldState *world, uint8_t *out, size_t out_size);
 int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_size);
@@ -80,5 +89,11 @@ int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_siz
 size_t sim_state_snapshot_size(void);
 int sim_state_snapshot_serialize(const SimState *state, uint8_t *out, size_t out_size);
 int sim_state_snapshot_deserialize(SimState *state, const uint8_t *in, size_t in_size);
+int sim_write_replay_checkpoints(const SimState *initial_state,
+                                 const SimCommand *commands,
+                                 size_t command_count,
+                                 uint32_t total_ticks,
+                                 uint32_t checkpoint_interval,
+                                 const char *path);
 
 #endif

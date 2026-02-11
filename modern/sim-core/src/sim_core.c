@@ -1,5 +1,6 @@
 #include "sim_core.h"
 
+#include <stdio.h>
 #include <stddef.h>
 
 enum {
@@ -12,7 +13,8 @@ enum {
   U6M_SNAPSHOT_MAGIC = 0x534d3655u, /* "U6MS" little-endian */
   U6M_SNAPSHOT_VERSION = 1,
   U6M_SNAPSHOT_HEADER_SIZE = 16,
-  U6M_SNAPSHOT_PAYLOAD_SIZE = 16 + U6M_WORLD_BLOB_SIZE
+  U6M_SNAPSHOT_PAYLOAD_SIZE = 16 + U6M_WORLD_BLOB_SIZE,
+  U6M_COMMAND_WIRE_SIZE = 16
 };
 
 static uint32_t xorshift32(uint32_t x) {
@@ -371,4 +373,115 @@ uint64_t sim_state_hash(const SimState *state) {
   h = hash_mix_u32(h, state->world.in_combat);
   h = hash_mix_u32(h, state->world.sound_enabled);
   return h;
+}
+
+size_t sim_command_wire_size(void) {
+  return U6M_COMMAND_WIRE_SIZE;
+}
+
+int sim_command_serialize(const SimCommand *cmd, uint8_t *out, size_t out_size) {
+  if (cmd == NULL || out == NULL) {
+    return -1;
+  }
+  if (out_size < sim_command_wire_size()) {
+    return -2;
+  }
+  if ((int)cmd->type < (int)SIM_CMD_NOP || (int)cmd->type > (int)SIM_CMD_RNG_POKE) {
+    return -3;
+  }
+
+  write_u32_le(out + 0, cmd->tick);
+  out[4] = (uint8_t)cmd->type;
+  out[5] = 0;
+  write_u16_le(out + 6, 0);
+  write_i32_le(out + 8, cmd->arg0);
+  write_i32_le(out + 12, cmd->arg1);
+  return 0;
+}
+
+int sim_command_deserialize(SimCommand *cmd, const uint8_t *in, size_t in_size) {
+  if (cmd == NULL || in == NULL) {
+    return -1;
+  }
+  if (in_size < sim_command_wire_size()) {
+    return -2;
+  }
+
+  cmd->tick = read_u32_le(in + 0);
+  cmd->type = (SimCommandType)in[4];
+  cmd->arg0 = read_i32_le(in + 8);
+  cmd->arg1 = read_i32_le(in + 12);
+  if ((int)cmd->type < (int)SIM_CMD_NOP || (int)cmd->type > (int)SIM_CMD_RNG_POKE) {
+    return -3;
+  }
+  return 0;
+}
+
+int sim_command_stream_deserialize(SimCommand *out,
+                                   size_t out_capacity,
+                                   const uint8_t *in,
+                                   size_t in_size,
+                                   size_t *out_count) {
+  size_t count;
+  size_t wire;
+  int rc;
+
+  if (out == NULL || in == NULL || out_count == NULL) {
+    return -1;
+  }
+  wire = sim_command_wire_size();
+  if ((in_size % wire) != 0) {
+    return -2;
+  }
+  count = in_size / wire;
+  if (count > out_capacity) {
+    return -3;
+  }
+  for (size_t i = 0; i < count; i++) {
+    rc = sim_command_deserialize(&out[i], in + (i * wire), wire);
+    if (rc != 0) {
+      return rc;
+    }
+  }
+  *out_count = count;
+  return 0;
+}
+
+int sim_write_replay_checkpoints(const SimState *initial_state,
+                                 const SimCommand *commands,
+                                 size_t command_count,
+                                 uint32_t total_ticks,
+                                 uint32_t checkpoint_interval,
+                                 const char *path) {
+  SimState s;
+  FILE *fp;
+  uint32_t advanced = 0;
+
+  if (initial_state == NULL || path == NULL || checkpoint_interval == 0) {
+    return -1;
+  }
+
+  s = *initial_state;
+  fp = fopen(path, "wb");
+  if (fp == NULL) {
+    return -2;
+  }
+
+  fprintf(fp, "tick,hash\n");
+  while (advanced < total_ticks) {
+    SimStepResult res;
+    uint32_t step = checkpoint_interval;
+    if (step > (total_ticks - advanced)) {
+      step = total_ticks - advanced;
+    }
+    if (sim_step_ticks(&s, commands, command_count, step, &res) != 0) {
+      fclose(fp);
+      return -3;
+    }
+    advanced += step;
+    fprintf(fp, "%u,%016llx\n", s.tick, (unsigned long long)res.state_hash);
+  }
+
+  fclose(fp);
+  return 0;
 }

@@ -16,6 +16,8 @@ Authoritative simulation prototype with deterministic tick stepping.
 - `tests/test_u6_map.c`: synthetic fixture validation for map/chunk compatibility.
 - `tests/test_clock_rollover.c`: deterministic minute/hour/day/month/year rollover regression tests.
 - `tests/test_snapshot_persistence.c`: versioned snapshot roundtrip + corruption/error-path tests.
+- `tests/test_command_envelope.c`: command wire envelope serialize/deserialize tests.
+- `tests/test_replay_checkpoints.c`: deterministic replay checkpoint log generation tests.
 
 ## Intent
 
@@ -66,3 +68,11 @@ Persistence API hardening:
 - strict deserialize validation and error codes
 - deterministic snapshot roundtrip/hash invariants
 - malformed/corrupt input rejection tests
+
+## M3 Slice 1
+
+Command pipeline and replay tooling baseline:
+
+- fixed-size command wire envelope (for client/network ingestion boundary)
+- command stream decode helper with strict validation
+- replay checkpoint log writer (`tick,hash`) for deterministic scenario comparison

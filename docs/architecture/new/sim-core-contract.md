@@ -27,6 +27,16 @@ int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_siz
 size_t sim_state_snapshot_size(void);
 int sim_state_snapshot_serialize(const SimState *state, uint8_t *out, size_t out_size);
 int sim_state_snapshot_deserialize(SimState *state, const uint8_t *in, size_t in_size);
+size_t sim_command_wire_size(void);
+int sim_command_serialize(const SimCommand *cmd, uint8_t *out, size_t out_size);
+int sim_command_deserialize(SimCommand *cmd, const uint8_t *in, size_t in_size);
+int sim_command_stream_deserialize(SimCommand *out, size_t out_capacity, const uint8_t *in, size_t in_size, size_t *out_count);
+int sim_write_replay_checkpoints(const SimState *initial_state,
+                                 const SimCommand *commands,
+                                 size_t command_count,
+                                 uint32_t total_ticks,
+                                 uint32_t checkpoint_interval,
+                                 const char *path);
 ```
 
 Defined in:
@@ -62,6 +72,8 @@ Current bootstrap test:
 - `modern/sim-core/tests/test_u6_map.c`
 - `modern/sim-core/tests/test_clock_rollover.c`
 - `modern/sim-core/tests/test_snapshot_persistence.c`
+- `modern/sim-core/tests/test_command_envelope.c`
+- `modern/sim-core/tests/test_replay_checkpoints.c`
 
 ## M2 Slice 1 Mapping
 
@@ -133,6 +145,20 @@ Failure paths return explicit `SimPersistError` values:
 - `SIM_PERSIST_ERR_MAGIC`
 - `SIM_PERSIST_ERR_VERSION`
 - `SIM_PERSIST_ERR_CHECKSUM`
+
+## M3 Slice 1 Command + Replay Boundary
+
+Added stable command envelope and ingestion helpers:
+
+- fixed command wire size: `16` bytes
+- per-command serialize/deserialize
+- stream decode helper with alignment/capacity/error checks
+
+Added deterministic replay checkpoint writer:
+
+- CSV output: `tick,hash`
+- fixed interval stepping
+- reproducible logs for scenario comparisons and desync debugging
 
 ## Legacy Mapping Requirement
 

@@ -91,3 +91,15 @@ Impact on Port: improves corruption detection, simplifies migration/versioning s
 Next Validation Step: add snapshot format version migration test when version 2 fields are introduced.
 Related Symbols: SYM-0004, SYM-0008
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0007
+Date: 2026-02-11
+Area: Command Envelope + Replay Checkpoints
+Legacy Source Ref: N/A (modern deterministic tooling boundary)
+Summary: introduced fixed-size command wire envelope and deterministic checkpoint log output to support client ingestion and future net desync diagnostics.
+Evidence: command wire encode/decode helpers and replay checkpoint tests in sim-core test suite.
+Confidence: high
+Impact on Port: establishes stable input boundary for web client integration and deterministic run comparison tooling.
+Next Validation Step: consume command envelopes directly from client-web input loop in M3.2.
+Related Symbols: SYM-0004, SYM-0006
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

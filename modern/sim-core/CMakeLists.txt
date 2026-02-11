@@ -56,3 +56,19 @@ add_executable(sim_core_snapshot_persistence_test
 target_link_libraries(sim_core_snapshot_persistence_test PRIVATE sim_core)
 
 add_test(NAME sim_core_snapshot_persistence_test COMMAND sim_core_snapshot_persistence_test)
+
+add_executable(sim_core_command_envelope_test
+  tests/test_command_envelope.c
+)
+
+target_link_libraries(sim_core_command_envelope_test PRIVATE sim_core)
+
+add_test(NAME sim_core_command_envelope_test COMMAND sim_core_command_envelope_test)
+
+add_executable(sim_core_replay_checkpoints_test
+  tests/test_replay_checkpoints.c
+)
+
+target_link_libraries(sim_core_replay_checkpoints_test PRIVATE sim_core)
+
+add_test(NAME sim_core_replay_checkpoints_test COMMAND sim_core_replay_checkpoints_test)

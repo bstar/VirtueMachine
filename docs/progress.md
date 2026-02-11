@@ -66,9 +66,9 @@ This checklist is intentionally mutable.
 
 #### Slice M3.1: Command Pipeline and Core Loop Integration
 
-- `[ ]` Define stable command schema for movement/interact/wait
-- `[ ]` Implement command queue ingestion boundary between client and sim-core
-- `[ ]` Add replay logs with deterministic checkpoint hashes every N ticks
+- `[x]` Define stable command schema for movement/interact/wait
+- `[x]` Implement command queue ingestion boundary between client and sim-core
+- `[x]` Add replay logs with deterministic checkpoint hashes every N ticks
 
 #### Slice M3.2: Minimal Web Client Scaffolding
 
@@ -117,9 +117,9 @@ This checklist is intentionally mutable.
 
 ## Current Sprint Focus
 
-- `[ ]` Start M3.1 (command pipeline and core loop integration)
-- `[ ]` Define stable command envelope and queue ingestion boundary
-- `[ ]` Add replay checkpoint log output and deterministic comparison utility
+- `[ ]` Start M3.2 (minimal web client scaffolding)
+- `[ ]` Render first tile grid viewport from sim-core/map data
+- `[ ]` Map keyboard input to command envelopes and tick stepping
 
 ## Known Blockers / Risks
 
@@ -131,4 +131,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M3 Slice 1`: command pipeline and replay checkpoint logging for deterministic scenario runs.
+Implement `M3 Slice 2`: minimal web client runtime loop and first visible map rendering.
