@@ -155,6 +155,7 @@ This checklist is intentionally mutable.
 - `[x]` Complete M4.4 CI quality gates (required tests + replay artifact job)
 - `[x]` Start R1 static object layer rendering (doors/fountains/tables/food)
 - `[x]` Add canonical capture preset + PNG export tooling for parity screenshot workflow
+- `[x]` Add deterministic tick-driven animated tile phase + freeze/debug toggle + replay animation checkpoints
 - `[ ]` Land first terrain+object parity screenshots from canonical locations
 
 ## Known Blockers / Risks

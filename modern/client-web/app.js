@@ -53,6 +53,7 @@ const OBJECT_TYPES_RENDER = new Set([
   0x0e6, /* table round corner */
   0x0ea, /* fountain */
   0x0ed, /* table middle */
+  0x0ec, /* fire field */
   0x0ef, /* table round corner alt */
   0x0fa, /* table square corner alt */
   0x10f, /* doorsill */
@@ -70,6 +71,8 @@ const OBJECT_TYPES_RENDER = new Set([
   0x130, /* throne-room carpet/dais */
   0x137, /* stone table */
   0x147, /* throne */
+  0x120, /* water wheel */
+  0x125, /* spinning wheel */
   0x0fc, /* chair */
   0x14e /* secret door */
 ]);
@@ -98,6 +101,7 @@ const layoutSelect = document.getElementById("layoutSelect");
 const fontSelect = document.getElementById("fontSelect");
 const gridToggle = document.getElementById("gridToggle");
 const debugOverlayToggle = document.getElementById("debugOverlayToggle");
+const animationToggle = document.getElementById("animationToggle");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
@@ -107,6 +111,7 @@ const LAYOUT_KEY = "vm_layout";
 const FONT_KEY = "vm_font";
 const GRID_KEY = "vm_grid";
 const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
+const ANIMATION_KEY = "vm_animation";
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -133,12 +138,10 @@ const CAPTURE_PRESETS = [
   { id: "wood_corner_a", label: "Wood Corner A (355,411,0)", x: 355, y: 411, z: 0 },
   { id: "wood_corner_b", label: "Wood Corner B (356,411,0)", x: 356, y: 411, z: 0 },
   { id: "britain_core", label: "Britain Core (337,365,0)", x: 337, y: 365, z: 0 },
-  { id: "farmland", label: "Farmland Props (292,431,0)", x: 292, y: 431, z: 0 }
+  { id: "farmland", label: "Farmland Props (292,431,0)", x: 292, y: 431, z: 0 },
+  { id: "anim_fire", label: "Animation Test Fire (360,397,0)", x: 360, y: 397, z: 0 },
+  { id: "anim_wheels", label: "Animation Test Wheels (307,384,0)", x: 307, y: 384, z: 0 }
 ];
-const OBJ_TYPE_FIRE_FIELD = 0x0ec;
-const OBJ_TYPE_WATER_WHEEL = 0x120;
-const OBJ_TYPE_SPINNING_WHEEL = 0x125;
-
 const INITIAL_WORLD = Object.freeze({
   is_on_quest: 0,
   next_sleep: 0,
@@ -166,7 +169,8 @@ const state = {
   tileSet: null,
   objectLayer: null,
   animData: null,
-  animCounter: 0,
+  animationFrozen: false,
+  frozenAnimationTick: null,
   objectOverlayCount: 0,
   showGrid: false,
   showOverlayDebug: false,
@@ -195,6 +199,10 @@ class U6AnimDataJS {
       return;
     }
     this.state[i] = mode & 0x03;
+  }
+
+  hasBaseTile(tileId) {
+    return this.byBase.has(tileId);
   }
 
   animatedTile(tileId, counter) {
@@ -240,6 +248,42 @@ class U6AnimDataJS {
     }
     return new U6AnimDataJS(entries);
   }
+}
+
+function animationTick() {
+  if (state.animationFrozen) {
+    if (state.frozenAnimationTick === null) {
+      state.frozenAnimationTick = state.sim.tick >>> 0;
+    }
+    return state.frozenAnimationTick;
+  }
+  return state.sim.tick >>> 0;
+}
+
+function resolveAnimatedTileAtTick(tileId, counter) {
+  if (!state.animData || !state.animData.hasBaseTile(tileId)) {
+    return tileId;
+  }
+  return state.animData.animatedTile(tileId, counter);
+}
+
+function resolveAnimatedTile(tileId) {
+  return resolveAnimatedTileAtTick(tileId, animationTick());
+}
+
+function resolveAnimatedObjectTileAtTick(obj, counter) {
+  if (!obj) {
+    return 0;
+  }
+  if (state.animData && state.animData.hasBaseTile(obj.baseTile)) {
+    const animBase = state.animData.animatedTile(obj.baseTile, counter);
+    return (animBase + (obj.frame | 0)) & 0xffff;
+  }
+  return resolveAnimatedTileAtTick(obj.tileId, counter);
+}
+
+function resolveAnimatedObjectTile(obj) {
+  return resolveAnimatedObjectTileAtTick(obj, animationTick());
 }
 
 class U6MapJS {
@@ -481,6 +525,7 @@ class U6ObjectLayerJS {
         y,
         z,
         type,
+        baseTile: base,
         frame,
         tileId,
         order: i,
@@ -780,6 +825,42 @@ function initOverlayDebug() {
   if (debugOverlayToggle) {
     debugOverlayToggle.addEventListener("change", () => {
       setOverlayDebug(debugOverlayToggle.value === "on");
+    });
+  }
+}
+
+function setAnimationMode(mode) {
+  const nextMode = mode === "freeze" ? "freeze" : "live";
+  state.animationFrozen = nextMode === "freeze";
+  if (state.animationFrozen) {
+    state.frozenAnimationTick = state.sim.tick >>> 0;
+  } else {
+    state.frozenAnimationTick = null;
+  }
+  if (animationToggle) {
+    animationToggle.value = nextMode;
+  }
+  try {
+    localStorage.setItem(ANIMATION_KEY, nextMode);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initAnimationMode() {
+  let saved = "live";
+  try {
+    const fromStorage = localStorage.getItem(ANIMATION_KEY);
+    if (fromStorage === "live" || fromStorage === "freeze") {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setAnimationMode(saved);
+  if (animationToggle) {
+    animationToggle.addEventListener("change", () => {
+      setAnimationMode(animationToggle.value);
     });
   }
 }
@@ -1107,7 +1188,7 @@ function buildLegacyViewContext(startX, startY, wz) {
         const wy = startY + gy - PAD;
         const overlays = state.objectLayer.objectsAt(wx, wy, wz);
         for (const o of overlays) {
-          const tileId = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
+          const tileId = resolveAnimatedObjectTile(o);
           applyObjFlags(gx, gy, tileId);
         }
       }
@@ -1363,8 +1444,8 @@ function drawTileGrid() {
       const px = gx * TILE_SIZE;
       const py = gy * TILE_SIZE;
       if (state.tileSet) {
-        const animRawTile = state.animData ? state.animData.animatedTile(rawTile, state.animCounter) : rawTile;
-        const animTile = state.animData ? state.animData.animatedTile(t, state.animCounter) : t;
+        const animRawTile = resolveAnimatedTile(rawTile);
+        const animTile = resolveAnimatedTile(t);
         const baseTileCanvas = state.tileSet.tileCanvas(animRawTile);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(baseTileCanvas, px, py, TILE_SIZE, TILE_SIZE);
@@ -1383,7 +1464,7 @@ function drawTileGrid() {
           if (!o.renderable) {
             continue;
           }
-          const animObjTile = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
+          const animObjTile = resolveAnimatedObjectTile(o);
           const dbgMain = `0x${animObjTile.toString(16)}`;
           insertLegacyCellTile(gx, gy, animObjTile, 0, dbgMain);
 
@@ -1502,33 +1583,110 @@ function runReplayCheckpoints(commands, totalTicks, interval) {
   return checkpoints;
 }
 
+function animationViewportHash(sim) {
+  if (!state.mapCtx) {
+    return null;
+  }
+  const wz = sim.world.map_z;
+  const startX = sim.world.map_x - (VIEW_W >> 1);
+  const startY = sim.world.map_y - (VIEW_H >> 1);
+  const tick = sim.tick >>> 0;
+  const samples = [
+    [VIEW_W >> 1, VIEW_H >> 1],
+    [0, 0],
+    [VIEW_W - 1, 0],
+    [0, VIEW_H - 1],
+    [VIEW_W - 1, VIEW_H - 1]
+  ];
+  let h = HASH_OFFSET;
+  h = hashMixU32(h, tick);
+
+  for (const [gx, gy] of samples) {
+    const wx = startX + gx;
+    const wy = startY + gy;
+    const rawTile = state.mapCtx.tileAt(wx, wy, wz);
+    const animTile = resolveAnimatedTileAtTick(rawTile, tick);
+    h = hashMixU32(h, asU32Signed(wx));
+    h = hashMixU32(h, asU32Signed(wy));
+    h = hashMixU32(h, animTile);
+    if (state.objectLayer) {
+      const overlays = state.objectLayer.objectsAt(wx, wy, wz);
+      h = hashMixU32(h, overlays.length);
+      for (const o of overlays) {
+        const animObjTile = resolveAnimatedObjectTileAtTick(o, tick);
+        h = hashMixU32(h, animObjTile);
+      }
+    }
+  }
+  return hashHex(h);
+}
+
+function runAnimationCheckpoints(commands, totalTicks, interval) {
+  if (!state.mapCtx) {
+    return [];
+  }
+  const sim = createInitialSimState();
+  const queue = commands.map((cmd) => ({ ...cmd }));
+  const checkpoints = [];
+
+  for (let i = 0; i < totalTicks; i += 1) {
+    const pending = stepSimTick(sim, queue);
+    queue.length = 0;
+    queue.push(...pending);
+
+    if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
+      checkpoints.push({
+        tick: sim.tick,
+        hash: animationViewportHash(sim)
+      });
+    }
+  }
+
+  return checkpoints;
+}
+
 function verifyReplayStability() {
   const maxCommandTick = state.commandLog.reduce((maxTick, cmd) => Math.max(maxTick, cmd.tick), 0);
   const totalTicks = Math.max(state.sim.tick, maxCommandTick, 1);
   const a = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
   const b = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
+  const aa = runAnimationCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
+  const ab = runAnimationCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
 
   const sameLength = a.length === b.length;
   const allMatch = sameLength && a.every((cp, idx) => cp.tick === b[idx].tick && cp.hash === b[idx].hash);
+  const animSameLength = aa.length === ab.length;
+  const animAllMatch = animSameLength && aa.every((cp, idx) => cp.tick === ab[idx].tick && cp.hash === ab[idx].hash);
 
-  if (allMatch) {
+  if (allMatch && animAllMatch) {
     const csv = replayCheckpointsCsv(a);
     setReplayCsv(csv);
     statReplay.textContent = `stable (${a.length} checkpoints)`;
     diagBox.className = "diag ok";
-    diagBox.textContent = `Replay verified stable over ${totalTicks} ticks. Download checkpoints.csv for baseline tracking.`;
+    if (aa.length) {
+      diagBox.textContent = `Replay + animation verified stable over ${totalTicks} ticks. Download checkpoints.csv for baseline tracking.`;
+    } else {
+      diagBox.textContent = `Replay verified stable over ${totalTicks} ticks. Download checkpoints.csv for baseline tracking.`;
+    }
     return;
   }
 
   statReplay.textContent = "mismatch";
   diagBox.className = "diag warn";
-  diagBox.textContent = "Replay mismatch detected. Determinism drift likely in command/tick path.";
+  if (!allMatch) {
+    diagBox.textContent = "Replay mismatch detected. Determinism drift likely in command/tick path.";
+    return;
+  }
+  diagBox.textContent = "Animation mismatch detected. Animated tile phase is not deterministic.";
 }
 
 function resetRun() {
   state.sim = createInitialSimState();
   state.queue = [];
   state.commandLog = [];
+  if (state.animationFrozen) {
+    state.frozenAnimationTick = state.sim.tick >>> 0;
+  }
   statReplay.textContent = "not run";
   releaseReplayUrl();
   replayDownload.classList.add("disabled");
@@ -1542,7 +1700,6 @@ function tickLoop(ts) {
   while (state.accMs >= TICK_MS) {
     state.accMs -= TICK_MS;
     state.queue = stepSimTick(state.sim, state.queue);
-    state.animCounter = (state.animCounter + 1) & 0xffff;
   }
 
   drawTileGrid();
@@ -1632,11 +1789,6 @@ async function loadRuntimeAssets() {
       await state.objectLayer.loadOutdoor((name) => fetch(`../assets/runtime/savegame/${name}`));
       if (animRes.ok && animBuf.byteLength >= 2) {
         state.animData = U6AnimDataJS.fromBytes(new Uint8Array(animBuf));
-        if (state.animData) {
-          state.animData.setByBaseTile(baseTiles[OBJ_TYPE_SPINNING_WHEEL], 0);
-          state.animData.setByBaseTile(baseTiles[OBJ_TYPE_WATER_WHEEL], 0);
-          state.animData.setByBaseTile(baseTiles[OBJ_TYPE_FIRE_FIELD], 0);
-        }
       } else {
         state.animData = null;
       }
@@ -1693,6 +1845,7 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "p") captureViewportPng();
   else if (k === "r") resetRun();
   else if (k === "v") verifyReplayStability();
+  else if (k === "f") setAnimationMode(state.animationFrozen ? "live" : "freeze");
   else return;
   ev.preventDefault();
 });
@@ -1709,6 +1862,7 @@ initLayout();
 initFont();
 initGrid();
 initOverlayDebug();
+initAnimationMode();
 initCapturePresets();
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);

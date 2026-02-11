@@ -15,7 +15,8 @@ Minimal browser client prototype:
 - overlay debug labels toggle (off by default; saved in browser `localStorage`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
-- legacy `animdata`-driven tile remap animation (water/swamp and other animated sets)
+- deterministic `sim.tick`-driven `animdata` tile animation (water/swamp and other animated sets)
+- animation freeze toggle for render/occlusion debugging (`F` or UI dropdown)
 - first-pass legacy visibility/blackout mask (room-dependent wall/corner behavior)
 - canonical capture presets + one-click viewport PNG export for parity screenshot workflow
   - includes `Lord British Throne (307,347,0)` preset for throne composition validation
@@ -27,6 +28,12 @@ From repository root:
 ```bash
 ./modern/tools/dev_web.sh
 ```
+
+The dev server is allowlisted and does not expose general filesystem browsing.
+Served paths are limited to:
+
+- `/modern/client-web/*`
+- `/modern/assets/runtime/*`
 
 Then open:
 
@@ -60,9 +67,10 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `W/A/S/D` or `H/J/K/L`: queue movement commands
 - `R`: reset run state to initial seed/world
 - `O`: toggle overlay debug tile labels
+- `F`: toggle animated tile freeze/live phase
 - `G`: jump to selected canonical capture preset
 - `P`: capture viewport PNG
-- `V`: run replay determinism verification for current command log and produce downloadable checkpoints CSV
+- `V`: run replay determinism verification (sim + animation checkpoints) and produce downloadable checkpoints CSV
 
 ## Layout Variants
 

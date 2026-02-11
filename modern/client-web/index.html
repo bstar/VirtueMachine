@@ -116,6 +116,14 @@
           </select>
         </div>
         <div class="stat">
+          <span>Animation</span>
+          <label class="theme-label" for="animationToggle">Animated Tile Phase</label>
+          <select id="animationToggle" class="theme-select">
+            <option value="live">Live (Tick-Driven)</option>
+            <option value="freeze">Freeze (Debug)</option>
+          </select>
+        </div>
+        <div class="stat">
           <span>Capture Preset</span>
           <label class="theme-label" for="locationSelect">Canonical Location</label>
           <select id="locationSelect" class="theme-select"></select>
@@ -135,6 +143,7 @@
           <p>`G` jump to selected capture preset</p>
           <p>`P` capture viewport png</p>
           <p>`V` verify replay stability</p>
+          <p>`F` toggle animated tile freeze</p>
         </div>
       </aside>
     </main>
