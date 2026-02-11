@@ -14,6 +14,7 @@ Authoritative simulation prototype with deterministic tick stepping.
 - `tests/test_world_state_io.c`: world state serialization/deserialization + hash invariants.
 - `tests/test_objlist_compat.c`: legacy `objlist` compatibility and malformed-input checks.
 - `tests/test_u6_map.c`: synthetic fixture validation for map/chunk compatibility.
+- `tests/test_clock_rollover.c`: deterministic minute/hour/day/month/year rollover regression tests.
 
 ## Intent
 
@@ -43,3 +44,15 @@ Added a minimal read-only `map`/`chunks` compatibility boundary modeled after le
 - decode packed 12-bit chunk indices
 - read chunks as 8x8 tile blocks (`0x40` bytes)
 - resolve a tile at `(x, y, z)` via chunk lookup
+
+## M2 Slice 4
+
+Clock semantics are now explicit and deterministic:
+
+- 4 ticks per simulated minute
+- 60 minutes per hour
+- 24 hours per day
+- 28 days per month
+- 13 months per year
+
+Rollover behavior is covered by dedicated tests.

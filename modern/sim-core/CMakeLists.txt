@@ -40,3 +40,11 @@ add_executable(sim_core_u6_map_test
 target_link_libraries(sim_core_u6_map_test PRIVATE sim_core)
 
 add_test(NAME sim_core_u6_map_test COMMAND sim_core_u6_map_test)
+
+add_executable(sim_core_clock_rollover_test
+  tests/test_clock_rollover.c
+)
+
+target_link_libraries(sim_core_clock_rollover_test PRIVATE sim_core)
+
+add_test(NAME sim_core_clock_rollover_test COMMAND sim_core_clock_rollover_test)

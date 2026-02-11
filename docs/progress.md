@@ -52,9 +52,9 @@ This checklist is intentionally mutable.
 
 #### Slice M2.4: Deterministic Time/Clock Semantics
 
-- `[ ]` Define authoritative tick-to-time policy for minute/hour/day progression
-- `[ ]` Add regression tests for rollover behavior (minute->hour->day->month)
-- `[ ]` Document intended parity gaps (if any) in `docs/architecture/new/sim-core-contract.md`
+- `[x]` Define authoritative tick-to-time policy for minute/hour/day progression
+- `[x]` Add regression tests for rollover behavior (minute->hour->day->month)
+- `[x]` Document intended parity gaps (if any) in `docs/architecture/new/sim-core-contract.md`
 
 #### Slice M2.5: Persistence API Hardening
 
@@ -117,9 +117,9 @@ This checklist is intentionally mutable.
 
 ## Current Sprint Focus
 
-- `[ ]` Start M2.4 (deterministic time/clock semantics slice)
-- `[ ]` Add rollover regression tests for minute/hour/day/month progression
-- `[ ]` Document tick-to-time policy and accepted parity differences
+- `[ ]` Start M2.5 (persistence API hardening slice)
+- `[ ]` Add versioned state blob header and malformed snapshot tests
+- `[ ]` Expand persistence error code coverage and failure-path tests
 
 ## Known Blockers / Risks
 
@@ -131,4 +131,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M2 Slice 4`: deterministic time/clock semantics with rollover tests and explicit policy docs.
+Implement `M2 Slice 5`: persistence API hardening with versioned snapshots and corruption/error-path tests.

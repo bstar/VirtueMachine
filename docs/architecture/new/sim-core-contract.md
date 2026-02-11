@@ -57,6 +57,7 @@ Current bootstrap test:
 - `modern/sim-core/tests/test_world_state_io.c`
 - `modern/sim-core/tests/test_objlist_compat.c`
 - `modern/sim-core/tests/test_u6_map.c`
+- `modern/sim-core/tests/test_clock_rollover.c`
 
 ## M2 Slice 1 Mapping
 
@@ -99,6 +100,18 @@ Current behavior:
 - `u6_map_get_chunk_index_at` decodes packed 12-bit chunk indices
 - `u6_chunk_read` reads `0x40` bytes per chunk
 - `u6_map_get_tile_at` resolves tile via chunk lookup and in-chunk coordinates
+
+## M2 Slice 4 Deterministic Clock Policy
+
+Current explicit simulation clock policy:
+
+- 4 ticks per minute
+- 60 minutes per hour
+- 24 hours per day
+- 28 days per month
+- 13 months per year
+
+Rollover sequence is regression-tested. This is a deterministic baseline policy and may be tuned later if deeper legacy timing analysis reveals required adjustments.
 
 ## Legacy Mapping Requirement
 

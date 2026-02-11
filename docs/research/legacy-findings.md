@@ -67,3 +67,15 @@ Impact on Port: enables deterministic read-only map/chunk compatibility APIs and
 Next Validation Step: verify with real runtime assets across multiple coordinates and z-levels.
 Related Symbols: SYM-0006
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0005
+Date: 2026-02-11
+Area: Clock Semantics Baseline
+Legacy Source Ref: `SRC/D_2C4A.c`, `SRC/seg_0A33.c`, `SRC/seg_101C.c` (time use sites)
+Summary: a deterministic calendar/tick policy is now explicit in sim-core (4 ticks/minute, 60/24/28/13 rollovers).
+Evidence: implemented and covered by `test_clock_rollover`; chosen as stable baseline while deeper legacy timing parity analysis continues.
+Confidence: medium
+Impact on Port: establishes deterministic time progression needed for replay, save/load, and future network sync.
+Next Validation Step: verify against legacy runtime behavior over long in-game time spans and adjust if parity gaps are observed.
+Related Symbols: SYM-0005
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

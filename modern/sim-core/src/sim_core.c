@@ -3,7 +3,12 @@
 #include <stddef.h>
 
 enum {
-  U6M_WORLD_BLOB_SIZE = 22
+  U6M_WORLD_BLOB_SIZE = 22,
+  U6M_TICKS_PER_MINUTE = 4,
+  U6M_MINUTES_PER_HOUR = 60,
+  U6M_HOURS_PER_DAY = 24,
+  U6M_DAYS_PER_MONTH = 28,
+  U6M_MONTHS_PER_YEAR = 13
 };
 
 static uint32_t xorshift32(uint32_t x) {
@@ -58,6 +63,45 @@ static uint64_t hash_mix_u32(uint64_t h, uint32_t v) {
 
 static uint16_t read_u16_le(const uint8_t *p) {
   return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+}
+
+static void normalize_world_calendar(SimWorldState *w) {
+  if (w->time_m >= U6M_MINUTES_PER_HOUR) {
+    w->time_m %= U6M_MINUTES_PER_HOUR;
+  }
+  if (w->time_h >= U6M_HOURS_PER_DAY) {
+    w->time_h %= U6M_HOURS_PER_DAY;
+  }
+  if (w->date_d == 0 || w->date_d > U6M_DAYS_PER_MONTH) {
+    w->date_d = 1;
+  }
+  if (w->date_m == 0 || w->date_m > U6M_MONTHS_PER_YEAR) {
+    w->date_m = 1;
+  }
+}
+
+static void advance_world_minute(SimWorldState *w) {
+  w->time_m++;
+  if (w->time_m < U6M_MINUTES_PER_HOUR) {
+    return;
+  }
+  w->time_m = 0;
+  w->time_h++;
+  if (w->time_h < U6M_HOURS_PER_DAY) {
+    return;
+  }
+  w->time_h = 0;
+  w->date_d++;
+  if (w->date_d <= U6M_DAYS_PER_MONTH) {
+    return;
+  }
+  w->date_d = 1;
+  w->date_m++;
+  if (w->date_m <= U6M_MONTHS_PER_YEAR) {
+    return;
+  }
+  w->date_m = 1;
+  w->date_y++;
 }
 
 static int16_t read_i16_le(const uint8_t *p) {
@@ -155,6 +199,7 @@ int sim_init(SimState *state, const SimConfig *cfg) {
   state->world_flags = 0;
   state->commands_applied = 0;
   state->world = cfg->initial_world;
+  normalize_world_calendar(&state->world);
   return 0;
 }
 
@@ -184,8 +229,8 @@ int sim_step_ticks(SimState *state,
 
     state->rng_state = xorshift32(state->rng_state);
     state->world_flags ^= (state->rng_state & 1u);
-    if ((state->tick & 3u) == 0u) {
-      state->world.time_m = (uint8_t)((state->world.time_m + 1u) % 60u);
+    if ((next_tick % U6M_TICKS_PER_MINUTE) == 0u) {
+      advance_world_minute(&state->world);
     }
     state->tick = next_tick;
   }
