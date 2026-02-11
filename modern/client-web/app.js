@@ -123,6 +123,7 @@ const debugOverlayToggle = document.getElementById("debugOverlayToggle");
 const animationToggle = document.getElementById("animationToggle");
 const paletteFxToggle = document.getElementById("paletteFxToggle");
 const movementModeToggle = document.getElementById("movementModeToggle");
+const renderModeToggle = document.getElementById("renderModeToggle");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
@@ -135,6 +136,7 @@ const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
 const ANIMATION_KEY = "vm_animation";
 const PALETTE_FX_KEY = "vm_palette_fx";
 const MOVEMENT_MODE_KEY = "vm_movement_mode";
+const RENDER_MODE_KEY = "vm_render_mode";
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -155,6 +157,7 @@ const LAYOUTS = [
   "ledger-focus"
 ];
 const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
+const RENDER_MODES = ["current", "nuvie"];
 const CAPTURE_PRESETS = [
   { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
   { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
@@ -204,6 +207,7 @@ const state = {
   showOverlayDebug: false,
   enablePaletteFx: true,
   movementMode: "ghost",
+  renderMode: "current",
   avatarFacingDx: 0,
   avatarFacingDy: 1,
   avatarLastMoveTick: -1,
@@ -1333,6 +1337,38 @@ function initMovementMode() {
   }
 }
 
+function setRenderMode(mode) {
+  const next = RENDER_MODES.includes(mode) ? mode : "current";
+  state.renderMode = next;
+  document.documentElement.setAttribute("data-render-mode", next);
+  if (renderModeToggle) {
+    renderModeToggle.value = next;
+  }
+  try {
+    localStorage.setItem(RENDER_MODE_KEY, next);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initRenderMode() {
+  let saved = "current";
+  try {
+    const fromStorage = localStorage.getItem(RENDER_MODE_KEY);
+    if (fromStorage && RENDER_MODES.includes(fromStorage)) {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setRenderMode(saved);
+  if (renderModeToggle) {
+    renderModeToggle.addEventListener("change", () => {
+      setRenderMode(renderModeToggle.value);
+    });
+  }
+}
+
 function isCloseableDoorObject(obj) {
   return !!obj && OBJECT_TYPES_CLOSEABLE_DOOR.has(obj.type);
 }
@@ -2078,6 +2114,105 @@ function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
   return resolved;
 }
 
+function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
+  const rawTiles = new Uint16Array(VIEW_W * VIEW_H);
+  const displayTiles = new Uint16Array(VIEW_W * VIEW_H);
+  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
+  for (let gy = 0; gy < VIEW_H; gy += 1) {
+    for (let gx = 0; gx < VIEW_W; gx += 1) {
+      const wx = startX + gx;
+      const wy = startY + gy;
+      let rawTile = 0;
+      let displayTile = 0;
+      if (state.mapCtx) {
+        rawTile = state.mapCtx.tileAt(wx, wy, wz) & 0xffff;
+        displayTile = rawTile;
+        if (shouldBlackoutTile(rawTile, wx, wy, viewCtx)) {
+          rawTile = 0x0ff;
+          displayTile = 0x0ff;
+        } else {
+          displayTile = stableCornerVariant(displayTile, wx, wy, wz, viewCtx);
+        }
+      } else {
+        rawTile = (wx * 7 + wy * 13) & 0xff;
+        displayTile = rawTile;
+      }
+      const idx = cellIndex(gx, gy);
+      rawTiles[idx] = rawTile & 0xffff;
+      displayTiles[idx] = displayTile & 0xffff;
+    }
+  }
+  return { rawTiles, displayTiles };
+}
+
+function applyNuvieBoundaryReshape(displayTiles, startX, startY) {
+  const inView = (gx, gy) => gx >= 0 && gy >= 0 && gx < VIEW_W && gy < VIEW_H;
+  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
+  const isBlack = (gx, gy) => !inView(gx, gy) || (displayTiles[cellIndex(gx, gy)] & 0xffff) === 0x0ff;
+
+  for (let gy = 0; gy < VIEW_H; gy += 1) {
+    for (let gx = 0; gx < VIEW_W; gx += 1) {
+      const idx = cellIndex(gx, gy);
+      const tile = displayTiles[idx] & 0xffff;
+      if (tile === 0x0ff) {
+        continue;
+      }
+      if (tile < 140 || tile > 187) {
+        continue;
+      }
+
+      const blackN = isBlack(gx, gy - 1);
+      const blackE = isBlack(gx + 1, gy);
+      const blackS = isBlack(gx, gy + 1);
+      const blackW = isBlack(gx - 1, gy);
+      if (!(blackN || blackE || blackS || blackW)) {
+        continue;
+      }
+
+      const familyBase = Math.floor(((tile - (tile % 16)) - 140) / 16);
+      if (familyBase < 0 || familyBase > 2) {
+        continue;
+      }
+
+      /* Nuvie reshapeBoundary() black-corner substitutions. */
+      if (blackN && blackE) {
+        displayTiles[idx] = (266 + (2 * familyBase)) & 0xffff;
+        continue;
+      }
+      if (blackS && blackW) {
+        displayTiles[idx] = (267 + (2 * familyBase)) & 0xffff;
+      }
+    }
+  }
+}
+
+function buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx) {
+  const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
+  applyNuvieBoundaryReshape(base.displayTiles, startX, startY);
+  return base;
+}
+
+function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
+  if (state.renderMode === "nuvie") {
+    return buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx);
+  }
+  return buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
+}
+
+function shouldSuppressOverlayNuvie(entry, gx, gy, displayTiles) {
+  const idx = (gy * VIEW_W) + gx;
+  const here = displayTiles[idx] & 0xffff;
+  if (here === 0x0ff) {
+    return true;
+  }
+  const rightBlack = gx + 1 >= VIEW_W || (displayTiles[(gy * VIEW_W) + gx + 1] & 0xffff) === 0x0ff;
+  const downBlack = gy + 1 >= VIEW_H || (displayTiles[((gy + 1) * VIEW_W) + gx] & 0xffff) === 0x0ff;
+  if (!(rightBlack || downBlack)) {
+    return false;
+  }
+  return !hasWallTerrain(entry.tileId);
+}
+
 function avatarFacingFrameOffset() {
   if (state.avatarFacingDy < 0) return 0;
   if (state.avatarFacingDx > 0) return 1;
@@ -2171,6 +2306,7 @@ function drawTileGrid() {
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
   const renderPalette = getRenderPalette();
   const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
+  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayBuild = buildOverlayCells(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayCells = overlayBuild.overlayCells;
   const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
@@ -2212,23 +2348,9 @@ function drawTileGrid() {
   let entityCount = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
-      const wx = startX + gx;
-      const wy = startY + gy;
-      let t = 0;
-      let rawTile = 0;
-      if (state.mapCtx) {
-        rawTile = state.mapCtx.tileAt(wx, wy, state.sim.world.map_z);
-        t = rawTile;
-        if (shouldBlackoutTile(rawTile, wx, wy, viewCtx)) {
-          t = 0x0ff;
-          rawTile = 0x0ff;
-        } else {
-          t = stableCornerVariant(t, wx, wy, state.sim.world.map_z, viewCtx);
-        }
-      } else {
-        t = (wx * 7 + wy * 13) & 0xff;
-        rawTile = t;
-      }
+      const cell = cellIndex(gx, gy);
+      const rawTile = baseRawTiles[cell] & 0xffff;
+      const t = baseDisplayTiles[cell] & 0xffff;
       if (gx === (VIEW_W >> 1) && gy === (VIEW_H >> 1)) {
         centerTile = t;
         centerRawTile = rawTile;
@@ -2278,6 +2400,9 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
+          if (state.renderMode === "nuvie" && shouldSuppressOverlayNuvie(t, gx, gy, baseDisplayTiles)) {
+            continue;
+          }
           if (!t.occluder) {
             drawOverlayEntry(t, px, py);
           }
@@ -2799,6 +2924,7 @@ initOverlayDebug();
 initAnimationMode();
 initPaletteFxMode();
 initMovementMode();
+initRenderMode();
 initCapturePresets();
 initPanelCopyButtons();
 if (jumpButton) {

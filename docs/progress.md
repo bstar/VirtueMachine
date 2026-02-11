@@ -129,6 +129,7 @@ This checklist is intentionally mutable.
 
 - `[~]` Implement tile/object composition rules for doorway openings, wall edges, and overlap priority
 - `[ ]` Refactor wall-corner shaping into Nuvie-style boundary reshape pass (post-blackout, boundary-scoped)
+- `[x]` Land feature-gated render pipeline scaffold (`current` vs `nuvie`) with explicit base buffer stages and runtime toggle
 - `[x]` Add first-pass entity/NPC overlay render layer from legacy `savegame/objlist` actor records
 - `[x]` Add deterministic tick-driven NPC patrol motion pilot for humanoid actor subset
 - `[x]` Prevent NPC movement into occluded/unseen cells and add occlusion-block debug telemetry
