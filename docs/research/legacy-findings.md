@@ -235,3 +235,15 @@ Impact on Port: enables practical avatar-centric interaction testing (doors + co
 Next Validation Step: add replay fixtures for avatar-mode door open/close command sequences and verify hash parity across repeated runs.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0019
+Date: 2026-02-11
+Area: Boundary-Scoped Wall Reshape Parity (Nuvie Cross-Reference)
+Legacy Source Ref: Nuvie `MapWindow.cpp` (`generateTmpMap`, `reshapeBoundary`, `tmpBufTileIsWall`, `tmpBufTileIsBoundary`), U6 wall flag model (`TileManager.h` `TILEFLAG_WALL_MASK`)
+Summary: Nuvie uses a dedicated post-blackout boundary reshape pass for wall families instead of relying only on per-tile corner remap. This likely explains several doorway/room-edge corner parity differences seen in the web client.
+Evidence: code review of Nuvie `MapWindow.cpp` shows `generateTmpMap` -> `boundaryFill` -> `reshapeBoundary` flow with explicit black-corner substitutions and boundary-gated wall mask reconstruction.
+Confidence: medium
+Impact on Port: provides a concrete reference model for the remaining wall-transition parity bugs without introducing ad-hoc object-specific hacks.
+Next Validation Step: implement the boundary reshape model behind a feature gate and validate against canonical throne room / kitchen-courtyard captures before replacing current default path.
+Related Symbols: SYM-0006
+Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`

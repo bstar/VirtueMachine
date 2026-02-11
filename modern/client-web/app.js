@@ -154,7 +154,7 @@ const LAYOUTS = [
   "ledger-compact",
   "ledger-focus"
 ];
-const FONTS = ["blockblueprint", "kaijuz", "orangekid", "silkscreen"];
+const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
 const CAPTURE_PRESETS = [
   { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
   { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
@@ -217,6 +217,7 @@ const state = {
   centerRawTile: 0,
   centerAnimatedTile: 0,
   centerPaletteBand: "none",
+  cornerVariantCache: new Map(),
   lastTs: performance.now(),
   accMs: 0,
   replayUrl: null
@@ -1052,7 +1053,7 @@ function initLayout() {
 }
 
 function setFont(fontName) {
-  const font = FONTS.includes(fontName) ? fontName : "silkscreen";
+  const font = FONTS.includes(fontName) ? fontName : "sans";
   document.documentElement.setAttribute("data-font", font);
   if (fontSelect) {
     fontSelect.value = font;
@@ -1065,7 +1066,7 @@ function setFont(fontName) {
 }
 
 function initFont() {
-  let saved = "silkscreen";
+  let saved = "sans";
   try {
     const fromStorage = localStorage.getItem(FONT_KEY);
     if (fromStorage) {
@@ -1074,14 +1075,99 @@ function initFont() {
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
-  if (saved === "blockblueprint") {
-    saved = "silkscreen";
-  }
   setFont(saved);
   if (fontSelect) {
     fontSelect.addEventListener("change", () => {
       setFont(fontSelect.value);
     });
+  }
+}
+
+async function copyTextToClipboard(text) {
+  const v = String(text ?? "");
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(v);
+      return true;
+    }
+  } catch (_err) {
+    // fallback below
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = v;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return !!ok;
+  } catch (_err) {
+    return false;
+  }
+}
+
+function makeCopyButton(getText) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "copy-icon-btn";
+  btn.title = "Copy to clipboard";
+  btn.textContent = "⧉";
+  btn.addEventListener("click", async () => {
+    const text = getText();
+    const ok = await copyTextToClipboard(text);
+    const prev = btn.textContent;
+    btn.textContent = ok ? "✓" : "!";
+    setTimeout(() => {
+      btn.textContent = prev;
+    }, 900);
+  });
+  return btn;
+}
+
+function initPanelCopyButtons() {
+  const usefulValueIds = new Set([
+    "statPos",
+    "statClock",
+    "statDate",
+    "statTile",
+    "statRenderParity",
+    "statSource",
+    "statHash",
+    "statReplay",
+    "statCenterTiles"
+  ]);
+  const rows = document.querySelectorAll(".stat-row");
+  for (const row of rows) {
+    const label = row.querySelector("span");
+    const value = row.querySelector("strong");
+    if (!label || !value) {
+      continue;
+    }
+    const valueId = value.id || "";
+    const existingBtn = row.querySelector(".copy-icon-btn");
+    if (!usefulValueIds.has(valueId)) {
+      if (existingBtn) {
+        existingBtn.remove();
+      }
+      continue;
+    }
+    if (existingBtn) {
+      continue;
+    }
+    const btn = makeCopyButton(() => `${label.textContent || ""}: ${value.textContent || ""}`);
+    row.appendChild(btn);
+  }
+
+  if (diagBox && diagBox.parentElement && !diagBox.parentElement.querySelector(".diag-copy")) {
+    const wrap = document.createElement("div");
+    wrap.className = "mt-1 flex justify-end diag-copy";
+    const btn = makeCopyButton(() => diagBox.textContent || "");
+    wrap.appendChild(btn);
+    diagBox.parentElement.insertBefore(wrap, diagBox.nextSibling);
   }
 }
 
@@ -1893,7 +1979,6 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
   if (tileId >= 0x0c0 && tileId < 0x100) {
     return tileId;
   }
-
   const t = terrainOf(tileId);
   const terrainLow = t & 0x0f;
   if (terrainLow !== (0x04 | 0x02)) {
@@ -1964,6 +2049,33 @@ function shouldBlackoutTile(rawTile, wx, wy, viewCtx) {
     return false;
   }
   return true;
+}
+
+function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
+  const terrainLow = terrainOf(rawTile) & 0x0f;
+  if (terrainLow !== (0x04 | 0x02)) {
+    return rawTile;
+  }
+  if (viewCtx) {
+    const fullyVisible = (
+      viewCtx.visibleAtWorld(wx, wy)
+      && viewCtx.visibleAtWorld(wx, wy - 1)
+      && viewCtx.visibleAtWorld(wx + 1, wy)
+      && viewCtx.visibleAtWorld(wx, wy + 1)
+      && viewCtx.visibleAtWorld(wx - 1, wy)
+    );
+    if (!fullyVisible) {
+      return rawTile;
+    }
+  }
+  const key = `${wz}:${wx}:${wy}:${rawTile & 0xffff}`;
+  const cached = state.cornerVariantCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const resolved = applyLegacyCornerVariant(rawTile, wx, wy, wz, viewCtx) & 0xffff;
+  state.cornerVariantCache.set(key, resolved);
+  return resolved;
 }
 
 function avatarFacingFrameOffset() {
@@ -2111,7 +2223,7 @@ function drawTileGrid() {
           t = 0x0ff;
           rawTile = 0x0ff;
         } else {
-          t = applyLegacyCornerVariant(t, wx, wy, state.sim.world.map_z, viewCtx);
+          t = stableCornerVariant(t, wx, wy, state.sim.world.map_z, viewCtx);
         }
       } else {
         t = (wx * 7 + wy * 13) & 0xff;
@@ -2513,6 +2625,7 @@ async function loadRuntimeAssets() {
   const missing = [];
 
   try {
+    state.cornerVariantCache.clear();
     for (const name of required) {
       const res = await fetch(`../assets/runtime/${name}`);
       if (!res.ok) {
@@ -2636,6 +2749,7 @@ async function loadRuntimeAssets() {
       diagBox.textContent = "Runtime assets loaded. Rendering map/chunk data from local runtime directory.";
     }
   } catch (err) {
+    state.cornerVariantCache.clear();
     state.mapCtx = null;
     state.tileSet = null;
     state.objectLayer = null;
@@ -2686,6 +2800,7 @@ initAnimationMode();
 initPaletteFxMode();
 initMovementMode();
 initCapturePresets();
+initPanelCopyButtons();
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);
 }

@@ -1,189 +1,80 @@
 <!doctype html>
-<html lang="en" data-theme="obsidian" data-layout="classic-right" data-font="silkscreen">
+<html lang="en" data-theme="obsidian" data-layout="classic-right" data-font="sans">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>VirtueMachine | M3.4 Walkaround Demo</title>
+    <title>VirtueMachine | Web Debug View</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css">
   </head>
-  <body>
-    <main class="layout">
-      <section class="panel panel-main">
-        <header class="header">
-          <div class="header-top">
-            <h1>VirtueMachine</h1>
-            <p>M3.4 Walkaround Demo</p>
+  <body class="vm-body h-screen overflow-hidden antialiased">
+    <main class="h-screen pr-[390px]">
+      <section class="h-full px-4 py-4">
+        <div class="vm-main-shell h-full rounded p-4">
+          <header class="vm-header mb-3 pb-3">
+            <h1 class="text-2xl font-bold tracking-tight">VirtueMachine</h1>
+            <p class="vm-muted-text mt-1 text-sm">Web Debug View</p>
+            <p class="mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
+          </header>
+          <div class="h-[calc(100%-88px)] flex items-center justify-center">
+            <canvas id="viewport" width="704" height="704" class="vm-canvas max-h-full max-w-full rounded"></canvas>
           </div>
-          <p class="header-time">Time of Day: <strong id="topTimeOfDay">Midnight (00:00)</strong></p>
-        </header>
-        <div class="viewport-wrap">
-          <canvas id="viewport" width="704" height="704"></canvas>
         </div>
       </section>
 
-      <aside class="panel panel-side">
-        <div class="stat">
-          <span>Tick</span>
-          <strong id="statTick">0</strong>
+      <aside class="vm-side-panel smart-scroll fixed right-0 top-0 h-screen w-[390px] p-4 overflow-y-auto">
+        <div class="vm-header mb-4 pb-3">
+          <h2 class="text-lg font-semibold">Debug Panel</h2>
+          <p class="vm-muted-text text-xs">Runtime status, controls, and rendering diagnostics</p>
         </div>
-        <div class="stat">
-          <span>Map Position</span>
-          <strong id="statPos">0, 0, 0</strong>
+
+        <div class="space-y-2 text-sm">
+          <div class="stat-row"><span>Tick</span><strong id="statTick">0</strong></div>
+          <div class="stat-row"><span>Map Position</span><strong id="statPos">0, 0, 0</strong></div>
+          <div class="stat-row"><span>Clock</span><strong id="statClock">00:00</strong></div>
+          <div class="stat-row"><span>Date</span><strong id="statDate">1 / 1 / 1</strong></div>
+          <div class="stat-row"><span>Tile</span><strong id="statTile">-</strong></div>
+          <div class="stat-row"><span>Object Overlay</span><strong id="statObjects">0 / 0</strong></div>
+          <div class="stat-row"><span>Entity Overlay</span><strong id="statEntities">0 / 0</strong></div>
+          <div class="stat-row"><span>Render Parity</span><strong id="statRenderParity">ok</strong></div>
+          <div class="stat-row"><span>Avatar State</span><strong id="statAvatarState">ghost</strong></div>
+          <div class="stat-row"><span>NPC Occlusion Blocks</span><strong id="statNpcOcclusionBlocks">0</strong></div>
+          <div class="stat-row"><span>Commands Queued</span><strong id="statQueued">0</strong></div>
+          <div class="stat-row"><span>Data Source</span><strong id="statSource">booting...</strong></div>
+          <div class="stat-row"><span>State Hash</span><strong id="statHash">-</strong></div>
+          <div class="stat-row"><span>Replay Check</span><strong id="statReplay">not run</strong></div>
+          <div class="stat-row"><span>Palette Phase</span><strong id="statPalettePhase">-</strong></div>
+          <div class="stat-row"><span>Center Tile IDs</span><strong id="statCenterTiles">-</strong></div>
+          <div class="stat-row"><span>Center Palette Band</span><strong id="statCenterBand">-</strong></div>
         </div>
-        <div class="stat">
-          <span>Clock</span>
-          <strong id="statClock">00:00</strong>
+
+        <div class="mt-4 space-y-3">
+          <div class="control-block"><label for="themeSelect">Theme</label><select id="themeSelect" class="control-input"><option value="obsidian">Obsidian Codex</option><option value="phosphor">Phosphor CRT</option><option value="amber">Amber Terminal</option><option value="cga-cyan">CGA Cyan Steel</option><option value="cga-magenta">CGA Magenta Night</option><option value="parchment">Parchment Atlas</option><option value="cobalt">Cobalt Keep</option><option value="bloodstone">Bloodstone Banner</option><option value="moonstone">Moonstone Ledger</option><option value="ash">Ash Monolith</option></select></div>
+          <div class="control-block"><label for="layoutSelect">Interface</label><select id="layoutSelect" class="control-input"><option value="classic-right">Classic Right Rail</option><option value="classic-left">Classic Left Rail</option><option value="ledger-split">Ledger Split Panel</option><option value="ledger-compact">Ledger Compact Console</option><option value="ledger-focus">Ledger Focus Board</option></select></div>
+          <div class="control-block"><label for="fontSelect">Body Font</label><select id="fontSelect" class="control-input"><option value="sans">Sans UI (Default)</option><option value="silkscreen">Silkscreen</option><option value="kaijuz">Kaijuz</option><option value="orangekid">Orange Kid</option><option value="blockblueprint">BlockBlueprint</option></select></div>
+          <div class="control-block"><label for="gridToggle">Viewport Grid</label><select id="gridToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">On</option></select></div>
+          <div class="control-block"><label for="debugOverlayToggle">Overlay Debug</label><select id="debugOverlayToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">On</option></select></div>
+          <div class="control-block"><label for="animationToggle">Animation</label><select id="animationToggle" class="control-input"><option value="live">Live (Tick-Driven)</option><option value="freeze">Freeze (Debug)</option></select></div>
+          <div class="control-block"><label for="paletteFxToggle">Legacy Palette FX</label><select id="paletteFxToggle" class="control-input"><option value="on">On (Default)</option><option value="off">Off</option></select></div>
+          <div class="control-block"><label for="movementModeToggle">Control Mode</label><select id="movementModeToggle" class="control-input"><option value="ghost">Ghost (No Collision)</option><option value="avatar">Avatar (Collision + Doors)</option></select></div>
+          <div class="control-block"><label for="locationSelect">Capture Preset</label><select id="locationSelect" class="control-input"></select></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="jumpButton" class="control-btn" type="button">Jump (G)</button>
+            <button id="captureButton" class="control-btn" type="button">Capture (P)</button>
+          </div>
         </div>
-        <div class="stat">
-          <span>Date</span>
-          <strong id="statDate">1 / 1 / 1</strong>
-        </div>
-        <div class="stat">
-          <span>Tile</span>
-          <strong id="statTile">-</strong>
-        </div>
-        <div class="stat">
-          <span>Object Overlay</span>
-          <strong id="statObjects">0 / 0</strong>
-        </div>
-        <div class="stat">
-          <span>Entity Overlay</span>
-          <strong id="statEntities">0 / 0</strong>
-        </div>
-        <div class="stat">
-          <span>Render Parity</span>
-          <strong id="statRenderParity">ok</strong>
-        </div>
-        <div class="stat">
-          <span>Avatar State</span>
-          <strong id="statAvatarState">ghost</strong>
-        </div>
-        <div class="stat">
-          <span>NPC Occlusion Blocks</span>
-          <strong id="statNpcOcclusionBlocks">0</strong>
-        </div>
-        <div class="stat">
-          <span>Commands Queued</span>
-          <strong id="statQueued">0</strong>
-        </div>
-        <div class="stat">
-          <span>Data Source</span>
-          <strong id="statSource">booting...</strong>
-        </div>
-        <div class="stat">
-          <span>State Hash</span>
-          <strong id="statHash">-</strong>
-        </div>
-        <div class="stat">
-          <span>Replay Check</span>
-          <strong id="statReplay">not run</strong>
-        </div>
-        <div class="stat">
-          <span>Palette Phase</span>
-          <strong id="statPalettePhase">-</strong>
-        </div>
-        <div class="stat">
-          <span>Center Tile IDs</span>
-          <strong id="statCenterTiles">-</strong>
-        </div>
-        <div class="stat">
-          <span>Center Palette Band</span>
-          <strong id="statCenterBand">-</strong>
-        </div>
-        <div class="stat">
-          <span>Theme</span>
-          <label class="theme-label" for="themeSelect">UI Style</label>
-          <select id="themeSelect" class="theme-select">
-            <option value="obsidian">Obsidian Codex</option>
-            <option value="phosphor">Phosphor CRT</option>
-            <option value="amber">Amber Terminal</option>
-            <option value="cga-cyan">CGA Cyan Steel</option>
-            <option value="cga-magenta">CGA Magenta Night</option>
-            <option value="parchment">Parchment Atlas</option>
-            <option value="cobalt">Cobalt Keep</option>
-            <option value="bloodstone">Bloodstone Banner</option>
-            <option value="moonstone">Moonstone Ledger</option>
-            <option value="ash">Ash Monolith</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Interface</span>
-          <label class="theme-label" for="layoutSelect">Layout Variant</label>
-          <select id="layoutSelect" class="theme-select">
-            <option value="classic-right">Classic Right Rail</option>
-            <option value="classic-left">Classic Left Rail</option>
-            <option value="ledger-split">Ledger Split Panel</option>
-            <option value="ledger-compact">Ledger Compact Console</option>
-            <option value="ledger-focus">Ledger Focus Board</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Body Font</span>
-          <label class="theme-label" for="fontSelect">Rendered Retro Font</label>
-          <select id="fontSelect" class="theme-select">
-            <option value="blockblueprint">BlockBlueprint</option>
-            <option value="kaijuz">Kaijuz</option>
-            <option value="orangekid">Orange Kid</option>
-            <option value="silkscreen">Silkscreen Fallback</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Viewport Grid</span>
-          <label class="theme-label" for="gridToggle">Tile Grid Lines</label>
-          <select id="gridToggle" class="theme-select">
-            <option value="off">Off (Default)</option>
-            <option value="on">On</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Overlay Debug</span>
-          <label class="theme-label" for="debugOverlayToggle">Object Tile Labels</label>
-          <select id="debugOverlayToggle" class="theme-select">
-            <option value="off">Off (Default)</option>
-            <option value="on">On</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Animation</span>
-          <label class="theme-label" for="animationToggle">Animated Tile Phase</label>
-          <select id="animationToggle" class="theme-select">
-            <option value="live">Live (Tick-Driven)</option>
-            <option value="freeze">Freeze (Debug)</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Legacy Palette FX</span>
-          <label class="theme-label" for="paletteFxToggle">Fire/Water Color Cycling</label>
-          <select id="paletteFxToggle" class="theme-select">
-            <option value="on">On (Default)</option>
-            <option value="off">Off</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Control Mode</span>
-          <label class="theme-label" for="movementModeToggle">Ghost vs Avatar</label>
-          <select id="movementModeToggle" class="theme-select">
-            <option value="ghost">Ghost (No Collision)</option>
-            <option value="avatar">Avatar (Collision + Doors)</option>
-          </select>
-        </div>
-        <div class="stat">
-          <span>Capture Preset</span>
-          <label class="theme-label" for="locationSelect">Canonical Location</label>
-          <select id="locationSelect" class="theme-select"></select>
-          <button id="jumpButton" class="control-btn" type="button">jump to preset (G)</button>
-          <button id="captureButton" class="control-btn" type="button">capture viewport png (P)</button>
-        </div>
-        <a class="replay-link disabled" id="replayDownload" href="#">download replay checkpoints.csv</a>
-        <div class="diag" id="diagBox">
+
+        <a class="vm-replay-link mt-4 block text-xs underline decoration-dotted disabled" id="replayDownload" href="#">download replay checkpoints.csv</a>
+
+        <div class="diag mt-4 p-2 text-xs" id="diagBox">
           awaiting runtime checks...
         </div>
 
-        <div class="help">
-          <h2>Controls</h2>
+        <div class="vm-help mt-4 p-3 text-xs">
+          <h3 class="mb-2 text-sm font-semibold">Controls</h3>
           <p>`W A S D` or `H J K L` move</p>
           <p>`R` recenter</p>
           <p>`O` toggle overlay debug labels</p>
@@ -199,4 +90,4 @@
     </main>
     <script type="module" src="./app.js"></script>
   </body>
-  </html>
+</html>
