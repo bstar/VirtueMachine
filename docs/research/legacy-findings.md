@@ -151,3 +151,15 @@ Impact on Port: establishes a deterministic, testable entity-state boundary need
 Next Validation Step: map first real legacy interaction path (open/use/talk) onto this entity surface and validate symbol-level parity assumptions.
 Related Symbols: SYM-0008
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0012
+Date: 2026-02-11
+Area: Interaction Boundary (Talk/Use/Open)
+Legacy Source Ref: `SRC/seg_1703.c`, `SRC/seg_1944.c`, `SRC/seg_27a1.c`
+Summary: first deterministic interaction flow is isolated into a dedicated boundary with stable request/result structures and explicit failure codes.
+Evidence: `modern/sim-core/include/u6_interaction.h`, `modern/sim-core/src/u6_interaction.c`, and `modern/sim-core/tests/test_interaction.c`.
+Confidence: medium
+Impact on Port: provides a testable gameplay interaction seam required for gradual dialogue/script parity work.
+Next Validation Step: connect one legacy conversation/script path to this boundary and compare observed branch outcomes.
+Related Symbols: SYM-0009, SYM-0010
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

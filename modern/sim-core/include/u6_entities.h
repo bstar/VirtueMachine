@@ -20,6 +20,13 @@ typedef enum U6ObjectType {
   U6_OBJECT_CONTAINER = 3
 } U6ObjectType;
 
+enum {
+  U6_OBJECT_FLAG_USABLE = 1u << 0,
+  U6_OBJECT_FLAG_OPENABLE = 1u << 1,
+  U6_OBJECT_FLAG_OPEN = 1u << 2,
+  U6_OBJECT_FLAG_LOCKED = 1u << 3
+};
+
 typedef struct U6ObjectState {
   uint16_t object_id;
   uint16_t tile_id;

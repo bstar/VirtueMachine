@@ -74,6 +74,8 @@ Current bootstrap test:
 - `modern/sim-core/tests/test_snapshot_persistence.c`
 - `modern/sim-core/tests/test_command_envelope.c`
 - `modern/sim-core/tests/test_replay_checkpoints.c`
+- `modern/sim-core/tests/test_entities.c`
+- `modern/sim-core/tests/test_interaction.c`
 
 ## M2 Slice 1 Mapping
 
@@ -191,6 +193,23 @@ Current scope:
 - versioned entity blob serialize/deserialize for subset roundtrip validation
 
 This slice provides a deterministic scaffold for later interaction and dialogue flows.
+
+## M4 Slice 2 Interaction Flow Status
+
+Added first deterministic interaction boundary:
+
+- `modern/sim-core/include/u6_interaction.h`
+- `modern/sim-core/src/u6_interaction.c`
+
+Current verbs:
+
+- `talk` (range-checked NPC-to-NPC)
+- `use` (usable-object gate)
+- `open` (openable + lock gate with idempotent already-open result)
+
+Deterministic fixtures validate success/failure paths and event codes:
+
+- `modern/sim-core/tests/test_interaction.c`
 
 ## Legacy Mapping Requirement
 

@@ -6,10 +6,12 @@ Authoritative simulation prototype with deterministic tick stepping.
 
 - `include/sim_core.h`: API and simulation data types.
 - `include/u6_entities.h`: typed object/NPC subset containers and persistence helpers.
+- `include/u6_interaction.h`: deterministic interaction request/result boundary for talk/use/open flows.
 - `include/u6_objlist.h`: legacy `savegame/objlist` compatibility constants and helpers.
 - `include/u6_map.h`: legacy `map`/`chunks` read-only compatibility API.
 - `src/sim_core.c`: deterministic tick loop, command application, state hash.
 - `src/u6_entities.c`: typed entity state helpers, deterministic patrol stepping, subset serialization.
+- `src/u6_interaction.c`: deterministic interaction flow handlers and result codes.
 - `src/u6_objlist.c`: extract/patch helpers for the legacy `objlist` tail block.
 - `src/u6_map.c`: read-only map window loading, chunk index decode, chunk/tile reads.
 - `tests/test_replay.c`: replay determinism + golden-hash regression check.
@@ -21,6 +23,7 @@ Authoritative simulation prototype with deterministic tick stepping.
 - `tests/test_command_envelope.c`: command wire envelope serialize/deserialize tests.
 - `tests/test_replay_checkpoints.c`: deterministic replay checkpoint log generation tests.
 - `tests/test_entities.c`: typed object/NPC placement/update and subset save/load roundtrip tests.
+- `tests/test_interaction.c`: deterministic talk/use/open flow fixtures (success and failure paths).
 
 ## Intent
 

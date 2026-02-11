@@ -99,9 +99,9 @@ This checklist is intentionally mutable.
 
 #### Slice M4.2: Interaction + Basic Dialogue Path
 
-- `[ ]` Port one interaction flow (open/use/talk minimal path)
-- `[ ]` Add deterministic script/dialogue execution test fixtures
-- `[ ]` Document legacy-to-modern function mapping for this flow
+- `[x]` Port one interaction flow (open/use/talk minimal path)
+- `[x]` Add deterministic script/dialogue execution test fixtures
+- `[x]` Document legacy-to-modern function mapping for this flow
 
 #### Slice M4.3: Multiplayer Readiness (Pre-M5)
 
@@ -120,8 +120,9 @@ This checklist is intentionally mutable.
 - `[x]` Complete M3.3 (asset pipeline integration)
 - `[x]` Complete M3.4 (playable walkaround demo)
 - `[x]` Complete M4.1 (object/NPC data surface)
-- `[ ]` Start M4.2 (interaction + basic dialogue path)
-- `[ ]` Select first interaction flow and legacy symbol mapping targets
+- `[x]` Complete M4.2 (interaction + basic dialogue path)
+- `[ ]` Start M4.3 (multiplayer readiness prework)
+- `[ ]` Define actor-aware command envelope variant and checksum fixtures
 
 ## Known Blockers / Risks
 
@@ -133,4 +134,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M4 Slice 2`: port one minimal interaction flow (use/open/talk path) with deterministic fixtures.
+Implement `M4 Slice 3`: network-neutral command envelope and desync-check utility baseline.

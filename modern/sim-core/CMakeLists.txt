@@ -1,6 +1,7 @@
 add_library(sim_core STATIC
   src/sim_core.c
   src/u6_entities.c
+  src/u6_interaction.c
   src/u6_objlist.c
   src/u6_map.c
 )
@@ -81,3 +82,11 @@ add_executable(sim_core_entities_test
 target_link_libraries(sim_core_entities_test PRIVATE sim_core)
 
 add_test(NAME sim_core_entities_test COMMAND sim_core_entities_test)
+
+add_executable(sim_core_interaction_test
+  tests/test_interaction.c
+)
+
+target_link_libraries(sim_core_interaction_test PRIVATE sim_core)
+
+add_test(NAME sim_core_interaction_test COMMAND sim_core_interaction_test)

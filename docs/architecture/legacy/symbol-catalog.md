@@ -118,3 +118,25 @@ Evidence: read/write tail size computed by `(char *)&D_2CCC - (char *)&obj_2C4A`
 Behavior Notes: compatibility boundary for loading/persisting world-state globals
 Modern Mapping: `u6_objlist` helpers and constants `U6_OBJLIST_TAIL_OFFSET`/`U6_OBJLIST_TAIL_SIZE`
 Last Updated: 2026-02-11
+
+ID: SYM-0009
+Legacy Symbol: conversation/interaction handlers (function names pending)
+Location: `SRC/seg_1703.c`, `SRC/seg_1944.c`
+Proposed Name: `interaction_dispatch`
+Confidence: medium
+Status: candidate
+Evidence: segments contain interaction-heavy gameplay branching and NPC-driven action handling surfaces.
+Behavior Notes: expected to route talk/use/open-like actions through context and target checks.
+Modern Mapping: `u6_interaction_apply` in `modern/sim-core/src/u6_interaction.c`
+Last Updated: 2026-02-11
+
+ID: SYM-0010
+Legacy Symbol: dialogue/content lookup routines (function names pending)
+Location: `SRC/seg_27a1.c`
+Proposed Name: `dialogue_content_lookup`
+Confidence: low
+Status: candidate
+Evidence: module map and string/content handling patterns suggest conversation text/content mediation.
+Behavior Notes: likely downstream from interaction dispatch for talk flows.
+Modern Mapping: pending (future M4.2+ dialogue bridge)
+Last Updated: 2026-02-11
