@@ -12,9 +12,11 @@ Minimal browser client prototype:
 - 5 switchable interface layout variants (saved in browser `localStorage`)
 - optional self-hosted retro fonts (`modern/client-web/fonts/README.md`)
 - viewport tile grid toggle (off by default; saved in browser `localStorage`)
+- overlay debug labels toggle (off by default; saved in browser `localStorage`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
 - legacy `animdata`-driven tile remap animation (water/swamp and other animated sets)
+- first-pass legacy visibility/blackout mask (room-dependent wall/corner behavior)
 - canonical capture presets + one-click viewport PNG export for parity screenshot workflow
   - includes `Lord British Throne (307,347,0)` preset for throne composition validation
 
@@ -57,6 +59,7 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 
 - `W/A/S/D` or `H/J/K/L`: queue movement commands
 - `R`: reset run state to initial seed/world
+- `O`: toggle overlay debug tile labels
 - `G`: jump to selected canonical capture preset
 - `P`: capture viewport PNG
 - `V`: run replay determinism verification for current command log and produce downloadable checkpoints CSV

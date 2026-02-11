@@ -97,6 +97,7 @@ const themeSelect = document.getElementById("themeSelect");
 const layoutSelect = document.getElementById("layoutSelect");
 const fontSelect = document.getElementById("fontSelect");
 const gridToggle = document.getElementById("gridToggle");
+const debugOverlayToggle = document.getElementById("debugOverlayToggle");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
@@ -105,6 +106,7 @@ const THEME_KEY = "vm_theme";
 const LAYOUT_KEY = "vm_layout";
 const FONT_KEY = "vm_font";
 const GRID_KEY = "vm_grid";
+const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -167,6 +169,7 @@ const state = {
   animCounter: 0,
   objectOverlayCount: 0,
   showGrid: false,
+  showOverlayDebug: false,
   palette: null,
   tileFlags: null,
   terrainType: null,
@@ -380,7 +383,6 @@ class U6TileSetJS {
   buildTileCanvas(tileId) {
     const tilePixels = this.decodeTilePixels(tileId);
     const mask = this.maskTypeFor(tileId);
-    const legacyCornerOverlay = tileId >= 0x100 && tileId < 0x120;
     const c = document.createElement("canvas");
     c.width = 16;
     c.height = 16;
@@ -395,9 +397,6 @@ class U6TileSetJS {
         a = (palIdx === 0xff || palIdx === 0x00) ? 0 : 255;
       } else if (mask === 5) {
         a = (palIdx === 0xff || palIdx === 0x00) ? 0 : 255;
-      } else if (legacyCornerOverlay) {
-        /* Corner overlay tiles in this range use 0 as transparent over base terrain. */
-        a = (palIdx === 0x00) ? 0 : 255;
       }
       const p = i * 4;
       img.data[p + 0] = rgb[0];
@@ -744,6 +743,36 @@ function initGrid() {
   }
 }
 
+function setOverlayDebug(enabled) {
+  state.showOverlayDebug = !!enabled;
+  if (debugOverlayToggle) {
+    debugOverlayToggle.value = state.showOverlayDebug ? "on" : "off";
+  }
+  try {
+    localStorage.setItem(DEBUG_OVERLAY_KEY, state.showOverlayDebug ? "on" : "off");
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initOverlayDebug() {
+  let saved = "off";
+  try {
+    const fromStorage = localStorage.getItem(DEBUG_OVERLAY_KEY);
+    if (fromStorage === "on" || fromStorage === "off") {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setOverlayDebug(saved === "on");
+  if (debugOverlayToggle) {
+    debugOverlayToggle.addEventListener("change", () => {
+      setOverlayDebug(debugOverlayToggle.value === "on");
+    });
+  }
+}
+
 function initCapturePresets() {
   if (!locationSelect) {
     return;
@@ -980,53 +1009,180 @@ function hasWallTerrain(tileId) {
   return (terrainOf(tileId) & 0x04) !== 0;
 }
 
-function objectWallContributionAt(wx, wy, wz) {
-  if (!state.objectLayer) {
-    return false;
+function buildLegacyViewContext(startX, startY, wz) {
+  if (!state.mapCtx) {
+    return null;
   }
 
-  const candidates = [
-    { x: wx, y: wy, dx: 0, dy: 0 },
-    { x: wx + 1, y: wy, dx: 1, dy: 0 },
-    { x: wx, y: wy + 1, dx: 0, dy: 1 },
-    { x: wx + 1, y: wy + 1, dx: 1, dy: 1 }
-  ];
+  const PAD = 1;
+  const W = VIEW_W + (PAD * 2);
+  const H = VIEW_H + (PAD * 2);
+  const C_X = PAD + (VIEW_W >> 1);
+  const C_Y = PAD + (VIEW_H >> 1);
+  const FLAG_BA = 0x04;
+  const FLAG_WALL = 0x08;
+  const FLAG_WIN = 0x10;
+  const FLAG_OPA = 0x20;
+  const FLAG_VISITED = 0x40;
+  const FLAG_VISIBLE = 0x80;
 
-  for (const c of candidates) {
-    const objs = state.objectLayer.objectsAt(c.x, c.y, wz);
-    for (const o of objs) {
-      const tileId = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
-      if (!hasWallTerrain(tileId)) {
-        continue;
+  const baseTiles = Array.from({ length: H }, () => new Uint16Array(W));
+  const flags = Array.from({ length: H }, () => new Uint8Array(W));
+
+  const tileFlagsFor = (tileId) => {
+    if (!state.tileFlags) {
+      return 0;
+    }
+    return state.tileFlags[tileId & 0x7ff] ?? 0;
+  };
+  const inBounds = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const markFlag = (x, y, bit) => {
+    if (inBounds(x, y)) {
+      flags[y][x] |= bit;
+    }
+  };
+  const isTileOpa = (tileId) => (tileFlagsFor(tileId) & 0x04) !== 0;
+  const isTileWin = (tileId) => (tileFlagsFor(tileId) & 0x08) !== 0;
+  const isTileFor = (tileId) => (tileFlagsFor(tileId) & 0x10) !== 0;
+  const isTileDoubleV = (tileId) => (tileFlagsFor(tileId) & 0x40) !== 0;
+  const isTileDoubleH = (tileId) => (tileFlagsFor(tileId) & 0x80) !== 0;
+
+  const applyObjFlags = (gx, gy, tileId) => {
+    if (!inBounds(gx, gy)) {
+      return;
+    }
+    if (isTileWin(tileId)) {
+      markFlag(gx, gy, FLAG_WIN);
+    } else if (isTileOpa(tileId)) {
+      markFlag(gx, gy, FLAG_OPA);
+    } else {
+      const isBa = false;
+      if (isBa) {
+        markFlag(gx, gy, FLAG_BA);
       }
-      const flags = state.tileFlags ? (state.tileFlags[tileId & 0x7ff] ?? 0) : 0;
-      if (c.dx === 0 && c.dy === 0) {
-        return true;
+    }
+    if (isTileOpa(tileId - 1)) {
+      if (isTileDoubleV(tileId)) {
+        markFlag(gx, gy - 1, FLAG_OPA);
       }
-      if (c.dx === 1 && c.dy === 0 && (flags & 0x80)) {
-        return true;
+      if (isTileDoubleH(tileId)) {
+        markFlag(gx - 1, gy, FLAG_OPA);
       }
-      if (c.dx === 0 && c.dy === 1 && (flags & 0x40)) {
-        return true;
+    }
+    if (hasWallTerrain(tileId)) {
+      markFlag(gx, gy, FLAG_WALL);
+      if (isTileDoubleV(tileId)) {
+        markFlag(gx, gy - 1, FLAG_WALL);
       }
-      if (c.dx === 1 && c.dy === 1 && (flags & 0x80) && (flags & 0x40)) {
-        return true;
+      if (isTileDoubleH(tileId)) {
+        markFlag(gx - 1, gy, FLAG_WALL);
+      }
+    }
+  };
+
+  for (let gy = 0; gy < H; gy += 1) {
+    for (let gx = 0; gx < W; gx += 1) {
+      const wx = startX + gx - PAD;
+      const wy = startY + gy - PAD;
+      baseTiles[gy][gx] = state.mapCtx.tileAt(wx, wy, wz);
+    }
+  }
+
+  if (state.objectLayer) {
+    for (let gy = 0; gy < H; gy += 1) {
+      for (let gx = 0; gx < W; gx += 1) {
+        const wx = startX + gx - PAD;
+        const wy = startY + gy - PAD;
+        const overlays = state.objectLayer.objectsAt(wx, wy, wz);
+        for (const o of overlays) {
+          const tileId = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
+          applyObjFlags(gx, gy, tileId);
+        }
       }
     }
   }
 
-  return false;
-}
-
-function wallPresenceAt(wx, wy, wz) {
-  const baseTile = state.mapCtx ? state.mapCtx.tileAt(wx, wy, wz) : 0;
-  if (hasWallTerrain(baseTile)) {
+  const isVisibleAt = (gx, gy) => {
+    if (!inBounds(gx, gy)) {
+      return false;
+    }
+    const tile = baseTiles[gy][gx];
+    const f = flags[gy][gx];
+    if (f & FLAG_OPA) {
+      return false;
+    }
+    if (isTileWin(tile) || (f & FLAG_WIN)) {
+      return (
+        (gx === C_X && Math.abs(gy - C_Y) < 2)
+        || (gy === C_Y && Math.abs(gx - C_X) < 2)
+      );
+    }
+    if (!(f & FLAG_BA) && isTileOpa(tile)) {
+      return false;
+    }
     return true;
+  };
+
+  const q = [];
+  const pushVisit = (gx, gy) => {
+    if (!inBounds(gx, gy)) {
+      return;
+    }
+    if (flags[gy][gx] & FLAG_VISITED) {
+      return;
+    }
+    flags[gy][gx] |= FLAG_VISITED;
+    q.push([gx, gy]);
+  };
+
+  if (isVisibleAt(C_X, C_Y)) {
+    pushVisit(C_X, C_Y);
+  } else {
+    if (isVisibleAt(C_X + 1, C_Y)) pushVisit(C_X + 1, C_Y);
+    if (isVisibleAt(C_X, C_Y + 1)) pushVisit(C_X, C_Y + 1);
   }
-  return objectWallContributionAt(wx, wy, wz);
+
+  const stepX = [0, 1, 0, 0, -1, -1, 0, 0];
+  const stepY = [-1, 0, 1, 1, 0, 0, -1, -1];
+
+  while (q.length) {
+    const [gx, gy] = q.shift();
+    flags[gy][gx] |= FLAG_VISIBLE;
+    if (!isVisibleAt(gx, gy)) {
+      continue;
+    }
+    /* Match legacy C_1100_0131 neighbor walk: cumulative step sequence
+       that traces N, NE, E, SE, S, SW, W, NW around the current cell. */
+    let nx = gx;
+    let ny = gy;
+    for (let i = 0; i < stepX.length; i += 1) {
+      nx += stepX[i];
+      ny += stepY[i];
+      pushVisit(nx, ny);
+    }
+  }
+
+  const visibleAtWorld = (wx, wy) => {
+    const gx = wx - startX + PAD;
+    const gy = wy - startY + PAD;
+    if (!inBounds(gx, gy)) {
+      return true;
+    }
+    return (flags[gy][gx] & FLAG_VISIBLE) !== 0;
+  };
+  const wallAtWorld = (wx, wy) => {
+    const gx = wx - startX + PAD;
+    const gy = wy - startY + PAD;
+    if (!inBounds(gx, gy)) {
+      return false;
+    }
+    return (flags[gy][gx] & FLAG_WALL) !== 0;
+  };
+
+  return { visibleAtWorld, wallAtWorld };
 }
 
-function applyLegacyCornerVariant(tileId, wx, wy, wz) {
+function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
   /* Heuristic guard: in the web prototype we don't have full AreaFlags/object
      occlusion state from legacy `seg_1100`; remapping mid/high wall families
      (notably 0xC0+) can incorrectly turn wood walls into stone variants. */
@@ -1050,13 +1206,12 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz) {
   const south = state.mapCtx.tileAt(wx, wy + 1, wz);
   const west = state.mapCtx.tileAt(wx - 1, wy, wz);
 
-  /* Approximate legacy AreaFlags wall signal with map terrain + object
-     wall contributions (including double-H/double-V spill). */
+  /* Use view-context visibility bits like legacy AreaFlags[...]&0x80. */
   let bp0c = 0;
-  if (wallPresenceAt(wx, wy - 1, wz)) bp0c |= 8;
-  if (wallPresenceAt(wx + 1, wy, wz)) bp0c |= 4;
-  if (wallPresenceAt(wx, wy + 1, wz)) bp0c |= 2;
-  if (wallPresenceAt(wx - 1, wy, wz)) bp0c |= 1;
+  if (!viewCtx || viewCtx.visibleAtWorld(wx, wy - 1)) bp0c |= 8;
+  if (!viewCtx || viewCtx.visibleAtWorld(wx + 1, wy)) bp0c |= 4;
+  if (!viewCtx || viewCtx.visibleAtWorld(wx, wy + 1)) bp0c |= 2;
+  if (!viewCtx || viewCtx.visibleAtWorld(wx - 1, wy)) bp0c |= 1;
 
   if (bp0c === 0x0f || bp0c === 0x00) {
     return tileId;
@@ -1067,14 +1222,18 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz) {
     const nt = terrainOf(north);
     const nl = nt & 0x0f;
     if (!(nl & 0x04) || !(nt & 0x20)) {
-      imped &= ~8;
+      if (!viewCtx || !viewCtx.wallAtWorld(wx, wy - 1)) {
+        imped &= ~8;
+      }
     }
   }
   if (imped & 2) {
     const wt = terrainOf(west);
     const wl = wt & 0x0f;
     if (!(wl & 0x04) || !(wt & 0x40)) {
-      imped &= ~1;
+      if (!viewCtx || !viewCtx.wallAtWorld(wx - 1, wy)) {
+        imped &= ~1;
+      }
     }
   }
 
@@ -1087,6 +1246,10 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz) {
   }
 
   return tileId;
+}
+
+function shouldBlackoutTile(rawTile, wx, wy, viewCtx) {
+  return !!(viewCtx && !viewCtx.visibleAtWorld(wx, wy));
 }
 
 function tileColor(t) {
@@ -1106,6 +1269,7 @@ function drawTileGrid() {
 
   const startX = state.sim.world.map_x - (VIEW_W >> 1);
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
+  const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
   const overlayCells = (state.tileSet && state.objectLayer)
     ? Array.from({ length: VIEW_W * VIEW_H }, () => [])
     : null;
@@ -1116,12 +1280,15 @@ function drawTileGrid() {
     }
     return (state.tileFlags[tileId & 0x7ff] & 0x10) !== 0;
   };
-  const insertLegacyCellTile = (gx, gy, tileId, bp06) => {
+  const insertLegacyCellTile = (gx, gy, tileId, bp06, debugLabel = "") => {
     if (!overlayCells || gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
       return;
     }
+    if (viewCtx && !viewCtx.visibleAtWorld(startX + gx, startY + gy)) {
+      return;
+    }
     const list = overlayCells[cellIndex(gx, gy)];
-    const entry = { tileId: tileId & 0xffff, floor: isFloorTile(tileId) };
+    const entry = { tileId: tileId & 0xffff, floor: isFloorTile(tileId), dbg: debugLabel };
     if (entry.floor || bp06 === 2) {
       if (bp06 & 1) {
         list.push(entry);
@@ -1149,7 +1316,12 @@ function drawTileGrid() {
       if (state.mapCtx) {
         rawTile = state.mapCtx.tileAt(wx, wy, state.sim.world.map_z);
         t = rawTile;
-        t = applyLegacyCornerVariant(t, wx, wy, state.sim.world.map_z);
+        if (shouldBlackoutTile(rawTile, wx, wy, viewCtx)) {
+          t = 0x0ff;
+          rawTile = 0x0ff;
+        } else {
+          t = applyLegacyCornerVariant(t, wx, wy, state.sim.world.map_z, viewCtx);
+        }
       } else {
         t = (wx * 7 + wy * 13) & 0xff;
         rawTile = t;
@@ -1174,20 +1346,24 @@ function drawTileGrid() {
       if (state.tileSet && state.objectLayer) {
         const overlays = state.objectLayer.objectsAt(wx, wy, state.sim.world.map_z);
         for (const o of overlays) {
+          if (viewCtx && !viewCtx.visibleAtWorld(wx, wy)) {
+            continue;
+          }
           const animObjTile = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
-          insertLegacyCellTile(gx, gy, animObjTile, 0);
+          const dbgMain = `0x${animObjTile.toString(16)}`;
+          insertLegacyCellTile(gx, gy, animObjTile, 0, dbgMain);
 
           /* Legacy C_1184_35EA: object tiles with TileFlag 0x80/0x40 spill into
              left/up neighboring cells using tileId-1..-3 subtiles. */
           const tf = state.tileFlags ? (state.tileFlags[animObjTile & 0x7ff] ?? 0) : 0;
           if (tf & 0x80) {
-            insertLegacyCellTile(gx - 1, gy, animObjTile - 1, 1);
+            insertLegacyCellTile(gx - 1, gy, animObjTile - 1, 1, `0x${(animObjTile - 1).toString(16)}`);
             if (tf & 0x40) {
-              insertLegacyCellTile(gx, gy - 1, animObjTile - 2, 1);
-              insertLegacyCellTile(gx - 1, gy - 1, animObjTile - 3, 1);
+              insertLegacyCellTile(gx, gy - 1, animObjTile - 2, 1, `0x${(animObjTile - 2).toString(16)}`);
+              insertLegacyCellTile(gx - 1, gy - 1, animObjTile - 3, 1, `0x${(animObjTile - 3).toString(16)}`);
             }
           } else if (tf & 0x40) {
-            insertLegacyCellTile(gx, gy - 1, animObjTile - 1, 1);
+            insertLegacyCellTile(gx, gy - 1, animObjTile - 1, 1, `0x${(animObjTile - 1).toString(16)}`);
           }
           overlayCount += 1;
         }
@@ -1203,10 +1379,20 @@ function drawTileGrid() {
       for (let gx = 0; gx < VIEW_W; gx += 1) {
         const px = gx * TILE_SIZE;
         const py = gy * TILE_SIZE;
+        if (viewCtx && !viewCtx.visibleAtWorld(startX + gx, startY + gy)) {
+          continue;
+        }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
           const oc = state.tileSet.tileCanvas(t.tileId);
           ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
+          if (state.showOverlayDebug && t.dbg) {
+            ctx.fillStyle = "rgba(7, 12, 16, 0.72)";
+            ctx.fillRect(px + 3, py + 3, 48, 14);
+            ctx.fillStyle = "#f5f5f5";
+            ctx.font = "10px monospace";
+            ctx.fillText(t.dbg, px + 5, py + 13);
+          }
         }
       }
     }
@@ -1469,6 +1655,7 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "a" || k === "h") queueMove(-1, 0);
   else if (k === "d" || k === "l") queueMove(1, 0);
   else if (k === "g") jumpToPreset();
+  else if (k === "o") setOverlayDebug(!state.showOverlayDebug);
   else if (k === "p") captureViewportPng();
   else if (k === "r") resetRun();
   else if (k === "v") verifyReplayStability();
@@ -1487,6 +1674,7 @@ initTheme();
 initLayout();
 initFont();
 initGrid();
+initOverlayDebug();
 initCapturePresets();
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);

@@ -108,6 +108,14 @@
           </select>
         </div>
         <div class="stat">
+          <span>Overlay Debug</span>
+          <label class="theme-label" for="debugOverlayToggle">Object Tile Labels</label>
+          <select id="debugOverlayToggle" class="theme-select">
+            <option value="off">Off (Default)</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+        <div class="stat">
           <span>Capture Preset</span>
           <label class="theme-label" for="locationSelect">Canonical Location</label>
           <select id="locationSelect" class="theme-select"></select>
@@ -123,6 +131,7 @@
           <h2>Controls</h2>
           <p>`W A S D` or `H J K L` move</p>
           <p>`R` recenter</p>
+          <p>`O` toggle overlay debug labels</p>
           <p>`G` jump to selected capture preset</p>
           <p>`P` capture viewport png</p>
           <p>`V` verify replay stability</p>
