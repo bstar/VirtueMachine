@@ -119,9 +119,9 @@ This checklist is intentionally mutable.
 
 #### Slice R1: Static Object Layer Rendering (Doors/Fountains/Tables/Food)
 
-- `[ ]` Identify and document legacy object placement source files/records for world map overlays
+- `[x]` Identify and document legacy object placement source files/records for world map overlays
 - `[ ]` Add read-only loader for static world object placements into `sim-core` data surface
-- `[ ]` Render static object layer in `client-web` above terrain with deterministic ordering rules
+- `[x]` Render static object layer in `client-web` above terrain with deterministic ordering rules
 - `[ ]` Add fixture tests for placement decode and draw-order determinism
 - `[ ]` Capture parity screenshots at known coordinates (legacy reference vs web client)
 
@@ -153,7 +153,7 @@ This checklist is intentionally mutable.
 - `[x]` Define actor-aware command envelope variant and checksum fixtures
 - `[x]` Add peer checkpoint hash comparator CLI + automated test
 - `[x]` Complete M4.4 CI quality gates (required tests + replay artifact job)
-- `[ ]` Start R1 static object layer rendering (doors/fountains/tables/food)
+- `[x]` Start R1 static object layer rendering (doors/fountains/tables/food)
 - `[ ]` Land first terrain+object parity screenshots from canonical locations
 
 ## Known Blockers / Risks

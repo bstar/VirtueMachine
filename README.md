@@ -92,3 +92,4 @@ Defaults:
 
 - Source: `../ultima6` (relative to repo root) unless `U6_ASSET_SRC` is set.
 - Destination: `modern/assets/runtime` unless `U6_ASSET_DEST` is set.
+- Savegame object overlay files (`savegame/objblk??`, `savegame/objlist`) are copied to `modern/assets/runtime/savegame` when present.

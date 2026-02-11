@@ -12,6 +12,7 @@ Minimal browser client prototype:
 - 5 switchable interface layout variants (saved in browser `localStorage`)
 - optional self-hosted retro fonts (`modern/client-web/fonts/README.md`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
+- static object overlay layer for select world props (doors, fountains, tables, food)
 
 ## Run
 
@@ -38,6 +39,12 @@ For bitmap tile rendering path (optional, if present):
 - `modern/assets/runtime/masktype.vga`
 - `modern/assets/runtime/maptiles.vga`
 - `modern/assets/runtime/objtiles.vga`
+
+For static world object overlays (optional, if present):
+
+- `modern/assets/runtime/basetile`
+- `modern/assets/runtime/savegame/objblk??`
+- `modern/assets/runtime/savegame/objlist`
 
 If missing/unavailable, it renders a deterministic synthetic fallback grid.
 

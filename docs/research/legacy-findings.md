@@ -163,3 +163,15 @@ Impact on Port: provides a testable gameplay interaction seam required for gradu
 Next Validation Step: connect one legacy conversation/script path to this boundary and compare observed branch outcomes.
 Related Symbols: SYM-0009, SYM-0010
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0013
+Date: 2026-02-11
+Area: Object Block (`savegame/objblk??`) Layout for World Overlay Rendering
+Legacy Source Ref: `SRC/seg_1184.c` (`C_1184_2722`, `C_1184_2DEF`, `__ObjSerialize`, `__ObjectsDeserialize`), `SRC/u6.h` (`struct t_9E39`, coord/status macros)
+Summary: each `objblk` file is a compact object list: 2-byte object count followed by `count * 8` records (`ObjStatus`, packed coord, `ObjShapeType`, `Amount`), with area file naming based on 8x8 outdoor region IDs.
+Evidence: legacy read/write paths use `OSI_read(..., 2)` for count and `OSI_read(..., count << 3, ScratchBuf)` for record payload; file name mapping writes `objblkXY` where `X=(area_id & 7)+'A'`, `Y=(area_id >> 3)+'A'`; packed coord decode follows `GetCoordX/GetCoordY/GetCoordZ` bit layout in `u6.h`.
+Confidence: high
+Impact on Port: enables faithful static object overlay rendering (doors/fountains/tables/food) from original game save data without mutating legacy sources.
+Next Validation Step: compare selected known map locations against reference captures and refine draw ordering/occlusion rules for multi-object stacks.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../architecture/new/system-overview.md`, `../progress.md`

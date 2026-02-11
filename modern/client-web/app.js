@@ -21,6 +21,32 @@ const LEGACY_CORNER_TABLE = [
   1, 5, 1, 1,
   11, 0, 2, 2
 ];
+const OBJ_COORD_USE_MASK = 0x18;
+const OBJ_COORD_USE_LOCXYZ = 0x00;
+const OBJECT_TYPES_RENDER = new Set([
+  0x05f, /* grapes */
+  0x060, /* butter */
+  0x080, /* loaf of bread */
+  0x081, /* portion of meat */
+  0x084, /* cheese */
+  0x0c6, /* cutting table */
+  0x0d1, /* meat rib type */
+  0x0e4, /* table square corner */
+  0x0e6, /* table round corner */
+  0x0ea, /* fountain */
+  0x0ed, /* table middle */
+  0x0ef, /* table round corner alt */
+  0x0fa, /* table square corner alt */
+  0x10f, /* doorsill */
+  0x117, /* table */
+  0x129, /* oaken door */
+  0x12a, /* windowed door */
+  0x12b, /* cedar door */
+  0x12c, /* steel door */
+  0x12d, /* doorway */
+  0x137, /* stone table */
+  0x14e /* secret door */
+]);
 
 const HASH_OFFSET = 1469598103934665603n;
 const HASH_PRIME = 1099511628211n;
@@ -34,6 +60,7 @@ const statPos = document.getElementById("statPos");
 const statClock = document.getElementById("statClock");
 const statDate = document.getElementById("statDate");
 const statTile = document.getElementById("statTile");
+const statObjects = document.getElementById("statObjects");
 const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
 const statHash = document.getElementById("statHash");
@@ -93,6 +120,8 @@ const state = {
   commandLog: [],
   mapCtx: null,
   tileSet: null,
+  objectLayer: null,
+  objectOverlayCount: 0,
   palette: null,
   terrainType: null,
   lastTs: performance.now(),
@@ -276,6 +305,97 @@ class U6TileSetJS {
       this.cache.set(tileId, this.buildTileCanvas(tileId));
     }
     return this.cache.get(tileId);
+  }
+}
+
+class U6ObjectLayerJS {
+  constructor(baseTiles) {
+    this.baseTiles = baseTiles;
+    this.byCoord = new Map();
+    this.totalLoaded = 0;
+    this.filesLoaded = 0;
+  }
+
+  decodeCoord(raw0, raw1, raw2) {
+    const x = raw0 | ((raw1 & 0x03) << 8);
+    const y = (raw1 >> 2) | ((raw2 & 0x0f) << 6);
+    const z = (raw2 >> 4) & 0x0f;
+    return { x, y, z };
+  }
+
+  coordKey(x, y, z) {
+    return `${x & 0x3ff},${y & 0x3ff},${z & 0x0f}`;
+  }
+
+  parseObjBlk(bytes) {
+    if (!bytes || bytes.length < 2) {
+      return [];
+    }
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let count = dv.getUint16(0, true);
+    const maxCount = Math.min(0x0c00, Math.floor((bytes.length - 2) / 8));
+    if (count > maxCount) {
+      count = maxCount;
+    }
+
+    const entries = [];
+    for (let i = 0; i < count; i += 1) {
+      const off = 2 + (i * 8);
+      const status = bytes[off + 0];
+      if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
+        continue;
+      }
+
+      const { x, y, z } = this.decodeCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
+      const shapeType = dv.getUint16(off + 4, true);
+      const type = shapeType & 0x3ff;
+      if (!OBJECT_TYPES_RENDER.has(type)) {
+        continue;
+      }
+
+      const frame = shapeType >>> 10;
+      const base = this.baseTiles[type] ?? 0;
+      const tileId = (base + frame) & 0xffff;
+      entries.push({ x, y, z, type, frame, tileId, order: i });
+    }
+    return entries;
+  }
+
+  addEntries(entries) {
+    for (const e of entries) {
+      const key = this.coordKey(e.x, e.y, e.z);
+      if (!this.byCoord.has(key)) {
+        this.byCoord.set(key, []);
+      }
+      this.byCoord.get(key).push(e);
+      this.totalLoaded += 1;
+    }
+  }
+
+  async loadOutdoor(fetcher) {
+    this.byCoord.clear();
+    this.totalLoaded = 0;
+    this.filesLoaded = 0;
+
+    for (let ay = 0; ay < 8; ay += 1) {
+      for (let ax = 0; ax < 8; ax += 1) {
+        const name = `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
+        const res = await fetcher(name);
+        if (!res || !res.ok) {
+          continue;
+        }
+        const buf = new Uint8Array(await res.arrayBuffer());
+        this.addEntries(this.parseObjBlk(buf));
+        this.filesLoaded += 1;
+      }
+    }
+    for (const list of this.byCoord.values()) {
+      list.sort((a, b) => a.order - b.order);
+    }
+  }
+
+  objectsAt(x, y, z) {
+    return this.byCoord.get(this.coordKey(x, y, z)) ?? [];
   }
 }
 
@@ -618,6 +738,16 @@ function buildPaletteFromU6Pal(bytes) {
   return colors;
 }
 
+function buildBaseTileTable(bytes) {
+  const out = new Uint16Array(1024);
+  const n = Math.min(1024, Math.floor(bytes.length / 2));
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = dv.getUint16(i * 2, true);
+  }
+  return out;
+}
+
 function fallbackTileColor(t) {
   const r = (t * 53) & 0xff;
   const g = (t * 97) & 0xff;
@@ -729,6 +859,7 @@ function drawTileGrid() {
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
 
   let centerTile = 0;
+  let overlayCount = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
       const wx = startX + gx;
@@ -758,10 +889,19 @@ function drawTileGrid() {
         ctx.fillStyle = tileColor(t);
         ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
       }
+      if (state.tileSet && state.objectLayer) {
+        const overlays = state.objectLayer.objectsAt(wx, wy, state.sim.world.map_z);
+        for (const o of overlays) {
+          const oc = state.tileSet.tileCanvas(o.tileId);
+          ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
+          overlayCount += 1;
+        }
+      }
       ctx.strokeStyle = "rgba(15, 20, 24, 0.55)";
       ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
     }
   }
+  state.objectOverlayCount = overlayCount;
 
   const cx = (VIEW_W >> 1) * TILE_SIZE;
   const cy = (VIEW_H >> 1) * TILE_SIZE;
@@ -779,6 +919,11 @@ function updateStats() {
   statClock.textContent = `${String(w.time_h).padStart(2, "0")}:${String(w.time_m).padStart(2, "0")}`;
   statDate.textContent = `${w.date_d} / ${w.date_m} / ${w.date_y}`;
   statQueued.textContent = String(state.queue.length);
+  if (state.objectLayer) {
+    statObjects.textContent = `${state.objectOverlayCount} / ${state.objectLayer.totalLoaded}`;
+  } else {
+    statObjects.textContent = "0 / 0";
+  }
   statHash.textContent = hashHex(simStateHash(state.sim));
 }
 
@@ -889,7 +1034,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -897,9 +1042,10 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/tileindx.vga"),
       fetch("../assets/runtime/masktype.vga"),
       fetch("../assets/runtime/maptiles.vga"),
-      fetch("../assets/runtime/objtiles.vga")
+      fetch("../assets/runtime/objtiles.vga"),
+      fetch("../assets/runtime/basetile")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -907,7 +1053,8 @@ async function loadRuntimeAssets() {
       idxRes.arrayBuffer(),
       maskRes.arrayBuffer(),
       mapTileRes.arrayBuffer(),
-      objTileRes.arrayBuffer()
+      objTileRes.arrayBuffer(),
+      baseTileRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -941,6 +1088,14 @@ async function loadRuntimeAssets() {
       state.tileSet = null;
     }
 
+    if (baseTileRes.ok && baseTileBuf.byteLength >= 2048) {
+      const baseTiles = buildBaseTileTable(new Uint8Array(baseTileBuf));
+      state.objectLayer = new U6ObjectLayerJS(baseTiles);
+      await state.objectLayer.loadOutdoor((name) => fetch(`../assets/runtime/savegame/${name}`));
+    } else {
+      state.objectLayer = null;
+    }
+
     if (state.tileSet) {
       statSource.textContent = "runtime assets + tile art";
     } else if (state.palette) {
@@ -950,7 +1105,11 @@ async function loadRuntimeAssets() {
     }
     diagBox.className = "diag ok";
     if (state.tileSet) {
-      diagBox.textContent = "Runtime assets loaded with tile decoder path (tileindx/masktype/maptiles/objtiles). Rendering bitmap tiles.";
+      if (state.objectLayer && state.objectLayer.filesLoaded > 0) {
+        diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files).`;
+      } else {
+        diagBox.textContent = "Runtime assets loaded with tile decoder path (tileindx/masktype/maptiles/objtiles). Rendering bitmap tiles.";
+      }
     } else if (state.palette) {
       diagBox.textContent = "Runtime assets loaded with u6pal/tileflag decoding. Terrain tint now uses original palette data.";
     } else {
@@ -959,6 +1118,7 @@ async function loadRuntimeAssets() {
   } catch (err) {
     state.mapCtx = null;
     state.tileSet = null;
+    state.objectLayer = null;
     state.palette = null;
     state.terrainType = null;
     statSource.textContent = "synthetic fallback";

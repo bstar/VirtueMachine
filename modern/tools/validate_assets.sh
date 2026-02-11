@@ -49,6 +49,18 @@ set -e
 echo "Required missing: $req_missing"
 echo "Optional missing: $opt_missing"
 
+objblk_count="$(find "$RUNTIME_DIR/savegame" -maxdepth 1 -type f -iname 'objblk??' 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "$objblk_count" -eq 0 ]]; then
+  echo "MISSING OPTIONAL: savegame/objblk?? (object layer overlays disabled)"
+else
+  echo "Optional present: savegame/objblk?? count=$objblk_count"
+fi
+if [[ ! -f "$RUNTIME_DIR/savegame/objlist" ]]; then
+  echo "MISSING OPTIONAL: savegame/objlist"
+else
+  echo "Optional present: savegame/objlist"
+fi
+
 if [[ "$req_missing" -ne 0 ]]; then
   echo "Asset preflight FAILED."
   exit 1
