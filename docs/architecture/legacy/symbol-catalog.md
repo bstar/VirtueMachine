@@ -69,8 +69,41 @@ Legacy Symbol: `D_2C4A` block globals
 Location: `SRC/D_2C4A.c`
 Proposed Name: `world_state_globals`
 Confidence: high
-Status: candidate
+Status: active
 Evidence: includes time/date, map coordinates, active party state, combat flag, quest state
 Behavior Notes: serialized to `savegame\\objlist` tail region
-Modern Mapping: `sim-core` authoritative world state struct
+Modern Mapping: `SimWorldState` in `modern/sim-core/include/sim_core.h`
+Last Updated: 2026-02-11
+
+ID: SYM-0005
+Legacy Symbol: `Time_M`, `Time_H`, `Date_D`, `Date_M`, `Date_Y`
+Location: `SRC/D_2C4A.c`
+Proposed Name: `world_time_date`
+Confidence: high
+Status: active
+Evidence: explicit minute/hour/day/month/year globals in `D_2C4A`
+Behavior Notes: simulation clock fields that must serialize cleanly
+Modern Mapping: `SimWorldState.time_m/time_h/date_d/date_m/date_y`
+Last Updated: 2026-02-11
+
+ID: SYM-0006
+Legacy Symbol: `MapX`, `MapY`, `MapZ`
+Location: `SRC/D_2C4A.c`
+Proposed Name: `world_map_position`
+Confidence: high
+Status: active
+Evidence: explicit globals for current world position and level
+Behavior Notes: core movement/view state; required for save/load parity
+Modern Mapping: `SimWorldState.map_x/map_y/map_z`
+Last Updated: 2026-02-11
+
+ID: SYM-0007
+Legacy Symbol: `InCombat`, `SoundFlag`, `IsOnQuest`, `NextSleep`, `WindDir`, `Active`
+Location: `SRC/D_2C4A.c`
+Proposed Name: `world_runtime_flags`
+Confidence: high
+Status: active
+Evidence: top-level world state globals in legacy source
+Behavior Notes: combat mode and progression flags influence world behavior
+Modern Mapping: `SimWorldState.in_combat/sound_enabled/is_on_quest/next_sleep/wind_dir/active`
 Last Updated: 2026-02-11

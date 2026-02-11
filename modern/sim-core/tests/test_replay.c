@@ -14,8 +14,23 @@ static int assert_u64_eq(const char *label, uint64_t a, uint64_t b) {
 int main(void) {
   const SimConfig cfg = {
       .seed = 0x12345678u,
-      .start_x = 10,
-      .start_y = -5,
+      .initial_world =
+          {
+              .is_on_quest = 1,
+              .next_sleep = 0,
+              .time_m = 12,
+              .time_h = 8,
+              .date_d = 4,
+              .date_m = 7,
+              .date_y = 161,
+              .wind_dir = 0,
+              .active = 0,
+              .map_x = 10,
+              .map_y = -5,
+              .map_z = 0,
+              .in_combat = 1,
+              .sound_enabled = 1,
+          },
   };
 
   const SimCommand script[] = {
@@ -64,7 +79,7 @@ int main(void) {
 
   /* Intentional golden value to catch unplanned behavior changes. */
   {
-    const uint64_t expected = UINT64_C(0x9fc13001384621e8);
+    const uint64_t expected = UINT64_C(0x0a4618d497e0f03c);
     if (assert_u64_eq("golden hash", r1.state_hash, expected)) {
       return 1;
     }

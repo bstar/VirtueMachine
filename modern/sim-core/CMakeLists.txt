@@ -14,3 +14,11 @@ add_executable(sim_core_replay_test
 target_link_libraries(sim_core_replay_test PRIVATE sim_core)
 
 add_test(NAME sim_core_replay_test COMMAND sim_core_replay_test)
+
+add_executable(sim_core_world_state_io_test
+  tests/test_world_state_io.c
+)
+
+target_link_libraries(sim_core_world_state_io_test PRIVATE sim_core)
+
+add_test(NAME sim_core_world_state_io_test COMMAND sim_core_world_state_io_test)

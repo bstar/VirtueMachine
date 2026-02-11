@@ -13,9 +13,25 @@ typedef enum SimCommandType {
 
 typedef struct SimConfig {
   uint32_t seed;
-  int32_t start_x;
-  int32_t start_y;
+  struct SimWorldState {
+    uint8_t is_on_quest;
+    uint8_t next_sleep;
+    uint8_t time_m;
+    uint8_t time_h;
+    uint8_t date_d;
+    uint8_t date_m;
+    uint16_t date_y;
+    int16_t wind_dir;
+    uint8_t active;
+    int32_t map_x;
+    int32_t map_y;
+    int16_t map_z;
+    uint8_t in_combat;
+    uint8_t sound_enabled;
+  } initial_world;
 } SimConfig;
+
+typedef struct SimWorldState SimWorldState;
 
 typedef struct SimCommand {
   uint32_t tick;
@@ -27,10 +43,9 @@ typedef struct SimCommand {
 typedef struct SimState {
   uint32_t tick;
   uint32_t rng_state;
-  int32_t player_x;
-  int32_t player_y;
   uint32_t world_flags;
   uint32_t commands_applied;
+  SimWorldState world;
 } SimState;
 
 typedef struct SimStepResult {
@@ -48,5 +63,9 @@ int sim_step_ticks(SimState *state,
                    SimStepResult *out_result);
 
 uint64_t sim_state_hash(const SimState *state);
+
+size_t sim_world_state_size(void);
+int sim_world_serialize(const SimWorldState *world, uint8_t *out, size_t out_size);
+int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_size);
 
 #endif

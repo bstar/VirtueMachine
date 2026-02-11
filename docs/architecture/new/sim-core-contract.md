@@ -21,6 +21,9 @@ int sim_step_ticks(SimState *state,
                    uint32_t tick_count,
                    SimStepResult *out_result);
 uint64_t sim_state_hash(const SimState *state);
+size_t sim_world_state_size(void);
+int sim_world_serialize(const SimWorldState *world, uint8_t *out, size_t out_size);
+int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_size);
 ```
 
 Defined in:
@@ -51,6 +54,20 @@ Defined in:
 Current bootstrap test:
 
 - `modern/sim-core/tests/test_replay.c`
+- `modern/sim-core/tests/test_world_state_io.c`
+
+## M2 Slice 1 Mapping
+
+Current `SimWorldState` maps a vetted subset of legacy `D_2C4A` globals:
+
+- quest/sleep flags
+- time/date fields
+- wind direction
+- active party index
+- map coordinates (`map_x`, `map_y`, `map_z`)
+- combat/sound booleans
+
+This is the first persisted/state-sync-ready boundary for save compatibility and multiplayer snapshots.
 
 ## Legacy Mapping Requirement
 
