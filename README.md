@@ -41,6 +41,15 @@ nix develop
 
 Included tools: `clang`, `cmake`, `ninja`, `pkg-config`, `python3`, `nodejs`, `ripgrep`, shell tooling.
 
+Build and run the first `sim-core` test:
+
+```bash
+nix develop
+cmake -S . -B build -G Ninja
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
 ## Assets (Untracked)
 
 Original game assets are not committed. Keep them outside the repo (or under ignored `local/`).

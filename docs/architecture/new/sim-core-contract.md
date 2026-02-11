@@ -11,24 +11,29 @@ Define a stable, deterministic gameplay runtime API that remains faithful to leg
 3. Serializable authoritative state for saves and multiplayer synchronization.
 4. Explicit control over RNG source and seed.
 
-## Draft API Surface
+## M1 Bootstrap API Surface
 
 ```c
-typedef struct SimConfig SimConfig;
-typedef struct SimState SimState;
-typedef struct SimCommand SimCommand;
-typedef struct SimStepResult SimStepResult;
-
-int sim_init(SimState* state, const SimConfig* cfg);
-int sim_load_game(SimState* state, const char* save_slot_path);
-int sim_save_game(const SimState* state, const char* save_slot_path);
-
-int sim_queue_command(SimState* state, const SimCommand* cmd);
-int sim_step_ticks(SimState* state, int tick_count, SimStepResult* out_result);
-
-uint64_t sim_state_hash(const SimState* state);
-void sim_shutdown(SimState* state);
+int sim_init(SimState *state, const SimConfig *cfg);
+int sim_step_ticks(SimState *state,
+                   const SimCommand *commands,
+                   size_t command_count,
+                   uint32_t tick_count,
+                   SimStepResult *out_result);
+uint64_t sim_state_hash(const SimState *state);
 ```
+
+Defined in:
+
+- `modern/sim-core/include/sim_core.h`
+- `modern/sim-core/src/sim_core.c`
+
+## Why This Happens First
+
+- Multiplayer needs deterministic command + tick replay.
+- A larger viewport/UI must be presentation-only, not simulation authority.
+- Faithful legacy behavior requires measurable regression checks (hash/replay), which this layer enables.
+- This is the smallest possible executable slice that validates architecture decisions before larger port work.
 
 ## Determinism Policy
 
@@ -42,6 +47,10 @@ void sim_shutdown(SimState* state);
 - Replay tests: command log -> deterministic state hash checkpoints.
 - Golden scenario tests for key systems (movement/combat/dialogue/save-load).
 - Hash mismatch diagnostics include subsystem and tick context.
+
+Current bootstrap test:
+
+- `modern/sim-core/tests/test_replay.c`
 
 ## Legacy Mapping Requirement
 
