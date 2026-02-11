@@ -1,5 +1,6 @@
 add_library(sim_core STATIC
   src/sim_core.c
+  src/u6_entities.c
   src/u6_objlist.c
   src/u6_map.c
 )
@@ -72,3 +73,11 @@ add_executable(sim_core_replay_checkpoints_test
 target_link_libraries(sim_core_replay_checkpoints_test PRIVATE sim_core)
 
 add_test(NAME sim_core_replay_checkpoints_test COMMAND sim_core_replay_checkpoints_test)
+
+add_executable(sim_core_entities_test
+  tests/test_entities.c
+)
+
+target_link_libraries(sim_core_entities_test PRIVATE sim_core)
+
+add_test(NAME sim_core_entities_test COMMAND sim_core_entities_test)

@@ -139,3 +139,15 @@ Impact on Port: provides a practical browser-side determinism harness for moveme
 Next Validation Step: replace JS-side deterministic helpers with direct sim-core wasm calls to eliminate duplicate authority logic.
 Related Symbols: SYM-0005, SYM-0008
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0011
+Date: 2026-02-11
+Area: Typed Object/NPC State Surface
+Legacy Source Ref: `SRC/obj.h`, `SRC/seg_1944.c`, `SRC/seg_356A.c` (entity placement/update touchpoints)
+Summary: introduced a bounded typed entity module with explicit object/NPC state records, deterministic patrol stepping, and versioned subset serialization.
+Evidence: `modern/sim-core/include/u6_entities.h`, `modern/sim-core/src/u6_entities.c`, and `modern/sim-core/tests/test_entities.c`.
+Confidence: medium
+Impact on Port: establishes a deterministic, testable entity-state boundary needed before interaction/dialogue logic is ported.
+Next Validation Step: map first real legacy interaction path (open/use/talk) onto this entity surface and validate symbol-level parity assumptions.
+Related Symbols: SYM-0008
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

@@ -176,6 +176,22 @@ The client now includes deterministic walkaround instrumentation:
 
 This remains an interim JS mirror of sim-core behavior until wasm boundary integration lands.
 
+## M4 Slice 1 Entity Surface Status
+
+Added a first typed entity boundary for object/NPC subsets:
+
+- `modern/sim-core/include/u6_entities.h`
+- `modern/sim-core/src/u6_entities.c`
+
+Current scope:
+
+- bounded typed containers (`U6ObjectState`, `U6NpcState`, `U6EntityState`)
+- placement and direct lookup/move APIs
+- deterministic patrol update rule (`tick % 4 == 0` step cadence, boundary bounce)
+- versioned entity blob serialize/deserialize for subset roundtrip validation
+
+This slice provides a deterministic scaffold for later interaction and dialogue flows.
+
 ## Legacy Mapping Requirement
 
 For each implemented subsystem, add:

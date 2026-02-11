@@ -93,9 +93,9 @@ This checklist is intentionally mutable.
 
 #### Slice M4.1: Object/NPC Data Surface
 
-- `[ ]` Introduce typed object/NPC state containers for a minimal subset
-- `[ ]` Port first object placement/update rules with deterministic tests
-- `[ ]` Add save/load tests for object subset roundtrip
+- `[x]` Introduce typed object/NPC state containers for a minimal subset
+- `[x]` Port first object placement/update rules with deterministic tests
+- `[x]` Add save/load tests for object subset roundtrip
 
 #### Slice M4.2: Interaction + Basic Dialogue Path
 
@@ -119,8 +119,9 @@ This checklist is intentionally mutable.
 
 - `[x]` Complete M3.3 (asset pipeline integration)
 - `[x]` Complete M3.4 (playable walkaround demo)
-- `[ ]` Start M4.1 (object/NPC data surface)
-- `[ ]` Select first object subset and invariants for deterministic tests
+- `[x]` Complete M4.1 (object/NPC data surface)
+- `[ ]` Start M4.2 (interaction + basic dialogue path)
+- `[ ]` Select first interaction flow and legacy symbol mapping targets
 
 ## Known Blockers / Risks
 
@@ -132,4 +133,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M4 Slice 1`: introduce minimal object/NPC typed state containers with deterministic tests.
+Implement `M4 Slice 2`: port one minimal interaction flow (use/open/talk path) with deterministic fixtures.
