@@ -1255,38 +1255,61 @@ function doorStateKey(obj) {
   return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff}`;
 }
 
-function isDoorOpen(sim, obj) {
+function doorToggleMask(obj) {
+  return obj && obj.type === 0x14e ? 1 : 4;
+}
+
+function isDoorToggled(sim, obj) {
   if (!isCloseableDoorObject(obj)) {
     return false;
   }
   return !!(sim.doorOpenStates && sim.doorOpenStates[doorStateKey(obj)]);
 }
 
-function setDoorOpen(sim, obj, open) {
+function toggleDoorState(sim, obj) {
   if (!isCloseableDoorObject(obj)) {
-    return;
+    return false;
   }
   if (!sim.doorOpenStates) {
     sim.doorOpenStates = {};
   }
   const key = doorStateKey(obj);
-  if (open) {
-    sim.doorOpenStates[key] = 1;
-  } else {
+  if (sim.doorOpenStates[key]) {
     delete sim.doorOpenStates[key];
+    return false;
   }
+  sim.doorOpenStates[key] = 1;
+  return true;
+}
+
+function resolvedDoorFrame(sim, obj) {
+  const frame = obj.frame | 0;
+  if (!isCloseableDoorObject(obj)) {
+    return frame;
+  }
+  if (!isDoorToggled(sim, obj)) {
+    return frame;
+  }
+  return frame ^ doorToggleMask(obj);
+}
+
+function isDoorFrameOpen(obj, frame) {
+  if (!isCloseableDoorObject(obj)) {
+    return false;
+  }
+  if (obj.type === 0x14e) {
+    return (frame & 1) !== 0;
+  }
+  return frame >= 0 && frame < 4;
 }
 
 function resolveDoorTileId(sim, obj) {
   const base = obj.baseTile | 0;
-  const frame = obj.frame | 0;
-  if (!isCloseableDoorObject(obj)) {
-    return (base + frame) & 0xffff;
-  }
-  if (isDoorOpen(sim, obj)) {
-    return -1;
-  }
-  return (base + frame) & 0xffff;
+  return (base + resolvedDoorFrame(sim, obj)) & 0xffff;
+}
+
+function resolveDoorTileIdForVisibility(sim, obj) {
+  return resolveDoorTileId(sim, obj);
 }
 
 function isBlockedAt(sim, wx, wy, wz) {
@@ -1301,18 +1324,56 @@ function isBlockedAt(sim, wx, wy, wz) {
     return true;
   }
   if (state.objectLayer && state.tileFlags) {
-    const overlays = state.objectLayer.objectsAt(wx, wy, wz);
-    for (const o of overlays) {
-      if (!o.renderable) {
-        continue;
-      }
-      if (isCloseableDoorObject(o) && isDoorOpen(sim, o)) {
-        continue;
-      }
+    const wrap10 = (v) => v & 0x3ff;
+    const tx = wrap10(wx);
+    const ty = wrap10(wy);
+    const checkObjectBlockAt = (o, ox, oy) => {
       const tileId = resolveDoorTileId(sim, o);
       const tf = state.tileFlags[tileId & 0x07ff] ?? 0;
-      if (tf & 0x04) {
+      const sx = wrap10(ox);
+      const sy = wrap10(oy);
+      if ((tf & 0x04) !== 0 && sx === tx && sy === ty) {
         return true;
+      }
+      if ((tf & 0x80) !== 0 && tx === wrap10(sx - 1) && ty === sy) {
+        const spill = (tileId - 1) & 0xffff;
+        const sf = state.tileFlags[spill & 0x07ff] ?? 0;
+        if ((sf & 0x04) !== 0) {
+          return true;
+        }
+      }
+      if ((tf & 0x40) !== 0 && tx === sx && ty === wrap10(sy - 1)) {
+        const spill = (tileId - 1) & 0xffff;
+        const sf = state.tileFlags[spill & 0x07ff] ?? 0;
+        if ((sf & 0x04) !== 0) {
+          return true;
+        }
+      }
+      if ((tf & 0xc0) === 0xc0 && tx === wrap10(sx - 1) && ty === wrap10(sy - 1)) {
+        const spill = (tileId - 3) & 0xffff;
+        const sf = state.tileFlags[spill & 0x07ff] ?? 0;
+        if ((sf & 0x04) !== 0) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const sources = [
+      [wx, wy],         // main tile source
+      [wx + 1, wy],     // left spill source
+      [wx, wy + 1],     // up spill source
+      [wx + 1, wy + 1]  // up-left spill source
+    ];
+    for (const [ox, oy] of sources) {
+      const overlays = state.objectLayer.objectsAt(ox, oy, wz);
+      for (const o of overlays) {
+        if (!o.renderable) {
+          continue;
+        }
+        if (checkObjectBlockAt(o, ox, oy)) {
+          return true;
+        }
       }
     }
   }
@@ -1345,12 +1406,17 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
     if (!isCloseableDoorObject(o)) {
       continue;
     }
-    const nextOpen = !isDoorOpen(sim, o);
-    setDoorOpen(sim, o, nextOpen);
+    const beforeFrame = resolvedDoorFrame(sim, o);
+    const beforeOpen = isDoorFrameOpen(o, beforeFrame);
+    toggleDoorState(sim, o);
+    const afterFrame = resolvedDoorFrame(sim, o);
+    const afterOpen = isDoorFrameOpen(o, afterFrame);
     diagBox.className = "diag ok";
-    diagBox.textContent = nextOpen
+    diagBox.textContent = afterOpen && !beforeOpen
       ? `Opened door at ${tx},${ty},${tz}`
-      : `Closed door at ${tx},${ty},${tz}`;
+      : (!afterOpen && beforeOpen
+        ? `Closed door at ${tx},${ty},${tz}`
+        : `Toggled door at ${tx},${ty},${tz}`);
     return true;
   }
   return false;
@@ -1724,7 +1790,7 @@ function buildLegacyViewContext(startX, startY, wz) {
         const wy = startY + gy - PAD;
         const overlays = state.objectLayer.objectsAt(wx, wy, wz);
         for (const o of overlays) {
-          const tileId = resolveAnimatedObjectTile(o);
+          const tileId = resolveDoorTileIdForVisibility(state.sim, o);
           applyObjFlags(gx, gy, tileId);
         }
       }
