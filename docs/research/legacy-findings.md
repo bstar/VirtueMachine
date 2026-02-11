@@ -55,3 +55,15 @@ Impact on Port: enables strict compatibility boundary for extracting/patching ma
 Next Validation Step: validate on multiple real save files and confirm no variant layout deltas.
 Related Symbols: SYM-0004, SYM-0005, SYM-0006, SYM-0007
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0004
+Date: 2026-02-11
+Area: Map/Chunk Read Layout
+Legacy Source Ref: `SRC/seg_101C.c`
+Summary: legacy map loading uses 0x180-byte map blocks (z=0) and 0x600-byte map windows (z>0), with packed 12-bit chunk indices and 0x40-byte chunk data blocks.
+Evidence: `OSI_read(..., 0x180, ...)`, `OSI_read(..., 4 * 0x180, ...)`, `OSI_read(..., (long)chunkIdx << 6, 0x40, ...)`, and `getChunkIdxAt` 12-bit decode logic.
+Confidence: high
+Impact on Port: enables deterministic read-only map/chunk compatibility APIs and fixture-based tests without shipping proprietary data.
+Next Validation Step: verify with real runtime assets across multiple coordinates and z-levels.
+Related Symbols: SYM-0006
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

@@ -1,6 +1,7 @@
 add_library(sim_core STATIC
   src/sim_core.c
   src/u6_objlist.c
+  src/u6_map.c
 )
 
 target_include_directories(sim_core
@@ -31,3 +32,11 @@ add_executable(sim_core_objlist_compat_test
 target_link_libraries(sim_core_objlist_compat_test PRIVATE sim_core)
 
 add_test(NAME sim_core_objlist_compat_test COMMAND sim_core_objlist_compat_test)
+
+add_executable(sim_core_u6_map_test
+  tests/test_u6_map.c
+)
+
+target_link_libraries(sim_core_u6_map_test PRIVATE sim_core)
+
+add_test(NAME sim_core_u6_map_test COMMAND sim_core_u6_map_test)

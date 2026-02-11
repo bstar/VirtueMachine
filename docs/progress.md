@@ -17,6 +17,15 @@ Legend:
 - `[~]` in progress
 - `[ ]` not started
 
+## Planning Flexibility
+
+This checklist is intentionally mutable.
+
+- Add, remove, split, merge, or reorder tasks when new technical evidence appears.
+- Prefer momentum and shipped slice outcomes over strict adherence to prior ordering.
+- If a task blocks progress, either reduce scope or defer it and continue on an adjacent slice.
+- Record material priority/scope changes in this file so reasoning is preserved.
+
 ## Completed (Backfilled)
 
 - `[x]` Established modern repo with legacy submodule provenance and policy guardrails (`e30639d`)
@@ -35,11 +44,11 @@ Legend:
 
 #### Slice M2.3: Map/Chunk Read Compatibility (Read-Only)
 
-- `[ ]` Add `u6_map` module (`modern/sim-core/include/u6_map.h`, `modern/sim-core/src/u6_map.c`)
-- `[ ]` Implement `map` file open/close and tile read API with bounds checks
-- `[ ]` Implement `chunks` file read API with chunk index validation
-- `[ ]` Add fixture-based tests (small synthetic binaries, no proprietary assets)
-- `[ ]` Document offset/index assumptions in `docs/research/legacy-findings.md`
+- `[x]` Add `u6_map` module (`modern/sim-core/include/u6_map.h`, `modern/sim-core/src/u6_map.c`)
+- `[x]` Implement `map` file open/close and tile read API with bounds checks
+- `[x]` Implement `chunks` file read API with chunk index validation
+- `[x]` Add fixture-based tests (small synthetic binaries, no proprietary assets)
+- `[x]` Document offset/index assumptions in `docs/research/legacy-findings.md`
 
 #### Slice M2.4: Deterministic Time/Clock Semantics
 
@@ -108,9 +117,9 @@ Legend:
 
 ## Current Sprint Focus
 
-- `[ ]` Start M2.3 (`u6_map` read-only compatibility slice)
-- `[ ]` Add tests for map/chunk read offsets and index bounds
-- `[ ]` Update findings docs with validated assumptions
+- `[ ]` Start M2.4 (deterministic time/clock semantics slice)
+- `[ ]` Add rollover regression tests for minute/hour/day/month progression
+- `[ ]` Document tick-to-time policy and accepted parity differences
 
 ## Known Blockers / Risks
 
@@ -122,4 +131,4 @@ Legend:
 
 ## Next Immediate Task
 
-Implement `M2 Slice 3`: map/chunk read-only compatibility in `sim-core` with fixture-based tests and documented offset assumptions.
+Implement `M2 Slice 4`: deterministic time/clock semantics with rollover tests and explicit policy docs.

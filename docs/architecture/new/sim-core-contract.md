@@ -56,6 +56,7 @@ Current bootstrap test:
 - `modern/sim-core/tests/test_replay.c`
 - `modern/sim-core/tests/test_world_state_io.c`
 - `modern/sim-core/tests/test_objlist_compat.c`
+- `modern/sim-core/tests/test_u6_map.c`
 
 ## M2 Slice 1 Mapping
 
@@ -84,6 +85,20 @@ Current constants:
 
 These are based on fixed-size read/write ordering from `SRC/seg_0C9C.c` and the serialized
 `D_2C4A..D_2CCB` world-state block length.
+
+## M2 Slice 3 Compatibility Boundary
+
+Legacy map/chunk read compatibility module:
+
+- `modern/sim-core/include/u6_map.h`
+- `modern/sim-core/src/u6_map.c`
+
+Current behavior:
+
+- `u6_map_load_window` mirrors key legacy `seg_101C` map window loads
+- `u6_map_get_chunk_index_at` decodes packed 12-bit chunk indices
+- `u6_chunk_read` reads `0x40` bytes per chunk
+- `u6_map_get_tile_at` resolves tile via chunk lookup and in-chunk coordinates
 
 ## Legacy Mapping Requirement
 

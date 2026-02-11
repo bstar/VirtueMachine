@@ -6,11 +6,14 @@ Authoritative simulation prototype with deterministic tick stepping.
 
 - `include/sim_core.h`: API and simulation data types.
 - `include/u6_objlist.h`: legacy `savegame/objlist` compatibility constants and helpers.
+- `include/u6_map.h`: legacy `map`/`chunks` read-only compatibility API.
 - `src/sim_core.c`: deterministic tick loop, command application, state hash.
 - `src/u6_objlist.c`: extract/patch helpers for the legacy `objlist` tail block.
+- `src/u6_map.c`: read-only map window loading, chunk index decode, chunk/tile reads.
 - `tests/test_replay.c`: replay determinism + golden-hash regression check.
 - `tests/test_world_state_io.c`: world state serialization/deserialization + hash invariants.
 - `tests/test_objlist_compat.c`: legacy `objlist` compatibility and malformed-input checks.
+- `tests/test_u6_map.c`: synthetic fixture validation for map/chunk compatibility.
 
 ## Intent
 
@@ -30,3 +33,13 @@ This slice also adds a strict `objlist` tail compatibility boundary:
 
 - parse mapped fields from legacy tail bytes
 - patch mapped fields back into tail bytes without altering unknown fields
+
+## M2 Slice 3
+
+Added a minimal read-only `map`/`chunks` compatibility boundary modeled after legacy
+`seg_101C` access patterns:
+
+- load map window data (`z=0` 4x0x180 blocks, `z>0` 0x600 block at legacy offset)
+- decode packed 12-bit chunk indices
+- read chunks as 8x8 tile blocks (`0x40` bytes)
+- resolve a tile at `(x, y, z)` via chunk lookup
