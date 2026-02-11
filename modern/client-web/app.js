@@ -691,7 +691,7 @@ function initLayout() {
 }
 
 function setFont(fontName) {
-  const font = FONTS.includes(fontName) ? fontName : "blockblueprint";
+  const font = FONTS.includes(fontName) ? fontName : "silkscreen";
   document.documentElement.setAttribute("data-font", font);
   if (fontSelect) {
     fontSelect.value = font;
@@ -704,7 +704,7 @@ function setFont(fontName) {
 }
 
 function initFont() {
-  let saved = "blockblueprint";
+  let saved = "silkscreen";
   try {
     const fromStorage = localStorage.getItem(FONT_KEY);
     if (fromStorage) {
@@ -712,6 +712,9 @@ function initFont() {
     }
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
+  }
+  if (saved === "blockblueprint") {
+    saved = "silkscreen";
   }
   setFont(saved);
   if (fontSelect) {
@@ -1036,6 +1039,7 @@ function buildLegacyViewContext(startX, startY, wz) {
 
   const baseTiles = Array.from({ length: H }, () => new Uint16Array(W));
   const flags = Array.from({ length: H }, () => new Uint8Array(W));
+  const open = Array.from({ length: H }, () => new Uint8Array(W));
 
   const tileFlagsFor = (tileId) => {
     if (!state.tileFlags) {
@@ -1159,6 +1163,7 @@ function buildLegacyViewContext(startX, startY, wz) {
     if (!isVisibleAt(gx, gy)) {
       continue;
     }
+    open[gy][gx] = 1;
     /* Match legacy C_1100_0131 neighbor walk: cumulative step sequence
        that traces N, NE, E, SE, S, SW, W, NW around the current cell. */
     let nx = gx;
@@ -1186,8 +1191,16 @@ function buildLegacyViewContext(startX, startY, wz) {
     }
     return (flags[gy][gx] & FLAG_WALL) !== 0;
   };
+  const openAtWorld = (wx, wy) => {
+    const gx = wx - startX + PAD;
+    const gy = wy - startY + PAD;
+    if (!inBounds(gx, gy)) {
+      return false;
+    }
+    return open[gy][gx] !== 0;
+  };
 
-  return { visibleAtWorld, wallAtWorld };
+  return { visibleAtWorld, wallAtWorld, openAtWorld };
 }
 
 function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
@@ -1257,7 +1270,17 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
 }
 
 function shouldBlackoutTile(rawTile, wx, wy, viewCtx) {
-  return !!(viewCtx && !viewCtx.visibleAtWorld(wx, wy));
+  if (!viewCtx) {
+    return false;
+  }
+  if (viewCtx.openAtWorld(wx, wy)) {
+    return false;
+  }
+  const terrainLow = terrainOf(rawTile) & 0x0f;
+  if (terrainLow === (0x04 | 0x02) && viewCtx.visibleAtWorld(wx, wy)) {
+    return false;
+  }
+  return true;
 }
 
 function tileColor(t) {

@@ -32,7 +32,7 @@
 
 :root {
   --px-step: 7px;
-  --ui-font: "VMBlockBlueprint";
+  --ui-font: "Silkscreen";
   --bg0: #0b0f12;
   --bg1: #131a20;
   --panel: #151d24;
@@ -306,7 +306,7 @@ body::before {
 
 .header h1 {
   margin: 0;
-  font-family: "VMGothicByte", "Silkscreen", monospace;
+  font-family: var(--ui-font), "Silkscreen", monospace;
   font-size: calc(var(--px-step) * 4);
   color: var(--accent);
   letter-spacing: 0.04em;
@@ -437,7 +437,7 @@ body::before {
 
 .help h2 {
   margin: 0 0 0.45rem;
-  font-family: "VMGothicByte", "Silkscreen", monospace;
+  font-family: var(--ui-font), "Silkscreen", monospace;
   font-size: calc(var(--px-step) * 1.5);
   color: var(--accent-2);
   line-height: 1.35;
