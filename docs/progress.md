@@ -129,6 +129,7 @@ This checklist is intentionally mutable.
 
 - `[~]` Implement tile/object composition rules for doorway openings, wall edges, and overlap priority
 - `[x]` Add first-pass entity/NPC overlay render layer from legacy `savegame/objlist` actor records
+- `[x]` Add deterministic tick-driven NPC patrol motion pilot for humanoid actor subset
 - `[ ]` Ensure interaction probes use the same object layer coordinates as renderer
 - `[ ]` Add regression cases for corner/edge overlaps and transparency correctness
 

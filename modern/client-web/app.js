@@ -756,6 +756,17 @@ class U6EntityLayerJS {
 
   load(bytes) {
     this.entries = this.parseObjList(bytes);
+    for (const e of this.entries) {
+      e.homeX = e.x;
+      e.homeY = e.y;
+      e.patrolPhase = e.id & 0x03;
+      e.patrolRadius = 2;
+      e.movable = (
+        (e.type >= 0x178 && e.type <= 0x183)
+        || e.type === 0x187
+        || e.type === 0x188
+      );
+    }
     this.totalLoaded = this.entries.length;
   }
 
@@ -778,6 +789,84 @@ class U6EntityLayerJS {
       return a.order - b.order;
     });
     return out;
+  }
+
+  tileBlocks(x, y, z, mapCtx, tileFlags, terrainType, objectLayer) {
+    if (!mapCtx) {
+      return false;
+    }
+    const t = mapCtx.tileAt(x, y, z);
+    if (tileFlags && ((tileFlags[t & 0x7ff] ?? 0) & 0x04)) {
+      return true;
+    }
+    if (terrainType && ((terrainType[t & 0x7ff] ?? 0) & 0x04)) {
+      return true;
+    }
+    if (objectLayer && tileFlags) {
+      const overlays = objectLayer.objectsAt(x, y, z);
+      for (const o of overlays) {
+        const tf = tileFlags[o.tileId & 0x7ff] ?? 0;
+        if (tf & 0x04) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  step(tick, mapCtx, tileFlags, terrainType, objectLayer) {
+    if ((tick % 8) !== 0) {
+      return;
+    }
+    const dirs = [
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+      [0, -1]
+    ];
+    const occupied = new Set();
+    for (const e of this.entries) {
+      occupied.add(`${e.x & 0x3ff},${e.y & 0x3ff},${e.z & 0x0f}`);
+    }
+
+    const phase = (tick >> 3) & 0xff;
+    for (const e of this.entries) {
+      if (!e.movable || e.z !== 0) {
+        continue;
+      }
+      const baseDir = (phase + e.patrolPhase) & 0x03;
+      const candidateDir = [
+        baseDir,
+        (baseDir + 1) & 0x03,
+        (baseDir + 3) & 0x03,
+        (baseDir + 2) & 0x03
+      ];
+      let moved = false;
+      for (const d of candidateDir) {
+        const nx = (e.x + dirs[d][0]) & 0x3ff;
+        const ny = (e.y + dirs[d][1]) & 0x3ff;
+        const dz = e.z & 0x0f;
+        if (Math.abs(nx - e.homeX) + Math.abs(ny - e.homeY) > e.patrolRadius) {
+          continue;
+        }
+        const k = `${nx},${ny},${dz}`;
+        if (occupied.has(k)) {
+          continue;
+        }
+        if (this.tileBlocks(nx, ny, dz, mapCtx, tileFlags, terrainType, objectLayer)) {
+          continue;
+        }
+        occupied.delete(`${e.x & 0x3ff},${e.y & 0x3ff},${dz}`);
+        e.x = nx;
+        e.y = ny;
+        occupied.add(k);
+        moved = true;
+        break;
+      }
+      if (!moved) {
+        continue;
+      }
+    }
   }
 }
 
@@ -2042,6 +2131,15 @@ function tickLoop(ts) {
   while (state.accMs >= TICK_MS) {
     state.accMs -= TICK_MS;
     state.queue = stepSimTick(state.sim, state.queue);
+    if (state.entityLayer) {
+      state.entityLayer.step(
+        state.sim.tick,
+        state.mapCtx,
+        state.tileFlags,
+        state.terrainType,
+        state.objectLayer
+      );
+    }
   }
 
   drawTileGrid();
