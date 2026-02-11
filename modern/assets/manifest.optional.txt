@@ -3,3 +3,7 @@
 
 u6face0.bmp
 stats.bmp
+tileindx.vga
+masktype.vga
+maptiles.vga
+objtiles.vga

@@ -29,6 +29,15 @@ The client will try loading:
 
 - `modern/assets/runtime/map`
 - `modern/assets/runtime/chunks`
+- `modern/assets/runtime/u6pal`
+- `modern/assets/runtime/tileflag`
+
+For bitmap tile rendering path (optional, if present):
+
+- `modern/assets/runtime/tileindx.vga`
+- `modern/assets/runtime/masktype.vga`
+- `modern/assets/runtime/maptiles.vga`
+- `modern/assets/runtime/objtiles.vga`
 
 If missing/unavailable, it renders a deterministic synthetic fallback grid.
 
