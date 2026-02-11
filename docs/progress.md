@@ -156,6 +156,8 @@ This checklist is intentionally mutable.
 - `[x]` Start R1 static object layer rendering (doors/fountains/tables/food)
 - `[x]` Add canonical capture preset + PNG export tooling for parity screenshot workflow
 - `[x]` Add deterministic tick-driven animated tile phase + freeze/debug toggle + replay animation checkpoints
+- `[x]` Port legacy VGA fire/water palette cycling to deterministic web renderer path
+- `[x]` Add renderer debug stats (palette phase, center tile ids, palette band)
 - `[ ]` Land first terrain+object parity screenshots from canonical locations
 
 ## Known Blockers / Risks
@@ -169,4 +171,7 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Capture R1 canonical parity screenshots (legacy reference vs web client) and document any visible gaps.
+Capture R1 canonical parity screenshots (legacy reference vs web client) for:
+- `Lord British Throne (307,347,0)` static composition
+- `Animation Test Fire (360,397,0)` animated palette-fx composition
+- `Animation Test Wheels (307,384,0)` animated tile-remap composition

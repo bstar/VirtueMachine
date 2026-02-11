@@ -63,6 +63,18 @@
           <strong id="statReplay">not run</strong>
         </div>
         <div class="stat">
+          <span>Palette Phase</span>
+          <strong id="statPalettePhase">-</strong>
+        </div>
+        <div class="stat">
+          <span>Center Tile IDs</span>
+          <strong id="statCenterTiles">-</strong>
+        </div>
+        <div class="stat">
+          <span>Center Palette Band</span>
+          <strong id="statCenterBand">-</strong>
+        </div>
+        <div class="stat">
           <span>Theme</span>
           <label class="theme-label" for="themeSelect">UI Style</label>
           <select id="themeSelect" class="theme-select">
@@ -124,6 +136,14 @@
           </select>
         </div>
         <div class="stat">
+          <span>Legacy Palette FX</span>
+          <label class="theme-label" for="paletteFxToggle">Fire/Water Color Cycling</label>
+          <select id="paletteFxToggle" class="theme-select">
+            <option value="on">On (Default)</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div class="stat">
           <span>Capture Preset</span>
           <label class="theme-label" for="locationSelect">Canonical Location</label>
           <select id="locationSelect" class="theme-select"></select>
@@ -144,6 +164,7 @@
           <p>`P` capture viewport png</p>
           <p>`V` verify replay stability</p>
           <p>`F` toggle animated tile freeze</p>
+          <p>`B` toggle legacy palette FX</p>
         </div>
       </aside>
     </main>

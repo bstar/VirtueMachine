@@ -16,7 +16,9 @@ Minimal browser client prototype:
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
 - deterministic `sim.tick`-driven `animdata` tile animation (water/swamp and other animated sets)
+- legacy VGA palette-cycle animation for fire/water hues (deterministic, tick-driven)
 - animation freeze toggle for render/occlusion debugging (`F` or UI dropdown)
+- renderer debug stats for palette phase and center tile palette-band inspection
 - first-pass legacy visibility/blackout mask (room-dependent wall/corner behavior)
 - canonical capture presets + one-click viewport PNG export for parity screenshot workflow
   - includes `Lord British Throne (307,347,0)` preset for throne composition validation
@@ -68,9 +70,15 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `R`: reset run state to initial seed/world
 - `O`: toggle overlay debug tile labels
 - `F`: toggle animated tile freeze/live phase
+- `B`: toggle legacy palette FX (fire/water color cycling)
 - `G`: jump to selected canonical capture preset
 - `P`: capture viewport PNG
 - `V`: run replay determinism verification (sim + animation checkpoints) and produce downloadable checkpoints CSV
+
+Useful parity presets:
+
+- `Animation Test Fire (360,397,0)` for palette-cycle validation
+- `Animation Test Wheels (307,384,0)` for tile-remap animation validation
 
 ## Layout Variants
 

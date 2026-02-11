@@ -94,6 +94,9 @@ const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
 const statHash = document.getElementById("statHash");
 const statReplay = document.getElementById("statReplay");
+const statPalettePhase = document.getElementById("statPalettePhase");
+const statCenterTiles = document.getElementById("statCenterTiles");
+const statCenterBand = document.getElementById("statCenterBand");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
@@ -102,6 +105,7 @@ const fontSelect = document.getElementById("fontSelect");
 const gridToggle = document.getElementById("gridToggle");
 const debugOverlayToggle = document.getElementById("debugOverlayToggle");
 const animationToggle = document.getElementById("animationToggle");
+const paletteFxToggle = document.getElementById("paletteFxToggle");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
@@ -112,6 +116,7 @@ const FONT_KEY = "vm_font";
 const GRID_KEY = "vm_grid";
 const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
 const ANIMATION_KEY = "vm_animation";
+const PALETTE_FX_KEY = "vm_palette_fx";
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -174,9 +179,16 @@ const state = {
   objectOverlayCount: 0,
   showGrid: false,
   showOverlayDebug: false,
+  enablePaletteFx: true,
   palette: null,
+  basePalette: null,
   tileFlags: null,
   terrainType: null,
+  paletteFrameTick: -1,
+  paletteFrame: null,
+  centerRawTile: 0,
+  centerAnimatedTile: 0,
+  centerPaletteBand: "none",
   lastTs: performance.now(),
   accMs: 0,
   replayUrl: null
@@ -286,6 +298,64 @@ function resolveAnimatedObjectTile(obj) {
   return resolveAnimatedObjectTileAtTick(obj, animationTick());
 }
 
+function buildLegacyPaletteFrame(basePalette, counter) {
+  if (!basePalette) {
+    return null;
+  }
+  const pal = basePalette.slice();
+  const c = counter & 0xff;
+
+  // Legacy VGA palette cycling from seg_0903 PaletteAnimation():
+  // 0xE0..0xE7 <- rotating 0xE0..0xE7 (source window anchored at 0xE7)
+  // 0xE8..0xEF <- rotating 0xE8..0xEF (source window anchored at 0xEF)
+  for (let i = 0; i < 8; i += 1) {
+    const dstA = ((c - i) & 7) + 0xe0;
+    const srcA = 0xe7 - i;
+    pal[dstA] = basePalette[srcA];
+
+    const dstB = ((c - i) & 7) + 0xe8;
+    const srcB = 0xef - i;
+    pal[dstB] = basePalette[srcB];
+  }
+
+  // 0xF0..0xFB in 3x4 groups, cycled at half speed.
+  const h = (c >> 1) & 0xff;
+  for (let i = 0; i < 4; i += 1) {
+    const slot = (h - i) & 3;
+    pal[slot + 0xf0] = basePalette[0xf3 - i];
+    pal[slot + 0xf4] = basePalette[0xf7 - i];
+    pal[slot + 0xf8] = basePalette[0xfb - i];
+  }
+  return pal;
+}
+
+function renderPaletteTick() {
+  return animationTick();
+}
+
+function getRenderPalette() {
+  if (!state.basePalette) {
+    return null;
+  }
+  if (!state.enablePaletteFx) {
+    return state.basePalette;
+  }
+  const tick = renderPaletteTick();
+  if (state.paletteFrame && state.paletteFrameTick === tick) {
+    return state.paletteFrame;
+  }
+  state.paletteFrame = buildLegacyPaletteFrame(state.basePalette, tick);
+  state.paletteFrameTick = tick;
+  return state.paletteFrame;
+}
+
+function getRenderPaletteKey() {
+  if (!state.enablePaletteFx) {
+    return "pal-static";
+  }
+  return `palfx-${renderPaletteTick()}`;
+}
+
 class U6MapJS {
   constructor(mapBytes, chunkBytes) {
     this.map = mapBytes;
@@ -358,14 +428,14 @@ class U6MapJS {
 }
 
 class U6TileSetJS {
-  constructor(palette, tileIndexBytes, maskTypeBytes, mapTilesBytes, objTilesBytes) {
-    this.palette = palette;
+  constructor(tileIndexBytes, maskTypeBytes, mapTilesBytes, objTilesBytes) {
     this.tileIndex = new DataView(tileIndexBytes.buffer, tileIndexBytes.byteOffset, tileIndexBytes.byteLength);
     this.maskType = maskTypeBytes.slice(0, 2048);
     this.tiles = new Uint8Array(mapTilesBytes.length + objTilesBytes.length);
     this.tiles.set(mapTilesBytes, 0);
     this.tiles.set(objTilesBytes, mapTilesBytes.length);
     this.cache = new Map();
+    this.pixelCache = new Map();
   }
 
   maskTypeFor(tileId) {
@@ -408,23 +478,30 @@ class U6TileSetJS {
   }
 
   decodeTilePixels(tileId) {
+    if (this.pixelCache.has(tileId)) {
+      return this.pixelCache.get(tileId);
+    }
     const out = new Uint8Array(256);
     const off = this.getTileOffset(tileId);
     if (off < 0 || off >= this.tiles.length) {
+      this.pixelCache.set(tileId, out);
       return out;
     }
 
     const mask = this.maskTypeFor(tileId);
     if (mask === 10) {
-      return this.decodePixelBlockTile(tileId, off);
+      const decoded = this.decodePixelBlockTile(tileId, off);
+      this.pixelCache.set(tileId, decoded);
+      return decoded;
     }
 
     const max = Math.min(256, this.tiles.length - off);
     out.set(this.tiles.slice(off, off + max), 0);
+    this.pixelCache.set(tileId, out);
     return out;
   }
 
-  buildTileCanvas(tileId) {
+  buildTileCanvas(tileId, palette) {
     const tilePixels = this.decodeTilePixels(tileId);
     const mask = this.maskTypeFor(tileId);
     const c = document.createElement("canvas");
@@ -435,7 +512,7 @@ class U6TileSetJS {
 
     for (let i = 0; i < 256; i += 1) {
       const palIdx = tilePixels[i];
-      const rgb = this.palette[palIdx] ?? [0, 0, 0];
+      const rgb = palette[palIdx] ?? [0, 0, 0];
       let a = 255;
       const zeroIsTransparent = tileId <= 0x1ff;
       if (mask === 10) {
@@ -454,11 +531,12 @@ class U6TileSetJS {
     return c;
   }
 
-  tileCanvas(tileId) {
-    if (!this.cache.has(tileId)) {
-      this.cache.set(tileId, this.buildTileCanvas(tileId));
+  tileCanvas(tileId, palette, paletteKey = "static") {
+    const key = `${paletteKey}:${tileId}`;
+    if (!this.cache.has(key)) {
+      this.cache.set(key, this.buildTileCanvas(tileId, palette));
     }
-    return this.cache.get(tileId);
+    return this.cache.get(key);
   }
 }
 
@@ -861,6 +939,38 @@ function initAnimationMode() {
   if (animationToggle) {
     animationToggle.addEventListener("change", () => {
       setAnimationMode(animationToggle.value);
+    });
+  }
+}
+
+function setPaletteFxMode(enabled) {
+  state.enablePaletteFx = !!enabled;
+  state.paletteFrameTick = -1;
+  state.paletteFrame = null;
+  if (paletteFxToggle) {
+    paletteFxToggle.value = state.enablePaletteFx ? "on" : "off";
+  }
+  try {
+    localStorage.setItem(PALETTE_FX_KEY, state.enablePaletteFx ? "on" : "off");
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initPaletteFxMode() {
+  let saved = "on";
+  try {
+    const fromStorage = localStorage.getItem(PALETTE_FX_KEY);
+    if (fromStorage === "on" || fromStorage === "off") {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setPaletteFxMode(saved === "on");
+  if (paletteFxToggle) {
+    paletteFxToggle.addEventListener("change", () => {
+      setPaletteFxMode(paletteFxToggle.value === "on");
     });
   }
 }
@@ -1364,13 +1474,13 @@ function shouldBlackoutTile(rawTile, wx, wy, viewCtx) {
   return true;
 }
 
-function tileColor(t) {
-  if (!state.palette) {
+function tileColor(t, palette) {
+  if (!palette) {
     const [r, g, b] = fallbackTileColor(t);
     return `rgb(${r}, ${g}, ${b})`;
   }
   const idx = tilePaletteIndex(t);
-  const c = state.palette[idx] ?? [0, 0, 0];
+  const c = palette[idx] ?? [0, 0, 0];
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
@@ -1381,6 +1491,8 @@ function drawTileGrid() {
 
   const startX = state.sim.world.map_x - (VIEW_W >> 1);
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
+  const renderPalette = getRenderPalette();
+  const renderPaletteKey = getRenderPaletteKey();
   const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
   const overlayCells = (state.tileSet && state.objectLayer)
     ? Array.from({ length: VIEW_W * VIEW_H }, () => [])
@@ -1418,6 +1530,9 @@ function drawTileGrid() {
   };
 
   let centerTile = 0;
+  let centerRawTile = 0;
+  let centerAnimatedTile = 0;
+  let centerPaletteBand = "none";
   let overlayCount = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
@@ -1440,19 +1555,31 @@ function drawTileGrid() {
       }
       if (gx === (VIEW_W >> 1) && gy === (VIEW_H >> 1)) {
         centerTile = t;
+        centerRawTile = rawTile;
       }
       const px = gx * TILE_SIZE;
       const py = gy * TILE_SIZE;
       if (state.tileSet) {
         const animRawTile = resolveAnimatedTile(rawTile);
         const animTile = resolveAnimatedTile(t);
-        const baseTileCanvas = state.tileSet.tileCanvas(animRawTile);
+        if (gx === (VIEW_W >> 1) && gy === (VIEW_H >> 1)) {
+          centerAnimatedTile = animTile;
+          const idx = tilePaletteIndex(animTile);
+          if (idx >= 0xe0 && idx <= 0xef) {
+            centerPaletteBand = "E0-EF";
+          } else if (idx >= 0xf0 && idx <= 0xfb) {
+            centerPaletteBand = "F0-FB";
+          } else {
+            centerPaletteBand = "static";
+          }
+        }
+        const baseTileCanvas = state.tileSet.tileCanvas(animRawTile, renderPalette, renderPaletteKey);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(baseTileCanvas, px, py, TILE_SIZE, TILE_SIZE);
-        const tc = state.tileSet.tileCanvas(animTile);
+        const tc = state.tileSet.tileCanvas(animTile, renderPalette, renderPaletteKey);
         ctx.drawImage(tc, px, py, TILE_SIZE, TILE_SIZE);
       } else {
-        ctx.fillStyle = tileColor(t);
+        ctx.fillStyle = tileColor(t, renderPalette);
         ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
       }
       if (state.tileSet && state.objectLayer) {
@@ -1499,7 +1626,7 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          const oc = state.tileSet.tileCanvas(t.tileId);
+          const oc = state.tileSet.tileCanvas(t.tileId, renderPalette, renderPaletteKey);
           ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
           if (state.showOverlayDebug && t.dbg) {
             ctx.fillStyle = "rgba(7, 12, 16, 0.72)";
@@ -1513,6 +1640,9 @@ function drawTileGrid() {
     }
   }
   state.objectOverlayCount = overlayCount;
+  state.centerRawTile = centerRawTile;
+  state.centerAnimatedTile = centerAnimatedTile || centerTile;
+  state.centerPaletteBand = centerPaletteBand;
 
   const cx = (VIEW_W >> 1) * TILE_SIZE;
   const cy = (VIEW_H >> 1) * TILE_SIZE;
@@ -1536,6 +1666,15 @@ function updateStats() {
     statObjects.textContent = "0 / 0";
   }
   statHash.textContent = hashHex(simStateHash(state.sim));
+  if (statPalettePhase) {
+    statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
+  }
+  if (statCenterTiles) {
+    statCenterTiles.textContent = `0x${state.centerRawTile.toString(16)} -> 0x${state.centerAnimatedTile.toString(16)}`;
+  }
+  if (statCenterBand) {
+    statCenterBand.textContent = state.centerPaletteBand;
+  }
 }
 
 function releaseReplayUrl() {
@@ -1684,6 +1823,11 @@ function resetRun() {
   state.sim = createInitialSimState();
   state.queue = [];
   state.commandLog = [];
+  state.paletteFrameTick = -1;
+  state.paletteFrame = null;
+  state.centerRawTile = 0;
+  state.centerAnimatedTile = 0;
+  state.centerPaletteBand = "none";
   if (state.animationFrozen) {
     state.frozenAnimationTick = state.sim.tick >>> 0;
   }
@@ -1748,8 +1892,12 @@ async function loadRuntimeAssets() {
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
-      state.palette = buildPaletteFromU6Pal(new Uint8Array(palBuf));
+      state.basePalette = buildPaletteFromU6Pal(new Uint8Array(palBuf));
+      state.palette = state.basePalette;
+      state.paletteFrameTick = -1;
+      state.paletteFrame = null;
     } else {
+      state.basePalette = null;
       state.palette = null;
     }
     if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
@@ -1773,7 +1921,6 @@ async function loadRuntimeAssets() {
       const maskDecoded = decompressU6Lzw(new Uint8Array(maskBuf));
       const mapDecoded = decompressU6Lzw(new Uint8Array(mapTileBuf));
       state.tileSet = new U6TileSetJS(
-        state.palette,
         new Uint8Array(idxBuf),
         maskDecoded,
         mapDecoded,
@@ -1826,6 +1973,7 @@ async function loadRuntimeAssets() {
     state.objectLayer = null;
     state.animData = null;
     state.palette = null;
+    state.basePalette = null;
     state.tileFlags = null;
     state.terrainType = null;
     statSource.textContent = "synthetic fallback";
@@ -1846,6 +1994,7 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "r") resetRun();
   else if (k === "v") verifyReplayStability();
   else if (k === "f") setAnimationMode(state.animationFrozen ? "live" : "freeze");
+  else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else return;
   ev.preventDefault();
 });
@@ -1863,6 +2012,7 @@ initFont();
 initGrid();
 initOverlayDebug();
 initAnimationMode();
+initPaletteFxMode();
 initCapturePresets();
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);
