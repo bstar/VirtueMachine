@@ -199,3 +199,15 @@ Impact on Port: prevents visible wall-shape artifacts and keeps architectural si
 Next Validation Step: spot-check known interior corner cases (Britain castle/throne room, tavern interiors) against captured reference views; then move this logic behind a shared sim-core/render boundary.
 Related Symbols: SYM-0006
 Related Modern Docs: `../architecture/new/system-overview.md`, `../progress.md`
+
+Finding ID: FIND-0016
+Date: 2026-02-11
+Area: Renderer/Interaction Coordinate Parity and Occlusion Telemetry
+Legacy Source Ref: `SRC/seg_1184.c` (`C_1184_35EA` object spill to neighbor cells), `SRC/seg_1100.c` (visibility/open-area behavior)
+Summary: web client now builds a single overlay-cell composition model for object rendering and interaction probing, and records actor-vs-occluder parity warnings from the same data source.
+Evidence: `modern/client-web/app.js` now routes object spill/main tile placement through `buildOverlayCells(...)`, uses `topInteractiveOverlayAt(...)` for probe tile selection, and computes `measureActorOcclusionParity(...)` for deterministic HUD diagnostics.
+Confidence: medium-high
+Impact on Port: removes a class of renderer/probe coordinate drift bugs and gives a deterministic signal when doorway/wall transition ordering regresses.
+Next Validation Step: add fixture-driven parity checks for known corner/edge overlap and transparency hotspots (throne room and interior door transitions), then compare against canonical captures.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`

@@ -131,7 +131,8 @@ This checklist is intentionally mutable.
 - `[x]` Add first-pass entity/NPC overlay render layer from legacy `savegame/objlist` actor records
 - `[x]` Add deterministic tick-driven NPC patrol motion pilot for humanoid actor subset
 - `[x]` Prevent NPC movement into occluded/unseen cells and add occlusion-block debug telemetry
-- `[ ]` Ensure interaction probes use the same object layer coordinates as renderer
+- `[x]` Add renderer parity telemetry for actor-vs-occluder transitions and shared object-coordinate interaction probe source
+- `[x]` Ensure interaction probes use the same object layer coordinates as renderer
 - `[ ]` Add regression cases for corner/edge overlaps and transparency correctness
 
 #### Slice R3: Interactive Container Props and Visual State
@@ -162,6 +163,7 @@ This checklist is intentionally mutable.
 - `[x]` Port legacy VGA fire/water palette cycling to deterministic web renderer path
 - `[x]` Add renderer debug stats (palette phase, center tile ids, palette band)
 - `[x]` Land first terrain+object parity screenshots from canonical locations
+- `[x]` Add shared overlay composition/parity telemetry for renderer + interaction probe coordinate consistency
 
 ## Known Blockers / Risks
 
@@ -174,4 +176,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Harden R2 entity layering: add occlusion/order parity checks for actor-vs-wall/door transitions and document residual gaps.
+Complete remaining R2 hardening: land deterministic regression fixtures for corner/edge overlap + transparency behavior and close the interaction probe parity item.

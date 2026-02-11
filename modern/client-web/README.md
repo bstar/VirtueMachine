@@ -21,6 +21,7 @@ Minimal browser client prototype:
 - legacy VGA palette-cycle animation for fire/water hues (deterministic, tick-driven)
 - animation freeze toggle for render/occlusion debugging (`F` or UI dropdown)
 - renderer debug stats for palette phase and center tile palette-band inspection
+- renderer parity stat for actor-vs-occluder ordering checks (`Render Parity`)
 - first-pass legacy visibility/blackout mask (room-dependent wall/corner behavior)
 - canonical capture presets + one-click viewport PNG export for parity screenshot workflow
   - includes `Lord British Throne (307,347,0)` preset for throne composition validation
