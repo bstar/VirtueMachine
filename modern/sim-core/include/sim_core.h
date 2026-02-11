@@ -54,6 +54,15 @@ typedef struct SimStepResult {
   uint64_t state_hash;
 } SimStepResult;
 
+typedef enum SimPersistError {
+  SIM_PERSIST_OK = 0,
+  SIM_PERSIST_ERR_NULL = -1,
+  SIM_PERSIST_ERR_SIZE = -2,
+  SIM_PERSIST_ERR_MAGIC = -3,
+  SIM_PERSIST_ERR_VERSION = -4,
+  SIM_PERSIST_ERR_CHECKSUM = -5
+} SimPersistError;
+
 int sim_init(SimState *state, const SimConfig *cfg);
 
 int sim_step_ticks(SimState *state,
@@ -67,5 +76,9 @@ uint64_t sim_state_hash(const SimState *state);
 size_t sim_world_state_size(void);
 int sim_world_serialize(const SimWorldState *world, uint8_t *out, size_t out_size);
 int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_size);
+
+size_t sim_state_snapshot_size(void);
+int sim_state_snapshot_serialize(const SimState *state, uint8_t *out, size_t out_size);
+int sim_state_snapshot_deserialize(SimState *state, const uint8_t *in, size_t in_size);
 
 #endif

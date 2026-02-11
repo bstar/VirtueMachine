@@ -15,6 +15,7 @@ Authoritative simulation prototype with deterministic tick stepping.
 - `tests/test_objlist_compat.c`: legacy `objlist` compatibility and malformed-input checks.
 - `tests/test_u6_map.c`: synthetic fixture validation for map/chunk compatibility.
 - `tests/test_clock_rollover.c`: deterministic minute/hour/day/month/year rollover regression tests.
+- `tests/test_snapshot_persistence.c`: versioned snapshot roundtrip + corruption/error-path tests.
 
 ## Intent
 
@@ -56,3 +57,12 @@ Clock semantics are now explicit and deterministic:
 - 13 months per year
 
 Rollover behavior is covered by dedicated tests.
+
+## M2 Slice 5
+
+Persistence API hardening:
+
+- versioned binary snapshot header (`magic`, `version`, `sizes`, `checksum`)
+- strict deserialize validation and error codes
+- deterministic snapshot roundtrip/hash invariants
+- malformed/corrupt input rejection tests

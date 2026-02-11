@@ -79,3 +79,15 @@ Impact on Port: establishes deterministic time progression needed for replay, sa
 Next Validation Step: verify against legacy runtime behavior over long in-game time spans and adjust if parity gaps are observed.
 Related Symbols: SYM-0005
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0006
+Date: 2026-02-11
+Area: Snapshot Persistence Format
+Legacy Source Ref: N/A (modern compatibility envelope)
+Summary: introduced a versioned, checksummed snapshot envelope around authoritative sim state to harden persistence and future net sync.
+Evidence: snapshot header includes magic/version/size/checksum and validated deserialize error paths.
+Confidence: high
+Impact on Port: improves corruption detection, simplifies migration/versioning strategy, and provides explicit failure behavior.
+Next Validation Step: add snapshot format version migration test when version 2 fields are introduced.
+Related Symbols: SYM-0004, SYM-0008
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

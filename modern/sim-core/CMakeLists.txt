@@ -48,3 +48,11 @@ add_executable(sim_core_clock_rollover_test
 target_link_libraries(sim_core_clock_rollover_test PRIVATE sim_core)
 
 add_test(NAME sim_core_clock_rollover_test COMMAND sim_core_clock_rollover_test)
+
+add_executable(sim_core_snapshot_persistence_test
+  tests/test_snapshot_persistence.c
+)
+
+target_link_libraries(sim_core_snapshot_persistence_test PRIVATE sim_core)
+
+add_test(NAME sim_core_snapshot_persistence_test COMMAND sim_core_snapshot_persistence_test)

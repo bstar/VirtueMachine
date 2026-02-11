@@ -58,9 +58,9 @@ This checklist is intentionally mutable.
 
 #### Slice M2.5: Persistence API Hardening
 
-- `[ ]` Add versioned state blob header for modern snapshots
-- `[ ]` Add malformed/corrupt snapshot tests
-- `[ ]` Add explicit error codes and failure-path tests for all persistence functions
+- `[x]` Add versioned state blob header for modern snapshots
+- `[x]` Add malformed/corrupt snapshot tests
+- `[x]` Add explicit error codes and failure-path tests for all persistence functions
 
 ### Month 2 (Weeks 5-8): Reach First Playable Vertical Slice (M3)
 
@@ -117,9 +117,9 @@ This checklist is intentionally mutable.
 
 ## Current Sprint Focus
 
-- `[ ]` Start M2.5 (persistence API hardening slice)
-- `[ ]` Add versioned state blob header and malformed snapshot tests
-- `[ ]` Expand persistence error code coverage and failure-path tests
+- `[ ]` Start M3.1 (command pipeline and core loop integration)
+- `[ ]` Define stable command envelope and queue ingestion boundary
+- `[ ]` Add replay checkpoint log output and deterministic comparison utility
 
 ## Known Blockers / Risks
 
@@ -131,4 +131,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M2 Slice 5`: persistence API hardening with versioned snapshots and corruption/error-path tests.
+Implement `M3 Slice 1`: command pipeline and replay checkpoint logging for deterministic scenario runs.

@@ -8,7 +8,11 @@ enum {
   U6M_MINUTES_PER_HOUR = 60,
   U6M_HOURS_PER_DAY = 24,
   U6M_DAYS_PER_MONTH = 28,
-  U6M_MONTHS_PER_YEAR = 13
+  U6M_MONTHS_PER_YEAR = 13,
+  U6M_SNAPSHOT_MAGIC = 0x534d3655u, /* "U6MS" little-endian */
+  U6M_SNAPSHOT_VERSION = 1,
+  U6M_SNAPSHOT_HEADER_SIZE = 16,
+  U6M_SNAPSHOT_PAYLOAD_SIZE = 16 + U6M_WORLD_BLOB_SIZE
 };
 
 static uint32_t xorshift32(uint32_t x) {
@@ -63,6 +67,15 @@ static uint64_t hash_mix_u32(uint64_t h, uint32_t v) {
 
 static uint16_t read_u16_le(const uint8_t *p) {
   return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+}
+
+static uint32_t checksum32(const uint8_t *data, size_t len) {
+  uint32_t h = 2166136261u;
+  for (size_t i = 0; i < len; i++) {
+    h ^= data[i];
+    h *= 16777619u;
+  }
+  return h;
 }
 
 static void normalize_world_calendar(SimWorldState *w) {
@@ -187,6 +200,94 @@ int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_siz
   world->in_combat = in[21] & 1u;
   world->sound_enabled = (in[21] >> 1) & 1u;
   return 0;
+}
+
+size_t sim_state_snapshot_size(void) {
+  return U6M_SNAPSHOT_HEADER_SIZE + U6M_SNAPSHOT_PAYLOAD_SIZE;
+}
+
+int sim_state_snapshot_serialize(const SimState *state, uint8_t *out, size_t out_size) {
+  uint8_t *payload;
+  uint32_t sum;
+
+  if (state == NULL || out == NULL) {
+    return SIM_PERSIST_ERR_NULL;
+  }
+  if (out_size < sim_state_snapshot_size()) {
+    return SIM_PERSIST_ERR_SIZE;
+  }
+
+  write_u32_le(out + 0, U6M_SNAPSHOT_MAGIC);
+  write_u16_le(out + 4, U6M_SNAPSHOT_VERSION);
+  write_u16_le(out + 6, U6M_SNAPSHOT_HEADER_SIZE);
+  write_u32_le(out + 8, U6M_SNAPSHOT_PAYLOAD_SIZE);
+  write_u32_le(out + 12, 0u);
+
+  payload = out + U6M_SNAPSHOT_HEADER_SIZE;
+  write_u32_le(payload + 0, state->tick);
+  write_u32_le(payload + 4, state->rng_state);
+  write_u32_le(payload + 8, state->world_flags);
+  write_u32_le(payload + 12, state->commands_applied);
+
+  if (sim_world_serialize(&state->world, payload + 16, U6M_WORLD_BLOB_SIZE) != 0) {
+    return SIM_PERSIST_ERR_SIZE;
+  }
+
+  sum = checksum32(payload, U6M_SNAPSHOT_PAYLOAD_SIZE);
+  write_u32_le(out + 12, sum);
+  return SIM_PERSIST_OK;
+}
+
+int sim_state_snapshot_deserialize(SimState *state, const uint8_t *in, size_t in_size) {
+  const uint8_t *payload;
+  uint32_t magic;
+  uint16_t version;
+  uint16_t header_size;
+  uint32_t payload_size;
+  uint32_t expected_sum;
+  uint32_t actual_sum;
+
+  if (state == NULL || in == NULL) {
+    return SIM_PERSIST_ERR_NULL;
+  }
+  if (in_size < U6M_SNAPSHOT_HEADER_SIZE) {
+    return SIM_PERSIST_ERR_SIZE;
+  }
+
+  magic = read_u32_le(in + 0);
+  version = read_u16_le(in + 4);
+  header_size = read_u16_le(in + 6);
+  payload_size = read_u32_le(in + 8);
+  expected_sum = read_u32_le(in + 12);
+
+  if (magic != U6M_SNAPSHOT_MAGIC) {
+    return SIM_PERSIST_ERR_MAGIC;
+  }
+  if (version != U6M_SNAPSHOT_VERSION) {
+    return SIM_PERSIST_ERR_VERSION;
+  }
+  if (header_size != U6M_SNAPSHOT_HEADER_SIZE || payload_size != U6M_SNAPSHOT_PAYLOAD_SIZE) {
+    return SIM_PERSIST_ERR_SIZE;
+  }
+  if (in_size < (size_t)header_size + (size_t)payload_size) {
+    return SIM_PERSIST_ERR_SIZE;
+  }
+
+  payload = in + header_size;
+  actual_sum = checksum32(payload, payload_size);
+  if (actual_sum != expected_sum) {
+    return SIM_PERSIST_ERR_CHECKSUM;
+  }
+
+  state->tick = read_u32_le(payload + 0);
+  state->rng_state = read_u32_le(payload + 4);
+  state->world_flags = read_u32_le(payload + 8);
+  state->commands_applied = read_u32_le(payload + 12);
+  if (sim_world_deserialize(&state->world, payload + 16, U6M_WORLD_BLOB_SIZE) != 0) {
+    return SIM_PERSIST_ERR_SIZE;
+  }
+  normalize_world_calendar(&state->world);
+  return SIM_PERSIST_OK;
 }
 
 int sim_init(SimState *state, const SimConfig *cfg) {

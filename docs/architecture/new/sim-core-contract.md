@@ -24,6 +24,9 @@ uint64_t sim_state_hash(const SimState *state);
 size_t sim_world_state_size(void);
 int sim_world_serialize(const SimWorldState *world, uint8_t *out, size_t out_size);
 int sim_world_deserialize(SimWorldState *world, const uint8_t *in, size_t in_size);
+size_t sim_state_snapshot_size(void);
+int sim_state_snapshot_serialize(const SimState *state, uint8_t *out, size_t out_size);
+int sim_state_snapshot_deserialize(SimState *state, const uint8_t *in, size_t in_size);
 ```
 
 Defined in:
@@ -58,6 +61,7 @@ Current bootstrap test:
 - `modern/sim-core/tests/test_objlist_compat.c`
 - `modern/sim-core/tests/test_u6_map.c`
 - `modern/sim-core/tests/test_clock_rollover.c`
+- `modern/sim-core/tests/test_snapshot_persistence.c`
 
 ## M2 Slice 1 Mapping
 
@@ -112,6 +116,23 @@ Current explicit simulation clock policy:
 - 13 months per year
 
 Rollover sequence is regression-tested. This is a deterministic baseline policy and may be tuned later if deeper legacy timing analysis reveals required adjustments.
+
+## M2 Slice 5 Persistence Hardening
+
+Snapshot API now uses a versioned binary envelope:
+
+- magic: `U6MS`
+- version: `1`
+- fixed header size + payload size fields
+- payload checksum (FNV-1a 32-bit)
+
+Failure paths return explicit `SimPersistError` values:
+
+- `SIM_PERSIST_ERR_NULL`
+- `SIM_PERSIST_ERR_SIZE`
+- `SIM_PERSIST_ERR_MAGIC`
+- `SIM_PERSIST_ERR_VERSION`
+- `SIM_PERSIST_ERR_CHECKSUM`
 
 ## Legacy Mapping Requirement
 
