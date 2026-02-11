@@ -338,6 +338,11 @@ function renderPaletteTick() {
   return animationTick();
 }
 
+function legacyPalettePhase() {
+  /* Legacy VGA cycling repeats every 8 steps for the animated bands. */
+  return renderPaletteTick() & 0x07;
+}
+
 function getRenderPalette() {
   if (!state.basePalette) {
     return null;
@@ -345,12 +350,12 @@ function getRenderPalette() {
   if (!state.enablePaletteFx) {
     return state.basePalette;
   }
-  const tick = renderPaletteTick();
-  if (state.paletteFrame && state.paletteFrameTick === tick) {
+  const phase = legacyPalettePhase();
+  if (state.paletteFrame && state.paletteFrameTick === phase) {
     return state.paletteFrame;
   }
-  state.paletteFrame = buildLegacyPaletteFrame(state.basePalette, tick);
-  state.paletteFrameTick = tick;
+  state.paletteFrame = buildLegacyPaletteFrame(state.basePalette, phase);
+  state.paletteFrameTick = phase;
   return state.paletteFrame;
 }
 
@@ -358,7 +363,7 @@ function getRenderPaletteKey() {
   if (!state.enablePaletteFx) {
     return "pal-static";
   }
-  return `palfx-${renderPaletteTick()}`;
+  return `palfx-${legacyPalettePhase()}`;
 }
 
 class U6MapJS {
@@ -441,6 +446,7 @@ class U6TileSetJS {
     this.tiles.set(objTilesBytes, mapTilesBytes.length);
     this.cache = new Map();
     this.pixelCache = new Map();
+    this.fxBandCache = new Map();
   }
 
   maskTypeFor(tileId) {
@@ -542,6 +548,30 @@ class U6TileSetJS {
       this.cache.set(key, this.buildTileCanvas(tileId, palette));
     }
     return this.cache.get(key);
+  }
+
+  tileUsesLegacyPaletteFx(tileId) {
+    if (this.fxBandCache.has(tileId)) {
+      return this.fxBandCache.get(tileId);
+    }
+    const mask = this.maskTypeFor(tileId);
+    const zeroIsTransparent = tileId <= 0x1ff;
+    const px = this.decodeTilePixels(tileId);
+    let uses = false;
+    for (let i = 0; i < px.length; i += 1) {
+      const palIdx = px[i];
+      if (mask === 10 || mask === 5) {
+        if (palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00)) {
+          continue;
+        }
+      }
+      if ((palIdx >= 0xe0 && palIdx <= 0xef) || (palIdx >= 0xf0 && palIdx <= 0xfb)) {
+        uses = true;
+        break;
+      }
+    }
+    this.fxBandCache.set(tileId, uses);
+    return uses;
   }
 }
 
@@ -685,6 +715,10 @@ class U6EntityLayerJS {
     const out = [];
     for (let id = 0; id < 0x100; id += 1) {
       const status = bytes[objStatusOff + id];
+      const npcStatus = bytes[npcStatusOff + id];
+      if (npcStatus === 0) {
+        continue;
+      }
       if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
         continue;
       }
@@ -702,13 +736,16 @@ class U6EntityLayerJS {
       const y = (bytes[pos + 1] >> 2) | ((bytes[pos + 2] & 0x0f) << 6);
       const z = (bytes[pos + 2] >> 4) & 0x0f;
       const baseTile = this.baseTiles[type] ?? 0;
+      if (baseTile === 0) {
+        continue;
+      }
       out.push({
         id,
         x,
         y,
         z,
         status,
-        npcStatus: bytes[npcStatusOff + id],
+        npcStatus,
         type,
         frame,
         baseTile,
@@ -1574,6 +1611,23 @@ function tileColor(t, palette) {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
+function paletteForTile(tileId) {
+  if (!state.basePalette) {
+    return null;
+  }
+  if (!state.enablePaletteFx || !state.tileSet || !state.tileSet.tileUsesLegacyPaletteFx(tileId)) {
+    return state.basePalette;
+  }
+  return getRenderPalette();
+}
+
+function paletteKeyForTile(tileId) {
+  if (!state.enablePaletteFx || !state.tileSet || !state.tileSet.tileUsesLegacyPaletteFx(tileId)) {
+    return "pal-static";
+  }
+  return getRenderPaletteKey();
+}
+
 function drawTileGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#0a0f13";
@@ -1664,10 +1718,14 @@ function drawTileGrid() {
             centerPaletteBand = "static";
           }
         }
-        const baseTileCanvas = state.tileSet.tileCanvas(animRawTile, renderPalette, renderPaletteKey);
+        const basePal = state.basePalette;
+        const baseKey = "pal-static";
+        const baseTileCanvas = state.tileSet.tileCanvas(animRawTile, basePal, baseKey);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(baseTileCanvas, px, py, TILE_SIZE, TILE_SIZE);
-        const tc = state.tileSet.tileCanvas(animTile, renderPalette, renderPaletteKey);
+        const topPal = state.basePalette;
+        const topKey = "pal-static";
+        const tc = state.tileSet.tileCanvas(animTile, topPal, topKey);
         ctx.drawImage(tc, px, py, TILE_SIZE, TILE_SIZE);
       } else {
         ctx.fillStyle = tileColor(t, renderPalette);
@@ -1717,7 +1775,9 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          const oc = state.tileSet.tileCanvas(t.tileId, renderPalette, renderPaletteKey);
+          const op = paletteForTile(t.tileId);
+          const ok = paletteKeyForTile(t.tileId);
+          const oc = state.tileSet.tileCanvas(t.tileId, op, ok);
           ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
           if (state.showOverlayDebug && t.dbg) {
             ctx.fillStyle = "rgba(7, 12, 16, 0.72)";
@@ -1744,7 +1804,9 @@ function drawTileGrid() {
       const px = gx * TILE_SIZE;
       const py = gy * TILE_SIZE;
       const animEntityTile = resolveAnimatedObjectTile(e);
-      const ec = state.tileSet.tileCanvas(animEntityTile, renderPalette, renderPaletteKey);
+      const ep = paletteForTile(animEntityTile);
+      const ek = paletteKeyForTile(animEntityTile);
+      const ec = state.tileSet.tileCanvas(animEntityTile, ep, ek);
       ctx.drawImage(ec, px, py, TILE_SIZE, TILE_SIZE);
       entityCount += 1;
     }
