@@ -12,6 +12,7 @@ const statPos = document.getElementById("statPos");
 const statTile = document.getElementById("statTile");
 const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
+const diagBox = document.getElementById("diagBox");
 
 const state = {
   tick: 0,
@@ -202,20 +203,34 @@ function tickLoop(ts) {
 }
 
 async function loadRuntimeAssets() {
+  const required = ["map", "chunks"];
+  const missing = [];
+
   try {
+    for (const name of required) {
+      const res = await fetch(`../assets/runtime/${name}`);
+      if (!res.ok) {
+        missing.push(name);
+      }
+    }
+    if (missing.length) {
+      throw new Error(`missing ${missing.join(", ")}`);
+    }
+
     const [mapRes, chunksRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks")
     ]);
-    if (!mapRes.ok || !chunksRes.ok) {
-      throw new Error("map/chunks fetch failed");
-    }
     const [mapBuf, chunkBuf] = await Promise.all([mapRes.arrayBuffer(), chunksRes.arrayBuffer()]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     statSource.textContent = "runtime assets";
-  } catch (_err) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Runtime assets loaded. Rendering map/chunk data from local runtime directory.";
+  } catch (err) {
     state.mapCtx = null;
     statSource.textContent = "synthetic fallback";
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Fallback active: ${String(err.message || err)}. Run ./modern/tools/validate_assets.sh and ./modern/tools/sync_assets.sh.`;
   }
 }
 

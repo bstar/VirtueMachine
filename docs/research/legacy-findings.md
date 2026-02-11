@@ -115,3 +115,15 @@ Impact on Port: unblocks visual iteration and UX work while preserving determini
 Next Validation Step: wire rendering reads through a shared sim-core boundary (wasm or generated bridge) to remove JS-side duplicate logic.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0009
+Date: 2026-02-11
+Area: Runtime Asset Preflight + Diagnostics
+Legacy Source Ref: `SRC/seg_101C.c` (runtime `map`/`chunks` dependency surface)
+Summary: browser client startup now distinguishes required runtime files (`map`, `chunks`) from optional assets and falls back deterministically when required files are absent.
+Evidence: `modern/tools/validate_assets.sh` validates required/optional manifests; `modern/client-web/app.js` performs preflight fetch checks and emits explicit diagnostics UI state.
+Confidence: high
+Impact on Port: reduces startup ambiguity for contributors, preserves runnable web demo without proprietary data, and clarifies when viewport output is real map data versus synthetic fallback.
+Next Validation Step: move map/chunk read path behind shared sim-core boundary to remove duplicate decode logic and unify diagnostics.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

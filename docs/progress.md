@@ -79,9 +79,9 @@ This checklist is intentionally mutable.
 
 #### Slice M3.3: Asset Pipeline Integration
 
-- `[ ]` Add runtime asset validation command (preflight)
-- `[ ]` Wire map/chunk/tile reads from `modern/assets/runtime`
-- `[ ]` Add fallback diagnostics UI for missing asset files
+- `[x]` Add runtime asset validation command (preflight)
+- `[x]` Wire map/chunk/tile reads from `modern/assets/runtime`
+- `[x]` Add fallback diagnostics UI for missing asset files
 
 #### Slice M3.4: Playable Walkaround Demo
 
@@ -117,18 +117,19 @@ This checklist is intentionally mutable.
 
 ## Current Sprint Focus
 
-- `[ ]` Start M3.3 (asset pipeline integration)
-- `[ ]` Add runtime asset preflight validation command for client startup
-- `[ ]` Improve fallback diagnostics for missing map/chunk files
+- `[x]` Complete M3.3 (asset pipeline integration)
+- `[ ]` Start M3.4 (playable walkaround demo)
+- `[ ]` Add debug HUD time/date fields sourced from deterministic clock
+- `[ ]` Capture and compare replay hash logs from browser-driven movement run
 
 ## Known Blockers / Risks
 
 - `[~]` Exact legacy binary layout assumptions for full `savegame/objlist` still being validated
 - `[~]` Potential determinism drift if future subsystems introduce non-authoritative randomness or frame-time coupling
-- `[ ]` No UI/client integration yet (M3 not started)
+- `[~]` Current browser renderer duplicates some map/chunk logic in JS pending shared sim-core boundary
 - `[ ]` Map/chunk format edge cases may require additional reverse-engineering passes
 - `[ ]` Multiplayer timeline depends on deterministic coverage breadth by end of Month 2
 
 ## Next Immediate Task
 
-Implement `M3 Slice 3`: runtime asset preflight checks and client diagnostics polish.
+Implement `M3 Slice 4`: playable walkaround demo with debug HUD + replay hash stability check.
