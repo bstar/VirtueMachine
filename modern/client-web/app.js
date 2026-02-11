@@ -23,14 +23,32 @@ const LEGACY_CORNER_TABLE = [
 ];
 const OBJ_COORD_USE_MASK = 0x18;
 const OBJ_COORD_USE_LOCXYZ = 0x00;
+const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
+const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
+const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
 const OBJECT_TYPES_RENDER = new Set([
+  0x062, /* open chest */
+  0x07a, /* candle */
   0x05f, /* grapes */
   0x060, /* butter */
   0x080, /* loaf of bread */
   0x081, /* portion of meat */
   0x084, /* cheese */
+  0x0a2, /* stove */
+  0x0a3, /* bed */
+  0x0a4, /* fireplace */
+  0x0b0, /* chest of drawers */
+  0x0b1, /* desk */
+  0x0ba, /* open barrel */
   0x0c6, /* cutting table */
+  0x0ce, /* throne-room decor variant */
+  0x0d5, /* throne-room decor variant */
+  0x0d8, /* bookshelf */
+  0x0d9, /* anvil */
   0x0d1, /* meat rib type */
+  0x0dc, /* throne-room trim */
+  0x0dd, /* throne-room trim */
+  0x0de, /* throne-room trim */
   0x0e4, /* table square corner */
   0x0e6, /* table round corner */
   0x0ea, /* fountain */
@@ -38,13 +56,21 @@ const OBJECT_TYPES_RENDER = new Set([
   0x0ef, /* table round corner alt */
   0x0fa, /* table square corner alt */
   0x10f, /* doorsill */
+  0x110, /* throne-room wall segment */
+  0x111, /* throne-room wall segment */
+  0x114, /* throne-room trim segment */
   0x117, /* table */
   0x129, /* oaken door */
   0x12a, /* windowed door */
   0x12b, /* cedar door */
   0x12c, /* steel door */
   0x12d, /* doorway */
+  0x12e, /* throne-room stair carpet edge */
+  0x12f, /* throne-room carpet/dais */
+  0x130, /* throne-room carpet/dais */
   0x137, /* stone table */
+  0x147, /* throne */
+  0x0fc, /* chair */
   0x14e /* secret door */
 ]);
 
@@ -70,6 +96,7 @@ const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
 const layoutSelect = document.getElementById("layoutSelect");
 const fontSelect = document.getElementById("fontSelect");
+const gridToggle = document.getElementById("gridToggle");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
@@ -77,6 +104,7 @@ const captureButton = document.getElementById("captureButton");
 const THEME_KEY = "vm_theme";
 const LAYOUT_KEY = "vm_layout";
 const FONT_KEY = "vm_font";
+const GRID_KEY = "vm_grid";
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -99,11 +127,15 @@ const LAYOUTS = [
 const FONTS = ["blockblueprint", "kaijuz", "orangekid", "silkscreen"];
 const CAPTURE_PRESETS = [
   { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
+  { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
   { id: "wood_corner_a", label: "Wood Corner A (355,411,0)", x: 355, y: 411, z: 0 },
   { id: "wood_corner_b", label: "Wood Corner B (356,411,0)", x: 356, y: 411, z: 0 },
   { id: "britain_core", label: "Britain Core (337,365,0)", x: 337, y: 365, z: 0 },
   { id: "farmland", label: "Farmland Props (292,431,0)", x: 292, y: 431, z: 0 }
 ];
+const OBJ_TYPE_FIRE_FIELD = 0x0ec;
+const OBJ_TYPE_WATER_WHEEL = 0x120;
+const OBJ_TYPE_SPINNING_WHEEL = 0x125;
 
 const INITIAL_WORLD = Object.freeze({
   is_on_quest: 0,
@@ -131,13 +163,81 @@ const state = {
   mapCtx: null,
   tileSet: null,
   objectLayer: null,
+  animData: null,
+  animCounter: 0,
   objectOverlayCount: 0,
+  showGrid: false,
   palette: null,
+  tileFlags: null,
   terrainType: null,
   lastTs: performance.now(),
   accMs: 0,
   replayUrl: null
 };
+
+class U6AnimDataJS {
+  constructor(entries) {
+    this.entries = entries;
+    this.state = new Uint8Array(entries.length);
+    this.state.fill(1);
+    this.byBase = new Map();
+    for (let i = 0; i < entries.length; i += 1) {
+      this.byBase.set(entries[i].baseTile, i);
+    }
+  }
+
+  setByBaseTile(tileId, mode) {
+    const i = this.byBase.get(tileId);
+    if (i === undefined) {
+      return;
+    }
+    this.state[i] = mode & 0x03;
+  }
+
+  animatedTile(tileId, counter) {
+    const i = this.byBase.get(tileId);
+    if (i === undefined) {
+      return tileId;
+    }
+    const e = this.entries[i];
+    let frame = e.startFrame;
+    if (this.state[i] === 1) {
+      frame += ((counter & e.mask) >>> e.shift);
+    } else if (this.state[i] === 2) {
+      frame += (((~counter) & e.mask) >>> e.shift);
+    }
+    return frame & 0xffff;
+  }
+
+  static fromBytes(bytes) {
+    if (!bytes || bytes.length < 2) {
+      return null;
+    }
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const maxAnim = 32;
+    let count = dv.getUint16(0, true);
+    if (count > maxAnim) {
+      count = maxAnim;
+    }
+    if (bytes.length < (2 + (maxAnim * 2) + (maxAnim * 2) + maxAnim + maxAnim)) {
+      return null;
+    }
+    const entries = [];
+    const offBase = 2;
+    const offStart = offBase + (maxAnim * 2);
+    const offMask = offStart + (maxAnim * 2);
+    const offShift = offMask + maxAnim;
+    for (let i = 0; i < count; i += 1) {
+      entries.push({
+        baseTile: dv.getUint16(offBase + (i * 2), true),
+        startFrame: dv.getUint16(offStart + (i * 2), true),
+        mask: bytes[offMask + i],
+        shift: bytes[offShift + i] & 0x07
+      });
+    }
+    return new U6AnimDataJS(entries);
+  }
+}
 
 class U6MapJS {
   constructor(mapBytes, chunkBytes) {
@@ -337,6 +437,19 @@ class U6ObjectLayerJS {
     return `${x & 0x3ff},${y & 0x3ff},${z & 0x0f}`;
   }
 
+  drawPriority(type) {
+    if (OBJECT_TYPES_FLOOR_DECOR.has(type)) {
+      return -1;
+    }
+    if (OBJECT_TYPES_TOP_DECOR.has(type)) {
+      return 2;
+    }
+    if (OBJECT_TYPES_DOOR.has(type)) {
+      return 1;
+    }
+    return 0;
+  }
+
   parseObjBlk(bytes) {
     if (!bytes || bytes.length < 2) {
       return [];
@@ -366,7 +479,7 @@ class U6ObjectLayerJS {
       const frame = shapeType >>> 10;
       const base = this.baseTiles[type] ?? 0;
       const tileId = (base + frame) & 0xffff;
-      entries.push({ x, y, z, type, frame, tileId, order: i });
+      entries.push({ x, y, z, type, frame, tileId, order: i, drawPri: this.drawPriority(type) });
     }
     return entries;
   }
@@ -400,7 +513,12 @@ class U6ObjectLayerJS {
       }
     }
     for (const list of this.byCoord.values()) {
-      list.sort((a, b) => a.order - b.order);
+      list.sort((a, b) => {
+        if (a.drawPri !== b.drawPri) {
+          return a.drawPri - b.drawPri;
+        }
+        return a.order - b.order;
+      });
     }
   }
 
@@ -592,6 +710,36 @@ function initFont() {
   if (fontSelect) {
     fontSelect.addEventListener("change", () => {
       setFont(fontSelect.value);
+    });
+  }
+}
+
+function setGrid(enabled) {
+  state.showGrid = !!enabled;
+  if (gridToggle) {
+    gridToggle.value = state.showGrid ? "on" : "off";
+  }
+  try {
+    localStorage.setItem(GRID_KEY, state.showGrid ? "on" : "off");
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initGrid() {
+  let saved = "off";
+  try {
+    const fromStorage = localStorage.getItem(GRID_KEY);
+    if (fromStorage === "on" || fromStorage === "off") {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setGrid(saved === "on");
+  if (gridToggle) {
+    gridToggle.addEventListener("change", () => {
+      setGrid(gridToggle.value === "on");
     });
   }
 }
@@ -832,6 +980,52 @@ function hasWallTerrain(tileId) {
   return (terrainOf(tileId) & 0x04) !== 0;
 }
 
+function objectWallContributionAt(wx, wy, wz) {
+  if (!state.objectLayer) {
+    return false;
+  }
+
+  const candidates = [
+    { x: wx, y: wy, dx: 0, dy: 0 },
+    { x: wx + 1, y: wy, dx: 1, dy: 0 },
+    { x: wx, y: wy + 1, dx: 0, dy: 1 },
+    { x: wx + 1, y: wy + 1, dx: 1, dy: 1 }
+  ];
+
+  for (const c of candidates) {
+    const objs = state.objectLayer.objectsAt(c.x, c.y, wz);
+    for (const o of objs) {
+      const tileId = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
+      if (!hasWallTerrain(tileId)) {
+        continue;
+      }
+      const flags = state.tileFlags ? (state.tileFlags[tileId & 0x7ff] ?? 0) : 0;
+      if (c.dx === 0 && c.dy === 0) {
+        return true;
+      }
+      if (c.dx === 1 && c.dy === 0 && (flags & 0x80)) {
+        return true;
+      }
+      if (c.dx === 0 && c.dy === 1 && (flags & 0x40)) {
+        return true;
+      }
+      if (c.dx === 1 && c.dy === 1 && (flags & 0x80) && (flags & 0x40)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function wallPresenceAt(wx, wy, wz) {
+  const baseTile = state.mapCtx ? state.mapCtx.tileAt(wx, wy, wz) : 0;
+  if (hasWallTerrain(baseTile)) {
+    return true;
+  }
+  return objectWallContributionAt(wx, wy, wz);
+}
+
 function applyLegacyCornerVariant(tileId, wx, wy, wz) {
   /* Heuristic guard: in the web prototype we don't have full AreaFlags/object
      occlusion state from legacy `seg_1100`; remapping mid/high wall families
@@ -856,13 +1050,13 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz) {
   const south = state.mapCtx.tileAt(wx, wy + 1, wz);
   const west = state.mapCtx.tileAt(wx - 1, wy, wz);
 
-  /* Legacy code uses visibility flags; in the web slice we approximate with
-     wall-neighbor presence so corner variants still resolve consistently. */
+  /* Approximate legacy AreaFlags wall signal with map terrain + object
+     wall contributions (including double-H/double-V spill). */
   let bp0c = 0;
-  if (hasWallTerrain(north)) bp0c |= 8;
-  if (hasWallTerrain(east)) bp0c |= 4;
-  if (hasWallTerrain(south)) bp0c |= 2;
-  if (hasWallTerrain(west)) bp0c |= 1;
+  if (wallPresenceAt(wx, wy - 1, wz)) bp0c |= 8;
+  if (wallPresenceAt(wx + 1, wy, wz)) bp0c |= 4;
+  if (wallPresenceAt(wx, wy + 1, wz)) bp0c |= 2;
+  if (wallPresenceAt(wx - 1, wy, wz)) bp0c |= 1;
 
   if (bp0c === 0x0f || bp0c === 0x00) {
     return tileId;
@@ -912,6 +1106,37 @@ function drawTileGrid() {
 
   const startX = state.sim.world.map_x - (VIEW_W >> 1);
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
+  const overlayCells = (state.tileSet && state.objectLayer)
+    ? Array.from({ length: VIEW_W * VIEW_H }, () => [])
+    : null;
+  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
+  const isFloorTile = (tileId) => {
+    if (!state.tileFlags) {
+      return false;
+    }
+    return (state.tileFlags[tileId & 0x7ff] & 0x10) !== 0;
+  };
+  const insertLegacyCellTile = (gx, gy, tileId, bp06) => {
+    if (!overlayCells || gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+      return;
+    }
+    const list = overlayCells[cellIndex(gx, gy)];
+    const entry = { tileId: tileId & 0xffff, floor: isFloorTile(tileId) };
+    if (entry.floor || bp06 === 2) {
+      if (bp06 & 1) {
+        list.push(entry);
+        return;
+      }
+      const idx = list.findIndex((e) => !e.floor);
+      if (idx === -1) {
+        list.push(entry);
+      } else {
+        list.splice(idx, 0, entry);
+      }
+      return;
+    }
+    list.unshift(entry);
+  };
 
   let centerTile = 0;
   let overlayCount = 0;
@@ -935,10 +1160,12 @@ function drawTileGrid() {
       const px = gx * TILE_SIZE;
       const py = gy * TILE_SIZE;
       if (state.tileSet) {
-        const baseTileCanvas = state.tileSet.tileCanvas(rawTile);
+        const animRawTile = state.animData ? state.animData.animatedTile(rawTile, state.animCounter) : rawTile;
+        const animTile = state.animData ? state.animData.animatedTile(t, state.animCounter) : t;
+        const baseTileCanvas = state.tileSet.tileCanvas(animRawTile);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(baseTileCanvas, px, py, TILE_SIZE, TILE_SIZE);
-        const tc = state.tileSet.tileCanvas(t);
+        const tc = state.tileSet.tileCanvas(animTile);
         ctx.drawImage(tc, px, py, TILE_SIZE, TILE_SIZE);
       } else {
         ctx.fillStyle = tileColor(t);
@@ -947,13 +1174,41 @@ function drawTileGrid() {
       if (state.tileSet && state.objectLayer) {
         const overlays = state.objectLayer.objectsAt(wx, wy, state.sim.world.map_z);
         for (const o of overlays) {
-          const oc = state.tileSet.tileCanvas(o.tileId);
-          ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
+          const animObjTile = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
+          insertLegacyCellTile(gx, gy, animObjTile, 0);
+
+          /* Legacy C_1184_35EA: object tiles with TileFlag 0x80/0x40 spill into
+             left/up neighboring cells using tileId-1..-3 subtiles. */
+          const tf = state.tileFlags ? (state.tileFlags[animObjTile & 0x7ff] ?? 0) : 0;
+          if (tf & 0x80) {
+            insertLegacyCellTile(gx - 1, gy, animObjTile - 1, 1);
+            if (tf & 0x40) {
+              insertLegacyCellTile(gx, gy - 1, animObjTile - 2, 1);
+              insertLegacyCellTile(gx - 1, gy - 1, animObjTile - 3, 1);
+            }
+          } else if (tf & 0x40) {
+            insertLegacyCellTile(gx, gy - 1, animObjTile - 1, 1);
+          }
           overlayCount += 1;
         }
       }
-      ctx.strokeStyle = "rgba(15, 20, 24, 0.55)";
-      ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      if (state.showGrid) {
+        ctx.strokeStyle = "rgba(15, 20, 24, 0.55)";
+        ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      }
+    }
+  }
+  if (overlayCells && state.tileSet) {
+    for (let gy = 0; gy < VIEW_H; gy += 1) {
+      for (let gx = 0; gx < VIEW_W; gx += 1) {
+        const px = gx * TILE_SIZE;
+        const py = gy * TILE_SIZE;
+        const list = overlayCells[cellIndex(gx, gy)];
+        for (const t of list) {
+          const oc = state.tileSet.tileCanvas(t.tileId);
+          ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
+        }
+      }
     }
   }
   state.objectOverlayCount = overlayCount;
@@ -1067,6 +1322,7 @@ function tickLoop(ts) {
   while (state.accMs >= TICK_MS) {
     state.accMs -= TICK_MS;
     state.queue = stepSimTick(state.sim, state.queue);
+    state.animCounter = (state.animCounter + 1) & 0xffff;
   }
 
   drawTileGrid();
@@ -1089,7 +1345,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -1098,9 +1354,10 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/masktype.vga"),
       fetch("../assets/runtime/maptiles.vga"),
       fetch("../assets/runtime/objtiles.vga"),
-      fetch("../assets/runtime/basetile")
+      fetch("../assets/runtime/basetile"),
+      fetch("../assets/runtime/animdata")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -1109,7 +1366,8 @@ async function loadRuntimeAssets() {
       maskRes.arrayBuffer(),
       mapTileRes.arrayBuffer(),
       objTileRes.arrayBuffer(),
-      baseTileRes.arrayBuffer()
+      baseTileRes.arrayBuffer(),
+      animRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -1117,9 +1375,14 @@ async function loadRuntimeAssets() {
     } else {
       state.palette = null;
     }
-    if (flagRes.ok && flagBuf.byteLength >= 0x800) {
+    if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
+      state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
+    } else if (flagRes.ok && flagBuf.byteLength >= 0x800) {
+      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
+      state.tileFlags = new Uint8Array(flagBuf.slice(0, 0x800));
     } else {
+      state.tileFlags = null;
       state.terrainType = null;
     }
 
@@ -1147,8 +1410,19 @@ async function loadRuntimeAssets() {
       const baseTiles = buildBaseTileTable(new Uint8Array(baseTileBuf));
       state.objectLayer = new U6ObjectLayerJS(baseTiles);
       await state.objectLayer.loadOutdoor((name) => fetch(`../assets/runtime/savegame/${name}`));
+      if (animRes.ok && animBuf.byteLength >= 2) {
+        state.animData = U6AnimDataJS.fromBytes(new Uint8Array(animBuf));
+        if (state.animData) {
+          state.animData.setByBaseTile(baseTiles[OBJ_TYPE_SPINNING_WHEEL], 0);
+          state.animData.setByBaseTile(baseTiles[OBJ_TYPE_WATER_WHEEL], 0);
+          state.animData.setByBaseTile(baseTiles[OBJ_TYPE_FIRE_FIELD], 0);
+        }
+      } else {
+        state.animData = null;
+      }
     } else {
       state.objectLayer = null;
+      state.animData = null;
     }
 
     if (state.tileSet) {
@@ -1161,7 +1435,11 @@ async function loadRuntimeAssets() {
     diagBox.className = "diag ok";
     if (state.tileSet) {
       if (state.objectLayer && state.objectLayer.filesLoaded > 0) {
-        diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files).`;
+        if (state.animData) {
+          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files). Animated tile remaps active (${state.animData.entries.length} entries).`;
+        } else {
+          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files).`;
+        }
       } else {
         diagBox.textContent = "Runtime assets loaded with tile decoder path (tileindx/masktype/maptiles/objtiles). Rendering bitmap tiles.";
       }
@@ -1174,7 +1452,9 @@ async function loadRuntimeAssets() {
     state.mapCtx = null;
     state.tileSet = null;
     state.objectLayer = null;
+    state.animData = null;
     state.palette = null;
+    state.tileFlags = null;
     state.terrainType = null;
     statSource.textContent = "synthetic fallback";
     diagBox.className = "diag warn";
@@ -1206,6 +1486,7 @@ loadRuntimeAssets().then(() => {
 initTheme();
 initLayout();
 initFont();
+initGrid();
 initCapturePresets();
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);

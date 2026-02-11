@@ -11,9 +11,12 @@ Minimal browser client prototype:
 - 10 switchable nostalgia UI themes (saved in browser `localStorage`)
 - 5 switchable interface layout variants (saved in browser `localStorage`)
 - optional self-hosted retro fonts (`modern/client-web/fonts/README.md`)
+- viewport tile grid toggle (off by default; saved in browser `localStorage`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
-- static object overlay layer for select world props (doors, fountains, tables, food)
+- static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
+- legacy `animdata`-driven tile remap animation (water/swamp and other animated sets)
 - canonical capture presets + one-click viewport PNG export for parity screenshot workflow
+  - includes `Lord British Throne (307,347,0)` preset for throne composition validation
 
 ## Run
 
@@ -33,6 +36,7 @@ The client will try loading:
 - `modern/assets/runtime/chunks`
 - `modern/assets/runtime/u6pal`
 - `modern/assets/runtime/tileflag`
+- `modern/assets/runtime/animdata`
 
 For bitmap tile rendering path (optional, if present):
 

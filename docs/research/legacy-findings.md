@@ -187,3 +187,15 @@ Impact on Port: removes client-only parsing assumptions and establishes a testab
 Next Validation Step: replace direct JS `objblk` parsing path with data sourced through shared sim-core boundary.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../architecture/new/sim-core-contract.md`, `../progress.md`
+
+Finding ID: FIND-0015
+Date: 2026-02-11
+Area: Wall Corner Variant Parity (`seg_1100` AreaFlags vs web approximation)
+Legacy Source Ref: `SRC/seg_1100.c` (`C_1100_0306`), `SRC/seg_1184.c` (`C_1184_35EA`), `SRC/u6.h` (`IsTileDoubleH`, `IsTileDoubleV`, wall/floor tile flags)
+Summary: interior wall-corner selection depends on an AreaFlags wall signal that combines base map terrain walls and object wall contributions (including double-width/height spill into neighbor cells). A terrain-only neighbor check can misclassify straight walls as corners in places like the Lord British throne room.
+Evidence: legacy AreaFlags build marks wall bits from `TILE_FRAME(obj)` and propagates wall flags to adjacent cells for double-H/double-V tiles before corner remap logic runs.
+Confidence: medium-high
+Impact on Port: prevents visible wall-shape artifacts and keeps architectural silhouettes stable in interior maps without introducing object-specific hacks.
+Next Validation Step: spot-check known interior corner cases (Britain castle/throne room, tavern interiors) against captured reference views; then move this logic behind a shared sim-core/render boundary.
+Related Symbols: SYM-0006
+Related Modern Docs: `../architecture/new/system-overview.md`, `../progress.md`
