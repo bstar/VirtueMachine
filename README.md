@@ -100,19 +100,11 @@ Run the first web rendering prototype:
 
 ## Progress Snapshot
 
-Latest in-engine web renderer progress (throne room parity slice):
-
-![VirtueMachine web renderer progress snapshot](docs/assets/screenshots/2026-02-11-throne-room-progress.png)
-
 R1 canonical parity captures (web renderer):
 
 - Throne room static composition (`307,347,0`)
 - Fire palette-cycling composition (`360,397,0`)
 - Wheel tile-remap animation composition (`307,384,0`)
-
-![VirtueMachine throne room parity capture](docs/assets/screenshots/2026-02-11-throne-room-307-347-0.png)
-![VirtueMachine fire palette animation parity capture](docs/assets/screenshots/2026-02-11-animation-fire-360-397-0.png)
-![VirtueMachine wheel animation parity capture](docs/assets/screenshots/2026-02-11-animation-wheels-307-384-0.png)
 
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
