@@ -1758,6 +1758,29 @@ function drawTileGrid() {
     }
     list.unshift(entry);
   };
+  const isOverlayOccluder = (tileId) => {
+    if (!state.tileFlags) {
+      return false;
+    }
+    const tf = state.tileFlags[tileId & 0x7ff] ?? 0;
+    if ((tf & 0x04) !== 0 || (tf & 0x08) !== 0) {
+      return true;
+    }
+    return hasWallTerrain(tileId);
+  };
+  const drawOverlayEntry = (entry, px, py) => {
+    const op = paletteForTile(entry.tileId);
+    const ok = paletteKeyForTile(entry.tileId);
+    const oc = state.tileSet.tileCanvas(entry.tileId, op, ok);
+    ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
+    if (state.showOverlayDebug && entry.dbg) {
+      ctx.fillStyle = "rgba(7, 12, 16, 0.72)";
+      ctx.fillRect(px + 3, py + 3, 48, 14);
+      ctx.fillStyle = "#f5f5f5";
+      ctx.font = "10px monospace";
+      ctx.fillText(entry.dbg, px + 5, py + 13);
+    }
+  };
   const drawEntityTile = (tileId, gx, gy) => {
     if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
       return;
@@ -1867,6 +1890,23 @@ function drawTileGrid() {
       }
     }
   }
+  if (overlayCells && state.tileSet) {
+    for (let gy = 0; gy < VIEW_H; gy += 1) {
+      for (let gx = 0; gx < VIEW_W; gx += 1) {
+        const px = gx * TILE_SIZE;
+        const py = gy * TILE_SIZE;
+        if (viewCtx && !viewCtx.visibleAtWorld(startX + gx, startY + gy)) {
+          continue;
+        }
+        const list = overlayCells[cellIndex(gx, gy)];
+        for (const t of list) {
+          if (!isOverlayOccluder(t.tileId)) {
+            drawOverlayEntry(t, px, py);
+          }
+        }
+      }
+    }
+  }
   if (state.tileSet && state.entityLayer) {
     const entities = state.entityLayer.entitiesInView(startX, startY, state.sim.world.map_z, VIEW_W, VIEW_H);
     for (const e of entities) {
@@ -1903,16 +1943,8 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          const op = paletteForTile(t.tileId);
-          const ok = paletteKeyForTile(t.tileId);
-          const oc = state.tileSet.tileCanvas(t.tileId, op, ok);
-          ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
-          if (state.showOverlayDebug && t.dbg) {
-            ctx.fillStyle = "rgba(7, 12, 16, 0.72)";
-            ctx.fillRect(px + 3, py + 3, 48, 14);
-            ctx.fillStyle = "#f5f5f5";
-            ctx.font = "10px monospace";
-            ctx.fillText(t.dbg, px + 5, py + 13);
+          if (isOverlayOccluder(t.tileId)) {
+            drawOverlayEntry(t, px, py);
           }
         }
       }
