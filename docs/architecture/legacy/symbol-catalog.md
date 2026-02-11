@@ -107,3 +107,14 @@ Evidence: top-level world state globals in legacy source
 Behavior Notes: combat mode and progression flags influence world behavior
 Modern Mapping: `SimWorldState.in_combat/sound_enabled/is_on_quest/next_sleep/wind_dir/active`
 Last Updated: 2026-02-11
+
+ID: SYM-0008
+Legacy Symbol: `savegame\\objlist` tail (`obj_2C4A..D_2CCB`)
+Location: `SRC/seg_0C9C.c`, `SRC/D_2C4A.c`
+Proposed Name: `objlist_world_tail`
+Confidence: high
+Status: active
+Evidence: read/write tail size computed by `(char *)&D_2CCC - (char *)&obj_2C4A`, with fixed preceding reads in `C_0C9C_042A`/`C_0C9C_089F`
+Behavior Notes: compatibility boundary for loading/persisting world-state globals
+Modern Mapping: `u6_objlist` helpers and constants `U6_OBJLIST_TAIL_OFFSET`/`U6_OBJLIST_TAIL_SIZE`
+Last Updated: 2026-02-11

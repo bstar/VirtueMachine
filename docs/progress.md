@@ -30,11 +30,11 @@ Legend:
 
 ### M2 Slice 2: `objlist` Compatibility Boundary
 
-- `[ ]` Add typed `objlist`-tail compatibility layout under `modern/sim-core`
-- `[ ]` Implement little-endian read/write helpers with strict size checks
-- `[ ]` Add roundtrip and malformed-input tests for persistence boundary
-- `[ ]` Add hash invariants for load/save roundtrip behavior
-- `[ ]` Document field offsets and assumptions in `docs/research/legacy-findings.md`
+- `[x]` Add typed `objlist`-tail compatibility layout under `modern/sim-core`
+- `[x]` Implement little-endian read/write helpers with strict size checks
+- `[x]` Add roundtrip and malformed-input tests for persistence boundary
+- `[x]` Add hash invariants for load/save roundtrip behavior
+- `[x]` Document field offsets and assumptions in `docs/research/legacy-findings.md`
 
 ### Engineering Hygiene
 

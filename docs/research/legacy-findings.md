@@ -43,3 +43,15 @@ Impact on Port: asset pipeline and manifest are required for functional runtime
 Next Validation Step: build machine-readable required-file manifest
 Related Symbols: SYM-0001, SYM-0002, SYM-0003
 Related Modern Docs: `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0003
+Date: 2026-02-11
+Area: Savegame Layout (`savegame\\objlist`)
+Legacy Source Ref: `SRC/seg_0C9C.c`, `SRC/D_2C4A.c`, `SRC/u6.h`
+Summary: the serialized `D_2C4A..D_2CCB` block occupies `0x82` bytes and begins after fixed-size `objlist` sections at offset `0x1BF1`.
+Evidence: summing fixed reads before tail in `C_0C9C_042A` yields `0x1BF1`; length expression `(char *)&D_2CCC - (char *)&obj_2C4A` yields `0x82`.
+Confidence: high
+Impact on Port: enables strict compatibility boundary for extracting/patching mapped world fields without mutating unknown bytes.
+Next Validation Step: validate on multiple real save files and confirm no variant layout deltas.
+Related Symbols: SYM-0004, SYM-0005, SYM-0006, SYM-0007
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

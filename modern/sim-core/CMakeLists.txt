@@ -1,5 +1,6 @@
 add_library(sim_core STATIC
   src/sim_core.c
+  src/u6_objlist.c
 )
 
 target_include_directories(sim_core
@@ -22,3 +23,11 @@ add_executable(sim_core_world_state_io_test
 target_link_libraries(sim_core_world_state_io_test PRIVATE sim_core)
 
 add_test(NAME sim_core_world_state_io_test COMMAND sim_core_world_state_io_test)
+
+add_executable(sim_core_objlist_compat_test
+  tests/test_objlist_compat.c
+)
+
+target_link_libraries(sim_core_objlist_compat_test PRIVATE sim_core)
+
+add_test(NAME sim_core_objlist_compat_test COMMAND sim_core_objlist_compat_test)

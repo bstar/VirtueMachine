@@ -55,6 +55,7 @@ Current bootstrap test:
 
 - `modern/sim-core/tests/test_replay.c`
 - `modern/sim-core/tests/test_world_state_io.c`
+- `modern/sim-core/tests/test_objlist_compat.c`
 
 ## M2 Slice 1 Mapping
 
@@ -68,6 +69,21 @@ Current `SimWorldState` maps a vetted subset of legacy `D_2C4A` globals:
 - combat/sound booleans
 
 This is the first persisted/state-sync-ready boundary for save compatibility and multiplayer snapshots.
+
+## M2 Slice 2 Compatibility Boundary
+
+Legacy `savegame/objlist` support now has a dedicated boundary module:
+
+- `modern/sim-core/include/u6_objlist.h`
+- `modern/sim-core/src/u6_objlist.c`
+
+Current constants:
+
+- `U6_OBJLIST_TAIL_OFFSET = 0x1BF1`
+- `U6_OBJLIST_TAIL_SIZE = 0x82`
+
+These are based on fixed-size read/write ordering from `SRC/seg_0C9C.c` and the serialized
+`D_2C4A..D_2CCB` world-state block length.
 
 ## Legacy Mapping Requirement
 
