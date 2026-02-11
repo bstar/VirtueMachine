@@ -12,6 +12,7 @@ This documentation system keeps legacy reverse-engineering context and modern ar
 ## Structure
 
 - `docs/development-plan.md`: detailed execution plan, milestones, quality gates.
+- `docs/progress.md`: live milestone/sprint checklist and current status.
 - `docs/architecture/legacy/`: what the original game does and how we know it.
 - `docs/architecture/new/`: modern system architecture and contracts.
 - `docs/research/`: incremental findings during reverse-engineering/porting.
