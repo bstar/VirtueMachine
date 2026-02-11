@@ -94,6 +94,9 @@ const HASH_MASK = (1n << 64n) - 1n;
 
 const canvas = document.getElementById("viewport");
 const ctx = canvas.getContext("2d");
+const legacyBackdropCanvas = document.getElementById("legacyBackdrop");
+const legacyViewportCanvas = document.getElementById("legacyViewport");
+const legacyWorldSurface = document.getElementById("legacyWorldSurface");
 
 const statTick = document.getElementById("statTick");
 const statPos = document.getElementById("statPos");
@@ -116,7 +119,6 @@ const topTimeOfDay = document.getElementById("topTimeOfDay");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
-const layoutSelect = document.getElementById("layoutSelect");
 const fontSelect = document.getElementById("fontSelect");
 const gridToggle = document.getElementById("gridToggle");
 const debugOverlayToggle = document.getElementById("debugOverlayToggle");
@@ -124,12 +126,14 @@ const animationToggle = document.getElementById("animationToggle");
 const paletteFxToggle = document.getElementById("paletteFxToggle");
 const movementModeToggle = document.getElementById("movementModeToggle");
 const renderModeToggle = document.getElementById("renderModeToggle");
+const capturePreviewToggle = document.getElementById("capturePreviewToggle");
+const legacyScaleModeToggle = document.getElementById("legacyScaleModeToggle");
+const charStubCanvas = document.getElementById("charStubCanvas");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 
 const THEME_KEY = "vm_theme";
-const LAYOUT_KEY = "vm_layout";
 const FONT_KEY = "vm_font";
 const GRID_KEY = "vm_grid";
 const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
@@ -137,6 +141,45 @@ const ANIMATION_KEY = "vm_animation";
 const PALETTE_FX_KEY = "vm_palette_fx";
 const MOVEMENT_MODE_KEY = "vm_movement_mode";
 const RENDER_MODE_KEY = "vm_render_mode";
+const LEGACY_FRAME_PREVIEW_KEY = "vm_legacy_frame_preview";
+const LEGACY_SCALE_MODE_KEY = "vm_legacy_scale_mode";
+const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
+const LEGACY_FRAME_TILES = Object.freeze({
+  cornerTL: 0x1b0,
+  top: 0x1b1,
+  cornerTR: 0x1b2,
+  cornerBL: 0x1b3,
+  bottom: 0x1b4,
+  cornerBR: 0x1b5,
+  left: 0x1b6,
+  right: 0x1b7
+});
+const LEGACY_UI_TILE = Object.freeze({
+  SLOT_EMPTY: 0x19b,
+  BUTTON_ATTACK_BASE: 0x190,
+  BUTTON_RIGHT: 0x19e,
+  SKY_OUTSIDE_BASE: 0x160,
+  CAVE_L: 0x174,
+  CAVE_M: 0x175,
+  CAVE_R: 0x176,
+  EQUIP_UL: 0x170,
+  EQUIP_UR: 0x171,
+  EQUIP_DL: 0x172,
+  EQUIP_DR: 0x173
+});
+const LEGACY_POSTURE_ICONS = Object.freeze([0x183, 0x180, 0x181, 0x184, 0x187]);
+const LEGACY_HUD_TEXT_COLOR = "#8b3f24";
+const LEGACY_AVATAR_PORTRAIT_INDEX = 0;
+const LEGACY_DIGIT_3X5 = Object.freeze([
+  0xF6DE, 0x4924, 0xE7CE, 0xE59E, 0xB792,
+  0xF39E, 0xF3DE, 0xE4A4, 0xF7DE, 0xF79E
+]);
+const LEGACY_DIGIT_X = Object.freeze([
+  [7, 0, 0, 0],
+  [9, 4, 0, 0],
+  [11, 7, 3, 0],
+  [13, 9, 5, 1]
+]);
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -148,13 +191,6 @@ const THEMES = [
   "bloodstone",
   "moonstone",
   "ash"
-];
-const LAYOUTS = [
-  "classic-right",
-  "classic-left",
-  "ledger-split",
-  "ledger-compact",
-  "ledger-focus"
 ];
 const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
 const RENDER_MODES = ["current", "nuvie"];
@@ -201,6 +237,7 @@ const state = {
   objectOverlayCount: 0,
   entityOverlayCount: 0,
   renderParityMismatches: 0,
+  renderModeDebug: null,
   interactionProbeTile: null,
   npcOcclusionBlockedMoves: 0,
   showGrid: false,
@@ -224,8 +261,20 @@ const state = {
   cornerVariantCache: new Map(),
   lastTs: performance.now(),
   accMs: 0,
-  replayUrl: null
+  replayUrl: null,
+  legacyPaperPixmap: null,
+  legacyScaleMode: "fit",
+  legacyComposeCanvas: null,
+  legacyBackdropBaseCanvas: null,
+  avatarPortraitCanvas: null,
+  u6MainFont: null
 };
+
+function isLegacyScaleMode(mode) {
+  return mode === "fit" || mode === "1" || mode === "2" || mode === "3" || mode === "4";
+}
+
+const LEGACY_SCALE_MODES = Object.freeze(["fit", "1", "2", "3", "4"]);
 
 class U6AnimDataJS {
   constructor(entries) {
@@ -983,6 +1032,388 @@ function decompressU6Lzw(bytes) {
   return out;
 }
 
+function decodeLegacyPixmap(bytes) {
+  if (!bytes || bytes.length < 4) {
+    return null;
+  }
+  const decoded = decompressU6Lzw(bytes);
+  if (!decoded || decoded.length < 4) {
+    return null;
+  }
+  const w = decoded[0] | (decoded[1] << 8);
+  const h = decoded[2] | (decoded[3] << 8);
+  const size = w * h;
+  if (w <= 0 || h <= 0 || decoded.length < (4 + size)) {
+    return null;
+  }
+  return {
+    width: w,
+    height: h,
+    pixels: decoded.slice(4, 4 + size)
+  };
+}
+
+function decodePortraitFromArchive(bytes, index = 0) {
+  if (!bytes || bytes.length < 8) {
+    return null;
+  }
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const firstOff = dv.getUint32(0, true);
+  if (firstOff <= 0 || firstOff >= bytes.length || (firstOff % 4) !== 0) {
+    return null;
+  }
+  const count = Math.floor(firstOff / 4);
+  if (count <= 0 || index < 0 || index >= count) {
+    return null;
+  }
+  const offs = new Uint32Array(count);
+  for (let i = 0; i < count; i += 1) {
+    offs[i] = dv.getUint32(i * 4, true);
+  }
+  const start = offs[index] >>> 0;
+  if (start <= 0 || start >= bytes.length) {
+    return null;
+  }
+  let end = bytes.length;
+  for (let i = index + 1; i < count; i += 1) {
+    const o = offs[i] >>> 0;
+    if (o > start && o <= bytes.length) {
+      end = o;
+      break;
+    }
+  }
+  if (end <= start) {
+    return null;
+  }
+  const dec = decompressU6Lzw(bytes.slice(start, end));
+  const w = 56;
+  const h = 64;
+  const need = w * h;
+  if (!dec || dec.length < need) {
+    return null;
+  }
+  return {
+    width: w,
+    height: h,
+    pixels: dec.slice(0, need)
+  };
+}
+
+function canvasFromIndexedPixels(pixmap, palette) {
+  if (!pixmap || !palette) {
+    return null;
+  }
+  const c = document.createElement("canvas");
+  c.width = pixmap.width | 0;
+  c.height = pixmap.height | 0;
+  const g = c.getContext("2d");
+  const img = g.createImageData(c.width, c.height);
+  for (let i = 0, p = 0; i < pixmap.pixels.length; i += 1, p += 4) {
+    const rgb = palette[pixmap.pixels[i] & 0xff] ?? [0, 0, 0];
+    img.data[p + 0] = rgb[0] | 0;
+    img.data[p + 1] = rgb[1] | 0;
+    img.data[p + 2] = rgb[2] | 0;
+    img.data[p + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
+  if (!state.u6MainFont) {
+    g.fillStyle = color;
+    g.font = `${Math.max(8, 8 * scale)}px monospace`;
+    g.fillText(String(text || ""), sx, sy + (7 * scale));
+    return;
+  }
+  const msg = String(text || "").toUpperCase();
+  g.fillStyle = color;
+  for (let i = 0; i < msg.length; i += 1) {
+    const code = msg.charCodeAt(i) & 0xff;
+    const off = code * 8;
+    for (let row = 0; row < 8; row += 1) {
+      const bits = state.u6MainFont[off + row] ?? 0;
+      for (let col = 0; col < 8; col += 1) {
+        if (bits & (0x80 >> col)) {
+          g.fillRect(
+            sx + ((i * 8 + col) * scale),
+            sy + (row * scale),
+            scale,
+            scale
+          );
+        }
+      }
+    }
+  }
+}
+
+function applyLegacyFrameLayout() {
+  if (!legacyBackdropCanvas || !legacyWorldSurface || !canvas || !legacyViewportCanvas) {
+    return;
+  }
+
+  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+  if (!enabled) {
+    legacyWorldSurface.style.width = "";
+    legacyWorldSurface.style.height = "";
+    canvas.style.left = "";
+    canvas.style.top = "";
+    canvas.style.width = "";
+    canvas.style.height = "";
+    legacyViewportCanvas.style.left = "";
+    legacyViewportCanvas.style.top = "";
+    legacyViewportCanvas.style.width = "";
+    legacyViewportCanvas.style.height = "";
+    return;
+  }
+
+  const pixmap = state.legacyPaperPixmap;
+  const pal = state.basePalette;
+  if (!pixmap || !pal || pal.length < 256) {
+    return;
+  }
+
+  const srcW = pixmap.width | 0;
+  const srcH = pixmap.height | 0;
+  const host = legacyWorldSurface.parentElement || legacyWorldSurface;
+  const hostRect = host.getBoundingClientRect();
+  const fitScaleX = Math.floor((hostRect.width || srcW) / srcW);
+  const fitScaleY = Math.floor((hostRect.height || srcH) / srcH);
+  const fitScale = Math.max(1, Math.min(fitScaleX, fitScaleY));
+  let scale = fitScale;
+  if (state.legacyScaleMode !== "fit") {
+    const fixed = Number.parseInt(state.legacyScaleMode, 10);
+    if (Number.isFinite(fixed) && fixed >= 1) {
+      scale = fixed;
+    }
+  }
+  const outW = Math.max(1, Math.round(srcW * scale));
+  const outH = Math.max(1, Math.round(srcH * scale));
+
+  const src = document.createElement("canvas");
+  src.width = srcW;
+  src.height = srcH;
+  const sg = src.getContext("2d");
+  const id = sg.createImageData(srcW, srcH);
+  for (let i = 0, p = 0; i < pixmap.pixels.length; i += 1, p += 4) {
+    const c = pal[pixmap.pixels[i] & 0xff] ?? [0, 0, 0];
+    id.data[p + 0] = c[0] | 0;
+    id.data[p + 1] = c[1] | 0;
+    id.data[p + 2] = c[2] | 0;
+    id.data[p + 3] = 255;
+  }
+  sg.putImageData(id, 0, 0);
+
+  legacyBackdropCanvas.width = outW;
+  legacyBackdropCanvas.height = outH;
+  const bg = legacyBackdropCanvas.getContext("2d");
+  bg.imageSmoothingEnabled = false;
+  bg.clearRect(0, 0, outW, outH);
+  bg.drawImage(src, 0, 0, srcW, srcH, 0, 0, outW, outH);
+  if (!state.legacyBackdropBaseCanvas) {
+    state.legacyBackdropBaseCanvas = document.createElement("canvas");
+  }
+  state.legacyBackdropBaseCanvas.width = outW;
+  state.legacyBackdropBaseCanvas.height = outH;
+  const bb = state.legacyBackdropBaseCanvas.getContext("2d");
+  bb.imageSmoothingEnabled = false;
+  bb.clearRect(0, 0, outW, outH);
+  bb.drawImage(legacyBackdropCanvas, 0, 0);
+
+  const mapX = LEGACY_UI_MAP_RECT.x * scale;
+  const mapY = LEGACY_UI_MAP_RECT.y * scale;
+  const mapW = LEGACY_UI_MAP_RECT.w * scale;
+  const mapH = LEGACY_UI_MAP_RECT.h * scale;
+  legacyWorldSurface.style.width = `${outW}px`;
+  legacyWorldSurface.style.height = `${outH}px`;
+  legacyViewportCanvas.style.left = `${mapX}px`;
+  legacyViewportCanvas.style.top = `${mapY}px`;
+  legacyViewportCanvas.style.width = `${mapW}px`;
+  legacyViewportCanvas.style.height = `${mapH}px`;
+}
+
+function renderLegacyHudStubOnBackdrop() {
+  if (!legacyBackdropCanvas) {
+    return;
+  }
+  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+  if (!enabled) {
+    return;
+  }
+  const g = legacyBackdropCanvas.getContext("2d");
+  const w = legacyBackdropCanvas.width | 0;
+  const h = legacyBackdropCanvas.height | 0;
+  if (w <= 0 || h <= 0) {
+    return;
+  }
+  g.imageSmoothingEnabled = false;
+  if (state.legacyBackdropBaseCanvas
+    && state.legacyBackdropBaseCanvas.width === w
+    && state.legacyBackdropBaseCanvas.height === h) {
+    g.clearRect(0, 0, w, h);
+    g.drawImage(state.legacyBackdropBaseCanvas, 0, 0);
+  }
+
+  const scale = Math.max(1, Math.floor(w / 320));
+  const x = (v) => v * scale;
+  const y = (v) => v * scale;
+  const drawTile = (tileId, sx, sy) => {
+    if (!state.tileSet) {
+      return;
+    }
+    const pal = paletteForTile(tileId);
+    const key = paletteKeyForTile(tileId);
+    const tc = state.tileSet.tileCanvas(tileId, pal, key);
+    if (!tc) {
+      return;
+    }
+    g.drawImage(tc, x(sx), y(sy), x(16), y(16));
+  };
+
+  const drawLegacyNumber = (value, sx, sy, color = LEGACY_HUD_TEXT_COLOR) => {
+    const v = Math.max(0, Math.floor(value));
+    const text = String(v).slice(0, 4);
+    const sx0 = LEGACY_DIGIT_X[text.length - 1] ?? LEGACY_DIGIT_X[3];
+    const baseY = sy + 11;
+    g.fillStyle = color;
+    for (let i = 0; i < text.length; i += 1) {
+      const d = text.charCodeAt(i) - 48;
+      if (d < 0 || d > 9) {
+        continue;
+      }
+      let bits = LEGACY_DIGIT_3X5[d] & 0xffff;
+      const dx = sx + sx0[i];
+      for (let row = 0; row < 5; row += 1) {
+        for (let col = 0; col < 3; col += 1) {
+          if (bits & 0x8000) {
+            g.fillRect(x(dx + col), y(baseY + row), x(1), y(1));
+          }
+          bits = (bits << 1) & 0xffff;
+        }
+      }
+    }
+  };
+
+  /* Use real UI tiles for strip + panel stub to mimic legacy look. */
+  for (let i = 0; i < 9; i += 1) {
+    drawTile(LEGACY_UI_TILE.SLOT_EMPTY, i * 16, 176);
+  }
+  if (state.sim.world.map_z === 0 || state.sim.world.map_z === 5) {
+    for (let i = 0; i < 9; i += 1) {
+      drawTile(LEGACY_UI_TILE.SKY_OUTSIDE_BASE + i, i * 16, 4);
+    }
+  } else {
+    drawTile(LEGACY_UI_TILE.CAVE_L, 0, 4);
+    for (let i = 1; i < 8; i += 1) {
+      drawTile(LEGACY_UI_TILE.CAVE_M, i * 16, 4);
+    }
+    drawTile(LEGACY_UI_TILE.CAVE_R, 128, 4);
+  }
+  drawTile(LEGACY_UI_TILE.EQUIP_UL, 192, 40);
+  drawTile(LEGACY_UI_TILE.EQUIP_UR, 208, 40);
+  drawTile(LEGACY_UI_TILE.EQUIP_DL, 192, 56);
+  drawTile(LEGACY_UI_TILE.EQUIP_DR, 208, 56);
+
+  /* Portrait + stats block using legacy main font and posture icons. */
+  for (let ry = 0; ry < 10; ry += 1) {
+    for (let rx = 0; rx < 8; rx += 1) {
+      drawTile(LEGACY_UI_TILE.SLOT_EMPTY, 176 + (rx * 16), 8 + (ry * 16));
+    }
+  }
+  drawU6MainText(g, "AVATAR", x(184), y(12), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  if (state.avatarPortraitCanvas) {
+    g.drawImage(state.avatarPortraitCanvas, x(184), y(24), x(56), y(64));
+  } else if (state.tileSet) {
+    const avatarTile = avatarRenderTileId();
+    if (avatarTile != null) {
+      const pal = paletteForTile(avatarTile);
+      const key = paletteKeyForTile(avatarTile);
+      const tc = state.tileSet.tileCanvas(avatarTile, pal, key);
+      if (tc) {
+        g.drawImage(tc, x(204), y(40), x(16), y(16));
+      }
+    }
+  }
+  drawU6MainText(g, "HP", x(244), y(26), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(g, String(100), x(268), y(26), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(g, "MP", x(244), y(38), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(g, String(42), x(268), y(38), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(g, "TIME", x(244), y(50), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(
+    g,
+    `${String(state.sim.world.time_h).padStart(2, "0")}:${String(state.sim.world.time_m).padStart(2, "0")}`,
+    x(244),
+    y(62),
+    Math.max(1, scale),
+    LEGACY_HUD_TEXT_COLOR
+  );
+  for (let i = 0; i < LEGACY_POSTURE_ICONS.length; i += 1) {
+    drawTile(LEGACY_POSTURE_ICONS[i], 184 + (i * 16), 88);
+  }
+  drawU6MainText(g, "MODE", x(184), y(108), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(g, state.movementMode === "avatar" ? "BATTLE" : "GHOST", x(184), y(120), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+
+  /* Verb icons under world view, matching legacy strip placement. */
+  for (let i = 0; i < 9; i += 1) {
+    drawTile(LEGACY_UI_TILE.BUTTON_ATTACK_BASE + i, 8 + (i * 16), 176);
+  }
+  drawTile(LEGACY_UI_TILE.BUTTON_RIGHT, 152, 176);
+}
+
+function composeLegacyViewportFromModernGrid() {
+  if (!legacyViewportCanvas || !canvas) {
+    return;
+  }
+  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+  if (!enabled) {
+    return;
+  }
+
+  if (!state.legacyComposeCanvas) {
+    state.legacyComposeCanvas = document.createElement("canvas");
+    state.legacyComposeCanvas.width = 176;
+    state.legacyComposeCanvas.height = 176;
+  }
+  const compose = state.legacyComposeCanvas;
+  const cctx = compose.getContext("2d");
+  cctx.imageSmoothingEnabled = false;
+  cctx.clearRect(0, 0, 176, 176);
+  /* 704 -> 176 is exact /4, keeping tile edge parity intact before crop. */
+  cctx.drawImage(canvas, 0, 0, 704, 704, 0, 0, 176, 176);
+
+  if (state.tileSet) {
+    const drawFrameTile = (tileId, x, y) => {
+      const pal = paletteForTile(tileId);
+      const key = paletteKeyForTile(tileId);
+      const tc = state.tileSet.tileCanvas(tileId, pal, key);
+      if (tc) {
+        cctx.drawImage(tc, x, y);
+      }
+    };
+
+    /* Legacy order from C_0A33_09CE/seg_2FC1: frame overlays drawn over map. */
+    drawFrameTile(LEGACY_FRAME_TILES.cornerTL, 0, 0);
+    drawFrameTile(LEGACY_FRAME_TILES.cornerTR, 160, 0);
+    drawFrameTile(LEGACY_FRAME_TILES.cornerBL, 0, 160);
+    drawFrameTile(LEGACY_FRAME_TILES.cornerBR, 160, 160);
+    for (let i = 1; i < 10; i += 1) {
+      const pos = i * 16;
+      drawFrameTile(LEGACY_FRAME_TILES.top, pos, 0);
+      drawFrameTile(LEGACY_FRAME_TILES.bottom, pos, 160);
+      drawFrameTile(LEGACY_FRAME_TILES.left, 0, pos);
+      drawFrameTile(LEGACY_FRAME_TILES.right, 160, pos);
+    }
+  }
+
+  legacyViewportCanvas.width = 160;
+  legacyViewportCanvas.height = 160;
+  const lv = legacyViewportCanvas.getContext("2d");
+  lv.imageSmoothingEnabled = false;
+  lv.clearRect(0, 0, 160, 160);
+  /* Legacy map cutout sits at 8,8 with 160x160 size. */
+  lv.drawImage(compose, 8, 8, 160, 160, 0, 0, 160, 160);
+}
+
 function createInitialSimState() {
   return {
     tick: 0,
@@ -1021,37 +1452,6 @@ function initTheme() {
   if (themeSelect) {
     themeSelect.addEventListener("change", () => {
       setTheme(themeSelect.value);
-    });
-  }
-}
-
-function setLayout(layoutName) {
-  const layout = LAYOUTS.includes(layoutName) ? layoutName : "classic-right";
-  document.documentElement.setAttribute("data-layout", layout);
-  if (layoutSelect) {
-    layoutSelect.value = layout;
-  }
-  try {
-    localStorage.setItem(LAYOUT_KEY, layout);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-}
-
-function initLayout() {
-  let saved = "classic-right";
-  try {
-    const fromStorage = localStorage.getItem(LAYOUT_KEY);
-    if (fromStorage) {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-  setLayout(saved);
-  if (layoutSelect) {
-    layoutSelect.addEventListener("change", () => {
-      setLayout(layoutSelect.value);
     });
   }
 }
@@ -1320,7 +1720,7 @@ function setMovementMode(mode) {
 }
 
 function initMovementMode() {
-  let saved = "ghost";
+  let saved = "avatar";
   try {
     const fromStorage = localStorage.getItem(MOVEMENT_MODE_KEY);
     if (fromStorage === "avatar" || fromStorage === "ghost") {
@@ -1365,6 +1765,80 @@ function initRenderMode() {
   if (renderModeToggle) {
     renderModeToggle.addEventListener("change", () => {
       setRenderMode(renderModeToggle.value);
+    });
+  }
+}
+
+function setLegacyFramePreview(enabled) {
+  const on = !!enabled;
+  document.documentElement.setAttribute("data-legacy-frame-preview", on ? "on" : "off");
+  if (capturePreviewToggle) {
+    capturePreviewToggle.value = on ? "on" : "off";
+  }
+  applyLegacyFrameLayout();
+  try {
+    localStorage.setItem(LEGACY_FRAME_PREVIEW_KEY, on ? "on" : "off");
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function setLegacyScaleMode(mode) {
+  const next = isLegacyScaleMode(mode) ? mode : "fit";
+  state.legacyScaleMode = next;
+  if (legacyScaleModeToggle) {
+    legacyScaleModeToggle.value = next;
+  }
+  try {
+    localStorage.setItem(LEGACY_SCALE_MODE_KEY, next);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  applyLegacyFrameLayout();
+}
+
+function cycleLegacyScaleMode(step) {
+  const current = isLegacyScaleMode(state.legacyScaleMode) ? state.legacyScaleMode : "fit";
+  const idx = LEGACY_SCALE_MODES.indexOf(current);
+  const base = idx >= 0 ? idx : 0;
+  const nextIdx = (base + step + LEGACY_SCALE_MODES.length) % LEGACY_SCALE_MODES.length;
+  setLegacyScaleMode(LEGACY_SCALE_MODES[nextIdx]);
+}
+
+function initLegacyScaleMode() {
+  let saved = "4";
+  try {
+    const fromStorage = localStorage.getItem(LEGACY_SCALE_MODE_KEY);
+    if (isLegacyScaleMode(fromStorage)) {
+      saved = fromStorage;
+    } else if (fromStorage === "native") {
+      saved = "4";
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setLegacyScaleMode(saved);
+  if (legacyScaleModeToggle) {
+    legacyScaleModeToggle.addEventListener("change", () => {
+      setLegacyScaleMode(legacyScaleModeToggle.value);
+    });
+  }
+}
+
+function initLegacyFramePreview() {
+  let saved = "on";
+  try {
+    const fromStorage = localStorage.getItem(LEGACY_FRAME_PREVIEW_KEY);
+    if (fromStorage === "on" || fromStorage === "off") {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setLegacyFramePreview(saved === "on");
+  if (capturePreviewToggle) {
+    capturePreviewToggle.addEventListener("change", () => {
+      setLegacyFramePreview(capturePreviewToggle.value === "on");
     });
   }
 }
@@ -1576,11 +2050,118 @@ function jumpToPreset() {
 }
 
 function captureViewportPng() {
+  const composeCapture = () => {
+    const margin = 14;
+    const gap = 12;
+    const frameBorder = 14;
+    const panelW = 352;
+    const worldW = canvas.width;
+    const worldH = canvas.height;
+    const frameW = worldW + (frameBorder * 2);
+    const frameH = worldH + (frameBorder * 2);
+    const outW = (margin * 2) + frameW + gap + panelW + 8;
+    const outH = (margin * 2) + Math.max(frameH, 742);
+
+    const out = document.createElement("canvas");
+    out.width = outW;
+    out.height = outH;
+    const g = out.getContext("2d");
+    g.imageSmoothingEnabled = false;
+
+    const frameX = margin;
+    const frameY = margin;
+    const panelX = frameX + frameW + gap;
+    const panelY = margin;
+
+    g.fillStyle = "#070707";
+    g.fillRect(0, 0, outW, outH);
+
+    /* World frame: old-school beveled panel */
+    g.fillStyle = "#c7b17f";
+    g.fillRect(frameX - 4, frameY - 4, frameW + 8, frameH + 8);
+    g.fillStyle = "#7a6946";
+    g.fillRect(frameX - 2, frameY - 2, frameW + 4, frameH + 4);
+    g.fillStyle = "#3f3522";
+    g.fillRect(frameX, frameY, frameW, frameH);
+    g.fillStyle = "#101010";
+    g.fillRect(frameX + frameBorder, frameY + frameBorder, worldW, worldH);
+    g.drawImage(canvas, frameX + frameBorder, frameY + frameBorder, worldW, worldH);
+
+    /* Right-side info panel with U6-like dark blue ledger look */
+    const panelH = outH - (margin * 2);
+    g.fillStyle = "#c7b17f";
+    g.fillRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8);
+    g.fillStyle = "#7a6946";
+    g.fillRect(panelX - 2, panelY - 2, panelW + 4, panelH + 4);
+    g.fillStyle = "#111a2a";
+    g.fillRect(panelX, panelY, panelW, panelH);
+
+    const headerH = 54;
+    g.fillStyle = "#1a2740";
+    g.fillRect(panelX + 2, panelY + 2, panelW - 4, headerH);
+    g.fillStyle = "#2e4469";
+    g.fillRect(panelX + 2, panelY + headerH + 4, panelW - 4, 1);
+
+    const textX = panelX + 14;
+    let y = panelY + 22;
+    g.fillStyle = "#f0d69d";
+    g.font = "700 13px Silkscreen, monospace";
+    g.fillText("VIRTUE MACHINE", textX, y);
+    y += 16;
+    g.fillStyle = "#bed0ee";
+    g.font = "11px Inter, sans-serif";
+    g.fillText("Ultima VI parity capture", textX, y);
+    y += 15;
+    g.fillStyle = "#8ea8cf";
+    g.fillText(`mode: ${state.renderMode}`, textX, y);
+    y = panelY + headerH + 24;
+
+    const drawRow = (label, value) => {
+      g.fillStyle = "#7f99bd";
+      g.font = "11px Inter, sans-serif";
+      g.fillText(label, textX, y);
+      y += 13;
+      g.fillStyle = "#e8f1ff";
+      g.font = "700 11px Inter, sans-serif";
+      g.fillText(String(value ?? "-"), textX, y);
+      y += 15;
+    };
+
+    drawRow("Map Position", statPos ? statPos.textContent : "-");
+    drawRow("Clock", statClock ? statClock.textContent : "-");
+    drawRow("Date", statDate ? statDate.textContent : "-");
+    drawRow("Tile", statTile ? statTile.textContent : "-");
+    drawRow("Render Parity", statRenderParity ? statRenderParity.textContent : "-");
+    drawRow("Object Overlay", statObjects ? statObjects.textContent : "-");
+    drawRow("Entity Overlay", statEntities ? statEntities.textContent : "-");
+    drawRow("Data Source", statSource ? statSource.textContent : "-");
+    drawRow("State Hash", statHash ? statHash.textContent : "-");
+
+    if (diagBox && diagBox.textContent) {
+      y += 6;
+      g.fillStyle = "#2e4469";
+      g.fillRect(panelX + 10, y - 3, panelW - 20, 1);
+      y += 12;
+      g.fillStyle = "#7f99bd";
+      g.font = "11px Inter, sans-serif";
+      g.fillText("Diagnostic", textX, y);
+      y += 13;
+      g.fillStyle = "#d8e4f5";
+      g.font = "11px Inter, sans-serif";
+      const raw = diagBox.textContent.trim();
+      const line = raw.length > 72 ? `${raw.slice(0, 69)}...` : raw;
+      g.fillText(line, textX, y);
+    }
+
+    return out;
+  };
+
   const p = activeCapturePreset();
   const tag = p ? p.id : "custom";
   const filename = `virtuemachine-${tag}-${state.sim.world.map_x}-${state.sim.world.map_y}-${state.sim.world.map_z}.png`;
   const link = document.createElement("a");
-  link.href = canvas.toDataURL("image/png");
+  const composed = composeCapture();
+  link.href = composed.toDataURL("image/png");
   link.download = filename;
   document.body.appendChild(link);
   link.click();
@@ -2146,6 +2727,10 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
 }
 
 function applyNuvieBoundaryReshape(displayTiles, startX, startY) {
+  const debug = {
+    reshapedTiles: 0,
+    cornerSubs: 0
+  };
   const inView = (gx, gy) => gx >= 0 && gy >= 0 && gx < VIEW_W && gy < VIEW_H;
   const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
   const isBlack = (gx, gy) => !inView(gx, gy) || (displayTiles[cellIndex(gx, gy)] & 0xffff) === 0x0ff;
@@ -2169,26 +2754,26 @@ function applyNuvieBoundaryReshape(displayTiles, startX, startY) {
         continue;
       }
 
-      const familyBase = Math.floor(((tile - (tile % 16)) - 140) / 16);
-      if (familyBase < 0 || familyBase > 2) {
-        continue;
-      }
-
-      /* Nuvie reshapeBoundary() black-corner substitutions. */
-      if (blackN && blackE) {
-        displayTiles[idx] = (266 + (2 * familyBase)) & 0xffff;
-        continue;
-      }
-      if (blackS && blackW) {
-        displayTiles[idx] = (267 + (2 * familyBase)) & 0xffff;
-      }
+      /* Temporarily disabled while we rebuild parity from fixtures.
+         Keep diagnostics path active but do not mutate tiles here. */
     }
   }
+  return debug;
 }
 
 function buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx) {
   const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
-  applyNuvieBoundaryReshape(base.displayTiles, startX, startY);
+  let blackTiles = 0;
+  for (let i = 0; i < base.displayTiles.length; i += 1) {
+    if ((base.displayTiles[i] & 0xffff) === 0x0ff) {
+      blackTiles += 1;
+    }
+  }
+  const reshapeDebug = applyNuvieBoundaryReshape(base.displayTiles, startX, startY);
+  base.debug = {
+    blackTiles,
+    ...reshapeDebug
+  };
   return base;
 }
 
@@ -2196,21 +2781,17 @@ function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
   if (state.renderMode === "nuvie") {
     return buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx);
   }
-  return buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
+  const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
+  base.debug = null;
+  return base;
 }
 
 function shouldSuppressOverlayNuvie(entry, gx, gy, displayTiles) {
-  const idx = (gy * VIEW_W) + gx;
-  const here = displayTiles[idx] & 0xffff;
-  if (here === 0x0ff) {
-    return true;
-  }
-  const rightBlack = gx + 1 >= VIEW_W || (displayTiles[(gy * VIEW_W) + gx + 1] & 0xffff) === 0x0ff;
-  const downBlack = gy + 1 >= VIEW_H || (displayTiles[((gy + 1) * VIEW_W) + gx] & 0xffff) === 0x0ff;
-  if (!(rightBlack || downBlack)) {
-    return false;
-  }
-  return !hasWallTerrain(entry.tileId);
+  void entry;
+  void gx;
+  void gy;
+  void displayTiles;
+  return false;
 }
 
 function avatarFacingFrameOffset() {
@@ -2274,6 +2855,92 @@ function paletteKeyForTile(tileId) {
   return getRenderPaletteKey();
 }
 
+function renderCharacterStubPanel() {
+  if (!charStubCanvas) {
+    return;
+  }
+  const g = charStubCanvas.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, charStubCanvas.width, charStubCanvas.height);
+  g.fillStyle = "#090909";
+  g.fillRect(0, 0, charStubCanvas.width, charStubCanvas.height);
+
+  const slots = [
+    { x: 8, y: 8, w: 76, h: 96 },
+    { x: 90, y: 8, w: 76, h: 96 },
+    { x: 172, y: 8, w: 76, h: 96 },
+    { x: 254, y: 8, w: 76, h: 96 }
+  ];
+  for (const s of slots) {
+    g.fillStyle = "#111827";
+    g.fillRect(s.x, s.y, s.w, s.h);
+    g.strokeStyle = "#334155";
+    g.strokeRect(s.x + 0.5, s.y + 0.5, s.w - 1, s.h - 1);
+  }
+
+  if (!state.tileSet || !state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
+    g.fillStyle = "#94a3b8";
+    g.font = "11px var(--vm-ui-font), monospace";
+    g.fillText("Awaiting actor sprite data...", 12, 22);
+    return;
+  }
+
+  const avatarTile = avatarRenderTileId();
+  const px = state.sim.world.map_x | 0;
+  const py = state.sim.world.map_y | 0;
+  const pz = state.sim.world.map_z | 0;
+  const tick = animationTick();
+  const nearest = state.entityLayer.entries
+    .filter((e) => e.z === pz && e.id !== AVATAR_ENTITY_ID)
+    .map((e) => ({
+      ...e,
+      dist: Math.abs((e.x | 0) - px) + Math.abs((e.y | 0) - py)
+    }))
+    .sort((a, b) => {
+      if (a.dist !== b.dist) return a.dist - b.dist;
+      return a.id - b.id;
+    })
+    .slice(0, 3);
+
+  const picks = [{ label: "AVATAR", tileId: avatarTile }];
+  for (const e of nearest) {
+    const t = resolveAnimatedObjectTileAtTick(
+      { ...e, tileId: (e.baseTile + (e.frame | 0)) & 0xffff },
+      tick
+    );
+    picks.push({ label: `NPC ${e.id}`, tileId: t });
+  }
+  while (picks.length < 4) {
+    picks.push({ label: "EMPTY", tileId: null });
+  }
+
+  for (let i = 0; i < 4; i += 1) {
+    const slot = slots[i];
+    const pick = picks[i];
+    g.fillStyle = "#9ca3af";
+    g.font = "10px var(--vm-ui-font), monospace";
+    g.fillText(pick.label, slot.x + 6, slot.y + 12);
+    if (pick.tileId == null) {
+      continue;
+    }
+    const pal = paletteForTile(pick.tileId);
+    const key = paletteKeyForTile(pick.tileId);
+    const tc = state.tileSet.tileCanvas(pick.tileId, pal, key);
+    if (!tc) {
+      continue;
+    }
+    const scale = 3;
+    const dw = 16 * scale;
+    const dh = 16 * scale;
+    const dx = slot.x + Math.floor((slot.w - dw) / 2);
+    const dy = slot.y + 20;
+    g.drawImage(tc, 0, 0, 16, 16, dx, dy, dw, dh);
+    g.fillStyle = "#64748b";
+    g.font = "9px var(--vm-ui-font), monospace";
+    g.fillText(`0x${(pick.tileId & 0xffff).toString(16)}`, slot.x + 6, slot.y + slot.h - 8);
+  }
+}
+
 function buildOverlayCells(startX, startY, wz, viewCtx) {
   return buildOverlayCellsModel({
     viewW: VIEW_W,
@@ -2306,7 +2973,7 @@ function drawTileGrid() {
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
   const renderPalette = getRenderPalette();
   const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
-  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
+  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles, debug: baseDebug } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayBuild = buildOverlayCells(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayCells = overlayBuild.overlayCells;
   const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
@@ -2346,6 +3013,7 @@ function drawTileGrid() {
   let centerPaletteBand = "none";
   const overlayCount = overlayBuild.overlayCount;
   let entityCount = 0;
+  let nuvieOverlaySuppressed = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
       const cell = cellIndex(gx, gy);
@@ -2401,6 +3069,7 @@ function drawTileGrid() {
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
           if (state.renderMode === "nuvie" && shouldSuppressOverlayNuvie(t, gx, gy, baseDisplayTiles)) {
+            nuvieOverlaySuppressed += 1;
             continue;
           }
           if (!t.occluder) {
@@ -2485,6 +3154,14 @@ function drawTileGrid() {
   state.centerRawTile = centerRawTile;
   state.centerAnimatedTile = centerAnimatedTile || centerTile;
   state.centerPaletteBand = centerPaletteBand;
+  state.renderModeDebug = state.renderMode === "nuvie"
+    ? {
+      blackTiles: baseDebug ? baseDebug.blackTiles : 0,
+      reshapedTiles: baseDebug ? baseDebug.reshapedTiles : 0,
+      cornerSubs: baseDebug ? baseDebug.cornerSubs : 0,
+      overlaySuppressed: nuvieOverlaySuppressed
+    }
+    : null;
 
   const cx = (VIEW_W >> 1) * TILE_SIZE;
   const cy = (VIEW_H >> 1) * TILE_SIZE;
@@ -2494,6 +3171,7 @@ function drawTileGrid() {
     ctx.strokeRect(cx + 2, cy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
   }
 
+  renderCharacterStubPanel();
   statTile.textContent = `0x${centerTile.toString(16).padStart(2, "0")}`;
 }
 
@@ -2523,11 +3201,11 @@ function updateStats() {
   }
   if (statRenderParity) {
     if (state.renderParityMismatches > 0) {
-      statRenderParity.textContent = `warn (${state.renderParityMismatches})`;
+      statRenderParity.textContent = `warn (${state.renderParityMismatches}) [${state.renderMode}]`;
     } else if (state.interactionProbeTile != null) {
-      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)})`;
+      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)}) [${state.renderMode}]`;
     } else {
-      statRenderParity.textContent = "ok";
+      statRenderParity.textContent = `ok [${state.renderMode}]`;
     }
   }
   if (statAvatarState) {
@@ -2549,7 +3227,12 @@ function updateStats() {
     statCenterTiles.textContent = `0x${state.centerRawTile.toString(16)} -> 0x${state.centerAnimatedTile.toString(16)}`;
   }
   if (statCenterBand) {
-    statCenterBand.textContent = state.centerPaletteBand;
+    if (state.renderMode === "nuvie" && state.renderModeDebug) {
+      const d = state.renderModeDebug;
+      statCenterBand.textContent = `${state.centerPaletteBand} | b:${d.blackTiles} r:${d.reshapedTiles} c:${d.cornerSubs} o:${d.overlaySuppressed}`;
+    } else {
+      statCenterBand.textContent = state.centerPaletteBand;
+    }
   }
 }
 
@@ -2704,6 +3387,7 @@ function resetRun() {
   state.centerRawTile = 0;
   state.centerAnimatedTile = 0;
   state.centerPaletteBand = "none";
+  state.renderModeDebug = null;
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
   state.avatarLastMoveTick = -1;
@@ -2741,6 +3425,8 @@ function tickLoop(ts) {
   }
 
   drawTileGrid();
+  composeLegacyViewportFromModernGrid();
+  renderLegacyHudStubOnBackdrop();
   updateStats();
   requestAnimationFrame(tickLoop);
 }
@@ -2761,7 +3447,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes, paperRes, fontRes, portraitBRes, portraitARes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -2772,9 +3458,13 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/objtiles.vga"),
       fetch("../assets/runtime/basetile"),
       fetch("../assets/runtime/animdata"),
-      fetch("../assets/runtime/savegame/objlist")
+      fetch("../assets/runtime/savegame/objlist"),
+      fetch("../assets/runtime/paper.bmp"),
+      fetch("../assets/runtime/u6.ch"),
+      fetch("../assets/runtime/portrait.b"),
+      fetch("../assets/runtime/portrait.a")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -2785,7 +3475,11 @@ async function loadRuntimeAssets() {
       objTileRes.arrayBuffer(),
       baseTileRes.arrayBuffer(),
       animRes.arrayBuffer(),
-      objListRes.arrayBuffer()
+      objListRes.arrayBuffer(),
+      paperRes.arrayBuffer(),
+      fontRes.arrayBuffer(),
+      portraitBRes.arrayBuffer(),
+      portraitARes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -2796,6 +3490,28 @@ async function loadRuntimeAssets() {
     } else {
       state.basePalette = null;
       state.palette = null;
+    }
+    if (paperRes.ok && paperBuf.byteLength >= 4) {
+      state.legacyPaperPixmap = decodeLegacyPixmap(new Uint8Array(paperBuf));
+    } else {
+      state.legacyPaperPixmap = null;
+    }
+    if (fontRes.ok && fontBuf.byteLength >= 2048) {
+      state.u6MainFont = new Uint8Array(fontBuf.slice(0, 2048));
+    } else {
+      state.u6MainFont = null;
+    }
+    if (state.basePalette) {
+      let pix = null;
+      if (portraitBRes.ok && portraitBBuf.byteLength > 64) {
+        pix = decodePortraitFromArchive(new Uint8Array(portraitBBuf), LEGACY_AVATAR_PORTRAIT_INDEX);
+      }
+      if (!pix && portraitARes.ok && portraitABuf.byteLength > 64) {
+        pix = decodePortraitFromArchive(new Uint8Array(portraitABuf), LEGACY_AVATAR_PORTRAIT_INDEX);
+      }
+      state.avatarPortraitCanvas = canvasFromIndexedPixels(pix, state.basePalette);
+    } else {
+      state.avatarPortraitCanvas = null;
     }
     if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
@@ -2855,6 +3571,7 @@ async function loadRuntimeAssets() {
     } else {
       statSource.textContent = "runtime assets";
     }
+    applyLegacyFrameLayout();
     diagBox.className = "diag ok";
     if (state.tileSet) {
       if (state.objectLayer && state.objectLayer.filesLoaded > 0) {
@@ -2882,8 +3599,12 @@ async function loadRuntimeAssets() {
     state.animData = null;
     state.palette = null;
     state.basePalette = null;
+    state.avatarPortraitCanvas = null;
+    state.u6MainFont = null;
+    state.legacyPaperPixmap = null;
     state.tileFlags = null;
     state.terrainType = null;
+    applyLegacyFrameLayout();
     statSource.textContent = "synthetic fallback";
     diagBox.className = "diag warn";
     diagBox.textContent = `Fallback active: ${String(err.message || err)}. Run ./modern/tools/validate_assets.sh and ./modern/tools/sync_assets.sh.`;
@@ -2905,8 +3626,14 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
   else if (k === "e") queueInteractDoor();
+  else if (ev.key === "[") cycleLegacyScaleMode(-1);
+  else if (ev.key === "]") cycleLegacyScaleMode(1);
   else return;
   ev.preventDefault();
+});
+
+window.addEventListener("resize", () => {
+  applyLegacyFrameLayout();
 });
 
 loadRuntimeAssets().then(() => {
@@ -2917,7 +3644,6 @@ loadRuntimeAssets().then(() => {
 });
 
 initTheme();
-initLayout();
 initFont();
 initGrid();
 initOverlayDebug();
@@ -2925,6 +3651,8 @@ initAnimationMode();
 initPaletteFxMode();
 initMovementMode();
 initRenderMode();
+initLegacyScaleMode();
+initLegacyFramePreview();
 initCapturePresets();
 initPanelCopyButtons();
 if (jumpButton) {

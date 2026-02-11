@@ -26,9 +26,9 @@ Exit criteria:
 
 ### M2: Boundary Reshape Parity Pass (2-4 days)
 
-- `[ ]` Implement Nuvie-style boundary corner substitutions against blacked neighbors.
-- `[ ]` Restrict reshaping to validated wall families and add guardrails to avoid over-cornering.
-- `[ ]` Add probe-level diagnostics for raw vs blacked vs reshaped tile IDs.
+- `[x]` Implement Nuvie-style boundary corner substitutions against blacked neighbors.
+- `[~]` Restrict reshaping to validated wall families and add guardrails to avoid over-cornering.
+- `[x]` Add probe-level diagnostics for raw vs blacked vs reshaped tile IDs.
 
 Exit criteria:
 - No camera-driven wall morphing.
@@ -36,7 +36,7 @@ Exit criteria:
 
 ### M3: Object Visibility Parity at Boundaries (2-3 days)
 
-- `[ ]` Implement wall-adjacent object suppression rule (right/bottom black checks) in Nuvie mode.
+- `[x]` Implement wall-adjacent object suppression rule (right/bottom black checks) in Nuvie mode.
 - `[ ]` Validate decor/wall objects around doors and room transitions.
 - `[ ]` Keep interaction hit-testing and render composition aligned under this rule.
 
