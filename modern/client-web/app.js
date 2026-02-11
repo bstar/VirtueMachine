@@ -393,10 +393,11 @@ class U6TileSetJS {
       const palIdx = tilePixels[i];
       const rgb = this.palette[palIdx] ?? [0, 0, 0];
       let a = 255;
+      const zeroIsTransparent = tileId <= 0x1ff;
       if (mask === 10) {
-        a = (palIdx === 0xff || palIdx === 0x00) ? 0 : 255;
+        a = (palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00)) ? 0 : 255;
       } else if (mask === 5) {
-        a = (palIdx === 0xff || palIdx === 0x00) ? 0 : 255;
+        a = (palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00)) ? 0 : 255;
       }
       const p = i * 4;
       img.data[p + 0] = rgb[0];
@@ -471,14 +472,21 @@ class U6ObjectLayerJS {
       const { x, y, z } = this.decodeCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
       const shapeType = dv.getUint16(off + 4, true);
       const type = shapeType & 0x3ff;
-      if (!OBJECT_TYPES_RENDER.has(type)) {
-        continue;
-      }
 
       const frame = shapeType >>> 10;
       const base = this.baseTiles[type] ?? 0;
       const tileId = (base + frame) & 0xffff;
-      entries.push({ x, y, z, type, frame, tileId, order: i, drawPri: this.drawPriority(type) });
+      entries.push({
+        x,
+        y,
+        z,
+        type,
+        frame,
+        tileId,
+        order: i,
+        drawPri: this.drawPriority(type),
+        renderable: OBJECT_TYPES_RENDER.has(type)
+      });
     }
     return entries;
   }
@@ -1347,6 +1355,9 @@ function drawTileGrid() {
         const overlays = state.objectLayer.objectsAt(wx, wy, state.sim.world.map_z);
         for (const o of overlays) {
           if (viewCtx && !viewCtx.visibleAtWorld(wx, wy)) {
+            continue;
+          }
+          if (!o.renderable) {
             continue;
           }
           const animObjTile = state.animData ? state.animData.animatedTile(o.tileId, state.animCounter) : o.tileId;
