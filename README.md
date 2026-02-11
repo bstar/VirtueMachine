@@ -1,6 +1,6 @@
-# Ultima6 Modern
+# VirtueMachine
 
-Modern browser-port workspace for Ultima VI, with legacy provenance preserved via read-only submodule.
+VirtueMachine is a modern browser-port workspace for Ultima VI, with legacy provenance preserved via read-only submodule.
 
 ## Layout
 

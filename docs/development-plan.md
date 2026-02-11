@@ -1,4 +1,4 @@
-# Development Plan: Faithful U6 Simulation + Modern Web Client
+# VirtueMachine Development Plan: Faithful U6 Simulation + Modern Web Client
 
 ## Mission
 

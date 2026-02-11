@@ -1,5 +1,5 @@
 {
-  description = "Ultima6 Modern development environment";
+  description = "VirtueMachine development environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
@@ -43,7 +43,7 @@
 
             shellHook = ''
               export U6M_ROOT="$(pwd)"
-              echo "Ultima6 Modern dev shell ready."
+              echo "VirtueMachine dev shell ready."
               echo "Run: ./modern/tools/sync_assets.sh"
             '';
           };
