@@ -34,3 +34,4 @@ This documentation system keeps legacy reverse-engineering context and modern ar
 
 - `docs/policies/pristine-legacy-policy.md`
 - `docs/policies/legacy-submodule-update.md`
+- `docs/policies/sandbox-escalation-policy.md`

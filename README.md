@@ -50,6 +50,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
+
+- `docs/policies/sandbox-escalation-policy.md`
+
 ## Assets (Untracked)
 
 Original game assets are not committed. Keep them outside the repo (or under ignored `local/`).
