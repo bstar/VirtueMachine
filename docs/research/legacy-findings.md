@@ -223,3 +223,15 @@ Impact on Port: catches corner/edge overlap and transparency regressions before 
 Next Validation Step: extend fixtures with canonical map-coordinate captures once screenshot diff tooling lands.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0018
+Date: 2026-02-11
+Area: Ghost vs Avatar Movement Authority + First Door Visual State
+Legacy Source Ref: `SRC/seg_1184.c` (door/object placement and tile spill behavior), `SRC/u6.h` (tile flags and blocking semantics)
+Summary: client now supports explicit movement authority modes: `ghost` (free camera locomotion) and `avatar` (collision-aware locomotion). Avatar mode introduces first world-state-backed door toggles and uses the same door state for both passability and rendered tile variant.
+Evidence: `modern/client-web/app.js` adds `movementMode`, collision gating in `applyCommand`, `queueInteractDoor` command flow, and deterministic `sim.doorOpenStates` hashing.
+Confidence: medium
+Impact on Port: enables practical avatar-centric interaction testing (doors + collision) without dropping existing free-roam inspection workflow.
+Next Validation Step: add replay fixtures for avatar-mode door open/close command sequences and verify hash parity across repeated runs.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`

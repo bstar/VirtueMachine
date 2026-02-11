@@ -17,6 +17,7 @@ Minimal browser client prototype:
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
 - first-pass legacy entity/NPC overlay layer from `savegame/objlist` actor records
 - deterministic tick-driven NPC patrol motion pilot for humanoid actor subset
+- control mode switch: `Ghost` (free movement) vs `Avatar` (collision + door interaction)
 - deterministic `sim.tick`-driven `animdata` tile animation (water/swamp and other animated sets)
 - legacy VGA palette-cycle animation for fire/water hues (deterministic, tick-driven)
 - animation freeze toggle for render/occlusion debugging (`F` or UI dropdown)
@@ -71,6 +72,8 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 ## Controls
 
 - `W/A/S/D` or `H/J/K/L`: queue movement commands
+- `M`: toggle control mode (ghost/avatar)
+- `E`: interact with facing door (avatar mode)
 - `R`: reset run state to initial seed/world
 - `O`: toggle overlay debug tile labels
 - `F`: toggle animated tile freeze/live phase

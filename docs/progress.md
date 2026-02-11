@@ -137,8 +137,8 @@ This checklist is intentionally mutable.
 
 #### Slice R3: Interactive Container Props and Visual State
 
-- `[ ]` Add world-state-backed visual variants (e.g., opened/closed doors, empty/non-empty containers)
-- `[ ]` Bind first interaction outcomes to layer sprite state transitions
+- `[x]` Add world-state-backed visual variants (e.g., opened/closed doors, empty/non-empty containers)
+- `[x]` Bind first interaction outcomes to layer sprite state transitions
 - `[ ]` Add replay/hash tests proving visual state transitions are deterministic
 
 #### Slice R4: Layer Parity Hardening and Tooling
@@ -164,6 +164,7 @@ This checklist is intentionally mutable.
 - `[x]` Add renderer debug stats (palette phase, center tile ids, palette band)
 - `[x]` Land first terrain+object parity screenshots from canonical locations
 - `[x]` Add shared overlay composition/parity telemetry for renderer + interaction probe coordinate consistency
+- `[x]` Add ghost/avatar control modes with avatar collision path and first door interaction toggle
 
 ## Known Blockers / Risks
 
@@ -176,4 +177,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Start R3 interactive visual state: wire first world-state-backed open/closed prop variant (door) with deterministic replay coverage.
+Complete R3 determinism coverage: add replay/hash fixtures asserting door state transitions remain stable across repeated runs in avatar mode.

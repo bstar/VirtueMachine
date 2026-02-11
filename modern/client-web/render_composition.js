@@ -119,6 +119,9 @@ export function buildOverlayCellsModel(opts) {
         prevOrder = o.order;
 
         const animObjTile = resolveAnimatedObjectTile(o);
+        if (animObjTile < 0) {
+          continue;
+        }
         insertLegacyCellTile(
           gx,
           gy,

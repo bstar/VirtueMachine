@@ -32,8 +32,10 @@ const OBJ_COORD_USE_MASK = 0x18;
 const OBJ_COORD_USE_LOCXYZ = 0x00;
 const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
+const AVATAR_ENTITY_ID = 1;
 const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
 const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
+const OBJECT_TYPES_CLOSEABLE_DOOR = new Set([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
 const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
 const OBJECT_TYPES_RENDER = new Set([
   0x062, /* open chest */
@@ -101,6 +103,7 @@ const statTile = document.getElementById("statTile");
 const statObjects = document.getElementById("statObjects");
 const statEntities = document.getElementById("statEntities");
 const statRenderParity = document.getElementById("statRenderParity");
+const statAvatarState = document.getElementById("statAvatarState");
 const statNpcOcclusionBlocks = document.getElementById("statNpcOcclusionBlocks");
 const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
@@ -119,6 +122,7 @@ const gridToggle = document.getElementById("gridToggle");
 const debugOverlayToggle = document.getElementById("debugOverlayToggle");
 const animationToggle = document.getElementById("animationToggle");
 const paletteFxToggle = document.getElementById("paletteFxToggle");
+const movementModeToggle = document.getElementById("movementModeToggle");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
@@ -130,6 +134,7 @@ const GRID_KEY = "vm_grid";
 const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
 const ANIMATION_KEY = "vm_animation";
 const PALETTE_FX_KEY = "vm_palette_fx";
+const MOVEMENT_MODE_KEY = "vm_movement_mode";
 const THEMES = [
   "obsidian",
   "phosphor",
@@ -198,6 +203,11 @@ const state = {
   showGrid: false,
   showOverlayDebug: false,
   enablePaletteFx: true,
+  movementMode: "ghost",
+  avatarFacingDx: 0,
+  avatarFacingDy: 1,
+  avatarLastMoveTick: -1,
+  avatarFrameSeed: 0,
   palette: null,
   basePalette: null,
   tileFlags: null,
@@ -305,11 +315,12 @@ function resolveAnimatedObjectTileAtTick(obj, counter) {
   if (!obj) {
     return 0;
   }
+  const doorTileId = resolveDoorTileId(state.sim, obj);
   if (state.animData && state.animData.hasBaseTile(obj.baseTile)) {
     const animBase = state.animData.animatedTile(obj.baseTile, counter);
     return (animBase + (obj.frame | 0)) & 0xffff;
   }
-  return resolveAnimatedTileAtTick(obj.tileId, counter);
+  return resolveAnimatedTileAtTick(doorTileId, counter);
 }
 
 function resolveAnimatedObjectTile(obj) {
@@ -973,6 +984,7 @@ function createInitialSimState() {
     rngState: INITIAL_SEED >>> 0,
     worldFlags: 0,
     commandsApplied: 0,
+    doorOpenStates: {},
     world: { ...INITIAL_WORLD }
   };
 }
@@ -1201,6 +1213,149 @@ function initPaletteFxMode() {
   }
 }
 
+function setMovementMode(mode) {
+  const next = mode === "avatar" ? "avatar" : "ghost";
+  state.movementMode = next;
+  if (movementModeToggle) {
+    movementModeToggle.value = next;
+  }
+  if (statAvatarState) {
+    statAvatarState.textContent = next === "avatar" ? "avatar" : "ghost";
+  }
+  try {
+    localStorage.setItem(MOVEMENT_MODE_KEY, next);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initMovementMode() {
+  let saved = "ghost";
+  try {
+    const fromStorage = localStorage.getItem(MOVEMENT_MODE_KEY);
+    if (fromStorage === "avatar" || fromStorage === "ghost") {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setMovementMode(saved);
+  if (movementModeToggle) {
+    movementModeToggle.addEventListener("change", () => {
+      setMovementMode(movementModeToggle.value);
+    });
+  }
+}
+
+function isCloseableDoorObject(obj) {
+  return !!obj && OBJECT_TYPES_CLOSEABLE_DOOR.has(obj.type);
+}
+
+function doorStateKey(obj) {
+  return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff}`;
+}
+
+function isDoorOpen(sim, obj) {
+  if (!isCloseableDoorObject(obj)) {
+    return false;
+  }
+  return !!(sim.doorOpenStates && sim.doorOpenStates[doorStateKey(obj)]);
+}
+
+function setDoorOpen(sim, obj, open) {
+  if (!isCloseableDoorObject(obj)) {
+    return;
+  }
+  if (!sim.doorOpenStates) {
+    sim.doorOpenStates = {};
+  }
+  const key = doorStateKey(obj);
+  if (open) {
+    sim.doorOpenStates[key] = 1;
+  } else {
+    delete sim.doorOpenStates[key];
+  }
+}
+
+function resolveDoorTileId(sim, obj) {
+  const base = obj.baseTile | 0;
+  const frame = obj.frame | 0;
+  if (!isCloseableDoorObject(obj)) {
+    return (base + frame) & 0xffff;
+  }
+  if (isDoorOpen(sim, obj)) {
+    return -1;
+  }
+  return (base + frame) & 0xffff;
+}
+
+function isBlockedAt(sim, wx, wy, wz) {
+  if (!state.mapCtx) {
+    return false;
+  }
+  const t = state.mapCtx.tileAt(wx, wy, wz);
+  if (state.tileFlags && ((state.tileFlags[t & 0x07ff] ?? 0) & 0x04)) {
+    return true;
+  }
+  if (state.terrainType && ((state.terrainType[t & 0x07ff] ?? 0) & 0x04)) {
+    return true;
+  }
+  if (state.objectLayer && state.tileFlags) {
+    const overlays = state.objectLayer.objectsAt(wx, wy, wz);
+    for (const o of overlays) {
+      if (!o.renderable) {
+        continue;
+      }
+      if (isCloseableDoorObject(o) && isDoorOpen(sim, o)) {
+        continue;
+      }
+      const tileId = resolveDoorTileId(sim, o);
+      const tf = state.tileFlags[tileId & 0x07ff] ?? 0;
+      if (tf & 0x04) {
+        return true;
+      }
+    }
+  }
+  if (state.entityLayer && Array.isArray(state.entityLayer.entries)) {
+    for (const e of state.entityLayer.entries) {
+      if (e.z !== wz) {
+        continue;
+      }
+      if (e.x !== wx || e.y !== wy) {
+        continue;
+      }
+      if (e.id === AVATAR_ENTITY_ID) {
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+function tryToggleDoorInFacingDirection(sim, dx, dy) {
+  if (!state.objectLayer) {
+    return false;
+  }
+  const tx = (sim.world.map_x + dx) | 0;
+  const ty = (sim.world.map_y + dy) | 0;
+  const tz = sim.world.map_z | 0;
+  const overlays = state.objectLayer.objectsAt(tx, ty, tz);
+  for (const o of overlays) {
+    if (!isCloseableDoorObject(o)) {
+      continue;
+    }
+    const nextOpen = !isDoorOpen(sim, o);
+    setDoorOpen(sim, o, nextOpen);
+    diagBox.className = "diag ok";
+    diagBox.textContent = nextOpen
+      ? `Opened door at ${tx},${ty},${tz}`
+      : `Closed door at ${tx},${ty},${tz}`;
+    return true;
+  }
+  return false;
+}
+
 function initCapturePresets() {
   if (!locationSelect) {
     return;
@@ -1252,6 +1407,7 @@ function cloneSimState(sim) {
     rngState: sim.rngState >>> 0,
     worldFlags: sim.worldFlags >>> 0,
     commandsApplied: sim.commandsApplied >>> 0,
+    doorOpenStates: { ...(sim.doorOpenStates ?? {}) },
     world: { ...sim.world }
   };
 }
@@ -1291,8 +1447,22 @@ function advanceWorldMinute(world) {
 
 function applyCommand(sim, cmd) {
   if (cmd.type === 1) {
-    sim.world.map_x = clampI32(sim.world.map_x + cmd.arg0, -4096, 4095);
-    sim.world.map_y = clampI32(sim.world.map_y + cmd.arg1, -4096, 4095);
+    const nx = clampI32(sim.world.map_x + cmd.arg0, -4096, 4095);
+    const ny = clampI32(sim.world.map_y + cmd.arg1, -4096, 4095);
+    if (state.movementMode === "avatar") {
+      if (!isBlockedAt(sim, nx, ny, sim.world.map_z)) {
+        sim.world.map_x = nx;
+        sim.world.map_y = ny;
+        state.avatarLastMoveTick = sim.tick >>> 0;
+      }
+    } else {
+      sim.world.map_x = nx;
+      sim.world.map_y = ny;
+    }
+  } else if (cmd.type === 2) {
+    if (state.movementMode === "avatar") {
+      tryToggleDoorInFacingDirection(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
   }
   sim.commandsApplied += 1;
 }
@@ -1348,6 +1518,14 @@ function simStateHash(sim) {
   h = hashMixU32(h, asU32Signed(sim.world.map_z));
   h = hashMixU32(h, sim.world.in_combat);
   h = hashMixU32(h, sim.world.sound_enabled);
+  const doorKeys = Object.keys(sim.doorOpenStates ?? {}).sort();
+  h = hashMixU32(h, doorKeys.length);
+  for (const k of doorKeys) {
+    for (let i = 0; i < k.length; i += 1) {
+      h = hashMixU32(h, k.charCodeAt(i));
+    }
+    h = hashMixU32(h, sim.doorOpenStates[k] ? 1 : 0);
+  }
   return h;
 }
 
@@ -1386,7 +1564,19 @@ function unpackCommand(bytes) {
 }
 
 function queueMove(dx, dy) {
+  state.avatarFacingDx = dx | 0;
+  state.avatarFacingDy = dy | 0;
   const bytes = packCommand(state.sim.tick + 1, 1, dx, dy);
+  const cmd = unpackCommand(bytes);
+  state.queue.push(cmd);
+  state.commandLog.push({ ...cmd });
+}
+
+function queueInteractDoor() {
+  if (state.movementMode !== "avatar") {
+    return;
+  }
+  const bytes = packCommand(state.sim.tick + 1, 2, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
   const cmd = unpackCommand(bytes);
   state.queue.push(cmd);
   state.commandLog.push({ ...cmd });
@@ -1710,6 +1900,40 @@ function shouldBlackoutTile(rawTile, wx, wy, viewCtx) {
   return true;
 }
 
+function avatarFacingFrameOffset() {
+  if (state.avatarFacingDy < 0) return 0;
+  if (state.avatarFacingDx > 0) return 1;
+  if (state.avatarFacingDy > 0) return 2;
+  return 3;
+}
+
+function avatarRenderTileId() {
+  if (!state.entityLayer || !state.entityLayer.entries) {
+    return null;
+  }
+  const avatar = state.entityLayer.entries.find((e) => e.id === AVATAR_ENTITY_ID) ?? null;
+  if (!avatar || !avatar.baseTile) {
+    return null;
+  }
+  const walkMoving = state.avatarLastMoveTick >= 0 && ((state.sim.tick - state.avatarLastMoveTick) & 0xff) < 4;
+  const dirGroup = avatarFacingFrameOffset();
+  let frame = avatar.frame | 0;
+  /* Legacy actor classes (OBJ_178..183 and OBJ_199..19A) use 4 frames per direction:
+     dir*4 + {0,1,2,3}, with 1 as stable standing frame. */
+  if (
+    (avatar.type >= 0x178 && avatar.type <= 0x183)
+    || (avatar.type >= 0x199 && avatar.type <= 0x19a)
+  ) {
+    const step = walkMoving ? (((state.sim.tick >> 1) & 1) ? 0 : 2) : 1;
+    frame = (dirGroup << 2) + step;
+  } else {
+    /* Fallback for simpler actor frame families: two-frame directional groups. */
+    const step = walkMoving ? ((state.sim.tick >> 1) & 1) : 0;
+    frame = (dirGroup << 1) + step;
+  }
+  return (avatar.baseTile + frame) & 0xffff;
+}
+
 function tileColor(t, palette) {
   if (!palette) {
     const [r, g, b] = fallbackTileColor(t);
@@ -1883,10 +2107,15 @@ function drawTileGrid() {
       }
     }
   }
+  const entities = (state.tileSet && state.entityLayer)
+    ? state.entityLayer.entitiesInView(startX, startY, state.sim.world.map_z, VIEW_W, VIEW_H)
+    : [];
   if (state.tileSet && state.entityLayer) {
-    const entities = state.entityLayer.entitiesInView(startX, startY, state.sim.world.map_z, VIEW_W, VIEW_H);
     for (const e of entities) {
       if (viewCtx && !viewCtx.visibleAtWorld(e.x, e.y)) {
+        continue;
+      }
+      if (state.movementMode === "avatar" && e.id === AVATAR_ENTITY_ID) {
         continue;
       }
       const gx = e.x - startX;
@@ -1908,20 +2137,28 @@ function drawTileGrid() {
       }
       entityCount += 1;
     }
-    const interactionProbe = topInteractiveOverlayAt(
-      overlayCells,
-      startX,
-      startY,
-      state.sim.world.map_x,
-      state.sim.world.map_y
-    );
-    state.interactionProbeTile = interactionProbe ? interactionProbe.tileId : null;
-    const actorOcclusionMismatch = measureActorOcclusionParity(overlayCells, startX, startY, viewCtx, entities);
-    state.renderParityMismatches = overlayBuild.parity.unsortedSourceCount
-      + actorOcclusionMismatch;
-  } else {
+  }
+  if (state.tileSet && state.movementMode === "avatar") {
+    const avatarTile = avatarRenderTileId();
+    if (avatarTile != null) {
+      drawEntityTile(avatarTile, VIEW_W >> 1, VIEW_H >> 1);
+      entityCount += 1;
+    }
+  }
+  const interactionProbe = topInteractiveOverlayAt(
+    overlayCells,
+    startX,
+    startY,
+    state.sim.world.map_x,
+    state.sim.world.map_y
+  );
+  state.interactionProbeTile = interactionProbe ? interactionProbe.tileId : null;
+  const actorOcclusionMismatch = measureActorOcclusionParity(overlayCells, startX, startY, viewCtx, entities);
+  state.renderParityMismatches = overlayBuild.parity.unsortedSourceCount + actorOcclusionMismatch;
+
+  if (!state.tileSet) {
     state.interactionProbeTile = null;
-    state.renderParityMismatches = overlayBuild.parity.unsortedSourceCount;
+    state.renderParityMismatches = 0;
   }
   if (overlayCells && state.tileSet) {
     for (let gy = 0; gy < VIEW_H; gy += 1) {
@@ -1948,9 +2185,11 @@ function drawTileGrid() {
 
   const cx = (VIEW_W >> 1) * TILE_SIZE;
   const cy = (VIEW_H >> 1) * TILE_SIZE;
-  ctx.strokeStyle = "#f1f3f5";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(cx + 2, cy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+  if (state.movementMode === "ghost" || !state.tileSet) {
+    ctx.strokeStyle = "#f1f3f5";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx + 2, cy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+  }
 
   statTile.textContent = `0x${centerTile.toString(16).padStart(2, "0")}`;
 }
@@ -1987,6 +2226,14 @@ function updateStats() {
     } else {
       statRenderParity.textContent = "ok";
     }
+  }
+  if (statAvatarState) {
+    const facing = state.avatarFacingDx < 0 ? "W"
+      : state.avatarFacingDx > 0 ? "E"
+        : state.avatarFacingDy < 0 ? "N" : "S";
+    statAvatarState.textContent = state.movementMode === "avatar"
+      ? `avatar (${facing})`
+      : "ghost";
   }
   if (statNpcOcclusionBlocks) {
     statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
@@ -2156,6 +2403,7 @@ function resetRun() {
   state.centerPaletteBand = "none";
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
+  state.avatarLastMoveTick = -1;
   state.npcOcclusionBlockedMoves = 0;
   if (state.animationFrozen) {
     state.frozenAnimationTick = state.sim.tick >>> 0;
@@ -2350,6 +2598,8 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "v") verifyReplayStability();
   else if (k === "f") setAnimationMode(state.animationFrozen ? "live" : "freeze");
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
+  else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
+  else if (k === "e") queueInteractDoor();
   else return;
   ev.preventDefault();
 });
@@ -2368,6 +2618,7 @@ initGrid();
 initOverlayDebug();
 initAnimationMode();
 initPaletteFxMode();
+initMovementMode();
 initCapturePresets();
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);

@@ -58,6 +58,10 @@
           <strong id="statRenderParity">ok</strong>
         </div>
         <div class="stat">
+          <span>Avatar State</span>
+          <strong id="statAvatarState">ghost</strong>
+        </div>
+        <div class="stat">
           <span>NPC Occlusion Blocks</span>
           <strong id="statNpcOcclusionBlocks">0</strong>
         </div>
@@ -159,6 +163,14 @@
           </select>
         </div>
         <div class="stat">
+          <span>Control Mode</span>
+          <label class="theme-label" for="movementModeToggle">Ghost vs Avatar</label>
+          <select id="movementModeToggle" class="theme-select">
+            <option value="ghost">Ghost (No Collision)</option>
+            <option value="avatar">Avatar (Collision + Doors)</option>
+          </select>
+        </div>
+        <div class="stat">
           <span>Capture Preset</span>
           <label class="theme-label" for="locationSelect">Canonical Location</label>
           <select id="locationSelect" class="theme-select"></select>
@@ -180,6 +192,8 @@
           <p>`V` verify replay stability</p>
           <p>`F` toggle animated tile freeze</p>
           <p>`B` toggle legacy palette FX</p>
+          <p>`M` toggle ghost/avatar mode</p>
+          <p>`E` interact with facing door (avatar mode)</p>
         </div>
       </aside>
     </main>
