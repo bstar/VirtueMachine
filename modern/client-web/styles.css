@@ -296,12 +296,18 @@ body::before {
 }
 
 .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  display: grid;
+  gap: 0.35rem;
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--line);
   padding-bottom: 0.65rem;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.7rem;
 }
 
 .header h1 {
@@ -318,6 +324,17 @@ body::before {
   margin: 0;
   color: var(--muted);
   font-size: calc(var(--px-step) * 2);
+}
+
+.header-time {
+  display: block;
+}
+
+#topTimeOfDay {
+  display: inline-block;
+  min-width: 20ch;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 .viewport-wrap {

@@ -101,6 +101,7 @@ const statReplay = document.getElementById("statReplay");
 const statPalettePhase = document.getElementById("statPalettePhase");
 const statCenterTiles = document.getElementById("statCenterTiles");
 const statCenterBand = document.getElementById("statCenterBand");
+const topTimeOfDay = document.getElementById("topTimeOfDay");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
@@ -1350,6 +1351,16 @@ function hashHex(hashValue) {
   return hashValue.toString(16).padStart(16, "0");
 }
 
+function timeOfDayLabel(hour) {
+  const h = hour | 0;
+  if (h < 5) return "Midnight";
+  if (h < 8) return "Dawn";
+  if (h < 12) return "Morning";
+  if (h < 17) return "Afternoon";
+  if (h < 20) return "Dusk";
+  return "Night";
+}
+
 function packCommand(tick, type, arg0, arg1) {
   const b = new Uint8Array(COMMAND_WIRE_SIZE);
   const dv = new DataView(b.buffer);
@@ -1977,8 +1988,13 @@ function updateStats() {
   const w = state.sim.world;
   statTick.textContent = String(state.sim.tick);
   statPos.textContent = `${w.map_x}, ${w.map_y}, ${w.map_z}`;
-  statClock.textContent = `${String(w.time_h).padStart(2, "0")}:${String(w.time_m).padStart(2, "0")}`;
+  const hh = String(w.time_h).padStart(2, "0");
+  const mm = String(w.time_m).padStart(2, "0");
+  statClock.textContent = `${hh}:${mm}`;
   statDate.textContent = `${w.date_d} / ${w.date_m} / ${w.date_y}`;
+  if (topTimeOfDay) {
+    topTimeOfDay.textContent = `${timeOfDayLabel(w.time_h)} (${hh}:${mm})`;
+  }
   statQueued.textContent = String(state.queue.length);
   if (state.objectLayer) {
     statObjects.textContent = `${state.objectOverlayCount} / ${state.objectLayer.totalLoaded}`;
