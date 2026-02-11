@@ -8,7 +8,7 @@ Last Updated: 2026-02-11
 - `[x]` M1: Deterministic Runtime Skeleton
 - `[~]` M2: World State and Persistence Slice
 - `[x]` M3: Playable Single-Player Vertical Slice
-- `[x]` M4: Gameplay Parity Expansion
+- `[~]` M4: Gameplay Parity Expansion
 - `[ ]` M5: Multiplayer Prototype
 
 Legend:
@@ -115,6 +115,34 @@ This checklist is intentionally mutable.
 - `[x]` Add CI artifact upload of replay/hash logs
 - `[x]` Set minimum required test set for merge to `main`
 
+### Next 90 Days (Reprioritized): Rendering Layer Parity First
+
+#### Slice R1: Static Object Layer Rendering (Doors/Fountains/Tables/Food)
+
+- `[ ]` Identify and document legacy object placement source files/records for world map overlays
+- `[ ]` Add read-only loader for static world object placements into `sim-core` data surface
+- `[ ]` Render static object layer in `client-web` above terrain with deterministic ordering rules
+- `[ ]` Add fixture tests for placement decode and draw-order determinism
+- `[ ]` Capture parity screenshots at known coordinates (legacy reference vs web client)
+
+#### Slice R2: Occlusion/Passability-Aware Composition
+
+- `[ ]` Implement tile/object composition rules for doorway openings, wall edges, and overlap priority
+- `[ ]` Ensure interaction probes use the same object layer coordinates as renderer
+- `[ ]` Add regression cases for corner/edge overlaps and transparency correctness
+
+#### Slice R3: Interactive Container Props and Visual State
+
+- `[ ]` Add world-state-backed visual variants (e.g., opened/closed doors, empty/non-empty containers)
+- `[ ]` Bind first interaction outcomes to layer sprite state transitions
+- `[ ]` Add replay/hash tests proving visual state transitions are deterministic
+
+#### Slice R4: Layer Parity Hardening and Tooling
+
+- `[ ]` Build a map sweep validator for missing/unknown object sprites in viewport samples
+- `[ ]` Add CI artifact upload for layer parity diff reports/screenshots
+- `[ ]` Document accepted parity gaps and unresolved legacy ambiguities
+
 ## Current Sprint Focus
 
 - `[x]` Complete M3.3 (asset pipeline integration)
@@ -125,6 +153,8 @@ This checklist is intentionally mutable.
 - `[x]` Define actor-aware command envelope variant and checksum fixtures
 - `[x]` Add peer checkpoint hash comparator CLI + automated test
 - `[x]` Complete M4.4 CI quality gates (required tests + replay artifact job)
+- `[ ]` Start R1 static object layer rendering (doors/fountains/tables/food)
+- `[ ]` Land first terrain+object parity screenshots from canonical locations
 
 ## Known Blockers / Risks
 
@@ -132,8 +162,9 @@ This checklist is intentionally mutable.
 - `[~]` Potential determinism drift if future subsystems introduce non-authoritative randomness or frame-time coupling
 - `[~]` Current browser renderer duplicates some map/chunk logic in JS pending shared sim-core boundary
 - `[ ]` Map/chunk format edge cases may require additional reverse-engineering passes
-- `[ ]` Multiplayer timeline depends on deterministic coverage breadth by end of Month 2
+- `[~]` Multiplayer implementation deferred; architecture decisions will be made incrementally when R1-R4 work exposes concrete needs
+- `[~]` Legacy object placement storage/encoding for world overlays still needs explicit mapping
 
 ## Next Immediate Task
 
-Implement `M5 Slice 1`: multiplayer deterministic session scaffold (single host, mirrored command stream).
+Implement `R1`: static object layer loader + renderer path for doors/fountains/tables/food.

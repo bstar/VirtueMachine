@@ -66,6 +66,22 @@ Primary outputs:
 - net protocol draft
 - determinism and desync diagnostics docs
 
+## Priority Shift (2026-02-11)
+
+Before starting `M5` lockstep implementation, prioritize rendering-layer parity so the web client displays world objects as placed in the original game (doors, fountains, tables, food, and related overlays).
+
+Rationale:
+
+- Multiplayer debugging is materially easier once scene composition is closer to legacy behavior.
+- Interaction semantics depend on object-layer coordinates and ordering, not only base terrain tiles.
+- Early visual parity reduces rework in UI/QoL work by stabilizing the world presentation contract first.
+
+Multiplayer handling policy during this phase:
+
+- Do not start full multiplayer feature implementation yet.
+- Make multiplayer decisions only when an active rendering/simulation slice creates an architectural fork.
+- Record each decision as an ADR/decision-log entry and keep interfaces network-neutral where practical.
+
 ## Milestones
 
 ## M0: Documentation Foundation
