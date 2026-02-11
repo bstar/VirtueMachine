@@ -160,6 +160,12 @@ Added deterministic replay checkpoint writer:
 - fixed interval stepping
 - reproducible logs for scenario comparisons and desync debugging
 
+## M3 Slice 2 Client Prototype Status
+
+`modern/client-web` now consumes the command envelope/tick model and renders a first tile viewport.
+Current implementation uses a JS-side compatibility reader for `map`/`chunks` and is an interim bridge.
+Planned direction is shared data/logic boundaries with sim-core to avoid long-term duplication.
+
 ## Legacy Mapping Requirement
 
 For each implemented subsystem, add:

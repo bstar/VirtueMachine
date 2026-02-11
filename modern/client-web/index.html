@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VirtueMachine | M3.2 Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="layout">
+      <section class="panel panel-main">
+        <header class="header">
+          <h1>VirtueMachine</h1>
+          <p>M3.2 Client Prototype</p>
+        </header>
+        <div class="viewport-wrap">
+          <canvas id="viewport" width="704" height="704"></canvas>
+        </div>
+      </section>
+
+      <aside class="panel panel-side">
+        <div class="stat">
+          <span>Tick</span>
+          <strong id="statTick">0</strong>
+        </div>
+        <div class="stat">
+          <span>Map Position</span>
+          <strong id="statPos">0, 0, 0</strong>
+        </div>
+        <div class="stat">
+          <span>Tile</span>
+          <strong id="statTile">-</strong>
+        </div>
+        <div class="stat">
+          <span>Commands Queued</span>
+          <strong id="statQueued">0</strong>
+        </div>
+        <div class="stat">
+          <span>Data Source</span>
+          <strong id="statSource">booting...</strong>
+        </div>
+
+        <div class="help">
+          <h2>Controls</h2>
+          <p>`W A S D` move</p>
+          <p>`R` recenter</p>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+  </html>

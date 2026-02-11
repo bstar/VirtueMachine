@@ -72,10 +72,10 @@ This checklist is intentionally mutable.
 
 #### Slice M3.2: Minimal Web Client Scaffolding
 
-- `[ ]` Scaffold `modern/client-web` app shell and runtime loop
-- `[ ]` Render tile grid viewport fed only by sim-core snapshot data
-- `[ ]` Add camera transform supporting larger world view area
-- `[ ]` Add input mapping (keyboard first) to simulation commands
+- `[x]` Scaffold `modern/client-web` app shell and runtime loop
+- `[x]` Render tile grid viewport fed only by sim-core snapshot data
+- `[x]` Add camera transform supporting larger world view area
+- `[x]` Add input mapping (keyboard first) to simulation commands
 
 #### Slice M3.3: Asset Pipeline Integration
 
@@ -117,9 +117,9 @@ This checklist is intentionally mutable.
 
 ## Current Sprint Focus
 
-- `[ ]` Start M3.2 (minimal web client scaffolding)
-- `[ ]` Render first tile grid viewport from sim-core/map data
-- `[ ]` Map keyboard input to command envelopes and tick stepping
+- `[ ]` Start M3.3 (asset pipeline integration)
+- `[ ]` Add runtime asset preflight validation command for client startup
+- `[ ]` Improve fallback diagnostics for missing map/chunk files
 
 ## Known Blockers / Risks
 
@@ -131,4 +131,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M3 Slice 2`: minimal web client runtime loop and first visible map rendering.
+Implement `M3 Slice 3`: runtime asset preflight checks and client diagnostics polish.

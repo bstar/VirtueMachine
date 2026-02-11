@@ -56,6 +56,12 @@ Or run the one-command local test script:
 ./modern/tools/test.sh
 ```
 
+Run the first web rendering prototype:
+
+```bash
+./modern/tools/dev_web.sh
+```
+
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
 - `docs/policies/sandbox-escalation-policy.md`

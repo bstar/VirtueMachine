@@ -103,3 +103,15 @@ Impact on Port: establishes stable input boundary for web client integration and
 Next Validation Step: consume command envelopes directly from client-web input loop in M3.2.
 Related Symbols: SYM-0004, SYM-0006
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0008
+Date: 2026-02-11
+Area: First Rendering Prototype
+Legacy Source Ref: `SRC/seg_101C.c` (map/chunk tile addressing patterns)
+Summary: first browser rendering path is functional: fixed-tick loop, command-envelope movement input, and tile viewport using runtime `map`/`chunks` binary reads with deterministic synthetic fallback.
+Evidence: `modern/client-web/app.js` implements map-window/chunk decode logic aligned with `seg_101C` assumptions and renders 11x11 tile viewport.
+Confidence: medium
+Impact on Port: unblocks visual iteration and UX work while preserving deterministic input/tick flow.
+Next Validation Step: wire rendering reads through a shared sim-core boundary (wasm or generated bridge) to remove JS-side duplicate logic.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../architecture/new/sim-core-contract.md`
