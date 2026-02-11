@@ -716,9 +716,6 @@ class U6EntityLayerJS {
     for (let id = 0; id < 0x100; id += 1) {
       const status = bytes[objStatusOff + id];
       const npcStatus = bytes[npcStatusOff + id];
-      if (npcStatus === 0) {
-        continue;
-      }
       if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
         continue;
       }
