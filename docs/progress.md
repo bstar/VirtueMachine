@@ -8,7 +8,7 @@ Last Updated: 2026-02-11
 - `[x]` M1: Deterministic Runtime Skeleton
 - `[~]` M2: World State and Persistence Slice
 - `[x]` M3: Playable Single-Player Vertical Slice
-- `[~]` M4: Gameplay Parity Expansion
+- `[x]` M4: Gameplay Parity Expansion
 - `[ ]` M5: Multiplayer Prototype
 
 Legend:
@@ -111,9 +111,9 @@ This checklist is intentionally mutable.
 
 #### Slice M4.4: Quality Gates and CI Expansion
 
-- `[ ]` Add CI job for replay regression pack
-- `[ ]` Add CI artifact upload of replay/hash logs
-- `[ ]` Set minimum required test set for merge to `main`
+- `[x]` Add CI job for replay regression pack
+- `[x]` Add CI artifact upload of replay/hash logs
+- `[x]` Set minimum required test set for merge to `main`
 
 ## Current Sprint Focus
 
@@ -124,6 +124,7 @@ This checklist is intentionally mutable.
 - `[x]` Start M4.3 (multiplayer readiness prework)
 - `[x]` Define actor-aware command envelope variant and checksum fixtures
 - `[x]` Add peer checkpoint hash comparator CLI + automated test
+- `[x]` Complete M4.4 CI quality gates (required tests + replay artifact job)
 
 ## Known Blockers / Risks
 
@@ -135,4 +136,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M4 Slice 4`: CI replay regression pack and hash-log artifacts.
+Implement `M5 Slice 1`: multiplayer deterministic session scaffold (single host, mirrored command stream).

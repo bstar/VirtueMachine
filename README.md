@@ -56,6 +56,18 @@ Or run the one-command local test script:
 ./modern/tools/test.sh
 ```
 
+Run the CI-required deterministic gate locally:
+
+```bash
+./modern/tools/ci_required_tests.sh
+```
+
+Generate replay/hash artifact files locally (same pack produced in CI):
+
+```bash
+./modern/tools/generate_replay_pack.sh
+```
+
 Run the first web rendering prototype:
 
 ```bash

@@ -28,13 +28,13 @@ validate_csv() {
     }
     NR == 1 {
       if (norm($1) != "tick" || norm($2) != "hash") {
-        printf("error: invalid header in %s (expected tick,hash)\\n", FILENAME) > "/dev/stderr"
+        printf("error: invalid header in %s (expected tick,hash)\n", FILENAME) > "/dev/stderr"
         exit 2
       }
       next
     }
     NF < 2 {
-      printf("error: malformed checkpoint row %d in %s\\n", NR, FILENAME) > "/dev/stderr"
+      printf("error: malformed checkpoint row %d in %s\n", NR, FILENAME) > "/dev/stderr"
       exit 2
     }
   ' "$path"
@@ -66,7 +66,7 @@ awk -F',' '
     }
 
     if (!(FNR in a_tick)) {
-      printf("DESYNC: peer B has extra checkpoint at line %d (tick=%d hash=%s)\\n", FNR, $1 + 0, norm($2))
+      printf("DESYNC: peer B has extra checkpoint at line %d (tick=%d hash=%s)\n", FNR, $1 + 0, norm($2))
       exit 1
     }
 
@@ -74,7 +74,7 @@ awk -F',' '
     b_hash = norm($2)
 
     if (b_tick != a_tick[FNR] || b_hash != a_hash[FNR]) {
-      printf("DESYNC at line %d: A(tick=%d hash=%s) vs B(tick=%d hash=%s)\\n",
+      printf("DESYNC at line %d: A(tick=%d hash=%s) vs B(tick=%d hash=%s)\n",
              FNR, a_tick[FNR], a_hash[FNR], b_tick, b_hash)
       exit 1
     }
@@ -84,10 +84,10 @@ awk -F',' '
 
   END {
     if (a_lines != b_lines) {
-      printf("DESYNC: checkpoint count mismatch A=%d B=%d\\n", a_lines - 1, b_lines - 1)
+      printf("DESYNC: checkpoint count mismatch A=%d B=%d\n", a_lines - 1, b_lines - 1)
       exit 1
     }
 
-    printf("SYNC: %d checkpoints match\\n", a_lines - 1)
+    printf("SYNC: %d checkpoints match\n", a_lines - 1)
   }
 ' "$peer_a" "$peer_b"
