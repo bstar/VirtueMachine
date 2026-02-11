@@ -93,6 +93,7 @@ const statDate = document.getElementById("statDate");
 const statTile = document.getElementById("statTile");
 const statObjects = document.getElementById("statObjects");
 const statEntities = document.getElementById("statEntities");
+const statNpcOcclusionBlocks = document.getElementById("statNpcOcclusionBlocks");
 const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
 const statHash = document.getElementById("statHash");
@@ -182,6 +183,7 @@ const state = {
   frozenAnimationTick: null,
   objectOverlayCount: 0,
   entityOverlayCount: 0,
+  npcOcclusionBlockedMoves: 0,
   showGrid: false,
   showOverlayDebug: false,
   enablePaletteFx: true,
@@ -814,9 +816,9 @@ class U6EntityLayerJS {
     return false;
   }
 
-  step(tick, mapCtx, tileFlags, terrainType, objectLayer) {
+  step(tick, mapCtx, tileFlags, terrainType, objectLayer, visibleAtWorld) {
     if ((tick % 8) !== 0) {
-      return;
+      return 0;
     }
     const dirs = [
       [1, 0],
@@ -829,6 +831,7 @@ class U6EntityLayerJS {
       occupied.add(`${e.x & 0x3ff},${e.y & 0x3ff},${e.z & 0x0f}`);
     }
 
+    let blockedByOcclusion = 0;
     const phase = (tick >> 3) & 0xff;
     for (const e of this.entries) {
       if (!e.movable || e.z !== 0) {
@@ -853,6 +856,10 @@ class U6EntityLayerJS {
         if (occupied.has(k)) {
           continue;
         }
+        if (visibleAtWorld && !visibleAtWorld(nx, ny)) {
+          blockedByOcclusion += 1;
+          continue;
+        }
         if (this.tileBlocks(nx, ny, dz, mapCtx, tileFlags, terrainType, objectLayer)) {
           continue;
         }
@@ -867,6 +874,7 @@ class U6EntityLayerJS {
         continue;
       }
     }
+    return blockedByOcclusion;
   }
 }
 
@@ -1984,6 +1992,9 @@ function updateStats() {
       statEntities.textContent = "0 / 0";
     }
   }
+  if (statNpcOcclusionBlocks) {
+    statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
+  }
   statHash.textContent = hashHex(simStateHash(state.sim));
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
@@ -2147,6 +2158,7 @@ function resetRun() {
   state.centerRawTile = 0;
   state.centerAnimatedTile = 0;
   state.centerPaletteBand = "none";
+  state.npcOcclusionBlockedMoves = 0;
   if (state.animationFrozen) {
     state.frozenAnimationTick = state.sim.tick >>> 0;
   }
@@ -2164,13 +2176,18 @@ function tickLoop(ts) {
     state.accMs -= TICK_MS;
     state.queue = stepSimTick(state.sim, state.queue);
     if (state.entityLayer) {
-      state.entityLayer.step(
+      const startX = state.sim.world.map_x - (VIEW_W >> 1);
+      const startY = state.sim.world.map_y - (VIEW_H >> 1);
+      const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
+      const blocked = state.entityLayer.step(
         state.sim.tick,
         state.mapCtx,
         state.tileFlags,
         state.terrainType,
-        state.objectLayer
+        state.objectLayer,
+        viewCtx ? (x, y) => viewCtx.visibleAtWorld(x, y) : null
       );
+      state.npcOcclusionBlockedMoves += blocked;
     }
   }
 
