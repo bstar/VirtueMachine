@@ -7,7 +7,7 @@ Last Updated: 2026-02-11
 - `[x]` M0: Documentation Foundation
 - `[x]` M1: Deterministic Runtime Skeleton
 - `[~]` M2: World State and Persistence Slice
-- `[ ]` M3: Playable Single-Player Vertical Slice
+- `[x]` M3: Playable Single-Player Vertical Slice
 - `[ ]` M4: Gameplay Parity Expansion
 - `[ ]` M5: Multiplayer Prototype
 
@@ -85,9 +85,9 @@ This checklist is intentionally mutable.
 
 #### Slice M3.4: Playable Walkaround Demo
 
-- `[ ]` Achieve movement on map with deterministic tick stepping
-- `[ ]` Show current world time/date/map position in debug HUD
-- `[ ]` Capture demo replay and verify hash stability between runs
+- `[x]` Achieve movement on map with deterministic tick stepping
+- `[x]` Show current world time/date/map position in debug HUD
+- `[x]` Capture demo replay and verify hash stability between runs
 
 ### Month 3 (Weeks 9-12): M4 Early Parity + Multiplayer Prework
 
@@ -118,9 +118,9 @@ This checklist is intentionally mutable.
 ## Current Sprint Focus
 
 - `[x]` Complete M3.3 (asset pipeline integration)
-- `[ ]` Start M3.4 (playable walkaround demo)
-- `[ ]` Add debug HUD time/date fields sourced from deterministic clock
-- `[ ]` Capture and compare replay hash logs from browser-driven movement run
+- `[x]` Complete M3.4 (playable walkaround demo)
+- `[ ]` Start M4.1 (object/NPC data surface)
+- `[ ]` Select first object subset and invariants for deterministic tests
 
 ## Known Blockers / Risks
 
@@ -132,4 +132,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M3 Slice 4`: playable walkaround demo with debug HUD + replay hash stability check.
+Implement `M4 Slice 1`: introduce minimal object/NPC typed state containers with deterministic tests.

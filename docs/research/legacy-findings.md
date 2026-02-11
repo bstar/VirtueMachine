@@ -127,3 +127,15 @@ Impact on Port: reduces startup ambiguity for contributors, preserves runnable w
 Next Validation Step: move map/chunk read path behind shared sim-core boundary to remove duplicate decode logic and unify diagnostics.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../architecture/new/sim-core-contract.md`
+
+Finding ID: FIND-0010
+Date: 2026-02-11
+Area: Browser Walkaround Determinism Surface
+Legacy Source Ref: `SRC/D_2C4A.c` (world clock fields), `SRC/seg_0A33.c` (calendar usage), `SRC/seg_101C.c` (map movement context)
+Summary: browser walkaround now advances a deterministic world clock/date and exposes per-tick state hashes with replay checkpoint export for stability verification.
+Evidence: `modern/client-web/app.js` now mirrors sim-core tick semantics (xorshift32, 4 ticks/minute, rollover rules), computes FNV-1a 64-bit state hash, and verifies replay checkpoints via dual re-run comparison.
+Confidence: medium
+Impact on Port: provides a practical browser-side determinism harness for movement slices and creates reproducible checkpoint artifacts before wasm unification is introduced.
+Next Validation Step: replace JS-side deterministic helpers with direct sim-core wasm calls to eliminate duplicate authority logic.
+Related Symbols: SYM-0005, SYM-0008
+Related Modern Docs: `../architecture/new/sim-core-contract.md`

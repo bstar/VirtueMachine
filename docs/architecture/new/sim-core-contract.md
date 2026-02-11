@@ -166,6 +166,16 @@ Added deterministic replay checkpoint writer:
 Current implementation uses a JS-side compatibility reader for `map`/`chunks` and is an interim bridge.
 Planned direction is shared data/logic boundaries with sim-core to avoid long-term duplication.
 
+## M3 Slice 4 Walkaround Demo Status
+
+The client now includes deterministic walkaround instrumentation:
+
+- world clock/date HUD tied to fixed tick semantics
+- live state hash panel for run tracking
+- replay stability check that replays captured command streams and exports checkpoint CSV
+
+This remains an interim JS mirror of sim-core behavior until wasm boundary integration lands.
+
 ## Legacy Mapping Requirement
 
 For each implemented subsystem, add:

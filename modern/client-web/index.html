@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="obsidian" data-layout="classic-right" data-font="blockblueprint">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>VirtueMachine | M3.2 Prototype</title>
+    <title>VirtueMachine | M3.4 Walkaround Demo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
@@ -14,7 +14,7 @@
       <section class="panel panel-main">
         <header class="header">
           <h1>VirtueMachine</h1>
-          <p>M3.2 Client Prototype</p>
+          <p>M3.4 Walkaround Demo</p>
         </header>
         <div class="viewport-wrap">
           <canvas id="viewport" width="704" height="704"></canvas>
@@ -31,6 +31,14 @@
           <strong id="statPos">0, 0, 0</strong>
         </div>
         <div class="stat">
+          <span>Clock</span>
+          <strong id="statClock">00:00</strong>
+        </div>
+        <div class="stat">
+          <span>Date</span>
+          <strong id="statDate">1 / 1 / 1</strong>
+        </div>
+        <div class="stat">
           <span>Tile</span>
           <strong id="statTile">-</strong>
         </div>
@@ -42,6 +50,52 @@
           <span>Data Source</span>
           <strong id="statSource">booting...</strong>
         </div>
+        <div class="stat">
+          <span>State Hash</span>
+          <strong id="statHash">-</strong>
+        </div>
+        <div class="stat">
+          <span>Replay Check</span>
+          <strong id="statReplay">not run</strong>
+        </div>
+        <div class="stat">
+          <span>Theme</span>
+          <label class="theme-label" for="themeSelect">UI Style</label>
+          <select id="themeSelect" class="theme-select">
+            <option value="obsidian">Obsidian Codex</option>
+            <option value="phosphor">Phosphor CRT</option>
+            <option value="amber">Amber Terminal</option>
+            <option value="cga-cyan">CGA Cyan Steel</option>
+            <option value="cga-magenta">CGA Magenta Night</option>
+            <option value="parchment">Parchment Atlas</option>
+            <option value="cobalt">Cobalt Keep</option>
+            <option value="bloodstone">Bloodstone Banner</option>
+            <option value="moonstone">Moonstone Ledger</option>
+            <option value="ash">Ash Monolith</option>
+          </select>
+        </div>
+        <div class="stat">
+          <span>Interface</span>
+          <label class="theme-label" for="layoutSelect">Layout Variant</label>
+          <select id="layoutSelect" class="theme-select">
+            <option value="classic-right">Classic Right Rail</option>
+            <option value="classic-left">Classic Left Rail</option>
+            <option value="ledger-split">Ledger Split Panel</option>
+            <option value="ledger-compact">Ledger Compact Console</option>
+            <option value="ledger-focus">Ledger Focus Board</option>
+          </select>
+        </div>
+        <div class="stat">
+          <span>Body Font</span>
+          <label class="theme-label" for="fontSelect">Rendered Retro Font</label>
+          <select id="fontSelect" class="theme-select">
+            <option value="blockblueprint">BlockBlueprint</option>
+            <option value="kaijuz">Kaijuz</option>
+            <option value="orangekid">Orange Kid</option>
+            <option value="silkscreen">Silkscreen Fallback</option>
+          </select>
+        </div>
+        <a class="replay-link disabled" id="replayDownload" href="#">download replay checkpoints.csv</a>
         <div class="diag" id="diagBox">
           awaiting runtime checks...
         </div>
@@ -50,6 +104,7 @@
           <h2>Controls</h2>
           <p>`W A S D` move</p>
           <p>`R` recenter</p>
+          <p>`V` verify replay stability</p>
         </div>
       </aside>
     </main>

@@ -3,26 +3,86 @@ const TILE_SIZE = 32;
 const VIEW_W = 11;
 const VIEW_H = 11;
 const COMMAND_WIRE_SIZE = 16;
+const TICKS_PER_MINUTE = 4;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const DAYS_PER_MONTH = 28;
+const MONTHS_PER_YEAR = 13;
+const REPLAY_CHECKPOINT_INTERVAL = 32;
+
+const HASH_OFFSET = 1469598103934665603n;
+const HASH_PRIME = 1099511628211n;
+const HASH_MASK = (1n << 64n) - 1n;
 
 const canvas = document.getElementById("viewport");
 const ctx = canvas.getContext("2d");
 
 const statTick = document.getElementById("statTick");
 const statPos = document.getElementById("statPos");
+const statClock = document.getElementById("statClock");
+const statDate = document.getElementById("statDate");
 const statTile = document.getElementById("statTile");
 const statQueued = document.getElementById("statQueued");
 const statSource = document.getElementById("statSource");
+const statHash = document.getElementById("statHash");
+const statReplay = document.getElementById("statReplay");
 const diagBox = document.getElementById("diagBox");
+const replayDownload = document.getElementById("replayDownload");
+const themeSelect = document.getElementById("themeSelect");
+const layoutSelect = document.getElementById("layoutSelect");
+const fontSelect = document.getElementById("fontSelect");
+
+const THEME_KEY = "vm_theme";
+const LAYOUT_KEY = "vm_layout";
+const FONT_KEY = "vm_font";
+const THEMES = [
+  "obsidian",
+  "phosphor",
+  "amber",
+  "cga-cyan",
+  "cga-magenta",
+  "parchment",
+  "cobalt",
+  "bloodstone",
+  "moonstone",
+  "ash"
+];
+const LAYOUTS = [
+  "classic-right",
+  "classic-left",
+  "ledger-split",
+  "ledger-compact",
+  "ledger-focus"
+];
+const FONTS = ["blockblueprint", "kaijuz", "orangekid", "silkscreen"];
+
+const INITIAL_WORLD = Object.freeze({
+  is_on_quest: 0,
+  next_sleep: 0,
+  time_m: 0,
+  time_h: 0,
+  date_d: 1,
+  date_m: 1,
+  date_y: 1,
+  wind_dir: 0,
+  active: 0,
+  map_x: 0x133,
+  map_y: 0x160,
+  map_z: 0,
+  in_combat: 0,
+  sound_enabled: 1
+});
+
+const INITIAL_SEED = 0x12345678;
 
 const state = {
-  tick: 0,
-  mapX: 0x133,
-  mapY: 0x160,
-  mapZ: 0,
+  sim: createInitialSimState(),
   queue: [],
+  commandLog: [],
   mapCtx: null,
   lastTs: performance.now(),
-  accMs: 0
+  accMs: 0,
+  replayUrl: null
 };
 
 class U6MapJS {
@@ -96,6 +156,218 @@ class U6MapJS {
   }
 }
 
+function createInitialSimState() {
+  return {
+    tick: 0,
+    rngState: INITIAL_SEED >>> 0,
+    worldFlags: 0,
+    commandsApplied: 0,
+    world: { ...INITIAL_WORLD }
+  };
+}
+
+function setTheme(themeName) {
+  const theme = THEMES.includes(themeName) ? themeName : "obsidian";
+  document.documentElement.setAttribute("data-theme", theme);
+  if (themeSelect) {
+    themeSelect.value = theme;
+  }
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initTheme() {
+  let saved = "obsidian";
+  try {
+    const fromStorage = localStorage.getItem(THEME_KEY);
+    if (fromStorage) {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setTheme(saved);
+  if (themeSelect) {
+    themeSelect.addEventListener("change", () => {
+      setTheme(themeSelect.value);
+    });
+  }
+}
+
+function setLayout(layoutName) {
+  const layout = LAYOUTS.includes(layoutName) ? layoutName : "classic-right";
+  document.documentElement.setAttribute("data-layout", layout);
+  if (layoutSelect) {
+    layoutSelect.value = layout;
+  }
+  try {
+    localStorage.setItem(LAYOUT_KEY, layout);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initLayout() {
+  let saved = "classic-right";
+  try {
+    const fromStorage = localStorage.getItem(LAYOUT_KEY);
+    if (fromStorage) {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setLayout(saved);
+  if (layoutSelect) {
+    layoutSelect.addEventListener("change", () => {
+      setLayout(layoutSelect.value);
+    });
+  }
+}
+
+function setFont(fontName) {
+  const font = FONTS.includes(fontName) ? fontName : "blockblueprint";
+  document.documentElement.setAttribute("data-font", font);
+  if (fontSelect) {
+    fontSelect.value = font;
+  }
+  try {
+    localStorage.setItem(FONT_KEY, font);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function initFont() {
+  let saved = "blockblueprint";
+  try {
+    const fromStorage = localStorage.getItem(FONT_KEY);
+    if (fromStorage) {
+      saved = fromStorage;
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  setFont(saved);
+  if (fontSelect) {
+    fontSelect.addEventListener("change", () => {
+      setFont(fontSelect.value);
+    });
+  }
+}
+
+function cloneSimState(sim) {
+  return {
+    tick: sim.tick >>> 0,
+    rngState: sim.rngState >>> 0,
+    worldFlags: sim.worldFlags >>> 0,
+    commandsApplied: sim.commandsApplied >>> 0,
+    world: { ...sim.world }
+  };
+}
+
+function xorshift32(x) {
+  let v = x >>> 0;
+  if (v === 0) {
+    v = 0x6d2b79f5;
+  }
+  v ^= v << 13;
+  v ^= v >>> 17;
+  v ^= v << 5;
+  return v >>> 0;
+}
+
+function clampI32(value, lo, hi) {
+  if (value < lo) return lo;
+  if (value > hi) return hi;
+  return value | 0;
+}
+
+function advanceWorldMinute(world) {
+  world.time_m += 1;
+  if (world.time_m < MINUTES_PER_HOUR) return;
+  world.time_m = 0;
+  world.time_h += 1;
+  if (world.time_h < HOURS_PER_DAY) return;
+  world.time_h = 0;
+  world.date_d += 1;
+  if (world.date_d <= DAYS_PER_MONTH) return;
+  world.date_d = 1;
+  world.date_m += 1;
+  if (world.date_m <= MONTHS_PER_YEAR) return;
+  world.date_m = 1;
+  world.date_y += 1;
+}
+
+function applyCommand(sim, cmd) {
+  if (cmd.type === 1) {
+    sim.world.map_x = clampI32(sim.world.map_x + cmd.arg0, -4096, 4095);
+    sim.world.map_y = clampI32(sim.world.map_y + cmd.arg1, -4096, 4095);
+  }
+  sim.commandsApplied += 1;
+}
+
+function stepSimTick(sim, queue) {
+  const nextTick = (sim.tick + 1) >>> 0;
+  const pending = [];
+
+  for (const cmd of queue) {
+    if (cmd.tick === nextTick) {
+      applyCommand(sim, cmd);
+      continue;
+    }
+    pending.push(cmd);
+  }
+
+  sim.rngState = xorshift32(sim.rngState);
+  sim.worldFlags ^= sim.rngState & 1;
+  if ((nextTick % TICKS_PER_MINUTE) === 0) {
+    advanceWorldMinute(sim.world);
+  }
+  sim.tick = nextTick;
+
+  return pending;
+}
+
+function hashMixU32(h, value) {
+  const mixed = (h ^ BigInt(value >>> 0)) * HASH_PRIME;
+  return mixed & HASH_MASK;
+}
+
+function asU32Signed(value) {
+  return (value | 0) >>> 0;
+}
+
+function simStateHash(sim) {
+  let h = HASH_OFFSET;
+  h = hashMixU32(h, sim.tick);
+  h = hashMixU32(h, sim.rngState);
+  h = hashMixU32(h, sim.worldFlags);
+  h = hashMixU32(h, sim.commandsApplied);
+  h = hashMixU32(h, sim.world.is_on_quest);
+  h = hashMixU32(h, sim.world.next_sleep);
+  h = hashMixU32(h, sim.world.time_m);
+  h = hashMixU32(h, sim.world.time_h);
+  h = hashMixU32(h, sim.world.date_d);
+  h = hashMixU32(h, sim.world.date_m);
+  h = hashMixU32(h, sim.world.date_y);
+  h = hashMixU32(h, asU32Signed(sim.world.wind_dir));
+  h = hashMixU32(h, sim.world.active);
+  h = hashMixU32(h, asU32Signed(sim.world.map_x));
+  h = hashMixU32(h, asU32Signed(sim.world.map_y));
+  h = hashMixU32(h, asU32Signed(sim.world.map_z));
+  h = hashMixU32(h, sim.world.in_combat);
+  h = hashMixU32(h, sim.world.sound_enabled);
+  return h;
+}
+
+function hashHex(hashValue) {
+  return hashValue.toString(16).padStart(16, "0");
+}
+
 function packCommand(tick, type, arg0, arg1) {
   const b = new Uint8Array(COMMAND_WIRE_SIZE);
   const dv = new DataView(b.buffer);
@@ -117,23 +389,10 @@ function unpackCommand(bytes) {
 }
 
 function queueMove(dx, dy) {
-  const bytes = packCommand(state.tick + 1, 1, dx, dy);
-  state.queue.push(unpackCommand(bytes));
-}
-
-function applyCommandsForTick(tick) {
-  const pending = [];
-  for (const c of state.queue) {
-    if (c.tick !== tick) {
-      pending.push(c);
-      continue;
-    }
-    if (c.type === 1) {
-      state.mapX = Math.max(0, Math.min(0x3ff, state.mapX + c.arg0));
-      state.mapY = Math.max(0, Math.min(0x3ff, state.mapY + c.arg1));
-    }
-  }
-  state.queue = pending;
+  const bytes = packCommand(state.sim.tick + 1, 1, dx, dy);
+  const cmd = unpackCommand(bytes);
+  state.queue.push(cmd);
+  state.commandLog.push({ ...cmd });
 }
 
 function tileColor(t) {
@@ -148,8 +407,8 @@ function drawTileGrid() {
   ctx.fillStyle = "#0a0f13";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const startX = state.mapX - (VIEW_W >> 1);
-  const startY = state.mapY - (VIEW_H >> 1);
+  const startX = state.sim.world.map_x - (VIEW_W >> 1);
+  const startY = state.sim.world.map_y - (VIEW_H >> 1);
 
   let centerTile = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
@@ -158,7 +417,7 @@ function drawTileGrid() {
       const wy = startY + gy;
       let t = 0;
       if (state.mapCtx) {
-        t = state.mapCtx.tileAt(wx, wy, state.mapZ);
+        t = state.mapCtx.tileAt(wx, wy, state.sim.world.map_z);
       } else {
         t = (wx * 7 + wy * 13) & 0xff;
       }
@@ -182,9 +441,91 @@ function drawTileGrid() {
 }
 
 function updateStats() {
-  statTick.textContent = String(state.tick);
-  statPos.textContent = `${state.mapX}, ${state.mapY}, ${state.mapZ}`;
+  const w = state.sim.world;
+  statTick.textContent = String(state.sim.tick);
+  statPos.textContent = `${w.map_x}, ${w.map_y}, ${w.map_z}`;
+  statClock.textContent = `${String(w.time_h).padStart(2, "0")}:${String(w.time_m).padStart(2, "0")}`;
+  statDate.textContent = `${w.date_d} / ${w.date_m} / ${w.date_y}`;
   statQueued.textContent = String(state.queue.length);
+  statHash.textContent = hashHex(simStateHash(state.sim));
+}
+
+function releaseReplayUrl() {
+  if (state.replayUrl) {
+    URL.revokeObjectURL(state.replayUrl);
+    state.replayUrl = null;
+  }
+}
+
+function setReplayCsv(csvText) {
+  releaseReplayUrl();
+  const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+  state.replayUrl = URL.createObjectURL(blob);
+  replayDownload.href = state.replayUrl;
+  replayDownload.download = "virtuemachine-replay-checkpoints.csv";
+  replayDownload.classList.remove("disabled");
+}
+
+function replayCheckpointsCsv(checkpoints) {
+  const lines = ["tick,hash"];
+  for (const cp of checkpoints) {
+    lines.push(`${cp.tick},${cp.hash}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function runReplayCheckpoints(commands, totalTicks, interval) {
+  const sim = createInitialSimState();
+  const queue = commands.map((cmd) => ({ ...cmd }));
+  const checkpoints = [];
+
+  for (let i = 0; i < totalTicks; i += 1) {
+    const pending = stepSimTick(sim, queue);
+    queue.length = 0;
+    queue.push(...pending);
+
+    if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
+      checkpoints.push({
+        tick: sim.tick,
+        hash: hashHex(simStateHash(sim))
+      });
+    }
+  }
+
+  return checkpoints;
+}
+
+function verifyReplayStability() {
+  const maxCommandTick = state.commandLog.reduce((maxTick, cmd) => Math.max(maxTick, cmd.tick), 0);
+  const totalTicks = Math.max(state.sim.tick, maxCommandTick, 1);
+  const a = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
+  const b = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
+
+  const sameLength = a.length === b.length;
+  const allMatch = sameLength && a.every((cp, idx) => cp.tick === b[idx].tick && cp.hash === b[idx].hash);
+
+  if (allMatch) {
+    const csv = replayCheckpointsCsv(a);
+    setReplayCsv(csv);
+    statReplay.textContent = `stable (${a.length} checkpoints)`;
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Replay verified stable over ${totalTicks} ticks. Download checkpoints.csv for baseline tracking.`;
+    return;
+  }
+
+  statReplay.textContent = "mismatch";
+  diagBox.className = "diag warn";
+  diagBox.textContent = "Replay mismatch detected. Determinism drift likely in command/tick path.";
+}
+
+function resetRun() {
+  state.sim = createInitialSimState();
+  state.queue = [];
+  state.commandLog = [];
+  statReplay.textContent = "not run";
+  releaseReplayUrl();
+  replayDownload.classList.add("disabled");
+  replayDownload.removeAttribute("href");
 }
 
 function tickLoop(ts) {
@@ -193,8 +534,7 @@ function tickLoop(ts) {
 
   while (state.accMs >= TICK_MS) {
     state.accMs -= TICK_MS;
-    state.tick += 1;
-    applyCommandsForTick(state.tick);
+    state.queue = stepSimTick(state.sim, state.queue);
   }
 
   drawTileGrid();
@@ -240,13 +580,9 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "s") queueMove(0, 1);
   else if (k === "a") queueMove(-1, 0);
   else if (k === "d") queueMove(1, 0);
-  else if (k === "r") {
-    state.mapX = 0x133;
-    state.mapY = 0x160;
-    state.mapZ = 0;
-  } else {
-    return;
-  }
+  else if (k === "r") resetRun();
+  else if (k === "v") verifyReplayStability();
+  else return;
   ev.preventDefault();
 });
 
@@ -256,3 +592,7 @@ loadRuntimeAssets().then(() => {
     requestAnimationFrame(tickLoop);
   });
 });
+
+initTheme();
+initLayout();
+initFont();
