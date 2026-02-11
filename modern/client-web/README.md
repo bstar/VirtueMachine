@@ -25,6 +25,7 @@ Minimal browser client prototype:
 - first-pass legacy visibility/blackout mask (room-dependent wall/corner behavior)
 - canonical capture presets + one-click viewport PNG export for parity screenshot workflow
   - includes `Lord British Throne (307,347,0)` preset for throne composition validation
+- deterministic composition fixture tests (corner spill ordering, occlusion parity, transparency edge cases)
 
 ## Run
 
@@ -82,6 +83,14 @@ Useful parity presets:
 
 - `Animation Test Fire (360,397,0)` for palette-cycle validation
 - `Animation Test Wheels (307,384,0)` for tile-remap animation validation
+
+## Determinism Fixtures
+
+Run deterministic client composition fixtures:
+
+```bash
+./modern/tools/test_client_web_render_composition.sh
+```
 
 ## Layout Variants
 

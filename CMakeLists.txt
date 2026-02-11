@@ -17,3 +17,11 @@ if(BASH_PROGRAM)
     COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_compare_checkpoints.sh
   )
 endif()
+
+find_program(NODE_PROGRAM node)
+if(BASH_PROGRAM AND NODE_PROGRAM)
+  add_test(
+    NAME client_web_render_composition_test
+    COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_client_web_render_composition.sh
+  )
+endif()

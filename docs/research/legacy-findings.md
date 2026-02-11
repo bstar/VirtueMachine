@@ -211,3 +211,15 @@ Impact on Port: removes a class of renderer/probe coordinate drift bugs and give
 Next Validation Step: add fixture-driven parity checks for known corner/edge overlap and transparency hotspots (throne room and interior door transitions), then compare against canonical captures.
 Related Symbols: SYM-0006, SYM-0008
 Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0017
+Date: 2026-02-11
+Area: Deterministic Client-Side Layer Composition Fixtures
+Legacy Source Ref: `SRC/seg_1184.c` (`C_1184_35EA` double-width/height spill), `SRC/u6.h` (tile flag-driven composition semantics)
+Summary: extracted pure renderer-composition logic into a standalone module and added fixture tests for spill ordering, visibility suppression, actor-vs-occluder parity warnings, and mask/transparency edge rules.
+Evidence: `modern/client-web/render_composition.js`, `modern/client-web/tests/render_composition_fixtures.mjs`, and CTest integration via `client_web_render_composition_test`.
+Confidence: high
+Impact on Port: catches corner/edge overlap and transparency regressions before runtime manual testing; reduces risk of reintroducing throne-room/door transition artifacts.
+Next Validation Step: extend fixtures with canonical map-coordinate captures once screenshot diff tooling lands.
+Related Symbols: SYM-0006, SYM-0008
+Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`

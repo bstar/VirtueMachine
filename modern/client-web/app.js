@@ -1,3 +1,10 @@
+import {
+  buildOverlayCellsModel,
+  isLegacyPixelTransparent,
+  measureActorOcclusionParityModel,
+  topInteractiveOverlayAtModel
+} from "./render_composition.js";
+
 const TICK_MS = 100;
 const TILE_SIZE = 64;
 const VIEW_W = 11;
@@ -530,13 +537,7 @@ class U6TileSetJS {
     for (let i = 0; i < 256; i += 1) {
       const palIdx = tilePixels[i];
       const rgb = palette[palIdx] ?? [0, 0, 0];
-      let a = 255;
-      const zeroIsTransparent = tileId <= 0x1ff;
-      if (mask === 10) {
-        a = (palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00)) ? 0 : 255;
-      } else if (mask === 5) {
-        a = (palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00)) ? 0 : 255;
-      }
+      const a = isLegacyPixelTransparent(mask, tileId, palIdx) ? 0 : 255;
       const p = i * 4;
       img.data[p + 0] = rgb[0];
       img.data[p + 1] = rgb[1];
@@ -1736,166 +1737,27 @@ function paletteKeyForTile(tileId) {
   return getRenderPaletteKey();
 }
 
-function overlayTileIsFloor(tileId) {
-  if (!state.tileFlags) {
-    return false;
-  }
-  return (state.tileFlags[tileId & 0x7ff] & 0x10) !== 0;
-}
-
-function overlayTileIsOccluder(tileId) {
-  if (!state.tileFlags) {
-    return false;
-  }
-  const tf = state.tileFlags[tileId & 0x7ff] ?? 0;
-  if ((tf & 0x04) !== 0 || (tf & 0x08) !== 0) {
-    return true;
-  }
-  return hasWallTerrain(tileId);
-}
-
 function buildOverlayCells(startX, startY, wz, viewCtx) {
-  const overlayCells = (state.tileSet && state.objectLayer)
-    ? Array.from({ length: VIEW_W * VIEW_H }, () => [])
-    : null;
-  const parity = {
-    hiddenSuppressedCount: 0,
-    spillOutOfBoundsCount: 0,
-    unsortedSourceCount: 0
-  };
-  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
-  const inView = (gx, gy) => gx >= 0 && gy >= 0 && gx < VIEW_W && gy < VIEW_H;
-  const insertLegacyCellTile = (gx, gy, tileId, bp06, source, debugLabel = "") => {
-    if (!overlayCells) {
-      return;
-    }
-    if (!inView(gx, gy)) {
-      parity.spillOutOfBoundsCount += 1;
-      return;
-    }
-    const wx = startX + gx;
-    const wy = startY + gy;
-    if (viewCtx && !viewCtx.visibleAtWorld(wx, wy)) {
-      parity.hiddenSuppressedCount += 1;
-      return;
-    }
-    const list = overlayCells[cellIndex(gx, gy)];
-    const entry = {
-      tileId: tileId & 0xffff,
-      floor: overlayTileIsFloor(tileId),
-      occluder: overlayTileIsOccluder(tileId),
-      sourceX: source.x,
-      sourceY: source.y,
-      sourceType: source.type,
-      sourceObjType: source.objType,
-      dbg: debugLabel
-    };
-    if (entry.floor || bp06 === 2) {
-      if (bp06 & 1) {
-        list.push(entry);
-        return;
-      }
-      const idx = list.findIndex((e) => !e.floor);
-      if (idx === -1) {
-        list.push(entry);
-      } else {
-        list.splice(idx, 0, entry);
-      }
-      return;
-    }
-    list.unshift(entry);
-  };
-
-  let overlayCount = 0;
-  if (!overlayCells) {
-    return { overlayCells: null, parity, overlayCount };
-  }
-
-  for (let gy = 0; gy < VIEW_H; gy += 1) {
-    for (let gx = 0; gx < VIEW_W; gx += 1) {
-      const wx = startX + gx;
-      const wy = startY + gy;
-      const overlays = state.objectLayer.objectsAt(wx, wy, wz);
-      let prevDrawPri = Number.NEGATIVE_INFINITY;
-      let prevOrder = Number.NEGATIVE_INFINITY;
-      for (const o of overlays) {
-        if (!o.renderable) {
-          continue;
-        }
-        if (o.drawPri < prevDrawPri || (o.drawPri === prevDrawPri && o.order < prevOrder)) {
-          parity.unsortedSourceCount += 1;
-        }
-        prevDrawPri = o.drawPri;
-        prevOrder = o.order;
-
-        const animObjTile = resolveAnimatedObjectTile(o);
-        const dbgMain = `0x${animObjTile.toString(16)}`;
-        insertLegacyCellTile(gx, gy, animObjTile, 0, { x: wx, y: wy, type: "main", objType: o.type }, dbgMain);
-
-        const tf = state.tileFlags ? (state.tileFlags[animObjTile & 0x7ff] ?? 0) : 0;
-        if (tf & 0x80) {
-          insertLegacyCellTile(gx - 1, gy, animObjTile - 1, 1, { x: wx, y: wy, type: "spill-left", objType: o.type }, `0x${(animObjTile - 1).toString(16)}`);
-          if (tf & 0x40) {
-            insertLegacyCellTile(gx, gy - 1, animObjTile - 2, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(animObjTile - 2).toString(16)}`);
-            insertLegacyCellTile(gx - 1, gy - 1, animObjTile - 3, 1, { x: wx, y: wy, type: "spill-up-left", objType: o.type }, `0x${(animObjTile - 3).toString(16)}`);
-          }
-        } else if (tf & 0x40) {
-          insertLegacyCellTile(gx, gy - 1, animObjTile - 1, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(animObjTile - 1).toString(16)}`);
-        }
-        overlayCount += 1;
-      }
-    }
-  }
-  return { overlayCells, parity, overlayCount };
+  return buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx,
+    objectLayer: state.tileSet ? state.objectLayer : null,
+    tileFlags: state.tileFlags,
+    resolveAnimatedObjectTile,
+    hasWallTerrain
+  });
 }
 
 function topInteractiveOverlayAt(overlayCells, startX, startY, wx, wy) {
-  if (!overlayCells) {
-    return null;
-  }
-  const gx = wx - startX;
-  const gy = wy - startY;
-  if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
-    return null;
-  }
-  const list = overlayCells[(gy * VIEW_W) + gx];
-  if (!list || list.length === 0) {
-    return null;
-  }
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    const e = list[i];
-    if (e.sourceX === wx && e.sourceY === wy && e.sourceType === "main") {
-      return e;
-    }
-  }
-  return null;
+  return topInteractiveOverlayAtModel(overlayCells, VIEW_W, VIEW_H, startX, startY, wx, wy);
 }
 
 function measureActorOcclusionParity(overlayCells, startX, startY, viewCtx, entities) {
-  if (!overlayCells || !entities || entities.length === 0) {
-    return 0;
-  }
-  let mismatches = 0;
-  for (const e of entities) {
-    if (viewCtx && !viewCtx.visibleAtWorld(e.x, e.y)) {
-      continue;
-    }
-    const gx = e.x - startX;
-    const gy = e.y - startY;
-    if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
-      continue;
-    }
-    const list = overlayCells[(gy * VIEW_W) + gx];
-    if (!list || list.length === 0) {
-      continue;
-    }
-    const hasOccluder = list.some((entry) => entry.occluder);
-    const cellOpen = !viewCtx || viewCtx.openAtWorld(e.x, e.y);
-    if (cellOpen && hasOccluder) {
-      mismatches += 1;
-    }
-  }
-  return mismatches;
+  return measureActorOcclusionParityModel(overlayCells, VIEW_W, VIEW_H, startX, startY, viewCtx, entities);
 }
 
 function drawTileGrid() {

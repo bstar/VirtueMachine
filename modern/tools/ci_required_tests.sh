@@ -14,6 +14,7 @@ required_tests=(
   sim_core_command_envelope_test
   sim_core_replay_checkpoints_test
   tools_compare_checkpoints_test
+  client_web_render_composition_test
 )
 
 for t in "${required_tests[@]}"; do

@@ -133,7 +133,7 @@ This checklist is intentionally mutable.
 - `[x]` Prevent NPC movement into occluded/unseen cells and add occlusion-block debug telemetry
 - `[x]` Add renderer parity telemetry for actor-vs-occluder transitions and shared object-coordinate interaction probe source
 - `[x]` Ensure interaction probes use the same object layer coordinates as renderer
-- `[ ]` Add regression cases for corner/edge overlaps and transparency correctness
+- `[x]` Add regression cases for corner/edge overlaps and transparency correctness
 
 #### Slice R3: Interactive Container Props and Visual State
 
@@ -176,4 +176,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Complete remaining R2 hardening: land deterministic regression fixtures for corner/edge overlap + transparency behavior and close the interaction probe parity item.
+Start R3 interactive visual state: wire first world-state-backed open/closed prop variant (door) with deterministic replay coverage.
