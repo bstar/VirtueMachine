@@ -1,0 +1,3 @@
+[submodule "legacy/u6-decompiled"]
+	path = legacy/u6-decompiled
+	url = https://github.com/ergonomy-joe/u6-decompiled.git

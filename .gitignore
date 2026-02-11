@@ -1,0 +1,17 @@
+# OS/editor
+.DS_Store
+*.swp
+*.swo
+
+# Build outputs
+build/
+dist/
+out/
+tmp/
+.cache/
+
+# Node
+node_modules/
+
+# Logs
+*.log
