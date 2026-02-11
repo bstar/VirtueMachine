@@ -8,6 +8,30 @@ VirtueMachine is a modern browser-port workspace for Ultima VI, with legacy prov
 - `docs/`: architecture, findings, and development plan
 - `modern/`: all new implementation code and tooling
 
+## Macro Milestones
+
+Status legend: `complete`, `in progress`, `next`.
+
+Completed:
+
+- `M0` Documentation Foundation (`complete`)
+- `M1` Deterministic Runtime Skeleton (`complete`)
+- `M3` Playable Single-Player Vertical Slice (`complete`)
+
+In progress:
+
+- `M2` World State and Persistence Slice (`in progress`)
+- `M4` Gameplay Parity Expansion (`in progress`)
+
+Next:
+
+- `R1-R4` Rendering Layer Parity plan (`next`, current 90-day execution focus)
+- `M5` Multiplayer Prototype (`next`, after rendering parity stabilization)
+
+For the live, mutable checklist and current slice-by-slice status, see:
+
+- `docs/progress.md`
+
 ## Legacy Source Provenance
 
 The legacy submodule tracks the original decompiled project:
@@ -73,6 +97,12 @@ Run the first web rendering prototype:
 ```bash
 ./modern/tools/dev_web.sh
 ```
+
+## Progress Snapshot
+
+Latest in-engine web renderer progress (throne room parity slice):
+
+![VirtueMachine web renderer progress snapshot](docs/assets/screenshots/2026-02-11-throne-room-progress.png)
 
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
