@@ -9,3 +9,11 @@ set(CMAKE_C_EXTENSIONS OFF)
 enable_testing()
 
 add_subdirectory(modern/sim-core)
+
+find_program(BASH_PROGRAM bash)
+if(BASH_PROGRAM)
+  add_test(
+    NAME tools_compare_checkpoints_test
+    COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_compare_checkpoints.sh
+  )
+endif()

@@ -36,6 +36,8 @@ typedef struct SimWorldState SimWorldState;
 typedef struct SimCommand {
   uint32_t tick;
   SimCommandType type;
+  uint8_t actor_id;
+  uint8_t cmd_flags;
   int32_t arg0;
   int32_t arg1;
 } SimCommand;

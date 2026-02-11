@@ -80,5 +80,7 @@ Persistence API hardening:
 Command pipeline and replay tooling baseline:
 
 - fixed-size command wire envelope (for client/network ingestion boundary)
+- envelope metadata now carries `actor_id` and command flags in reserved bytes
 - command stream decode helper with strict validation
 - replay checkpoint log writer (`tick,hash`) for deterministic scenario comparison
+- peer checkpoint comparer CLI: `modern/tools/compare_checkpoints.sh`

@@ -392,8 +392,9 @@ int sim_command_serialize(const SimCommand *cmd, uint8_t *out, size_t out_size) 
 
   write_u32_le(out + 0, cmd->tick);
   out[4] = (uint8_t)cmd->type;
-  out[5] = 0;
-  write_u16_le(out + 6, 0);
+  out[5] = cmd->actor_id;
+  out[6] = cmd->cmd_flags;
+  out[7] = 0;
   write_i32_le(out + 8, cmd->arg0);
   write_i32_le(out + 12, cmd->arg1);
   return 0;
@@ -409,6 +410,8 @@ int sim_command_deserialize(SimCommand *cmd, const uint8_t *in, size_t in_size) 
 
   cmd->tick = read_u32_le(in + 0);
   cmd->type = (SimCommandType)in[4];
+  cmd->actor_id = in[5];
+  cmd->cmd_flags = in[6];
   cmd->arg0 = read_i32_le(in + 8);
   cmd->arg1 = read_i32_le(in + 12);
   if ((int)cmd->type < (int)SIM_CMD_NOP || (int)cmd->type > (int)SIM_CMD_RNG_POKE) {

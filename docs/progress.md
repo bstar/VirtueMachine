@@ -8,7 +8,7 @@ Last Updated: 2026-02-11
 - `[x]` M1: Deterministic Runtime Skeleton
 - `[~]` M2: World State and Persistence Slice
 - `[x]` M3: Playable Single-Player Vertical Slice
-- `[ ]` M4: Gameplay Parity Expansion
+- `[~]` M4: Gameplay Parity Expansion
 - `[ ]` M5: Multiplayer Prototype
 
 Legend:
@@ -105,9 +105,9 @@ This checklist is intentionally mutable.
 
 #### Slice M4.3: Multiplayer Readiness (Pre-M5)
 
-- `[ ]` Define network-neutral command envelope (tick, actor, command, args)
-- `[ ]` Add serialization/deserialization tests for command envelopes
-- `[ ]` Add desync detector utility comparing checkpoint hashes between peers
+- `[x]` Define network-neutral command envelope (tick, actor, command, args)
+- `[x]` Add serialization/deserialization tests for command envelopes
+- `[x]` Add desync detector utility comparing checkpoint hashes between peers
 
 #### Slice M4.4: Quality Gates and CI Expansion
 
@@ -121,8 +121,9 @@ This checklist is intentionally mutable.
 - `[x]` Complete M3.4 (playable walkaround demo)
 - `[x]` Complete M4.1 (object/NPC data surface)
 - `[x]` Complete M4.2 (interaction + basic dialogue path)
-- `[ ]` Start M4.3 (multiplayer readiness prework)
-- `[ ]` Define actor-aware command envelope variant and checksum fixtures
+- `[x]` Start M4.3 (multiplayer readiness prework)
+- `[x]` Define actor-aware command envelope variant and checksum fixtures
+- `[x]` Add peer checkpoint hash comparator CLI + automated test
 
 ## Known Blockers / Risks
 
@@ -134,4 +135,4 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Implement `M4 Slice 3`: network-neutral command envelope and desync-check utility baseline.
+Implement `M4 Slice 4`: CI replay regression pack and hash-log artifacts.
