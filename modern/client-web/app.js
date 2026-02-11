@@ -1669,6 +1669,22 @@ function drawTileGrid() {
     }
     list.unshift(entry);
   };
+  const drawEntityTile = (tileId, gx, gy) => {
+    if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+      return;
+    }
+    const wx = startX + gx;
+    const wy = startY + gy;
+    if (viewCtx && !viewCtx.visibleAtWorld(wx, wy)) {
+      return;
+    }
+    const px = gx * TILE_SIZE;
+    const py = gy * TILE_SIZE;
+    const ep = paletteForTile(tileId);
+    const ek = paletteKeyForTile(tileId);
+    const ec = state.tileSet.tileCanvas(tileId, ep, ek);
+    ctx.drawImage(ec, px, py, TILE_SIZE, TILE_SIZE);
+  };
 
   let centerTile = 0;
   let centerRawTile = 0;
@@ -1762,6 +1778,32 @@ function drawTileGrid() {
       }
     }
   }
+  if (state.tileSet && state.entityLayer) {
+    const entities = state.entityLayer.entitiesInView(startX, startY, state.sim.world.map_z, VIEW_W, VIEW_H);
+    for (const e of entities) {
+      if (viewCtx && !viewCtx.visibleAtWorld(e.x, e.y)) {
+        continue;
+      }
+      const gx = e.x - startX;
+      const gy = e.y - startY;
+      if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+        continue;
+      }
+      const animEntityTile = resolveAnimatedObjectTile(e);
+      drawEntityTile(animEntityTile, gx, gy);
+      const tf = state.tileFlags ? (state.tileFlags[animEntityTile & 0x7ff] ?? 0) : 0;
+      if (tf & 0x80) {
+        drawEntityTile(animEntityTile - 1, gx - 1, gy);
+        if (tf & 0x40) {
+          drawEntityTile(animEntityTile - 2, gx, gy - 1);
+          drawEntityTile(animEntityTile - 3, gx - 1, gy - 1);
+        }
+      } else if (tf & 0x40) {
+        drawEntityTile(animEntityTile - 1, gx, gy - 1);
+      }
+      entityCount += 1;
+    }
+  }
   if (overlayCells && state.tileSet) {
     for (let gy = 0; gy < VIEW_H; gy += 1) {
       for (let gx = 0; gx < VIEW_W; gx += 1) {
@@ -1785,27 +1827,6 @@ function drawTileGrid() {
           }
         }
       }
-    }
-  }
-  if (state.tileSet && state.entityLayer) {
-    const entities = state.entityLayer.entitiesInView(startX, startY, state.sim.world.map_z, VIEW_W, VIEW_H);
-    for (const e of entities) {
-      if (viewCtx && !viewCtx.visibleAtWorld(e.x, e.y)) {
-        continue;
-      }
-      const gx = e.x - startX;
-      const gy = e.y - startY;
-      if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
-        continue;
-      }
-      const px = gx * TILE_SIZE;
-      const py = gy * TILE_SIZE;
-      const animEntityTile = resolveAnimatedObjectTile(e);
-      const ep = paletteForTile(animEntityTile);
-      const ek = paletteKeyForTile(animEntityTile);
-      const ec = state.tileSet.tileCanvas(animEntityTile, ep, ek);
-      ctx.drawImage(ec, px, py, TILE_SIZE, TILE_SIZE);
-      entityCount += 1;
     }
   }
   state.objectOverlayCount = overlayCount;
