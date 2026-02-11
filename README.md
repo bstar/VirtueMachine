@@ -31,6 +31,16 @@ git submodule status
 3. Implement modern systems only under `modern/`.
 4. Run policy checks to ensure legacy remains pristine.
 
+## Nix Development Shell
+
+This repo includes a Nix flake for reproducible tooling.
+
+```bash
+nix develop
+```
+
+Included tools: `clang`, `cmake`, `ninja`, `pkg-config`, `python3`, `nodejs`, `ripgrep`, shell tooling.
+
 ## Assets (Untracked)
 
 Original game assets are not committed. Keep them outside the repo (or under ignored `local/`).
