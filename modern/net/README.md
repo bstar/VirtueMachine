@@ -78,6 +78,7 @@ Public:
 
 - `GET /health`
 - `POST /api/auth/login`
+- `POST /api/auth/change-password`
 - `GET /api/auth/recover-password?username=<name>&email=<addr>`
 
 Authenticated (Bearer token):

@@ -126,6 +126,11 @@ const statNetPlayers = document.getElementById("statNetPlayers");
 const statCriticalRecoveries = document.getElementById("statCriticalRecoveries");
 const topTimeOfDay = document.getElementById("topTimeOfDay");
 const topNetStatus = document.getElementById("topNetStatus");
+const netQuickStatus = document.getElementById("netQuickStatus");
+const netAccountOpenButton = document.getElementById("netAccountOpenButton");
+const netAccountModal = document.getElementById("netAccountModal");
+const netAccountModalBackdrop = document.getElementById("netAccountModalBackdrop");
+const netAccountCloseButton = document.getElementById("netAccountCloseButton");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
@@ -144,9 +149,12 @@ const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 const captureWorldHudButton = document.getElementById("captureWorldHudButton");
 const netApiBaseInput = document.getElementById("netApiBaseInput");
+const netAccountSelect = document.getElementById("netAccountSelect");
 const netUsernameInput = document.getElementById("netUsernameInput");
 const netPasswordInput = document.getElementById("netPasswordInput");
 const netPasswordToggleButton = document.getElementById("netPasswordToggleButton");
+const netNewPasswordInput = document.getElementById("netNewPasswordInput");
+const netChangePasswordButton = document.getElementById("netChangePasswordButton");
 const netCharacterNameInput = document.getElementById("netCharacterNameInput");
 const netEmailInput = document.getElementById("netEmailInput");
 const netEmailCodeInput = document.getElementById("netEmailCodeInput");
@@ -155,8 +163,6 @@ const netRecoverButton = document.getElementById("netRecoverButton");
 const netSetEmailButton = document.getElementById("netSetEmailButton");
 const netSendVerifyButton = document.getElementById("netSendVerifyButton");
 const netVerifyEmailButton = document.getElementById("netVerifyEmailButton");
-const netTabButtons = Array.from(document.querySelectorAll("[data-net-tab-button]"));
-const netTabPanels = Array.from(document.querySelectorAll("[data-net-tab-panel]"));
 const netSaveButton = document.getElementById("netSaveButton");
 const netLoadButton = document.getElementById("netLoadButton");
 const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
@@ -179,8 +185,8 @@ const NET_PASSWORD_VISIBLE_KEY = "vm_net_password_visible";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
 const NET_EMAIL_KEY = "vm_net_email";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
-const NET_TAB_KEY = "vm_net_tab";
-const NET_TABS = Object.freeze(["account", "recovery", "verify"]);
+const NET_PROFILES_KEY = "vm_net_profiles";
+const NET_PROFILE_SELECTED_KEY = "vm_net_profile_selected";
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
   cornerTL: 0x1b0,
@@ -2120,7 +2126,138 @@ function setNetStatus(level, text) {
   if (topNetStatus) {
     topNetStatus.textContent = `${lvl} - ${msg}`;
   }
+  if (netQuickStatus) {
+    netQuickStatus.textContent = isNetAuthenticated() ? "Account: Signed in" : "Account: Signed out";
+  }
   updateNetAuthButton();
+}
+
+function profileKey(profile) {
+  const apiBase = String(profile?.apiBase || "").trim().toLowerCase();
+  const username = String(profile?.username || "").trim().toLowerCase();
+  return `${apiBase}|${username}`;
+}
+
+function sanitizeProfile(profile) {
+  const apiBase = String(profile?.apiBase || "").trim();
+  const username = String(profile?.username || "").trim().toLowerCase();
+  if (!apiBase || !username) {
+    return null;
+  }
+  return {
+    apiBase,
+    username,
+    password: String(profile?.password || ""),
+    characterName: String(profile?.characterName || "Avatar").trim() || "Avatar",
+    email: String(profile?.email || "").trim().toLowerCase()
+  };
+}
+
+function loadNetProfiles() {
+  try {
+    const raw = localStorage.getItem(NET_PROFILES_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    for (const row of arr) {
+      const p = sanitizeProfile(row);
+      if (p) out.push(p);
+    }
+    return out;
+  } catch (_err) {
+    return [];
+  }
+}
+
+function saveNetProfiles(profiles) {
+  try {
+    localStorage.setItem(NET_PROFILES_KEY, JSON.stringify(profiles));
+  } catch (_err) {
+    // ignore storage failures
+  }
+}
+
+function setSelectedProfileKey(key) {
+  try {
+    localStorage.setItem(NET_PROFILE_SELECTED_KEY, String(key || ""));
+  } catch (_err) {
+    // ignore storage failures
+  }
+}
+
+function getSelectedProfileKey() {
+  try {
+    return String(localStorage.getItem(NET_PROFILE_SELECTED_KEY) || "");
+  } catch (_err) {
+    return "";
+  }
+}
+
+function populateNetAccountSelect() {
+  if (!netAccountSelect) {
+    return [];
+  }
+  const profiles = loadNetProfiles();
+  const selected = getSelectedProfileKey();
+  netAccountSelect.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = profiles.length ? "Select saved account..." : "No saved accounts yet";
+  netAccountSelect.appendChild(placeholder);
+  for (const p of profiles) {
+    const opt = document.createElement("option");
+    opt.value = profileKey(p);
+    opt.textContent = `${p.username} @ ${p.apiBase}`;
+    if (opt.value === selected) {
+      opt.selected = true;
+    }
+    netAccountSelect.appendChild(opt);
+  }
+  return profiles;
+}
+
+function applyNetProfile(profile) {
+  const p = sanitizeProfile(profile);
+  if (!p) {
+    return false;
+  }
+  if (netApiBaseInput) netApiBaseInput.value = p.apiBase;
+  if (netUsernameInput) netUsernameInput.value = p.username;
+  if (netPasswordInput) netPasswordInput.value = p.password;
+  if (netCharacterNameInput) netCharacterNameInput.value = p.characterName;
+  if (netEmailInput) netEmailInput.value = p.email;
+  setSelectedProfileKey(profileKey(p));
+  return true;
+}
+
+function upsertNetProfileFromInputs() {
+  const p = sanitizeProfile({
+    apiBase: netApiBaseInput?.value,
+    username: netUsernameInput?.value,
+    password: netPasswordInput?.value,
+    characterName: netCharacterNameInput?.value,
+    email: netEmailInput?.value
+  });
+  if (!p) {
+    return;
+  }
+  const key = profileKey(p);
+  const profiles = loadNetProfiles().filter((row) => profileKey(row) !== key);
+  profiles.unshift(p);
+  while (profiles.length > 12) {
+    profiles.pop();
+  }
+  saveNetProfiles(profiles);
+  setSelectedProfileKey(key);
+  populateNetAccountSelect();
+  if (netAccountSelect) {
+    netAccountSelect.value = key;
+  }
+}
+
+function hasMultipleSavedAccounts() {
+  return loadNetProfiles().length > 1;
 }
 
 function resetBackgroundNetFailures() {
@@ -2288,6 +2425,7 @@ async function netLogin() {
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
+  upsertNetProfileFromInputs();
 }
 
 async function netSetEmail() {
@@ -2311,6 +2449,7 @@ async function netSetEmail() {
   } catch (_err) {
     // ignore storage failures
   }
+  upsertNetProfileFromInputs();
   setNetStatus("online", state.net.emailVerified ? "Email verified" : "Email set (verification required)");
   return out;
 }
@@ -2366,6 +2505,46 @@ async function netRecoverPassword() {
   setNetStatus("connecting", "Sending password recovery email...");
   const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}`, { method: "GET" }, false);
   setNetStatus("online", `Recovery email sent for ${out?.user?.username || username}`);
+  return out;
+}
+
+async function netChangePassword() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  const oldPassword = String(netPasswordInput?.value || "");
+  const newPassword = String(netNewPasswordInput?.value || "");
+  if (!oldPassword) {
+    throw new Error("Current password is required");
+  }
+  if (!newPassword) {
+    throw new Error("New password is required");
+  }
+  if (newPassword === oldPassword) {
+    throw new Error("New password must be different");
+  }
+  setNetStatus("sync", "Updating account password...");
+  const out = await netRequest("/api/auth/change-password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      old_password: oldPassword,
+      new_password: newPassword
+    })
+  }, true);
+  if (netPasswordInput) {
+    netPasswordInput.value = newPassword;
+  }
+  if (netNewPasswordInput) {
+    netNewPasswordInput.value = "";
+  }
+  try {
+    localStorage.setItem(NET_PASSWORD_KEY, newPassword);
+  } catch (_err) {
+    // ignore storage failures
+  }
+  upsertNetProfileFromInputs();
+  setNetStatus("online", "Password updated");
   return out;
 }
 
@@ -2574,23 +2753,13 @@ async function netPollWorldClock() {
   }
 }
 
-function setNetHeaderTab(tabId) {
-  const nextTab = NET_TABS.includes(tabId) ? tabId : NET_TABS[0];
-  for (const btn of netTabButtons) {
-    const active = String(btn.dataset.netTabButton || "") === nextTab;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-pressed", active ? "true" : "false");
+function setAccountModalOpen(open) {
+  if (!netAccountModal) {
+    return;
   }
-  for (const panel of netTabPanels) {
-    const active = String(panel.dataset.netTabPanel || "") === nextTab;
-    panel.hidden = !active;
-    panel.classList.toggle("is-active", active);
-  }
-  try {
-    localStorage.setItem(NET_TAB_KEY, nextTab);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const visible = !!open;
+  netAccountModal.classList.toggle("hidden", !visible);
+  netAccountModal.setAttribute("aria-hidden", visible ? "false" : "true");
 }
 
 function initNetPanel() {
@@ -2601,7 +2770,6 @@ function initNetPanel() {
   let savedPassVisible = "off";
   let savedChar = "Avatar";
   let savedMaintenance = "off";
-  let savedNetTab = NET_TABS[0];
   try {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
@@ -2610,7 +2778,6 @@ function initNetPanel() {
     savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
     savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
-    savedNetTab = localStorage.getItem(NET_TAB_KEY) || savedNetTab;
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
@@ -2635,6 +2802,14 @@ function initNetPanel() {
   if (netCharacterNameInput) {
     netCharacterNameInput.value = savedChar;
   }
+  populateNetAccountSelect();
+  if (netAccountSelect && netAccountSelect.value) {
+    const key = netAccountSelect.value;
+    const profile = loadNetProfiles().find((row) => profileKey(row) === key);
+    if (profile) {
+      applyNetProfile(profile);
+    }
+  }
   state.net.apiBase = savedBase;
   state.net.username = savedUser;
   state.net.email = savedEmail;
@@ -2647,6 +2822,18 @@ function initNetPanel() {
         localStorage.setItem(NET_API_BASE_KEY, String(netApiBaseInput.value || ""));
       } catch (_err) {
         // ignore storage failures
+      }
+    });
+  }
+  if (netAccountSelect) {
+    netAccountSelect.addEventListener("change", () => {
+      const key = String(netAccountSelect.value || "");
+      if (!key) {
+        return;
+      }
+      const profile = loadNetProfiles().find((row) => profileKey(row) === key);
+      if (profile) {
+        applyNetProfile(profile);
       }
     });
   }
@@ -2715,11 +2902,17 @@ function initNetPanel() {
   updateNetSessionStat();
   updateCriticalRecoveryStat();
   updateNetAuthButton();
-  setNetHeaderTab(savedNetTab);
-  for (const btn of netTabButtons) {
-    btn.addEventListener("click", () => {
-      setNetHeaderTab(String(btn.dataset.netTabButton || NET_TABS[0]));
+  if (netAccountOpenButton) {
+    netAccountOpenButton.addEventListener("click", () => {
+      populateNetAccountSelect();
+      setAccountModalOpen(true);
     });
+  }
+  if (netAccountCloseButton) {
+    netAccountCloseButton.addEventListener("click", () => setAccountModalOpen(false));
+  }
+  if (netAccountModalBackdrop) {
+    netAccountModalBackdrop.addEventListener("click", () => setAccountModalOpen(false));
   }
 
   if (netLoginButton) {
@@ -2730,6 +2923,7 @@ function initNetPanel() {
       }
       try {
         await netLogin();
+        setAccountModalOpen(false);
         diagBox.className = "diag ok";
         diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
       } catch (err) {
@@ -2791,6 +2985,19 @@ function initNetPanel() {
         setNetStatus("error", `Verify email failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Verify email failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netChangePasswordButton) {
+    netChangePasswordButton.addEventListener("click", async () => {
+      try {
+        await netChangePassword();
+        diagBox.className = "diag ok";
+        diagBox.textContent = "Account password updated.";
+      } catch (err) {
+        setNetStatus("error", `Change password failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Change password failed: ${String(err.message || err)}`;
       }
     });
   }
@@ -5252,6 +5459,13 @@ async function loadRuntimeAssets() {
 }
 
 window.addEventListener("keydown", (ev) => {
+  if (netAccountModal && !netAccountModal.classList.contains("hidden")) {
+    if (ev.key === "Escape") {
+      setAccountModalOpen(false);
+      ev.preventDefault();
+    }
+    return;
+  }
   if (isTypingContext(ev.target)) {
     return;
   }
@@ -5316,6 +5530,13 @@ window.addEventListener("keydown", (ev) => {
     if (isNetAuthenticated()) {
       netLogout();
     } else {
+      if (hasMultipleSavedAccounts()) {
+        populateNetAccountSelect();
+        setAccountModalOpen(true);
+        setNetStatus("idle", "Choose an account in Account Setup, then login.");
+        ev.preventDefault();
+        return;
+      }
       netLogin().then(() => {
         diagBox.className = "diag ok";
         diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;

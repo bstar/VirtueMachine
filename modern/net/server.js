@@ -877,6 +877,48 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/auth/change-password") {
+    const user = requireUser(state, req, res);
+    if (!user) {
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const oldPassword = String(body && body.old_password || "");
+    const newPassword = String(body && body.new_password || "");
+    if (!oldPassword) {
+      sendError(res, 400, "bad_old_password", "old_password is required");
+      return;
+    }
+    if (!newPassword) {
+      sendError(res, 400, "bad_new_password", "new_password is required");
+      return;
+    }
+    if (String(user.password_plaintext || "") !== oldPassword) {
+      sendError(res, 401, "auth_invalid", "invalid old password");
+      return;
+    }
+    if (oldPassword === newPassword) {
+      sendError(res, 409, "password_unchanged", "new password must differ from old password");
+      return;
+    }
+    user.password_plaintext = newPassword;
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      user: {
+        user_id: user.user_id,
+        username: user.username
+      }
+    });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/recover-password") {
     const username = normalizeUsername(url.searchParams.get("username") || "");
     const email = normalizeEmail(url.searchParams.get("email") || "");
@@ -906,7 +948,12 @@ const server = http.createServer(async (req, res) => {
       delivery = await deliverEmail(
         email,
         "VirtueMachine Password Recovery",
-        `Your VirtueMachine password is: ${String(user.password_plaintext || "")}`,
+        [
+          `Your VirtueMachine password is: ${String(user.password_plaintext || "")}`,
+          "",
+          "Security notice: this prototype intentionally does not store passwords securely.",
+          "Do not reuse any important or personal password here."
+        ].join("\n"),
         { user_id: user.user_id, template: "recover_password" }
       );
     } catch (err) {

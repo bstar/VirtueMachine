@@ -129,6 +129,31 @@ async function main() {
     assert.equal(verifyEmail.status, 200);
     assert.equal(verifyEmail.body?.user?.email_verified, true);
 
+    const changePassword = await jsonFetch(baseUrl, "/api/auth/change-password", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        old_password: "quest123",
+        new_password: "quest456"
+      })
+    });
+    assert.equal(changePassword.status, 200);
+    assert.equal(changePassword.body?.ok, true);
+
+    const oldPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "avatar", password: "quest123" })
+    });
+    assert.equal(oldPasswordLogin.status, 401);
+
+    const newPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "avatar", password: "quest456" })
+    });
+    assert.equal(newPasswordLogin.status, 200);
+
     const recovered = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
       method: "GET"
     });
