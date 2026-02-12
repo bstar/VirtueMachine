@@ -13,6 +13,11 @@ Minimal browser client prototype:
 - optional self-hosted retro fonts (`modern/client-web/fonts/README.md`)
 - viewport tile grid toggle (off by default; saved in browser `localStorage`)
 - overlay debug labels toggle (off by default; saved in browser `localStorage`)
+- net backend panel for login/password recovery and remote save/load snapshot flow
+- account rename flow (authenticated username change with current password)
+- live multiplayer presence preview (multiple tabs/users visible in world view)
+- server-authoritative clock sync (authenticated clients poll net clock for tick/time/date)
+- critical-item maintenance controls (manual run + optional auto cadence)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
 - first-pass legacy entity/NPC overlay layer from `savegame/objlist` actor records
@@ -78,8 +83,12 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `O`: toggle overlay debug tile labels
 - `F`: toggle animated tile freeze/live phase
 - `B`: toggle legacy palette FX (fire/water color cycling)
+- `I`: net login using panel credentials
 - `G`: jump to selected canonical capture preset
 - `P`: capture viewport PNG
+- `Y`: save current sim snapshot to net backend
+- `U`: load current character snapshot from net backend
+- `N`: run critical-item maintenance now
 - `V`: run replay determinism verification (sim + animation checkpoints) and produce downloadable checkpoints CSV
 
 Useful parity presets:

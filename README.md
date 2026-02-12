@@ -26,6 +26,8 @@ In progress:
 Next:
 
 - `R1-R4` Rendering Layer Parity plan (`next`, current 90-day execution focus)
+- `R5` Startup/Menu parity (`next`, implementation landed; screenshot-pair validation pending)
+- `R6` Legacy cursor parity (`next`, implementation landed; mode mapping polish pending)
 - `M5` Multiplayer Prototype (`next`, after rendering parity stabilization)
 
 For the live, mutable checklist and current slice-by-slice status, see:
@@ -106,6 +108,11 @@ R1 canonical parity captures (web renderer):
 - Fire palette-cycling composition (`360,397,0`)
 - Wheel tile-remap animation composition (`307,384,0`)
 
+Recently landed:
+
+- R5 startup/title in-engine flow using decoded legacy assets (`titles.shp`, `mainmenu.shp`) with palette-highlight menu behavior.
+- Journey-only startup action with direct throne-room entry and `Q` return-to-title path.
+- R6 legacy cursor integration (`u6mcga.ptr`) rendered in-engine across title/game views with layer-aware placement.
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
 - `docs/policies/sandbox-escalation-policy.md`

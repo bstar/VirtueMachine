@@ -1,6 +1,6 @@
 # Project Progress Checklist
 
-Last Updated: 2026-02-11
+Last Updated: 2026-02-12
 
 ## Milestone Status
 
@@ -38,145 +38,123 @@ This checklist is intentionally mutable.
 - `[x]` Added legacy `objlist` compatibility boundary + tests (`2af67ea`)
 - `[x]` Added one-command test runner + CI build/test workflow (`4919a2b`)
 
-## 90-Day Execution Plan (Slice-Based)
+## 90-Day Plan (Status-Reconciled)
 
-### Month 1 (Weeks 1-4): Finish M2 Foundations
+### M2 Foundations
 
-#### Slice M2.3: Map/Chunk Read Compatibility (Read-Only)
+- `[x]` Map/chunk read compatibility (read-only)
+- `[x]` Deterministic time/calendar semantics
+- `[x]` Persistence API hardening
+- `[~]` Shared authority boundary cleanup:
+  - remove duplicated client-side decode/logic where sim-core should own it
+  - keep deterministic replay/checkpoint behavior stable during migration
 
-- `[x]` Add `u6_map` module (`modern/sim-core/include/u6_map.h`, `modern/sim-core/src/u6_map.c`)
-- `[x]` Implement `map` file open/close and tile read API with bounds checks
-- `[x]` Implement `chunks` file read API with chunk index validation
-- `[x]` Add fixture-based tests (small synthetic binaries, no proprietary assets)
-- `[x]` Document offset/index assumptions in `docs/research/legacy-findings.md`
+### M3 Vertical Slice
 
-#### Slice M2.4: Deterministic Time/Clock Semantics
+- `[x]` Command pipeline + core loop integration
+- `[x]` Minimal web client scaffolding
+- `[x]` Runtime asset validation + fallback diagnostics
+- `[x]` Playable deterministic walkaround demo
 
-- `[x]` Define authoritative tick-to-time policy for minute/hour/day progression
-- `[x]` Add regression tests for rollover behavior (minute->hour->day->month)
-- `[x]` Document intended parity gaps (if any) in `docs/architecture/new/sim-core-contract.md`
+### M4 Gameplay Parity Expansion
 
-#### Slice M2.5: Persistence API Hardening
+- `[x]` Static object layer from legacy save data (`objblk`, `objlist`)
+- `[x]` Animated tiles (water/fire/wheels) with deterministic phase control
+- `[x]` Interaction baseline (avatar mode, door toggle, collision behavior)
+- `[x]` NPC render + deterministic movement pilot + occlusion guards
+- `[~]` Rendering parity hardening:
+  - keep `current` and `nuvie` feature-gated paths
+  - retain deferred wall/corner blackout hardening slice
 
-- `[x]` Add versioned state blob header for modern snapshots
-- `[x]` Add malformed/corrupt snapshot tests
-- `[x]` Add explicit error codes and failure-path tests for all persistence functions
+### M5 Multiplayer
 
-### Month 2 (Weeks 5-8): Reach First Playable Vertical Slice (M3)
+- `[x]` Network-neutral command envelope groundwork
+- `[x]` Peer checkpoint hash comparison utility
+- `[~]` Auth + remote character persistence contract defined (`docs/architecture/new/multiplayer-state-contract.md`)
+- `[~]` Critical quest-item recovery/respawn policy defined for server authority (DEC-0003)
+- `[ ]` Live synchronized multiplayer prototype
 
-#### Slice M3.1: Command Pipeline and Core Loop Integration
+## Rendering Parity Track
 
-- `[x]` Define stable command schema for movement/interact/wait
-- `[x]` Implement command queue ingestion boundary between client and sim-core
-- `[x]` Add replay logs with deterministic checkpoint hashes every N ticks
+### R1: Static Layer Content
 
-#### Slice M3.2: Minimal Web Client Scaffolding
+- `[x]` Read and render static world object layer
+- `[x]` Deterministic ordering rules and debug telemetry
+- `[~]` Canonical parity capture set:
+  - web captures are present
+  - legacy-reference side-by-side set still incomplete
 
-- `[x]` Scaffold `modern/client-web` app shell and runtime loop
-- `[x]` Render tile grid viewport fed only by sim-core snapshot data
-- `[x]` Add camera transform supporting larger world view area
-- `[x]` Add input mapping (keyboard first) to simulation commands
+### R2: Occlusion and Boundary Composition
 
-#### Slice M3.3: Asset Pipeline Integration
+- `[x]` Composition/overlay model unification for render + interaction probes
+- `[x]` Fixture-based regression tests for composition semantics
+- `[~]` Nuvie boundary reshape refactor:
+  - scaffolded and feature-gated
+  - final acceptance and default-mode decision pending
 
-- `[x]` Add runtime asset validation command (preflight)
-- `[x]` Wire map/chunk/tile reads from `modern/assets/runtime`
-- `[x]` Add fallback diagnostics UI for missing asset files
+### R3: Interactive Visual State Determinism
 
-#### Slice M3.4: Playable Walkaround Demo
+- `[x]` World-state-backed door/open-state visuals
+- `[ ]` Replay/hash fixture coverage explicitly validating interaction visual transitions
 
-- `[x]` Achieve movement on map with deterministic tick stepping
-- `[x]` Show current world time/date/map position in debug HUD
-- `[x]` Capture demo replay and verify hash stability between runs
+### R4: Tooling and CI Hardening
 
-### Month 3 (Weeks 9-12): M4 Early Parity + Multiplayer Prework
+- `[ ]` Map-sweep validator for unknown/missing sprite coverage
+- `[ ]` CI artifact publishing for parity screenshot/diff reports
+- `[ ]` Accepted parity-gap ledger for unresolved legacy ambiguities
 
-#### Slice M4.1: Object/NPC Data Surface
+### R5: Startup/Menu Recreation
 
-- `[x]` Introduce typed object/NPC state containers for a minimal subset
-- `[x]` Port first object placement/update rules with deterministic tests
-- `[x]` Add save/load tests for object subset roundtrip
+- `[x]` In-engine startup/title flow with journey path into throne room
+- `[x]` Keyboard + mouse menu navigation with disabled-option feedback
+- `[x]` Startup/title provenance documented against decompiled + ScummVM/Nuvie references
+- `[x]` Real `titles.shp` + `mainmenu.shp` decode/render path (palette-highlight behavior)
+- `[x]` `Q` return-to-title behavior during gameplay
+- `[ ]` Pixel-parity screenshot pair (legacy reference vs current startup/menu frame)
 
-#### Slice M4.2: Interaction + Basic Dialogue Path
+### R6: Legacy Cursor Parity
 
-- `[x]` Port one interaction flow (open/use/talk minimal path)
-- `[x]` Add deterministic script/dialogue execution test fixtures
-- `[x]` Document legacy-to-modern function mapping for this flow
-
-#### Slice M4.3: Multiplayer Readiness (Pre-M5)
-
-- `[x]` Define network-neutral command envelope (tick, actor, command, args)
-- `[x]` Add serialization/deserialization tests for command envelopes
-- `[x]` Add desync detector utility comparing checkpoint hashes between peers
-
-#### Slice M4.4: Quality Gates and CI Expansion
-
-- `[x]` Add CI job for replay regression pack
-- `[x]` Add CI artifact upload of replay/hash logs
-- `[x]` Set minimum required test set for merge to `main`
-
-### Next 90 Days (Reprioritized): Rendering Layer Parity First
-
-#### Slice R1: Static Object Layer Rendering (Doors/Fountains/Tables/Food)
-
-- `[x]` Identify and document legacy object placement source files/records for world map overlays
-- `[x]` Add read-only loader for static world object placements into `sim-core` data surface
-- `[x]` Render static object layer in `client-web` above terrain with deterministic ordering rules
-- `[x]` Add fixture tests for placement decode and draw-order determinism
-- `[ ]` Capture parity screenshots at known coordinates (legacy reference vs web client)
-
-#### Slice R2: Occlusion/Passability-Aware Composition
-
-- `[~]` Implement tile/object composition rules for doorway openings, wall edges, and overlap priority
-- `[ ]` Refactor wall-corner shaping into Nuvie-style boundary reshape pass (post-blackout, boundary-scoped)
-- `[x]` Land feature-gated render pipeline scaffold (`current` vs `nuvie`) with explicit base buffer stages and runtime toggle
-- `[x]` Add first-pass entity/NPC overlay render layer from legacy `savegame/objlist` actor records
-- `[x]` Add deterministic tick-driven NPC patrol motion pilot for humanoid actor subset
-- `[x]` Prevent NPC movement into occluded/unseen cells and add occlusion-block debug telemetry
-- `[x]` Add renderer parity telemetry for actor-vs-occluder transitions and shared object-coordinate interaction probe source
-- `[x]` Ensure interaction probes use the same object layer coordinates as renderer
-- `[x]` Add regression cases for corner/edge overlaps and transparency correctness
-
-#### Slice R3: Interactive Container Props and Visual State
-
-- `[x]` Add world-state-backed visual variants (e.g., opened/closed doors, empty/non-empty containers)
-- `[x]` Bind first interaction outcomes to layer sprite state transitions
-- `[ ]` Add replay/hash tests proving visual state transitions are deterministic
-
-#### Slice R4: Layer Parity Hardening and Tooling
-
-- `[ ]` Build a map sweep validator for missing/unknown object sprites in viewport samples
-- `[ ]` Add CI artifact upload for layer parity diff reports/screenshots
-- `[ ]` Document accepted parity gaps and unresolved legacy ambiguities
+- `[x]` Decode `u6mcga.ptr` via U6 LZW + libN item parsing path
+- `[x]` Engine-rendered custom cursor across title and in-session views
+- `[x]` Layer-aware cursor composition (world area vs menu/frame area)
+- `[x]` Cursor scaling/aspect tuned for current legacy-frame presentation
+- `[~]` Final pointer index/mode mapping:
+  - visually correct pointer now selected
+  - command/mode-specific cursor switching parity still pending
 
 ## Current Sprint Focus
 
-- `[x]` Complete M3.3 (asset pipeline integration)
-- `[x]` Complete M3.4 (playable walkaround demo)
-- `[x]` Complete M4.1 (object/NPC data surface)
-- `[x]` Complete M4.2 (interaction + basic dialogue path)
-- `[x]` Start M4.3 (multiplayer readiness prework)
-- `[x]` Define actor-aware command envelope variant and checksum fixtures
-- `[x]` Add peer checkpoint hash comparator CLI + automated test
-- `[x]` Complete M4.4 CI quality gates (required tests + replay artifact job)
-- `[x]` Start R1 static object layer rendering (doors/fountains/tables/food)
-- `[x]` Add canonical capture preset + PNG export tooling for parity screenshot workflow
-- `[x]` Add deterministic tick-driven animated tile phase + freeze/debug toggle + replay animation checkpoints
-- `[x]` Port legacy VGA fire/water palette cycling to deterministic web renderer path
-- `[x]` Add renderer debug stats (palette phase, center tile ids, palette band)
-- `[x]` Land first terrain+object parity screenshots from canonical locations
-- `[x]` Add shared overlay composition/parity telemetry for renderer + interaction probe coordinate consistency
-- `[x]` Add ghost/avatar control modes with avatar collision path and first door interaction toggle
+- `[x]` Complete startup/menu art parity implementation pass
+- `[x]` Complete in-engine legacy cursor integration pass
+- `[~]` Continue render parity stabilization with feature-gated `nuvie` path
+- `[ ]` Add deterministic tests for interaction visual-state transitions (R3)
+- `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
+- `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
 
 ## Known Blockers / Risks
 
-- `[~]` Exact legacy binary layout assumptions for full `savegame/objlist` still being validated
-- `[~]` Potential determinism drift if future subsystems introduce non-authoritative randomness or frame-time coupling
-- `[~]` Current browser renderer duplicates some map/chunk logic in JS pending shared sim-core boundary
-- `[ ]` Map/chunk format edge cases may require additional reverse-engineering passes
-- `[~]` Multiplayer implementation deferred; architecture decisions will be made incrementally when R1-R4 work exposes concrete needs
-- `[~]` Legacy object placement storage/encoding for world overlays still needs explicit mapping
+- `[~]` Full canonical title-menu ownership is split across assets/executable paths not entirely represented in released decompiled C source.
+- `[~]` Wall/corner/contextual blackout parity remains intentionally deferred to a dedicated hardening pass.
+- `[~]` Browser renderer still owns logic that should ultimately be centralized in sim-core authority boundaries.
+- `[ ]` Multiplayer remains deferred until rendering/interactions reach stable parity confidence.
+
+## Deferred Backlog (Intentional Pause)
+
+- `[ ]` Wall rendering parity hardening:
+  - doorway threshold floor precedence edge cases
+  - contextual wall variant/corner selection in adjacent rooms
+  - wall-adjacent decor suppression in blacked-out rooms
+  - canonical capture/compare evidence set before default mode flip
 
 ## Next Immediate Task
 
-Complete R3 determinism coverage: add replay/hash fixtures asserting door state transitions remain stable across repeated runs in avatar mode.
+Complete R5/R3 closure set:
+
+1. Capture startup/title parity screenshots against legacy references.
+2. Add deterministic interaction visual-state replay fixtures (doors/open states).
+3. Record any accepted startup/cursor parity gaps and lock default cursor mapping policy.
+
+Then start M5.2 backend seed:
+
+4. Implement minimal auth + character save/load endpoints (server-authoritative).
+5. Implement deterministic critical-item policy table and maintenance pass scaffold.

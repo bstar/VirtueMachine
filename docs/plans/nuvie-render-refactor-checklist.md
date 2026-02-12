@@ -1,6 +1,7 @@
 # Nuvie Render Refactor Checklist
 
 Date Started: 2026-02-11
+Last Reconciled: 2026-02-12
 Owner: VirtueMachine renderer slice
 Scope: `modern/client-web` map/visibility/wall/object composition path
 
@@ -26,9 +27,9 @@ Exit criteria:
 
 ### M2: Boundary Reshape Parity Pass (2-4 days)
 
-- `[ ]` Implement Nuvie-style boundary corner substitutions against blacked neighbors.
-- `[ ]` Restrict reshaping to validated wall families and add guardrails to avoid over-cornering.
-- `[ ]` Add probe-level diagnostics for raw vs blacked vs reshaped tile IDs.
+- `[x]` Implement Nuvie-style boundary corner substitutions against blacked neighbors.
+- `[~]` Restrict reshaping to validated wall families and add guardrails to avoid over-cornering.
+- `[x]` Add probe-level diagnostics for raw vs blacked vs reshaped tile IDs.
 
 Exit criteria:
 - No camera-driven wall morphing.
@@ -36,7 +37,7 @@ Exit criteria:
 
 ### M3: Object Visibility Parity at Boundaries (2-3 days)
 
-- `[ ]` Implement wall-adjacent object suppression rule (right/bottom black checks) in Nuvie mode.
+- `[x]` Implement wall-adjacent object suppression rule (right/bottom black checks) in Nuvie mode.
 - `[ ]` Validate decor/wall objects around doors and room transitions.
 - `[ ]` Keep interaction hit-testing and render composition aligned under this rule.
 
@@ -65,3 +66,6 @@ Exit criteria:
 - This is a rendering pipeline refactor, not a sim-core migration.
 - Multiplayer architecture remains out of scope for this checklist.
 - Fallback path must remain available until M4 sign-off.
+- Status update: wall parity work is intentionally paused and moved to deferred backlog while higher-priority gameplay slices continue.
+- Startup/menu and cursor parity work progressed in parallel under R5/R6 and is tracked in `docs/progress.md`.
+- `docs/progress.md` is the authoritative mutable priority board; this checklist remains the scoped tracker for the Nuvie wall/visibility refactor only.

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" data-theme="obsidian" data-layout="classic-right" data-font="sans">
+<html lang="en" data-theme="obsidian" data-font="sans" data-legacy-frame-preview="off">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>VirtueMachine | Web Debug View</title>
+    <title>VIRTUE MACHINE | Web Debug View</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,12 +15,21 @@
       <section class="h-full px-4 py-4">
         <div class="vm-main-shell h-full rounded p-4">
           <header class="vm-header mb-3 pb-3">
-            <h1 class="text-2xl font-bold tracking-tight">VirtueMachine</h1>
-            <p class="vm-muted-text mt-1 text-sm">Web Debug View</p>
-            <p class="mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
+            <h1 class="vm-game-title text-2xl font-bold tracking-tight">VIRTUE MACHINE</h1>
+            <p class="vm-game-subtitle mt-1 text-sm">Web Debug View</p>
+            <p class="vm-game-time mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
+            <p class="vm-game-time mt-1 text-sm">Net: <strong id="topNetStatus" class="font-semibold">idle - Not logged in.</strong></p>
           </header>
           <div class="h-[calc(100%-88px)] flex items-center justify-center">
-            <canvas id="viewport" width="704" height="704" class="vm-canvas max-h-full max-w-full rounded"></canvas>
+            <div class="vm-world-frame">
+              <div class="vm-world-inset">
+                <div id="legacyWorldSurface" class="vm-world-surface">
+                  <canvas id="legacyBackdrop" class="vm-legacy-backdrop" aria-hidden="true"></canvas>
+                  <canvas id="legacyViewport" class="vm-legacy-viewport" aria-hidden="true"></canvas>
+                  <canvas id="viewport" width="704" height="704" class="vm-canvas max-h-full max-w-full rounded"></canvas>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -49,11 +58,13 @@
           <div class="stat-row"><span>Palette Phase</span><strong id="statPalettePhase">-</strong></div>
           <div class="stat-row"><span>Center Tile IDs</span><strong id="statCenterTiles">-</strong></div>
           <div class="stat-row"><span>Center Palette Band</span><strong id="statCenterBand">-</strong></div>
+          <div class="stat-row"><span>Net Session</span><strong id="statNetSession">offline</strong></div>
+          <div class="stat-row"><span>Net Players</span><strong id="statNetPlayers">1</strong></div>
+          <div class="stat-row"><span>Critical Recoveries</span><strong id="statCriticalRecoveries">0</strong></div>
         </div>
 
         <div class="mt-4 space-y-3">
           <div class="control-block"><label for="themeSelect">Theme</label><select id="themeSelect" class="control-input"><option value="obsidian">Obsidian Codex</option><option value="phosphor">Phosphor CRT</option><option value="amber">Amber Terminal</option><option value="cga-cyan">CGA Cyan Steel</option><option value="cga-magenta">CGA Magenta Night</option><option value="parchment">Parchment Atlas</option><option value="cobalt">Cobalt Keep</option><option value="bloodstone">Bloodstone Banner</option><option value="moonstone">Moonstone Ledger</option><option value="ash">Ash Monolith</option></select></div>
-          <div class="control-block"><label for="layoutSelect">Interface</label><select id="layoutSelect" class="control-input"><option value="classic-right">Classic Right Rail</option><option value="classic-left">Classic Left Rail</option><option value="ledger-split">Ledger Split Panel</option><option value="ledger-compact">Ledger Compact Console</option><option value="ledger-focus">Ledger Focus Board</option></select></div>
           <div class="control-block"><label for="fontSelect">Body Font</label><select id="fontSelect" class="control-input"><option value="sans">Sans UI (Default)</option><option value="silkscreen">Silkscreen</option><option value="kaijuz">Kaijuz</option><option value="orangekid">Orange Kid</option><option value="blockblueprint">BlockBlueprint</option></select></div>
           <div class="control-block"><label for="gridToggle">Viewport Grid</label><select id="gridToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">On</option></select></div>
           <div class="control-block"><label for="debugOverlayToggle">Overlay Debug</label><select id="debugOverlayToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">On</option></select></div>
@@ -61,11 +72,36 @@
           <div class="control-block"><label for="paletteFxToggle">Legacy Palette FX</label><select id="paletteFxToggle" class="control-input"><option value="on">On (Default)</option><option value="off">Off</option></select></div>
           <div class="control-block"><label for="movementModeToggle">Control Mode</label><select id="movementModeToggle" class="control-input"><option value="ghost">Ghost (No Collision)</option><option value="avatar">Avatar (Collision + Doors)</option></select></div>
           <div class="control-block"><label for="renderModeToggle">Render Mode</label><select id="renderModeToggle" class="control-input"><option value="current">Current (Stable)</option><option value="nuvie">Nuvie Refactor</option></select></div>
+          <div class="control-block"><label for="capturePreviewToggle">Legacy Frame Preview</label><select id="capturePreviewToggle" class="control-input"><option value="off">Off</option><option value="on">On (Default)</option></select></div>
+          <div class="control-block"><label for="legacyScaleModeToggle">Legacy Scale</label><select id="legacyScaleModeToggle" class="control-input"><option value="fit">Integer Fit</option><option value="1">Perfect 1x (320x200)</option><option value="2">2x</option><option value="3">3x</option><option value="4">4x (Default)</option></select></div>
           <div class="control-block"><label for="locationSelect">Capture Preset</label><select id="locationSelect" class="control-input"></select></div>
           <div class="grid grid-cols-2 gap-2">
             <button id="jumpButton" class="control-btn" type="button">Jump (G)</button>
             <button id="captureButton" class="control-btn" type="button">Capture (P)</button>
+            <button id="captureWorldHudButton" class="control-btn col-span-2" type="button">Capture World+HUD (Shift+P)</button>
           </div>
+
+          <div class="control-block"><label for="netApiBaseInput">Net API Base URL</label><input id="netApiBaseInput" class="control-input" type="text" value="http://127.0.0.1:8081" placeholder="http://127.0.0.1:8081"></div>
+          <div class="control-block"><label for="netUsernameInput">Username</label><input id="netUsernameInput" class="control-input" type="text" value="avatar" placeholder="avatar"></div>
+          <div class="control-block"><label for="netPasswordInput">Password</label><input id="netPasswordInput" class="control-input" type="text" value="quest123" placeholder="quest123"></div>
+          <div class="control-block"><label for="netCharacterNameInput">Character Name</label><input id="netCharacterNameInput" class="control-input" type="text" value="Avatar" placeholder="Avatar"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="netLoginButton" class="control-btn" type="button">Net Login (I)</button>
+            <button id="netRecoverButton" class="control-btn" type="button">Recover Pass</button>
+            <button id="netSaveButton" class="control-btn" type="button">Save Remote (Y)</button>
+            <button id="netLoadButton" class="control-btn" type="button">Load Remote (U)</button>
+            <button id="netRenameButton" class="control-btn col-span-2" type="button">Rename Username</button>
+          </div>
+          <div class="control-block"><label for="netMaintenanceToggle">Critical Maintenance</label><select id="netMaintenanceToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">Auto (every 120 ticks)</option></select></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="netMaintenanceButton" class="control-btn col-span-2" type="button">Run Maintenance (N)</button>
+          </div>
+        </div>
+
+        <div class="mt-4 vm-char-stub-panel p-2">
+          <h3 class="text-sm font-semibold">Legacy Character Stubs</h3>
+          <p class="vm-muted-text text-xs">Avatar + nearest actors (temporary visual fill-in)</p>
+          <canvas id="charStubCanvas" width="336" height="112" class="vm-char-stub-canvas mt-2"></canvas>
         </div>
 
         <a class="vm-replay-link mt-4 block text-xs underline decoration-dotted disabled" id="replayDownload" href="#">download replay checkpoints.csv</a>
@@ -81,11 +117,20 @@
           <p>`O` toggle overlay debug labels</p>
           <p>`G` jump to selected capture preset</p>
           <p>`P` capture viewport png</p>
+          <p>`Shift+P` capture world + HUD png</p>
           <p>`V` verify replay stability</p>
           <p>`F` toggle animated tile freeze</p>
           <p>`B` toggle legacy palette FX</p>
           <p>`M` toggle ghost/avatar mode</p>
           <p>`E` interact with facing door (avatar mode)</p>
+          <p>`I` net login (selected user/password)</p>
+          <p>Rename Username button uses current password</p>
+          <p>Journey Onward requires login</p>
+          <p>`Y` save current sim snapshot to net backend</p>
+          <p>`U` load sim snapshot from net backend</p>
+          <p>`N` run critical-item maintenance now</p>
+          <p>`,` / `.` cycle cursor glyph</p>
+          <p>`[` / `]` cycle legacy scale</p>
         </div>
       </aside>
     </main>

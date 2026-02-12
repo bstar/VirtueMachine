@@ -195,8 +195,22 @@ body {
 }
 
 .vm-main-shell {
-  background: color-mix(in srgb, var(--vm-panel) 92%, black 8%);
+  background: #000;
   border: 1px solid var(--vm-border);
+}
+
+.vm-world-frame {
+  border: 1px solid var(--vm-border);
+  border-radius: 0.375rem;
+  padding: 0.4rem;
+  background: color-mix(in srgb, var(--vm-panel-soft) 90%, black 10%);
+}
+
+.vm-world-inset {
+  border: 1px solid color-mix(in srgb, var(--vm-border) 88%, transparent 12%);
+  border-radius: 0.25rem;
+  padding: 0.3rem;
+  background: #0a0a0a;
 }
 
 .vm-side-panel {
@@ -208,6 +222,22 @@ body {
   border-bottom: 1px solid var(--vm-border);
 }
 
+.vm-game-title {
+  color: #efe1bf;
+}
+
+.vm-game-subtitle {
+  color: #b7b0a0;
+}
+
+.vm-game-time {
+  color: #d7ccb3;
+}
+
+.vm-game-time #topTimeOfDay {
+  color: #f6e8c4;
+}
+
 .vm-muted-text {
   color: var(--vm-muted);
 }
@@ -217,11 +247,71 @@ body {
   background: #000;
 }
 
+.vm-world-surface {
+  position: relative;
+  display: inline-block;
+}
+
+.vm-legacy-backdrop {
+  display: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.vm-legacy-viewport {
+  display: none;
+  position: absolute;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+html[data-legacy-frame-preview="on"] .vm-world-frame {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-legacy-frame-preview="on"] .vm-world-inset {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+html[data-legacy-frame-preview="on"] .vm-canvas {
+  display: none;
+}
+
+html[data-legacy-frame-preview="on"] .vm-legacy-backdrop {
+  display: block;
+}
+
+html[data-legacy-frame-preview="on"] .vm-legacy-viewport {
+  display: block;
+}
+
 .vm-help {
   border: 1px solid var(--vm-border);
   border-radius: 0.25rem;
   background: color-mix(in srgb, var(--vm-panel-soft) 88%, black 12%);
   color: var(--vm-text);
+}
+
+.vm-char-stub-panel {
+  border: 1px solid var(--vm-border);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--vm-panel-soft) 88%, black 12%);
+}
+
+.vm-char-stub-canvas {
+  width: 100%;
+  height: auto;
+  border: 1px solid color-mix(in srgb, var(--vm-border) 90%, transparent 10%);
+  background: #090909;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .vm-replay-link {

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/auth_rename_username_response.schema.json",
+  "title": "AuthRenameUsernameResponse",
+  "type": "object",
+  "required": ["user", "old_username"],
+  "properties": {
+    "user": {
+      "type": "object",
+      "required": ["user_id", "username"],
+      "properties": {
+        "user_id": { "type": "string" },
+        "username": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "old_username": { "type": "string" }
+  },
+  "additionalProperties": false
+}

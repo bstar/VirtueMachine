@@ -247,3 +247,27 @@ Impact on Port: provides a concrete reference model for the remaining wall-trans
 Next Validation Step: implement the boundary reshape model behind a feature gate and validate against canonical throne room / kitchen-courtyard captures before replacing current default path.
 Related Symbols: SYM-0006
 Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0020
+Date: 2026-02-12
+Area: Startup/Menu Presentation Parity Baseline
+Legacy Source Ref: `SRC/seg_0903.c` (`C_0903_070B`, `C_0903_07C4`, startup init path), `SRC/seg_0C9C.c` (`C_0C9C_042A`, icon/status geometry constants), `SRC/u6.h`
+Summary: the gameplay executable startup flow initializes palette/font/background/UI shell directly from game assets (`u6pal`, `U6.CH`, `paper.bmp`), draws verb icons at fixed tile slots, and then immediately enters savegame load path (`C_0C9C_042A`). The canonical "new/return/configure" title menu text is not present as plain strings in this decompiled gameplay source, indicating that presentation likely lives in intro/auxiliary assets or another executable path.
+Evidence: `seg_0903.c` loads `U6.CH`, calls `C_0903_07C4` (palette), `C_0903_070B` (paper background), and draws icon strip with `GR_2D(TIL_190 + i, ...)` plus `TIL_19E`; then calls `C_0C9C_042A` to load schedule/basetile/savegame structures. String scan does not reveal full startup menu labels in `SRC/*.c`.
+Confidence: medium-high
+Impact on Port: startup/menu parity work must be anchored to real asset/routine sequencing from gameplay init, with separate investigation for missing title-menu text/art provenance before claiming pixel-faithful title flow.
+Next Validation Step: trace intro/title provenance (`intro.m`, auxiliary resources/binaries, and/or external startup executable path), then map exact menu draw coordinates and input state transitions into modern in-engine startup state.
+Related Symbols: SYM-0001, SYM-0006, SYM-0008
+Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0021
+Date: 2026-02-12
+Area: Title/Intro Executable Provenance
+Legacy Source Ref: local original runtime binaries (`u.exe`, `intro.ptr`, `intro*.shp`), `legacy/u6-decompiled/README.md`
+Summary: canonical title/intro presentation appears to be owned by `u.exe` asset path rather than the released decompiled `GAME.EXE` source. `u.exe` references intro/title shape resources directly.
+Evidence: binary strings from `u.exe` include `intro.ptr`, `intro.shp`, `intro_1.shp`, `intro_2.shp`, `intro_3.shp`; decompiler README states other executables were decompiled but not published.
+Confidence: high
+Impact on Port: faithful startup/menu parity requires tracing the intro executable resource format/flow (or a known equivalent implementation), not only mirroring `GAME.EXE` initialization.
+Next Validation Step: implement a `.shp/.ptr` inspector for intro/title assets and map frame indices/coordinates used by startup/title screens.
+Related Symbols: SYM-0001
+Related Modern Docs: `../progress.md`, `../architecture/legacy/startup-menu-parity.md`

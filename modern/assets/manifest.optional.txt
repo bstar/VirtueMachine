@@ -7,3 +7,13 @@ tileindx.vga
 masktype.vga
 maptiles.vga
 objtiles.vga
+mainmenu.shp
+titles.shp
+intro.shp
+intro_1.shp
+intro_2.shp
+intro_3.shp
+intro.ptr
+u.exe
+game.exe
+ultima6.exe

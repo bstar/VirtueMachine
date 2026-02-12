@@ -140,3 +140,14 @@ Evidence: module map and string/content handling patterns suggest conversation t
 Behavior Notes: likely downstream from interaction dispatch for talk flows.
 Modern Mapping: pending (future M4.2+ dialogue bridge)
 Last Updated: 2026-02-11
+
+ID: SYM-0011
+Legacy Symbol: intro/title executable resource path (`u.exe` + `intro.ptr` + `intro*.shp`)
+Location: local original game binaries (outside released `u6-decompiled/SRC` set)
+Proposed Name: `startup_intro_resource_pipeline`
+Confidence: medium-high
+Status: candidate
+Evidence: `u.exe` references intro/title shape resources; released decompiled repository explicitly omits most other executables.
+Behavior Notes: likely owns canonical title/startup menu presentation not directly visible in released `GAME.EXE` decompilation.
+Modern Mapping: planned startup/title parity importer/renderer in `modern/client-web`
+Last Updated: 2026-02-12

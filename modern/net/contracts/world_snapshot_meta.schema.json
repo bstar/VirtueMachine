@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/world_snapshot_meta.schema.json",
+  "title": "WorldSnapshotMeta",
+  "type": "object",
+  "required": ["schema_version", "sim_core_version", "saved_tick", "snapshot_hash"],
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "sim_core_version": { "type": "string" },
+    "saved_tick": { "type": "integer", "minimum": 0 },
+    "snapshot_hash": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/character_record.schema.json",
+  "title": "CharacterRecord",
+  "type": "object",
+  "required": ["character_id", "user_id", "name", "snapshot_meta"],
+  "properties": {
+    "character_id": { "type": "string" },
+    "user_id": { "type": "string" },
+    "name": { "type": "string", "minLength": 2 },
+    "snapshot_meta": {
+      "$ref": "./world_snapshot_meta.schema.json"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/world_presence_heartbeat_request.schema.json",
+  "title": "WorldPresenceHeartbeatRequest",
+  "type": "object",
+  "required": ["session_id", "map_x", "map_y", "map_z", "facing_dx", "facing_dy", "tick"],
+  "properties": {
+    "session_id": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "character_name": { "type": "string" },
+    "map_x": { "type": "integer" },
+    "map_y": { "type": "integer" },
+    "map_z": { "type": "integer" },
+    "facing_dx": { "type": "integer" },
+    "facing_dy": { "type": "integer" },
+    "tick": { "type": "integer", "minimum": 0 },
+    "mode": { "type": "string" }
+  },
+  "additionalProperties": false
+}

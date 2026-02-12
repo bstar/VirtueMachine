@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/auth_login_response.schema.json",
+  "title": "AuthLoginResponse",
+  "type": "object",
+  "required": ["token", "user"],
+  "properties": {
+    "token": { "type": "string", "minLength": 16 },
+    "user": {
+      "type": "object",
+      "required": ["user_id", "username"],
+      "properties": {
+        "user_id": { "type": "string" },
+        "username": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
