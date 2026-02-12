@@ -10,6 +10,7 @@ const TILE_SIZE = 64;
 const VIEW_W = 11;
 const VIEW_H = 11;
 const COMMAND_WIRE_SIZE = 16;
+const MOVE_INPUT_MIN_INTERVAL_MS = 120;
 const TICKS_PER_MINUTE = 4;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
@@ -132,6 +133,7 @@ const charStubCanvas = document.getElementById("charStubCanvas");
 const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
+const captureWorldHudButton = document.getElementById("captureWorldHudButton");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -248,6 +250,9 @@ const state = {
   avatarFacingDx: 0,
   avatarFacingDy: 1,
   avatarLastMoveTick: -1,
+  lastMoveQueueAtMs: -1,
+  lastMoveInputDx: 0,
+  lastMoveInputDy: 1,
   avatarFrameSeed: 0,
   palette: null,
   basePalette: null,
@@ -2170,6 +2175,68 @@ function captureViewportPng() {
   diagBox.textContent = `Captured ${filename}`;
 }
 
+function captureWorldHudPng() {
+  drawTileGrid();
+  composeLegacyViewportFromModernGrid();
+  renderLegacyHudStubOnBackdrop();
+
+  const p = activeCapturePreset();
+  const tag = p ? p.id : "custom";
+  const filename = `virtuemachine-worldhud-${tag}-${state.sim.world.map_x}-${state.sim.world.map_y}-${state.sim.world.map_z}.png`;
+  const out = document.createElement("canvas");
+
+  if (legacyBackdropCanvas && legacyBackdropCanvas.width > 0 && legacyBackdropCanvas.height > 0) {
+    out.width = 320;
+    out.height = 200;
+    const g = out.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    g.drawImage(
+      legacyBackdropCanvas,
+      0,
+      0,
+      legacyBackdropCanvas.width,
+      legacyBackdropCanvas.height,
+      0,
+      0,
+      320,
+      200
+    );
+
+    const dx = LEGACY_UI_MAP_RECT.x;
+    const dy = LEGACY_UI_MAP_RECT.y;
+    const dw = LEGACY_UI_MAP_RECT.w;
+    const dh = LEGACY_UI_MAP_RECT.h;
+    if (legacyViewportCanvas && legacyViewportCanvas.width > 0 && legacyViewportCanvas.height > 0) {
+      g.drawImage(
+        legacyViewportCanvas,
+        0,
+        0,
+        legacyViewportCanvas.width,
+        legacyViewportCanvas.height,
+        dx,
+        dy,
+        dw,
+        dh
+      );
+    }
+  } else {
+    out.width = 320;
+    out.height = 200;
+    const g = out.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    g.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 320, 200);
+  }
+
+  const link = document.createElement("a");
+  link.href = out.toDataURL("image/png");
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Captured ${filename}`;
+}
+
 function cloneSimState(sim) {
   return {
     tick: sim.tick >>> 0,
@@ -2333,10 +2400,47 @@ function unpackCommand(bytes) {
 }
 
 function queueMove(dx, dy) {
-  state.avatarFacingDx = dx | 0;
-  state.avatarFacingDy = dy | 0;
-  const bytes = packCommand(state.sim.tick + 1, 1, dx, dy);
+  dx |= 0;
+  dy |= 0;
+  const nowMs = performance.now();
+  const sameAsLast = (dx === state.lastMoveInputDx) && (dy === state.lastMoveInputDy);
+  if (sameAsLast && state.lastMoveQueueAtMs >= 0 && (nowMs - state.lastMoveQueueAtMs) < MOVE_INPUT_MIN_INTERVAL_MS) {
+    return;
+  }
+  state.lastMoveQueueAtMs = nowMs;
+  state.lastMoveInputDx = dx;
+  state.lastMoveInputDy = dy;
+  state.avatarFacingDx = dx;
+  state.avatarFacingDy = dy;
+  const targetTick = (state.sim.tick + 1) >>> 0;
+  const bytes = packCommand(targetTick, 1, dx, dy);
   const cmd = unpackCommand(bytes);
+
+  // Keep exactly one pending move command so repeated key events cannot stack.
+  for (let i = state.queue.length - 1; i >= 0; i -= 1) {
+    if (state.queue[i].type === 1 && state.queue[i].tick === targetTick) {
+      if (state.queue[i].arg0 === dx && state.queue[i].arg1 === dy) {
+        return;
+      }
+      state.queue[i] = cmd;
+      for (let j = state.commandLog.length - 1; j >= 0; j -= 1) {
+        const prev = state.commandLog[j];
+        if (prev.type === 1 && prev.tick === targetTick) {
+          state.commandLog.splice(j, 1);
+          break;
+        }
+      }
+      state.commandLog.push({ ...cmd });
+      return;
+    }
+  }
+
+  for (let i = state.queue.length - 1; i >= 0; i -= 1) {
+    if (state.queue[i].type === 1) {
+      state.queue.splice(i, 1);
+    }
+  }
+
   state.queue.push(cmd);
   state.commandLog.push({ ...cmd });
 }
@@ -3391,6 +3495,9 @@ function resetRun() {
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
   state.avatarLastMoveTick = -1;
+  state.lastMoveQueueAtMs = -1;
+  state.lastMoveInputDx = 0;
+  state.lastMoveInputDy = 1;
   state.npcOcclusionBlockedMoves = 0;
   if (state.animationFrozen) {
     state.frozenAnimationTick = state.sim.tick >>> 0;
@@ -3613,6 +3720,11 @@ async function loadRuntimeAssets() {
 
 window.addEventListener("keydown", (ev) => {
   const k = ev.key.toLowerCase();
+  if (k === "p" && ev.shiftKey) {
+    captureWorldHudPng();
+    ev.preventDefault();
+    return;
+  }
   if (k === "w" || k === "k") queueMove(0, -1);
   else if (k === "s" || k === "j") queueMove(0, 1);
   else if (k === "a" || k === "h") queueMove(-1, 0);
@@ -3660,4 +3772,7 @@ if (jumpButton) {
 }
 if (captureButton) {
   captureButton.addEventListener("click", captureViewportPng);
+}
+if (captureWorldHudButton) {
+  captureWorldHudButton.addEventListener("click", captureWorldHudPng);
 }
