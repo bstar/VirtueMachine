@@ -86,34 +86,53 @@ async function main() {
     });
     assert.equal(badLogin.status, 401);
 
-    const recovered = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar", {
+    const recoveredUnverified = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
       method: "GET"
     });
-    assert.equal(recovered.status, 200);
-    assert.equal(recovered.body?.password_plaintext, "quest123");
+    assert.equal(recoveredUnverified.status, 403);
 
-    const rename = await jsonFetch(baseUrl, "/api/auth/rename-username", {
+    const setEmail = await jsonFetch(baseUrl, "/api/auth/set-email", {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({
-        new_username: "avatar_renamed",
-        password: "quest123"
+        email: "avatar@example.com"
       })
     });
-    assert.equal(rename.status, 200);
-    assert.equal(rename.body?.user?.username, "avatar_renamed");
-    assert.equal(rename.body?.old_username, "avatar");
+    assert.equal(setEmail.status, 200);
+    assert.equal(setEmail.body?.user?.email, "avatar@example.com");
+    assert.equal(setEmail.body?.user?.email_verified, false);
 
-    const recoveredOld = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar", {
+    const sendVerify = await jsonFetch(baseUrl, "/api/auth/send-email-verification", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({})
+    });
+    assert.equal(sendVerify.status, 200);
+
+    const outboxPath = path.join(dataDir, "email_outbox.log");
+    const outboxLines = fs.readFileSync(outboxPath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    assert.ok(outboxLines.length >= 1);
+    const verifyMail = JSON.parse(outboxLines[outboxLines.length - 1]);
+    const matchCode = String(verifyMail?.body_text || "").match(/(\d{6})/);
+    assert.ok(matchCode && matchCode[1], "verification email must contain 6-digit code");
+    const verifyCode = matchCode[1];
+
+    const verifyEmail = await jsonFetch(baseUrl, "/api/auth/verify-email", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ code: verifyCode })
+    });
+    assert.equal(verifyEmail.status, 200);
+    assert.equal(verifyEmail.body?.user?.email_verified, true);
+
+    const recovered = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
       method: "GET"
     });
-    assert.equal(recoveredOld.status, 404);
-
-    const recoveredNew = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar_renamed", {
-      method: "GET"
-    });
-    assert.equal(recoveredNew.status, 200);
-    assert.equal(recoveredNew.body?.password_plaintext, "quest123");
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body?.delivered, true);
 
     const createChar = await jsonFetch(baseUrl, "/api/characters", {
       method: "POST",

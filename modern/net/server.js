@@ -20,6 +20,7 @@ const FILES = {
   users: path.join(DATA_DIR, "users.json"),
   tokens: path.join(DATA_DIR, "tokens.json"),
   characters: path.join(DATA_DIR, "characters.json"),
+  emailOutbox: path.join(DATA_DIR, "email_outbox.log"),
   presence: path.join(DATA_DIR, "presence.json"),
   worldClock: path.join(DATA_DIR, "world_clock.json"),
   criticalPolicy: path.join(DATA_DIR, "critical_item_policy.json"),
@@ -73,6 +74,15 @@ function normalizeUsername(raw) {
   return String(raw || "").trim().toLowerCase();
 }
 
+function normalizeEmail(raw) {
+  return String(raw || "").trim().toLowerCase();
+}
+
+function isValidEmail(raw) {
+  const v = normalizeEmail(raw);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
 function newUserId(state) {
   for (;;) {
     const id = `usr_${crypto.randomBytes(8).toString("hex")}`;
@@ -85,6 +95,21 @@ function newUserId(state) {
 function findUserByUsername(state, username) {
   const wanted = normalizeUsername(username);
   return state.users.find((u) => normalizeUsername(u.username) === wanted) || null;
+}
+
+function ensureUserSchema(user) {
+  if (!user || typeof user !== "object") {
+    return;
+  }
+  if (!Object.prototype.hasOwnProperty.call(user, "email")) {
+    user.email = "";
+  }
+  if (!Object.prototype.hasOwnProperty.call(user, "email_verified")) {
+    user.email_verified = false;
+  }
+  if (!user.email_verification || typeof user.email_verification !== "object") {
+    user.email_verification = null;
+  }
 }
 
 function parseAuth(req) {
@@ -246,6 +271,9 @@ function loadState() {
   if (!Array.isArray(state.presence)) {
     state.presence = [];
   }
+  for (const user of state.users) {
+    ensureUserSchema(user);
+  }
   return state;
 }
 
@@ -288,6 +316,29 @@ function issueToken(state, userId) {
     expires_at_ms: Date.now() + ttlMs
   });
   return token;
+}
+
+function issueEmailVerificationCode(user) {
+  const code = String(Math.floor(100000 + (Math.random() * 900000)));
+  user.email_verification = {
+    code,
+    issued_at: nowIso(),
+    expires_at_ms: Date.now() + (1000 * 60 * 15)
+  };
+  return code;
+}
+
+function emitEmailOutbox(toEmail, subject, bodyText, meta = {}) {
+  const delivery = {
+    kind: "email_delivery",
+    at: nowIso(),
+    to: normalizeEmail(toEmail),
+    subject: String(subject || ""),
+    body_text: String(bodyText || ""),
+    ...meta
+  };
+  appendJsonLine(FILES.emailOutbox, delivery);
+  return delivery;
 }
 
 function listUserCharacters(state, userId) {
@@ -408,7 +459,15 @@ const server = http.createServer(async (req, res) => {
 
     let user = findUserByUsername(state, username);
     if (!user) {
-      user = { user_id: newUserId(state), username, password_plaintext: password, created_at: nowIso() };
+      user = {
+        user_id: newUserId(state),
+        username,
+        password_plaintext: password,
+        email: "",
+        email_verified: false,
+        email_verification: null,
+        created_at: nowIso()
+      };
       state.users.push(user);
     } else if (!user.password_plaintext) {
       user.password_plaintext = password;
@@ -422,39 +481,19 @@ const server = http.createServer(async (req, res) => {
       token,
       user: {
         user_id: user.user_id,
-        username: user.username
+        username: user.username,
+        email: String(user.email || ""),
+        email_verified: !!user.email_verified
       }
     });
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/auth/recover-password") {
-    const username = normalizeUsername(url.searchParams.get("username") || "");
-    if (!username || username.length < 2) {
-      sendError(res, 400, "bad_username", "username is required");
-      return;
-    }
-    const user = findUserByUsername(state, username);
+  if (req.method === "POST" && url.pathname === "/api/auth/set-email") {
+    const user = requireUser(state, req, res);
     if (!user) {
-      sendError(res, 404, "user_not_found", "user not found");
       return;
     }
-    sendJson(res, 200, {
-      user: {
-        user_id: user.user_id,
-        username: user.username
-      },
-      password_plaintext: String(user.password_plaintext || "")
-    });
-    return;
-  }
-
-  const user = requireUser(state, req, res);
-  if (!user) {
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/auth/rename-username") {
     let body;
     try {
       body = await readBody(req);
@@ -462,35 +501,148 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 400, "bad_json", String(err.message || err));
       return;
     }
-    const newUsername = normalizeUsername(body && body.new_username);
-    const password = String(body && body.password || "");
-    if (!newUsername || newUsername.length < 2) {
-      sendError(res, 400, "bad_username", "new_username is required");
+    const email = normalizeEmail(body && body.email);
+    if (!isValidEmail(email)) {
+      sendError(res, 400, "bad_email", "valid email is required");
       return;
     }
-    if (!password) {
-      sendError(res, 400, "bad_password", "password is required");
-      return;
+    if (email !== normalizeEmail(user.email || "")) {
+      user.email_verified = false;
+      user.email_verification = null;
     }
-    if (String(user.password_plaintext || "") !== password) {
-      sendError(res, 401, "auth_invalid", "invalid username/password");
-      return;
-    }
-    const existing = findUserByUsername(state, newUsername);
-    if (existing && existing.user_id !== user.user_id) {
-      sendError(res, 409, "username_taken", "username already exists");
-      return;
-    }
-    const oldUsername = user.username;
-    user.username = newUsername;
+    user.email = email;
     persistState(state);
     sendJson(res, 200, {
       user: {
         user_id: user.user_id,
-        username: user.username
-      },
-      old_username: oldUsername
+        username: user.username,
+        email: user.email,
+        email_verified: !!user.email_verified
+      }
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/send-email-verification") {
+    const user = requireUser(state, req, res);
+    if (!user) {
+      return;
+    }
+    const email = normalizeEmail(user.email || "");
+    if (!isValidEmail(email)) {
+      sendError(res, 400, "bad_email", "set a valid email first");
+      return;
+    }
+    const code = issueEmailVerificationCode(user);
+    const delivery = emitEmailOutbox(
+      email,
+      "VirtueMachine Email Verification",
+      `Your VirtueMachine verification code is: ${code}`,
+      { user_id: user.user_id, template: "verify_email" }
+    );
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      delivery_id: `${delivery.at}:${delivery.to}`,
+      email: email,
+      expires_at_ms: user.email_verification.expires_at_ms
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/verify-email") {
+    const user = requireUser(state, req, res);
+    if (!user) {
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const code = String(body && body.code || "").trim();
+    if (!code) {
+      sendError(res, 400, "bad_code", "verification code is required");
+      return;
+    }
+    const pending = user.email_verification;
+    if (!pending || typeof pending !== "object") {
+      sendError(res, 409, "no_pending_verification", "no pending email verification");
+      return;
+    }
+    if (Number(pending.expires_at_ms) < Date.now()) {
+      user.email_verification = null;
+      persistState(state);
+      sendError(res, 410, "verification_expired", "verification code expired");
+      return;
+    }
+    if (String(pending.code || "") !== code) {
+      sendError(res, 401, "verification_invalid", "invalid verification code");
+      return;
+    }
+    user.email_verified = true;
+    user.email_verification = null;
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        email: String(user.email || ""),
+        email_verified: true
+      }
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/recover-password") {
+    const username = normalizeUsername(url.searchParams.get("username") || "");
+    const email = normalizeEmail(url.searchParams.get("email") || "");
+    if (!username || username.length < 2) {
+      sendError(res, 400, "bad_username", "username is required");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      sendError(res, 400, "bad_email", "email is required");
+      return;
+    }
+    const user = findUserByUsername(state, username);
+    if (!user) {
+      sendError(res, 404, "user_not_found", "user not found");
+      return;
+    }
+    if (!user.email_verified) {
+      sendError(res, 403, "email_unverified", "email must be verified before password recovery");
+      return;
+    }
+    if (normalizeEmail(user.email || "") !== email) {
+      sendError(res, 401, "email_mismatch", "email does not match account");
+      return;
+    }
+    const delivery = emitEmailOutbox(
+      email,
+      "VirtueMachine Password Recovery",
+      `Your VirtueMachine password is: ${String(user.password_plaintext || "")}`,
+      { user_id: user.user_id, template: "recover_password" }
+    );
+    persistState(state);
+    sendJson(res, 200, {
+      user: {
+        user_id: user.user_id,
+        username: user.username,
+        email: String(user.email || ""),
+        email_verified: !!user.email_verified
+      },
+      delivered: true,
+      delivery_id: `${delivery.at}:${delivery.to}`
+    });
+    return;
+  }
+
+  const user = requireUser(state, req, res);
+  if (!user) {
     return;
   }
 

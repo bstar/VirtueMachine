@@ -148,11 +148,15 @@ const netUsernameInput = document.getElementById("netUsernameInput");
 const netPasswordInput = document.getElementById("netPasswordInput");
 const netPasswordToggleButton = document.getElementById("netPasswordToggleButton");
 const netCharacterNameInput = document.getElementById("netCharacterNameInput");
+const netEmailInput = document.getElementById("netEmailInput");
+const netEmailCodeInput = document.getElementById("netEmailCodeInput");
 const netLoginButton = document.getElementById("netLoginButton");
 const netRecoverButton = document.getElementById("netRecoverButton");
+const netSetEmailButton = document.getElementById("netSetEmailButton");
+const netSendVerifyButton = document.getElementById("netSendVerifyButton");
+const netVerifyEmailButton = document.getElementById("netVerifyEmailButton");
 const netSaveButton = document.getElementById("netSaveButton");
 const netLoadButton = document.getElementById("netLoadButton");
-const netRenameButton = document.getElementById("netRenameButton");
 const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
 const netMaintenanceButton = document.getElementById("netMaintenanceButton");
 
@@ -171,6 +175,7 @@ const NET_USERNAME_KEY = "vm_net_username";
 const NET_PASSWORD_KEY = "vm_net_password";
 const NET_PASSWORD_VISIBLE_KEY = "vm_net_password_visible";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
+const NET_EMAIL_KEY = "vm_net_email";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
@@ -346,6 +351,8 @@ const state = {
     token: "",
     userId: "",
     username: "",
+    email: "",
+    emailVerified: false,
     sessionId: (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Math.random().toString(16).slice(2)}_${Date.now()}`,
     characterId: "",
     characterName: "",
@@ -2257,6 +2264,8 @@ async function netLogin() {
   state.net.token = String(login?.token || "");
   state.net.userId = String(login?.user?.user_id || "");
   state.net.username = String(login?.user?.username || username);
+  state.net.email = String(login?.user?.email || "");
+  state.net.emailVerified = !!login?.user?.email_verified;
   state.net.remotePlayers = [];
   state.net.lastPresenceHeartbeatTick = -1;
   state.net.lastPresencePollTick = -1;
@@ -2267,60 +2276,95 @@ async function netLogin() {
   resetBackgroundNetFailures();
   updateNetSessionStat();
   setNetStatus("online", `${state.net.username}/${state.net.characterName}`);
+  if (netEmailInput && state.net.email) {
+    netEmailInput.value = state.net.email;
+  }
   try {
     localStorage.setItem(NET_API_BASE_KEY, state.net.apiBase);
     localStorage.setItem(NET_USERNAME_KEY, state.net.username);
     localStorage.setItem(NET_CHARACTER_NAME_KEY, state.net.characterName);
+    localStorage.setItem(NET_EMAIL_KEY, state.net.email || "");
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
 }
 
-async function netRecoverPassword() {
-  const base = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
-  const username = String(netUsernameInput?.value || "").trim().toLowerCase();
-  if (!username) {
-    throw new Error("Username is required");
-  }
-  state.net.apiBase = base;
-  setNetStatus("connecting", "Recovering password...");
-  const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}`, { method: "GET" }, false);
-  if (netPasswordInput) {
-    netPasswordInput.value = String(out?.password_plaintext || "");
-  }
-  setNetStatus("online", `Recovered password for ${out?.user?.username || username}`);
-  return out;
-}
-
-async function netRenameUsername() {
+async function netSetEmail() {
   if (!state.net.token) {
     await netLogin();
   }
-  const newUsername = String(netUsernameInput?.value || "").trim().toLowerCase();
-  const password = String(netPasswordInput?.value || "");
-  if (!newUsername || newUsername.length < 2) {
-    throw new Error("New username is required");
+  const email = String(netEmailInput?.value || "").trim().toLowerCase();
+  if (!email) {
+    throw new Error("Recovery email is required");
   }
-  if (!password) {
-    throw new Error("Password is required");
-  }
-  setNetStatus("sync", `Renaming to ${newUsername}...`);
-  const out = await netRequest("/api/auth/rename-username", {
+  setNetStatus("sync", "Saving recovery email...");
+  const out = await netRequest("/api/auth/set-email", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      new_username: newUsername,
-      password
-    })
+    body: JSON.stringify({ email })
   }, true);
-  state.net.username = String(out?.user?.username || newUsername);
-  updateNetSessionStat();
+  state.net.email = String(out?.user?.email || email);
+  state.net.emailVerified = !!out?.user?.email_verified;
   try {
-    localStorage.setItem(NET_USERNAME_KEY, state.net.username);
+    localStorage.setItem(NET_EMAIL_KEY, state.net.email);
   } catch (_err) {
     // ignore storage failures
   }
-  setNetStatus("online", `Renamed ${out?.old_username || "user"} -> ${state.net.username}`);
+  setNetStatus("online", state.net.emailVerified ? "Email verified" : "Email set (verification required)");
+  return out;
+}
+
+async function netSendEmailVerification() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  setNetStatus("sync", "Sending verification email...");
+  const out = await netRequest("/api/auth/send-email-verification", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({})
+  }, true);
+  setNetStatus("online", "Verification code sent to recovery email");
+  return out;
+}
+
+async function netVerifyEmail() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  const code = String(netEmailCodeInput?.value || "").trim();
+  if (!code) {
+    throw new Error("Verification code is required");
+  }
+  setNetStatus("sync", "Verifying recovery email...");
+  const out = await netRequest("/api/auth/verify-email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code })
+  }, true);
+  state.net.email = String(out?.user?.email || state.net.email || "");
+  state.net.emailVerified = !!out?.user?.email_verified;
+  if (netEmailInput && state.net.email) {
+    netEmailInput.value = state.net.email;
+  }
+  setNetStatus("online", "Recovery email verified");
+  return out;
+}
+
+async function netRecoverPassword() {
+  const base = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
+  const username = String(netUsernameInput?.value || "").trim().toLowerCase();
+  const email = String(netEmailInput?.value || "").trim().toLowerCase();
+  if (!username) {
+    throw new Error("Username is required");
+  }
+  if (!email) {
+    throw new Error("Recovery email is required");
+  }
+  state.net.apiBase = base;
+  setNetStatus("connecting", "Sending password recovery email...");
+  const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}`, { method: "GET" }, false);
+  setNetStatus("online", `Recovery email sent for ${out?.user?.username || username}`);
   return out;
 }
 
@@ -2533,6 +2577,7 @@ function initNetPanel() {
   let savedBase = "http://127.0.0.1:8081";
   let savedUser = "avatar";
   let savedPass = "quest123";
+  let savedEmail = "";
   let savedPassVisible = "off";
   let savedChar = "Avatar";
   let savedMaintenance = "off";
@@ -2540,6 +2585,7 @@ function initNetPanel() {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
     savedPass = localStorage.getItem(NET_PASSWORD_KEY) || savedPass;
+    savedEmail = localStorage.getItem(NET_EMAIL_KEY) || savedEmail;
     savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
     savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
@@ -2561,11 +2607,15 @@ function initNetPanel() {
     netPasswordToggleButton.textContent = isVisible ? "Hide" : "Show";
     netPasswordToggleButton.title = isVisible ? "Hide password" : "Show password";
   }
+  if (netEmailInput) {
+    netEmailInput.value = savedEmail;
+  }
   if (netCharacterNameInput) {
     netCharacterNameInput.value = savedChar;
   }
   state.net.apiBase = savedBase;
   state.net.username = savedUser;
+  state.net.email = savedEmail;
   state.net.characterName = savedChar;
   setNetStatus("idle", "Not logged in.");
 
@@ -2600,6 +2650,15 @@ function initNetPanel() {
     netCharacterNameInput.addEventListener("input", () => {
       try {
         localStorage.setItem(NET_CHARACTER_NAME_KEY, String(netCharacterNameInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netEmailInput) {
+    netEmailInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_EMAIL_KEY, String(netEmailInput.value || ""));
       } catch (_err) {
         // ignore storage failures
       }
@@ -2657,11 +2716,53 @@ function initNetPanel() {
       try {
         const out = await netRecoverPassword();
         diagBox.className = "diag ok";
-        diagBox.textContent = `Recovered password for ${out?.user?.username || "user"}.`;
+        diagBox.textContent = `Recovery email sent for ${out?.user?.username || "user"}.`;
       } catch (err) {
         setNetStatus("error", `Recovery failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Password recovery failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netSetEmailButton) {
+    netSetEmailButton.addEventListener("click", async () => {
+      try {
+        const out = await netSetEmail();
+        diagBox.className = "diag ok";
+        const verified = !!out?.user?.email_verified;
+        diagBox.textContent = verified
+          ? `Recovery email set and verified (${out?.user?.email || ""}).`
+          : `Recovery email set (${out?.user?.email || ""}). Verification required.`;
+      } catch (err) {
+        setNetStatus("error", `Set email failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Set email failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netSendVerifyButton) {
+    netSendVerifyButton.addEventListener("click", async () => {
+      try {
+        await netSendEmailVerification();
+        diagBox.className = "diag ok";
+        diagBox.textContent = "Verification code sent to recovery email.";
+      } catch (err) {
+        setNetStatus("error", `Send code failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Send code failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netVerifyEmailButton) {
+    netVerifyEmailButton.addEventListener("click", async () => {
+      try {
+        await netVerifyEmail();
+        diagBox.className = "diag ok";
+        diagBox.textContent = "Recovery email verified.";
+      } catch (err) {
+        setNetStatus("error", `Verify email failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Verify email failed: ${String(err.message || err)}`;
       }
     });
   }
@@ -2690,19 +2791,6 @@ function initNetPanel() {
         setNetStatus("error", `Load failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
-      }
-    });
-  }
-  if (netRenameButton) {
-    netRenameButton.addEventListener("click", async () => {
-      try {
-        const out = await netRenameUsername();
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Renamed ${out?.old_username || "user"} to ${state.net.username}.`;
-      } catch (err) {
-        setNetStatus("error", `Rename failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Rename failed: ${String(err.message || err)}`;
       }
     });
   }
@@ -5196,14 +5284,20 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
   else if (k === "e") queueInteractDoor();
-  else if (k === "i") netLogin().then(() => {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
-  }).catch((err) => {
-    setNetStatus("error", `Login failed: ${String(err.message || err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
-  });
+  else if (k === "i") {
+    if (isNetAuthenticated()) {
+      netLogout();
+    } else {
+      netLogin().then(() => {
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
+      }).catch((err) => {
+        setNetStatus("error", `Login failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+      });
+    }
+  }
   else if (k === "y") netSaveSnapshot().then(() => {
     updateNetSessionStat();
     diagBox.className = "diag ok";

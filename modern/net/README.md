@@ -9,7 +9,10 @@ This directory contains the first multiplayer backend seed focused on:
 
 Authentication note (intentional for this project): passwords are stored in plaintext
 to prioritize password recovery over security hardening in the current prototype.
-User lookup is username-based; renames are supported without changing character ownership.
+Password recovery now requires:
+- a verified recovery email on the account
+- username + matching email
+Recovery "delivery" is emitted into `modern/net/data/email_outbox.log` in this prototype.
 
 ## Run
 
@@ -29,11 +32,13 @@ Public:
 
 - `GET /health`
 - `POST /api/auth/login`
-- `GET /api/auth/recover-password?username=<name>`
+- `GET /api/auth/recover-password?username=<name>&email=<addr>`
 
 Authenticated (Bearer token):
 
-- `POST /api/auth/rename-username`
+- `POST /api/auth/set-email`
+- `POST /api/auth/send-email-verification`
+- `POST /api/auth/verify-email`
 - `GET /api/characters`
 - `POST /api/characters`
 - `GET /api/characters/:id/snapshot`
