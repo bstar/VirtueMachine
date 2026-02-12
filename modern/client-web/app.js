@@ -146,6 +146,7 @@ const captureWorldHudButton = document.getElementById("captureWorldHudButton");
 const netApiBaseInput = document.getElementById("netApiBaseInput");
 const netUsernameInput = document.getElementById("netUsernameInput");
 const netPasswordInput = document.getElementById("netPasswordInput");
+const netPasswordToggleButton = document.getElementById("netPasswordToggleButton");
 const netCharacterNameInput = document.getElementById("netCharacterNameInput");
 const netLoginButton = document.getElementById("netLoginButton");
 const netRecoverButton = document.getElementById("netRecoverButton");
@@ -167,6 +168,8 @@ const LEGACY_FRAME_PREVIEW_KEY = "vm_legacy_frame_preview";
 const LEGACY_SCALE_MODE_KEY = "vm_legacy_scale_mode";
 const NET_API_BASE_KEY = "vm_net_api_base";
 const NET_USERNAME_KEY = "vm_net_username";
+const NET_PASSWORD_KEY = "vm_net_password";
+const NET_PASSWORD_VISIBLE_KEY = "vm_net_password_visible";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
@@ -2091,6 +2094,16 @@ function updateNetSessionStat() {
   statNetSession.textContent = `${state.net.username}/${name}`;
 }
 
+function updateNetAuthButton() {
+  if (!netLoginButton) {
+    return;
+  }
+  const authed = isNetAuthenticated();
+  netLoginButton.textContent = authed ? "Logout (I)" : "Net Login (I)";
+  netLoginButton.classList.remove("control-btn--login", "control-btn--logout");
+  netLoginButton.classList.add(authed ? "control-btn--logout" : "control-btn--login");
+}
+
 function setNetStatus(level, text) {
   const lvl = String(level || "idle");
   const msg = String(text || "");
@@ -2099,6 +2112,7 @@ function setNetStatus(level, text) {
   if (topNetStatus) {
     topNetStatus.textContent = `${lvl} - ${msg}`;
   }
+  updateNetAuthButton();
 }
 
 function resetBackgroundNetFailures() {
@@ -2310,6 +2324,29 @@ async function netRenameUsername() {
   return out;
 }
 
+function netLogout() {
+  state.net.token = "";
+  state.net.userId = "";
+  state.net.characterId = "";
+  state.net.remotePlayers = [];
+  state.net.lastPresenceHeartbeatTick = -1;
+  state.net.lastPresencePollTick = -1;
+  state.net.lastClockPollTick = -1;
+  state.net.backgroundSyncPaused = false;
+  state.net.backgroundFailCount = 0;
+  state.net.firstBackgroundFailAtMs = 0;
+  if (state.sessionStarted) {
+    returnToTitleMenu();
+  } else {
+    setStartupMenuIndex(0);
+  }
+  updateNetSessionStat();
+  setNetStatus("idle", "Not logged in.");
+  diagBox.className = "diag ok";
+  diagBox.textContent = "Logged out. Returned to title menu.";
+  updateNetAuthButton();
+}
+
 async function netSaveSnapshot() {
   setNetStatus("sync", "Saving remote snapshot...");
   if (!state.net.token) {
@@ -2495,11 +2532,15 @@ async function netPollWorldClock() {
 function initNetPanel() {
   let savedBase = "http://127.0.0.1:8081";
   let savedUser = "avatar";
+  let savedPass = "quest123";
+  let savedPassVisible = "off";
   let savedChar = "Avatar";
   let savedMaintenance = "off";
   try {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
+    savedPass = localStorage.getItem(NET_PASSWORD_KEY) || savedPass;
+    savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
     savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
   } catch (_err) {
@@ -2511,6 +2552,15 @@ function initNetPanel() {
   if (netUsernameInput) {
     netUsernameInput.value = savedUser;
   }
+  if (netPasswordInput) {
+    netPasswordInput.value = savedPass;
+    netPasswordInput.type = savedPassVisible === "on" ? "text" : "password";
+  }
+  if (netPasswordToggleButton) {
+    const isVisible = savedPassVisible === "on";
+    netPasswordToggleButton.textContent = isVisible ? "Hide" : "Show";
+    netPasswordToggleButton.title = isVisible ? "Hide password" : "Show password";
+  }
   if (netCharacterNameInput) {
     netCharacterNameInput.value = savedChar;
   }
@@ -2518,6 +2568,57 @@ function initNetPanel() {
   state.net.username = savedUser;
   state.net.characterName = savedChar;
   setNetStatus("idle", "Not logged in.");
+
+  if (netApiBaseInput) {
+    netApiBaseInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_API_BASE_KEY, String(netApiBaseInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netUsernameInput) {
+    netUsernameInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_USERNAME_KEY, String(netUsernameInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netPasswordInput) {
+    netPasswordInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_PASSWORD_KEY, String(netPasswordInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netCharacterNameInput) {
+    netCharacterNameInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_CHARACTER_NAME_KEY, String(netCharacterNameInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netPasswordToggleButton && netPasswordInput) {
+    netPasswordToggleButton.addEventListener("click", () => {
+      const show = netPasswordInput.type === "password";
+      netPasswordInput.type = show ? "text" : "password";
+      netPasswordToggleButton.textContent = show ? "Hide" : "Show";
+      netPasswordToggleButton.title = show ? "Hide password" : "Show password";
+      try {
+        localStorage.setItem(NET_PASSWORD_VISIBLE_KEY, show ? "on" : "off");
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+
   state.net.maintenanceAuto = savedMaintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
@@ -2532,9 +2633,14 @@ function initNetPanel() {
   }
   updateNetSessionStat();
   updateCriticalRecoveryStat();
+  updateNetAuthButton();
 
   if (netLoginButton) {
     netLoginButton.addEventListener("click", async () => {
+      if (isNetAuthenticated()) {
+        netLogout();
+        return;
+      }
       try {
         await netLogin();
         diagBox.className = "diag ok";

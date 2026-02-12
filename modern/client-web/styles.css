@@ -360,16 +360,20 @@ html[data-legacy-frame-preview="on"] .vm-legacy-viewport {
 }
 
 .control-input {
-  appearance: none;
   width: 100%;
   border: 1px solid var(--vm-border);
   background:
     linear-gradient(180deg, var(--vm-input-top) 0%, var(--vm-input-bot) 100%);
   color: var(--vm-text);
   border-radius: 0.25rem;
-  padding: 0.5rem 2rem 0.5rem 0.65rem;
+  padding: 0.5rem 0.65rem;
   font-size: 0.74rem;
   line-height: 1.2;
+}
+
+select.control-input {
+  appearance: none;
+  padding-right: 2rem;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--vm-muted) 50%),
     linear-gradient(135deg, var(--vm-muted) 50%, transparent 50%);
@@ -402,6 +406,44 @@ html[data-legacy-frame-preview="on"] .vm-legacy-viewport {
 
 .control-btn:hover {
   background: color-mix(in srgb, var(--vm-input-top) 78%, white 22%);
+}
+
+.control-btn--login {
+  border-color: #2f7a54;
+  background: #184d35;
+  color: #e6ffef;
+}
+
+.control-btn--login:hover {
+  background: #216445;
+}
+
+.control-btn--logout {
+  border-color: #8b3a3a;
+  background: #5f2323;
+  color: #ffe9e9;
+}
+
+.control-btn--logout:hover {
+  background: #773030;
+}
+
+.vm-net-header-compact .control-block {
+  gap: 0.2rem;
+}
+
+.vm-net-header-compact .control-input {
+  padding-top: 0.34rem;
+  padding-bottom: 0.34rem;
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.vm-net-header-compact .control-btn {
+  padding-top: 0.34rem;
+  padding-bottom: 0.34rem;
+  font-size: 0.66rem;
+  line-height: 1.1;
 }
 
 .replay-link.disabled {
