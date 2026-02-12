@@ -53,7 +53,8 @@ async function main() {
       ...process.env,
       VM_NET_HOST: host,
       VM_NET_PORT: String(port),
-      VM_NET_DATA_DIR: dataDir
+      VM_NET_DATA_DIR: dataDir,
+      VM_EMAIL_MODE: "log"
     },
     stdio: ["ignore", "pipe", "pipe"]
   });

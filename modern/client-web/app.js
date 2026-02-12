@@ -155,6 +155,8 @@ const netRecoverButton = document.getElementById("netRecoverButton");
 const netSetEmailButton = document.getElementById("netSetEmailButton");
 const netSendVerifyButton = document.getElementById("netSendVerifyButton");
 const netVerifyEmailButton = document.getElementById("netVerifyEmailButton");
+const netTabButtons = Array.from(document.querySelectorAll("[data-net-tab-button]"));
+const netTabPanels = Array.from(document.querySelectorAll("[data-net-tab-panel]"));
 const netSaveButton = document.getElementById("netSaveButton");
 const netLoadButton = document.getElementById("netLoadButton");
 const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
@@ -177,6 +179,8 @@ const NET_PASSWORD_VISIBLE_KEY = "vm_net_password_visible";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
 const NET_EMAIL_KEY = "vm_net_email";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
+const NET_TAB_KEY = "vm_net_tab";
+const NET_TABS = Object.freeze(["account", "recovery", "verify"]);
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
   cornerTL: 0x1b0,
@@ -330,7 +334,7 @@ const state = {
   accMs: 0,
   replayUrl: null,
   legacyPaperPixmap: null,
-  legacyScaleMode: "fit",
+  legacyScaleMode: "4",
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
   avatarPortraitCanvas: null,
@@ -1747,9 +1751,6 @@ function renderStartupMenuLayer(g, scale) {
   }
 
   drawU6MainText(g, "Use ARROWS + ENTER", x(98), y(162), Math.max(1, scale), "#8e7a55");
-  if (!isNetAuthenticated()) {
-    drawU6MainText(g, "LOGIN REQUIRED", x(108), y(174), Math.max(1, scale), "#8e6a42");
-  }
 }
 
 function buildStartupPaletteForMenu() {
@@ -1970,7 +1971,7 @@ function initTheme() {
 }
 
 function setFont(fontName) {
-  const font = FONTS.includes(fontName) ? fontName : "sans";
+  const font = FONTS.includes(fontName) ? fontName : "silkscreen";
   document.documentElement.setAttribute("data-font", font);
   if (fontSelect) {
     fontSelect.value = font;
@@ -1983,7 +1984,7 @@ function setFont(fontName) {
 }
 
 function initFont() {
-  let saved = "sans";
+  let saved = "silkscreen";
   try {
     const fromStorage = localStorage.getItem(FONT_KEY);
     if (fromStorage) {
@@ -2573,6 +2574,25 @@ async function netPollWorldClock() {
   }
 }
 
+function setNetHeaderTab(tabId) {
+  const nextTab = NET_TABS.includes(tabId) ? tabId : NET_TABS[0];
+  for (const btn of netTabButtons) {
+    const active = String(btn.dataset.netTabButton || "") === nextTab;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+  for (const panel of netTabPanels) {
+    const active = String(panel.dataset.netTabPanel || "") === nextTab;
+    panel.hidden = !active;
+    panel.classList.toggle("is-active", active);
+  }
+  try {
+    localStorage.setItem(NET_TAB_KEY, nextTab);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
 function initNetPanel() {
   let savedBase = "http://127.0.0.1:8081";
   let savedUser = "avatar";
@@ -2581,6 +2601,7 @@ function initNetPanel() {
   let savedPassVisible = "off";
   let savedChar = "Avatar";
   let savedMaintenance = "off";
+  let savedNetTab = NET_TABS[0];
   try {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
@@ -2589,6 +2610,7 @@ function initNetPanel() {
     savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
     savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
+    savedNetTab = localStorage.getItem(NET_TAB_KEY) || savedNetTab;
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
@@ -2693,6 +2715,12 @@ function initNetPanel() {
   updateNetSessionStat();
   updateCriticalRecoveryStat();
   updateNetAuthButton();
+  setNetHeaderTab(savedNetTab);
+  for (const btn of netTabButtons) {
+    btn.addEventListener("click", () => {
+      setNetHeaderTab(String(btn.dataset.netTabButton || NET_TABS[0]));
+    });
+  }
 
   if (netLoginButton) {
     netLoginButton.addEventListener("click", async () => {

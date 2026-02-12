@@ -446,6 +446,39 @@ select.control-input {
   line-height: 1.1;
 }
 
+.vm-net-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.vm-net-tab-btn {
+  border: 1px solid var(--vm-border);
+  background: color-mix(in srgb, var(--vm-input-top) 80%, transparent 20%);
+  color: var(--vm-muted);
+  border-radius: 0.25rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.62rem;
+  line-height: 1.1;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vm-net-tab-btn:hover {
+  color: var(--vm-text);
+  border-color: color-mix(in srgb, var(--vm-border) 75%, white 25%);
+}
+
+.vm-net-tab-btn.is-active {
+  color: var(--vm-text);
+  border-color: color-mix(in srgb, var(--vm-accent) 45%, var(--vm-border) 55%);
+  background: color-mix(in srgb, var(--vm-input-top) 68%, var(--vm-accent) 32%);
+}
+
+.vm-net-tab-panel[hidden] {
+  display: none !important;
+}
+
 .replay-link.disabled {
   color: color-mix(in srgb, var(--vm-muted) 85%, transparent 15%);
   pointer-events: none;

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="obsidian" data-font="sans" data-legacy-frame-preview="off">
+<html lang="en" data-theme="obsidian" data-font="silkscreen" data-legacy-frame-preview="on">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,47 +20,69 @@
               <p class="vm-game-subtitle mt-1 text-sm">Web Debug View</p>
               <p class="vm-game-time mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
               <p class="vm-game-time mt-1 text-sm">Net: <strong id="topNetStatus" class="font-semibold">idle - Not logged in.</strong></p>
+              <p class="vm-game-time mt-1 text-sm">Startup: <strong class="font-semibold">Only Journey Onward is currently playable.</strong></p>
             </div>
             <div class="w-[520px] max-w-[52vw] shrink-0 vm-net-header-compact">
-              <div class="grid grid-cols-2 gap-2">
-                <label class="control-block">
-                  <span class="text-[11px] vm-muted-text">Server URL</span>
-                  <input id="netApiBaseInput" class="control-input text-xs" type="text" value="http://127.0.0.1:8081" placeholder="http://127.0.0.1:8081" aria-label="Net API Base URL">
-                </label>
-                <label class="control-block">
-                  <span class="text-[11px] vm-muted-text">Account Username</span>
-                  <input id="netUsernameInput" class="control-input text-xs" type="text" value="avatar" placeholder="avatar" aria-label="Account Username">
-                </label>
-                <div class="control-block">
-                  <span class="text-[11px] vm-muted-text">Account Password</span>
-                  <div class="flex gap-2">
-                    <input id="netPasswordInput" class="control-input text-xs flex-1" type="password" value="quest123" placeholder="password" aria-label="Account Password">
-                    <button id="netPasswordToggleButton" class="control-btn text-xs px-2" type="button" title="Show password">Show</button>
+              <div class="vm-net-tabs">
+                <button class="vm-net-tab-btn is-active" data-net-tab-button="account" type="button">Account</button>
+                <button class="vm-net-tab-btn" data-net-tab-button="recovery" type="button">Recovery</button>
+                <button class="vm-net-tab-btn" data-net-tab-button="verify" type="button">Verify</button>
+              </div>
+
+              <div class="vm-net-tab-panels mt-2">
+                <div class="vm-net-tab-panel is-active" data-net-tab-panel="account">
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="control-block">
+                      <span class="text-[11px] vm-muted-text">Server URL</span>
+                      <input id="netApiBaseInput" class="control-input text-xs" type="text" value="http://127.0.0.1:8081" placeholder="http://127.0.0.1:8081" aria-label="Net API Base URL">
+                    </label>
+                    <label class="control-block">
+                      <span class="text-[11px] vm-muted-text">Account Username</span>
+                      <input id="netUsernameInput" class="control-input text-xs" type="text" value="avatar" placeholder="avatar" aria-label="Account Username">
+                    </label>
+                    <div class="control-block">
+                      <span class="text-[11px] vm-muted-text">Account Password</span>
+                      <div class="flex gap-2">
+                        <input id="netPasswordInput" class="control-input text-xs flex-1" type="password" value="quest123" placeholder="password" aria-label="Account Password">
+                        <button id="netPasswordToggleButton" class="control-btn text-xs px-2" type="button" title="Show password">Show</button>
+                      </div>
+                    </div>
+                    <label class="control-block">
+                      <span class="text-[11px] vm-muted-text">Character Name</span>
+                      <input id="netCharacterNameInput" class="control-input text-xs" type="text" value="Avatar" placeholder="Avatar" aria-label="Character Name">
+                    </label>
+                  </div>
+                  <div class="grid grid-cols-1 gap-2 mt-2">
+                    <button id="netLoginButton" class="control-btn text-xs" type="button">Net Login (I)</button>
                   </div>
                 </div>
-                <label class="control-block">
-                  <span class="text-[11px] vm-muted-text">Character Name</span>
-                  <input id="netCharacterNameInput" class="control-input text-xs" type="text" value="Avatar" placeholder="Avatar" aria-label="Character Name">
-                </label>
-              </div>
-              <div class="grid grid-cols-2 gap-2 mt-2">
-                <label class="control-block">
-                  <span class="text-[11px] vm-muted-text">Recovery Email</span>
-                  <input id="netEmailInput" class="control-input text-xs" type="text" value="" placeholder="user@example.com" aria-label="Recovery Email">
-                </label>
-                <label class="control-block">
-                  <span class="text-[11px] vm-muted-text">Email Verify Code</span>
-                  <input id="netEmailCodeInput" class="control-input text-xs" type="text" value="" placeholder="6-digit code" aria-label="Email Verify Code">
-                </label>
-              </div>
-              <div class="grid grid-cols-2 gap-2 mt-2">
-                <button id="netLoginButton" class="control-btn text-xs" type="button">Net Login (I)</button>
-                <button id="netRecoverButton" class="control-btn text-xs" type="button">Recover Pass</button>
-              </div>
-              <div class="grid grid-cols-3 gap-2 mt-2">
-                <button id="netSetEmailButton" class="control-btn text-xs" type="button">Set Email</button>
-                <button id="netSendVerifyButton" class="control-btn text-xs" type="button">Send Code</button>
-                <button id="netVerifyEmailButton" class="control-btn text-xs" type="button">Verify Email</button>
+
+                <div class="vm-net-tab-panel" data-net-tab-panel="recovery" hidden>
+                  <div class="grid grid-cols-1 gap-2">
+                    <label class="control-block">
+                      <span class="text-[11px] vm-muted-text">Recovery Email</span>
+                      <input id="netEmailInput" class="control-input text-xs" type="text" value="" placeholder="user@example.com" aria-label="Recovery Email">
+                    </label>
+                  </div>
+                  <div class="grid grid-cols-1 gap-2 mt-2">
+                    <button id="netRecoverButton" class="control-btn text-xs" type="button">Recover Pass</button>
+                  </div>
+                </div>
+
+                <div class="vm-net-tab-panel" data-net-tab-panel="verify" hidden>
+                  <div class="grid grid-cols-1 gap-2">
+                    <label class="control-block">
+                      <span class="text-[11px] vm-muted-text">Email Verify Code</span>
+                      <input id="netEmailCodeInput" class="control-input text-xs" type="text" value="" placeholder="6-digit code" aria-label="Email Verify Code">
+                    </label>
+                    <p class="vm-muted-text text-[10px]">Uses the recovery email set in the Recovery tab.</p>
+                  </div>
+                  <div class="grid grid-cols-3 gap-2 mt-2">
+                    <button id="netSetEmailButton" class="control-btn text-xs" type="button">Set Email</button>
+                    <button id="netSendVerifyButton" class="control-btn text-xs" type="button">Send Code</button>
+                    <button id="netVerifyEmailButton" class="control-btn text-xs" type="button">Verify Email</button>
+                  </div>
+                </div>
               </div>
             </div>
           </header>
@@ -109,7 +131,7 @@
 
         <div class="mt-4 space-y-3">
           <div class="control-block"><label for="themeSelect">Theme</label><select id="themeSelect" class="control-input"><option value="obsidian">Obsidian Codex</option><option value="phosphor">Phosphor CRT</option><option value="amber">Amber Terminal</option><option value="cga-cyan">CGA Cyan Steel</option><option value="cga-magenta">CGA Magenta Night</option><option value="parchment">Parchment Atlas</option><option value="cobalt">Cobalt Keep</option><option value="bloodstone">Bloodstone Banner</option><option value="moonstone">Moonstone Ledger</option><option value="ash">Ash Monolith</option></select></div>
-          <div class="control-block"><label for="fontSelect">Body Font</label><select id="fontSelect" class="control-input"><option value="sans">Sans UI (Default)</option><option value="silkscreen">Silkscreen</option><option value="kaijuz">Kaijuz</option><option value="orangekid">Orange Kid</option><option value="blockblueprint">BlockBlueprint</option></select></div>
+          <div class="control-block"><label for="fontSelect">Body Font</label><select id="fontSelect" class="control-input"><option value="sans">Sans UI</option><option value="silkscreen">Silkscreen (Default)</option><option value="kaijuz">Kaijuz</option><option value="orangekid">Orange Kid</option><option value="blockblueprint">BlockBlueprint</option></select></div>
           <div class="control-block"><label for="gridToggle">Viewport Grid</label><select id="gridToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">On</option></select></div>
           <div class="control-block"><label for="debugOverlayToggle">Overlay Debug</label><select id="debugOverlayToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">On</option></select></div>
           <div class="control-block"><label for="animationToggle">Animation</label><select id="animationToggle" class="control-input"><option value="live">Live (Tick-Driven)</option><option value="freeze">Freeze (Debug)</option></select></div>
