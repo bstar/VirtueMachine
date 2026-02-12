@@ -18,6 +18,7 @@
             <h1 class="vm-game-title text-2xl font-bold tracking-tight">VIRTUE MACHINE</h1>
             <p class="vm-game-subtitle mt-1 text-sm">Web Debug View</p>
             <p class="vm-game-time mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
+            <p class="vm-game-time mt-1 text-sm">Net: <strong id="topNetStatus" class="font-semibold">idle - Not logged in.</strong></p>
           </header>
           <div class="h-[calc(100%-88px)] flex items-center justify-center">
             <div class="vm-world-frame">
@@ -58,6 +59,8 @@
           <div class="stat-row"><span>Center Tile IDs</span><strong id="statCenterTiles">-</strong></div>
           <div class="stat-row"><span>Center Palette Band</span><strong id="statCenterBand">-</strong></div>
           <div class="stat-row"><span>Net Session</span><strong id="statNetSession">offline</strong></div>
+          <div class="stat-row"><span>Net Players</span><strong id="statNetPlayers">1</strong></div>
+          <div class="stat-row"><span>Critical Recoveries</span><strong id="statCriticalRecoveries">0</strong></div>
         </div>
 
         <div class="mt-4 space-y-3">
@@ -87,6 +90,11 @@
             <button id="netRecoverButton" class="control-btn" type="button">Recover Pass</button>
             <button id="netSaveButton" class="control-btn" type="button">Save Remote (Y)</button>
             <button id="netLoadButton" class="control-btn" type="button">Load Remote (U)</button>
+            <button id="netRenameButton" class="control-btn col-span-2" type="button">Rename Username</button>
+          </div>
+          <div class="control-block"><label for="netMaintenanceToggle">Critical Maintenance</label><select id="netMaintenanceToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">Auto (every 120 ticks)</option></select></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="netMaintenanceButton" class="control-btn col-span-2" type="button">Run Maintenance (N)</button>
           </div>
         </div>
 
@@ -116,8 +124,11 @@
           <p>`M` toggle ghost/avatar mode</p>
           <p>`E` interact with facing door (avatar mode)</p>
           <p>`I` net login (selected user/password)</p>
+          <p>Rename Username button uses current password</p>
+          <p>Journey Onward requires login</p>
           <p>`Y` save current sim snapshot to net backend</p>
           <p>`U` load sim snapshot from net backend</p>
+          <p>`N` run critical-item maintenance now</p>
           <p>`,` / `.` cycle cursor glyph</p>
           <p>`[` / `]` cycle legacy scale</p>
         </div>

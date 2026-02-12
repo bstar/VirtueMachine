@@ -9,6 +9,7 @@ This directory contains the first multiplayer backend seed focused on:
 
 Authentication note (intentional for this project): passwords are stored in plaintext
 to prioritize password recovery over security hardening in the current prototype.
+User lookup is username-based; renames are supported without changing character ownership.
 
 ## Run
 
@@ -32,10 +33,13 @@ Public:
 
 Authenticated (Bearer token):
 
+- `POST /api/auth/rename-username`
 - `GET /api/characters`
 - `POST /api/characters`
 - `GET /api/characters/:id/snapshot`
 - `PUT /api/characters/:id/snapshot`
+- `POST /api/world/presence/heartbeat`
+- `GET /api/world/presence`
 - `GET /api/world/critical-items/policy`
 - `PUT /api/world/critical-items/policy`
 - `POST /api/world/critical-items/maintenance`

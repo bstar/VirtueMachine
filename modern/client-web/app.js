@@ -11,6 +11,8 @@ const VIEW_W = 11;
 const VIEW_H = 11;
 const COMMAND_WIRE_SIZE = 16;
 const MOVE_INPUT_MIN_INTERVAL_MS = 120;
+const NET_PRESENCE_HEARTBEAT_TICKS = 4;
+const NET_PRESENCE_POLL_TICKS = 10;
 const TICKS_PER_MINUTE = 4;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
@@ -117,7 +119,10 @@ const statPalettePhase = document.getElementById("statPalettePhase");
 const statCenterTiles = document.getElementById("statCenterTiles");
 const statCenterBand = document.getElementById("statCenterBand");
 const statNetSession = document.getElementById("statNetSession");
+const statNetPlayers = document.getElementById("statNetPlayers");
+const statCriticalRecoveries = document.getElementById("statCriticalRecoveries");
 const topTimeOfDay = document.getElementById("topTimeOfDay");
+const topNetStatus = document.getElementById("topNetStatus");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
@@ -143,6 +148,9 @@ const netLoginButton = document.getElementById("netLoginButton");
 const netRecoverButton = document.getElementById("netRecoverButton");
 const netSaveButton = document.getElementById("netSaveButton");
 const netLoadButton = document.getElementById("netLoadButton");
+const netRenameButton = document.getElementById("netRenameButton");
+const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
+const netMaintenanceButton = document.getElementById("netMaintenanceButton");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -157,6 +165,7 @@ const LEGACY_SCALE_MODE_KEY = "vm_legacy_scale_mode";
 const NET_API_BASE_KEY = "vm_net_api_base";
 const NET_USERNAME_KEY = "vm_net_username";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
+const NET_MAINTENANCE_KEY = "vm_net_maintenance";
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
   cornerTL: 0x1b0,
@@ -331,9 +340,20 @@ const state = {
     token: "",
     userId: "",
     username: "",
+    sessionId: (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Math.random().toString(16).slice(2)}_${Date.now()}`,
     characterId: "",
     characterName: "",
-    lastSavedTick: 0
+    remotePlayers: [],
+    lastPresenceHeartbeatTick: -1,
+    lastPresencePollTick: -1,
+    presencePollInFlight: false,
+    lastSavedTick: 0,
+    maintenanceAuto: false,
+    maintenanceInFlight: false,
+    lastMaintenanceTick: -1,
+    recoveryEventCount: 0,
+    statusLevel: "idle",
+    statusText: "Not logged in."
   }
 };
 
@@ -1590,7 +1610,10 @@ function renderLegacyHudStubOnBackdrop() {
       drawTile(LEGACY_UI_TILE.SLOT_EMPTY, 176 + (rx * 16), 8 + (ry * 16));
     }
   }
-  drawU6MainText(g, "AVATAR", x(184), y(12), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  const portraitName = (state.net.username && state.net.username.trim())
+    ? state.net.username.trim().toUpperCase().slice(0, 12)
+    : "AVATAR";
+  drawU6MainText(g, portraitName, x(184), y(12), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   if (state.avatarPortraitCanvas) {
     g.drawImage(state.avatarPortraitCanvas, x(184), y(24), x(56), y(64));
   } else if (state.tileSet) {
@@ -1691,6 +1714,7 @@ function renderStartupMenuLayer(g, scale) {
 
   for (let i = 0; i < STARTUP_MENU.length; i += 1) {
     const item = STARTUP_MENU[i];
+    const enabled = startupMenuItemEnabled(item);
     const rowY = 74 + (i * 20);
     const selected = i === state.startupMenuIndex;
     g.fillStyle = selected ? "#5f2e1d" : "#1f1a14";
@@ -1700,11 +1724,14 @@ function renderStartupMenuLayer(g, scale) {
     if (selected) {
       drawU6MainText(g, ">>", x(68), y(rowY + 4), Math.max(1, scale), "#f2dfb6");
     }
-    const textColor = item.enabled ? (selected ? "#f2dfb6" : "#d8be8a") : "#76644a";
+    const textColor = enabled ? (selected ? "#f2dfb6" : "#d8be8a") : "#76644a";
     drawU6MainText(g, item.label, x(86), y(rowY + 4), Math.max(1, scale), textColor);
   }
 
   drawU6MainText(g, "Use ARROWS + ENTER", x(98), y(162), Math.max(1, scale), "#8e7a55");
+  if (!isNetAuthenticated()) {
+    drawU6MainText(g, "LOGIN REQUIRED", x(108), y(174), Math.max(1, scale), "#8e6a42");
+  }
 }
 
 function buildStartupPaletteForMenu() {
@@ -2056,6 +2083,42 @@ function updateNetSessionStat() {
   statNetSession.textContent = `${state.net.username}/${name}`;
 }
 
+function setNetStatus(level, text) {
+  const lvl = String(level || "idle");
+  const msg = String(text || "");
+  state.net.statusLevel = lvl;
+  state.net.statusText = msg;
+  if (topNetStatus) {
+    topNetStatus.textContent = `${lvl} - ${msg}`;
+  }
+}
+
+function isTypingContext(target) {
+  if (!target) {
+    return false;
+  }
+  const el = target instanceof Element ? target : null;
+  if (!el) {
+    return false;
+  }
+  if (el.isContentEditable) {
+    return true;
+  }
+  const tag = el.tagName ? el.tagName.toLowerCase() : "";
+  if (tag === "input" || tag === "textarea" || tag === "select") {
+    return true;
+  }
+  return !!el.closest("input, textarea, select, [contenteditable=\"\"], [contenteditable=\"true\"]");
+}
+
+function updateCriticalRecoveryStat() {
+  if (!statCriticalRecoveries) {
+    return;
+  }
+  const suffix = state.net.lastMaintenanceTick >= 0 ? ` @${state.net.lastMaintenanceTick}` : "";
+  statCriticalRecoveries.textContent = `${state.net.recoveryEventCount}${suffix}`;
+}
+
 function normalizeLoadedSimState(candidate) {
   if (!candidate || typeof candidate !== "object") {
     return null;
@@ -2134,6 +2197,7 @@ async function netEnsureCharacter() {
 }
 
 async function netLogin() {
+  setNetStatus("connecting", "Authenticating...");
   state.net.apiBase = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
   const username = String(netUsernameInput?.value || "").trim().toLowerCase();
   const password = String(netPasswordInput?.value || "");
@@ -2148,8 +2212,13 @@ async function netLogin() {
   state.net.token = String(login?.token || "");
   state.net.userId = String(login?.user?.user_id || "");
   state.net.username = String(login?.user?.username || username);
+  state.net.remotePlayers = [];
+  state.net.lastPresenceHeartbeatTick = -1;
+  state.net.lastPresencePollTick = -1;
   await netEnsureCharacter();
+  await netPollPresence();
   updateNetSessionStat();
+  setNetStatus("online", `${state.net.username}/${state.net.characterName}`);
   try {
     localStorage.setItem(NET_API_BASE_KEY, state.net.apiBase);
     localStorage.setItem(NET_USERNAME_KEY, state.net.username);
@@ -2166,14 +2235,49 @@ async function netRecoverPassword() {
     throw new Error("Username is required");
   }
   state.net.apiBase = base;
+  setNetStatus("connecting", "Recovering password...");
   const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}`, { method: "GET" }, false);
   if (netPasswordInput) {
     netPasswordInput.value = String(out?.password_plaintext || "");
   }
+  setNetStatus("online", `Recovered password for ${out?.user?.username || username}`);
+  return out;
+}
+
+async function netRenameUsername() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  const newUsername = String(netUsernameInput?.value || "").trim().toLowerCase();
+  const password = String(netPasswordInput?.value || "");
+  if (!newUsername || newUsername.length < 2) {
+    throw new Error("New username is required");
+  }
+  if (!password) {
+    throw new Error("Password is required");
+  }
+  setNetStatus("sync", `Renaming to ${newUsername}...`);
+  const out = await netRequest("/api/auth/rename-username", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      new_username: newUsername,
+      password
+    })
+  }, true);
+  state.net.username = String(out?.user?.username || newUsername);
+  updateNetSessionStat();
+  try {
+    localStorage.setItem(NET_USERNAME_KEY, state.net.username);
+  } catch (_err) {
+    // ignore storage failures
+  }
+  setNetStatus("online", `Renamed ${out?.old_username || "user"} -> ${state.net.username}`);
   return out;
 }
 
 async function netSaveSnapshot() {
+  setNetStatus("sync", "Saving remote snapshot...");
   if (!state.net.token) {
     await netLogin();
   } else if (!state.net.characterId) {
@@ -2191,10 +2295,12 @@ async function netSaveSnapshot() {
     })
   }, true);
   state.net.lastSavedTick = Number(out?.snapshot_meta?.saved_tick || 0) >>> 0;
+  setNetStatus("online", `Saved tick ${state.net.lastSavedTick}`);
   return out;
 }
 
 async function netLoadSnapshot() {
+  setNetStatus("sync", "Loading remote snapshot...");
   if (!state.net.token) {
     await netLogin();
   } else if (!state.net.characterId) {
@@ -2215,17 +2321,118 @@ async function netLoadSnapshot() {
   state.lastMoveQueueAtMs = -1;
   state.avatarLastMoveTick = -1;
   state.interactionProbeTile = null;
+  setNetStatus("online", `Loaded tick ${Number(out?.snapshot_meta?.saved_tick || 0)}`);
   return out;
+}
+
+function collectWorldItemsForMaintenance() {
+  if (!state.objectLayer || !state.objectLayer.byCoord) {
+    return [];
+  }
+  const worldItems = [];
+  for (const list of state.objectLayer.byCoord.values()) {
+    for (const obj of list) {
+      const typeHex = (obj.type & 0x3ff).toString(16).padStart(3, "0");
+      worldItems.push({
+        item_id: `item_type_0x${typeHex}`,
+        reachable: true,
+        at: { x: obj.x | 0, y: obj.y | 0, z: obj.z | 0 }
+      });
+    }
+  }
+  return worldItems;
+}
+
+async function netRunCriticalMaintenance(opts = {}) {
+  const { silent = false } = opts;
+  if (state.net.maintenanceInFlight) {
+    return [];
+  }
+  state.net.maintenanceInFlight = true;
+  setNetStatus("sync", "Running critical maintenance...");
+  try {
+    if (!state.net.token) {
+      await netLogin();
+    }
+    const out = await netRequest("/api/world/critical-items/maintenance", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tick: state.sim.tick >>> 0,
+        world_items: collectWorldItemsForMaintenance()
+      })
+    }, true);
+    const events = Array.isArray(out?.events) ? out.events : [];
+    state.net.recoveryEventCount += events.length;
+    state.net.lastMaintenanceTick = state.sim.tick >>> 0;
+    updateCriticalRecoveryStat();
+    if (!silent) {
+      diagBox.className = "diag ok";
+      diagBox.textContent = events.length
+        ? `Critical maintenance emitted ${events.length} recovery event(s).`
+        : "Critical maintenance check complete (no recoveries needed).";
+    }
+    setNetStatus("online", events.length
+      ? `Maintenance recovered ${events.length} item(s)`
+      : "Maintenance check complete");
+    return events;
+  } finally {
+    state.net.maintenanceInFlight = false;
+  }
+}
+
+async function netSendPresenceHeartbeat() {
+  if (!isNetAuthenticated() || !state.sessionStarted) {
+    return;
+  }
+  await netRequest("/api/world/presence/heartbeat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      session_id: state.net.sessionId,
+      character_name: state.net.characterName || "Avatar",
+      map_x: state.sim.world.map_x | 0,
+      map_y: state.sim.world.map_y | 0,
+      map_z: state.sim.world.map_z | 0,
+      facing_dx: state.avatarFacingDx | 0,
+      facing_dy: state.avatarFacingDy | 0,
+      tick: state.sim.tick >>> 0,
+      mode: state.movementMode
+    })
+  }, true);
+}
+
+async function netPollPresence() {
+  if (!isNetAuthenticated()) {
+    state.net.remotePlayers = [];
+    return;
+  }
+  if (state.net.presencePollInFlight) {
+    return;
+  }
+  state.net.presencePollInFlight = true;
+  try {
+    const out = await netRequest("/api/world/presence", { method: "GET" }, true);
+    const players = Array.isArray(out?.players) ? out.players : [];
+    state.net.remotePlayers = players.filter((p) => {
+      const sameSession = String(p.session_id || "") === String(state.net.sessionId || "");
+      return !sameSession;
+    });
+  } finally {
+    state.net.presencePollInFlight = false;
+  }
 }
 
 function initNetPanel() {
   let savedBase = "http://127.0.0.1:8081";
   let savedUser = "avatar";
   let savedChar = "Avatar";
+  let savedMaintenance = "off";
   try {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
+    savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
@@ -2241,7 +2448,21 @@ function initNetPanel() {
   state.net.apiBase = savedBase;
   state.net.username = savedUser;
   state.net.characterName = savedChar;
+  setNetStatus("idle", "Not logged in.");
+  state.net.maintenanceAuto = savedMaintenance === "on";
+  if (netMaintenanceToggle) {
+    netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
+    netMaintenanceToggle.addEventListener("change", () => {
+      state.net.maintenanceAuto = netMaintenanceToggle.value === "on";
+      try {
+        localStorage.setItem(NET_MAINTENANCE_KEY, state.net.maintenanceAuto ? "on" : "off");
+      } catch (_err) {
+        // ignore storage failures in restrictive browser contexts
+      }
+    });
+  }
   updateNetSessionStat();
+  updateCriticalRecoveryStat();
 
   if (netLoginButton) {
     netLoginButton.addEventListener("click", async () => {
@@ -2250,6 +2471,7 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
       } catch (err) {
+        setNetStatus("error", `Login failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
       }
@@ -2262,6 +2484,7 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Recovered password for ${out?.user?.username || "user"}.`;
       } catch (err) {
+        setNetStatus("error", `Recovery failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Password recovery failed: ${String(err.message || err)}`;
       }
@@ -2275,6 +2498,7 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
       } catch (err) {
+        setNetStatus("error", `Save failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
       }
@@ -2288,8 +2512,33 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
       } catch (err) {
+        setNetStatus("error", `Load failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netRenameButton) {
+    netRenameButton.addEventListener("click", async () => {
+      try {
+        const out = await netRenameUsername();
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Renamed ${out?.old_username || "user"} to ${state.net.username}.`;
+      } catch (err) {
+        setNetStatus("error", `Rename failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Rename failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netMaintenanceButton) {
+    netMaintenanceButton.addEventListener("click", async () => {
+      try {
+        await netRunCriticalMaintenance({ silent: false });
+      } catch (err) {
+        setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
       }
     });
   }
@@ -2774,12 +3023,35 @@ function setStartupMenuIndex(nextIndex) {
   state.startupMenuIndex = idx;
 }
 
+function isNetAuthenticated() {
+  return !!(state.net && state.net.token && state.net.userId);
+}
+
+function startupMenuItemEnabled(item) {
+  if (!item) {
+    return false;
+  }
+  if (!item.enabled) {
+    return false;
+  }
+  if (item.id === "journey") {
+    return isNetAuthenticated();
+  }
+  return true;
+}
+
 function activateStartupMenuSelection() {
   if (!STARTUP_MENU.length) {
     return;
   }
   const selected = STARTUP_MENU[state.startupMenuIndex] || STARTUP_MENU[0];
-  if (!selected || !selected.enabled) {
+  if (!selected || !startupMenuItemEnabled(selected)) {
+    if (selected && selected.id === "journey" && !isNetAuthenticated()) {
+      setNetStatus("idle", "Login required before Journey Onward.");
+      diagBox.className = "diag warn";
+      diagBox.textContent = "Login required before Journey Onward.";
+      return;
+    }
     diagBox.className = "diag warn";
     diagBox.textContent = `"${selected ? selected.label : "This option"}" is not available in this build.`;
     return;
@@ -2805,6 +3077,12 @@ function placeCameraAtPresetId(presetId) {
 
 function startSessionFromTitle() {
   if (state.sessionStarted) {
+    return;
+  }
+  if (!isNetAuthenticated()) {
+    setNetStatus("idle", "Login required before Journey Onward.");
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Login required before Journey Onward.";
     return;
   }
   if (!state.runtimeReady) {
@@ -3734,6 +4012,34 @@ function avatarRenderTileId() {
   return (avatar.baseTile + frame) & 0xffff;
 }
 
+function avatarBaseTileId() {
+  if (!state.entityLayer || !state.entityLayer.entries) {
+    return null;
+  }
+  const avatar = state.entityLayer.entries.find((e) => e.id === AVATAR_ENTITY_ID) ?? null;
+  if (!avatar || !avatar.baseTile) {
+    return null;
+  }
+  return avatar.baseTile & 0xffff;
+}
+
+function directionGroupFromDxDy(dx, dy) {
+  if ((dy | 0) < 0) return 0;
+  if ((dx | 0) > 0) return 1;
+  if ((dy | 0) > 0) return 2;
+  return 3;
+}
+
+function remotePlayerTileId(player) {
+  const base = avatarBaseTileId();
+  if (base == null) {
+    return null;
+  }
+  const dirGroup = directionGroupFromDxDy(player.facing_dx | 0, player.facing_dy | 0);
+  const frame = (dirGroup << 2) + 1;
+  return (base + frame) & 0xffff;
+}
+
 function tileColor(t, palette) {
   if (!palette) {
     const [r, g, b] = fallbackTileColor(t);
@@ -4028,6 +4334,42 @@ function drawTileGrid() {
       entityCount += 1;
     }
   }
+  if (state.sessionStarted && Array.isArray(state.net.remotePlayers)) {
+    for (const p of state.net.remotePlayers) {
+      const pxw = Number(p.map_x) | 0;
+      const pyw = Number(p.map_y) | 0;
+      const pzw = Number(p.map_z) | 0;
+      if (pzw !== (state.sim.world.map_z | 0)) {
+        continue;
+      }
+      if (viewCtx && !viewCtx.visibleAtWorld(pxw, pyw)) {
+        continue;
+      }
+      const gx = pxw - startX;
+      const gy = pyw - startY;
+      if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+        continue;
+      }
+      const tileId = remotePlayerTileId(p);
+      if (tileId != null && state.tileSet) {
+        drawEntityTile(tileId, gx, gy);
+      } else {
+        const px = gx * TILE_SIZE;
+        const py = gy * TILE_SIZE;
+        ctx.fillStyle = "rgba(80, 240, 255, 0.85)";
+        ctx.fillRect(px + 18, py + 18, TILE_SIZE - 36, TILE_SIZE - 36);
+      }
+      const label = String(p.username || "?").slice(0, 8);
+      const lx = (gx * TILE_SIZE) + 4;
+      const ly = (gy * TILE_SIZE) + 12;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.fillRect(lx - 2, ly - 10, (label.length * 7) + 4, 12);
+      ctx.fillStyle = "#9cf6ff";
+      ctx.font = "10px monospace";
+      ctx.fillText(label, lx, ly - 1);
+      entityCount += 1;
+    }
+  }
   const interactionProbe = topInteractiveOverlayAt(
     overlayCells,
     startX,
@@ -4144,6 +4486,10 @@ function updateStats() {
     } else {
       statCenterBand.textContent = state.centerPaletteBand;
     }
+  }
+  if (statNetPlayers) {
+    const remote = Array.isArray(state.net.remotePlayers) ? state.net.remotePlayers.length : 0;
+    statNetPlayers.textContent = String(1 + remote);
   }
 }
 
@@ -4345,6 +4691,38 @@ function tickLoop(ts) {
         viewCtx ? (x, y) => viewCtx.visibleAtWorld(x, y) : null
       );
       state.npcOcclusionBlockedMoves += blocked;
+    }
+    if (
+      isNetAuthenticated()
+      && state.sessionStarted
+      && (state.sim.tick - state.net.lastPresenceHeartbeatTick) >= NET_PRESENCE_HEARTBEAT_TICKS
+    ) {
+      state.net.lastPresenceHeartbeatTick = state.sim.tick >>> 0;
+      netSendPresenceHeartbeat().catch((err) => {
+        setNetStatus("error", `Presence heartbeat failed: ${String(err.message || err)}`);
+      });
+    }
+    if (
+      isNetAuthenticated()
+      && (state.sim.tick - state.net.lastPresencePollTick) >= NET_PRESENCE_POLL_TICKS
+    ) {
+      state.net.lastPresencePollTick = state.sim.tick >>> 0;
+      netPollPresence().catch((err) => {
+        setNetStatus("error", `Presence poll failed: ${String(err.message || err)}`);
+      });
+    }
+    if (
+      state.net.maintenanceAuto
+      && state.net.token
+      && !state.net.maintenanceInFlight
+      && (state.sim.tick % 120) === 0
+      && state.sim.tick !== state.net.lastMaintenanceTick
+    ) {
+      netRunCriticalMaintenance({ silent: true }).catch((err) => {
+        setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
+      });
     }
   }
 
@@ -4570,6 +4948,9 @@ async function loadRuntimeAssets() {
 }
 
 window.addEventListener("keydown", (ev) => {
+  if (isTypingContext(ev.target)) {
+    return;
+  }
   const k = ev.key.toLowerCase();
   if (!state.sessionStarted) {
     if (k === "arrowup") {
@@ -4631,6 +5012,7 @@ window.addEventListener("keydown", (ev) => {
     diagBox.className = "diag ok";
     diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
   }).catch((err) => {
+    setNetStatus("error", `Login failed: ${String(err.message || err)}`);
     diagBox.className = "diag warn";
     diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
   });
@@ -4639,6 +5021,7 @@ window.addEventListener("keydown", (ev) => {
     diagBox.className = "diag ok";
     diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
   }).catch((err) => {
+    setNetStatus("error", `Save failed: ${String(err.message || err)}`);
     diagBox.className = "diag warn";
     diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
   });
@@ -4647,8 +5030,14 @@ window.addEventListener("keydown", (ev) => {
     diagBox.className = "diag ok";
     diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
   }).catch((err) => {
+    setNetStatus("error", `Load failed: ${String(err.message || err)}`);
     diagBox.className = "diag warn";
     diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
+  });
+  else if (k === "n") netRunCriticalMaintenance({ silent: false }).catch((err) => {
+    setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
   });
   else if (ev.key === ",") cycleCursor(-1);
   else if (ev.key === ".") cycleCursor(1);

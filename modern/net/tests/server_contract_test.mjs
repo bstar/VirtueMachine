@@ -92,6 +92,29 @@ async function main() {
     assert.equal(recovered.status, 200);
     assert.equal(recovered.body?.password_plaintext, "quest123");
 
+    const rename = await jsonFetch(baseUrl, "/api/auth/rename-username", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        new_username: "avatar_renamed",
+        password: "quest123"
+      })
+    });
+    assert.equal(rename.status, 200);
+    assert.equal(rename.body?.user?.username, "avatar_renamed");
+    assert.equal(rename.body?.old_username, "avatar");
+
+    const recoveredOld = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar", {
+      method: "GET"
+    });
+    assert.equal(recoveredOld.status, 404);
+
+    const recoveredNew = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar_renamed", {
+      method: "GET"
+    });
+    assert.equal(recoveredNew.status, 200);
+    assert.equal(recoveredNew.body?.password_plaintext, "quest123");
+
     const createChar = await jsonFetch(baseUrl, "/api/characters", {
       method: "POST",
       headers: authHeaders,
@@ -121,6 +144,34 @@ async function main() {
     });
     assert.equal(loadSnapshot.status, 200);
     assert.ok(loadSnapshot.body?.snapshot_base64);
+
+    const heartbeat = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        session_id: "test-session-1",
+        character_name: "Avatar",
+        map_x: 307,
+        map_y: 347,
+        map_z: 0,
+        facing_dx: 0,
+        facing_dy: 1,
+        tick: 42,
+        mode: "avatar"
+      })
+    });
+    assert.equal(heartbeat.status, 200);
+    assert.equal(heartbeat.body?.ok, true);
+
+    const presence = await jsonFetch(baseUrl, "/api/world/presence", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(presence.status, 200);
+    assert.ok(Array.isArray(presence.body?.players));
+    assert.equal(presence.body.players.length, 1);
+    assert.equal(presence.body.players[0]?.username, "avatar_renamed");
+    assert.equal(presence.body.players[0]?.map_x, 307);
 
     const policy = await jsonFetch(baseUrl, "/api/world/critical-items/policy", {
       method: "GET",

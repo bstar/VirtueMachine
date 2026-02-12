@@ -14,6 +14,7 @@ const FILES = {
   users: path.join(DATA_DIR, "users.json"),
   tokens: path.join(DATA_DIR, "tokens.json"),
   characters: path.join(DATA_DIR, "characters.json"),
+  presence: path.join(DATA_DIR, "presence.json"),
   criticalPolicy: path.join(DATA_DIR, "critical_item_policy.json"),
   recoveriesLog: path.join(DATA_DIR, "critical_item_recoveries.log")
 };
@@ -61,9 +62,22 @@ function readJsonLines(filePath) {
   }
 }
 
-function stableUserId(username) {
-  const digest = crypto.createHash("sha256").update(username).digest("hex");
-  return `usr_${digest.slice(0, 16)}`;
+function normalizeUsername(raw) {
+  return String(raw || "").trim().toLowerCase();
+}
+
+function newUserId(state) {
+  for (;;) {
+    const id = `usr_${crypto.randomBytes(8).toString("hex")}`;
+    if (!state.users.find((u) => u.user_id === id)) {
+      return id;
+    }
+  }
+}
+
+function findUserByUsername(state, username) {
+  const wanted = normalizeUsername(username);
+  return state.users.find((u) => normalizeUsername(u.username) === wanted) || null;
 }
 
 function parseAuth(req) {
@@ -78,7 +92,10 @@ function sendJson(res, status, value) {
   const body = `${JSON.stringify(value)}\n`;
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
+    "access-control-allow-headers": "content-type,authorization"
   });
   res.end(body);
 }
@@ -144,10 +161,14 @@ function loadState() {
     users: readJson(FILES.users, []),
     tokens: readJson(FILES.tokens, []),
     characters: readJson(FILES.characters, []),
+    presence: readJson(FILES.presence, []),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy())
   };
   if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
     state.criticalPolicy = defaultCriticalPolicy();
+  }
+  if (!Array.isArray(state.presence)) {
+    state.presence = [];
   }
   return state;
 }
@@ -156,6 +177,7 @@ function persistState(state) {
   writeJson(FILES.users, state.users);
   writeJson(FILES.tokens, state.tokens);
   writeJson(FILES.characters, state.characters);
+  writeJson(FILES.presence, state.presence);
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
 }
 
@@ -182,7 +204,6 @@ function requireUser(state, req, res) {
 function issueToken(state, userId) {
   const token = crypto.randomBytes(24).toString("hex");
   const ttlMs = 1000 * 60 * 60 * 24 * 7;
-  state.tokens = state.tokens.filter((t) => t.user_id !== userId);
   state.tokens.push({
     token,
     user_id: userId,
@@ -269,6 +290,17 @@ const state = loadState();
 persistState(state);
 
 const server = http.createServer(async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
+      "access-control-allow-headers": "content-type,authorization",
+      "access-control-max-age": "86400"
+    });
+    res.end();
+    return;
+  }
+
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
   if (req.method === "GET" && url.pathname === "/health") {
@@ -284,7 +316,7 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 400, "bad_json", String(err.message || err));
       return;
     }
-    const username = String(body && body.username || "").trim().toLowerCase();
+    const username = normalizeUsername(body && body.username);
     const password = String(body && body.password || "");
     if (!username || username.length < 2) {
       sendError(res, 400, "bad_username", "username is required");
@@ -295,10 +327,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const userId = stableUserId(username);
-    let user = state.users.find((u) => u.user_id === userId);
+    let user = findUserByUsername(state, username);
     if (!user) {
-      user = { user_id: userId, username, password_plaintext: password, created_at: nowIso() };
+      user = { user_id: newUserId(state), username, password_plaintext: password, created_at: nowIso() };
       state.users.push(user);
     } else if (!user.password_plaintext) {
       user.password_plaintext = password;
@@ -306,7 +337,7 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 401, "auth_invalid", "invalid username/password");
       return;
     }
-    const token = issueToken(state, userId);
+    const token = issueToken(state, user.user_id);
     persistState(state);
     sendJson(res, 200, {
       token,
@@ -319,13 +350,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/auth/recover-password") {
-    const username = String(url.searchParams.get("username") || "").trim().toLowerCase();
+    const username = normalizeUsername(url.searchParams.get("username") || "");
     if (!username || username.length < 2) {
       sendError(res, 400, "bad_username", "username is required");
       return;
     }
-    const userId = stableUserId(username);
-    const user = state.users.find((u) => u.user_id === userId);
+    const user = findUserByUsername(state, username);
     if (!user) {
       sendError(res, 404, "user_not_found", "user not found");
       return;
@@ -342,6 +372,46 @@ const server = http.createServer(async (req, res) => {
 
   const user = requireUser(state, req, res);
   if (!user) {
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/rename-username") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const newUsername = normalizeUsername(body && body.new_username);
+    const password = String(body && body.password || "");
+    if (!newUsername || newUsername.length < 2) {
+      sendError(res, 400, "bad_username", "new_username is required");
+      return;
+    }
+    if (!password) {
+      sendError(res, 400, "bad_password", "password is required");
+      return;
+    }
+    if (String(user.password_plaintext || "") !== password) {
+      sendError(res, 401, "auth_invalid", "invalid username/password");
+      return;
+    }
+    const existing = findUserByUsername(state, newUsername);
+    if (existing && existing.user_id !== user.user_id) {
+      sendError(res, 409, "username_taken", "username already exists");
+      return;
+    }
+    const oldUsername = user.username;
+    user.username = newUsername;
+    persistState(state);
+    sendJson(res, 200, {
+      user: {
+        user_id: user.user_id,
+        username: user.username
+      },
+      old_username: oldUsername
+    });
     return;
   }
 
@@ -422,6 +492,78 @@ const server = http.createServer(async (req, res) => {
     }
     const events = runCriticalItemMaintenance(state, body || {});
     sendJson(res, 200, { events });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/world/presence/heartbeat") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const sessionId = String(body && body.session_id || "").trim();
+    if (!sessionId || sessionId.length < 8) {
+      sendError(res, 400, "bad_session_id", "session_id is required");
+      return;
+    }
+    const nowMs = Date.now();
+    const row = {
+      user_id: user.user_id,
+      username: user.username,
+      session_id: sessionId,
+      character_name: String(body && body.character_name || "").trim(),
+      map_x: Number(body && body.map_x) | 0,
+      map_y: Number(body && body.map_y) | 0,
+      map_z: Number(body && body.map_z) | 0,
+      facing_dx: Number(body && body.facing_dx) | 0,
+      facing_dy: Number(body && body.facing_dy) | 0,
+      tick: Number(body && body.tick) >>> 0,
+      mode: String(body && body.mode || "avatar"),
+      updated_at_ms: nowMs
+    };
+    const key = `${row.user_id}:${row.session_id}`;
+    let replaced = false;
+    state.presence = state.presence.map((p) => {
+      const pKey = `${String(p.user_id || "")}:${String(p.session_id || "")}`;
+      if (pKey === key) {
+        replaced = true;
+        return row;
+      }
+      return p;
+    });
+    if (!replaced) {
+      state.presence.push(row);
+    }
+    const cutoff = nowMs - 15000;
+    state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+    persistState(state);
+    sendJson(res, 200, { ok: true, now: nowIso() });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/world/presence") {
+    const nowMs = Date.now();
+    const cutoff = nowMs - 15000;
+    state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+    persistState(state);
+    sendJson(res, 200, {
+      players: state.presence.map((p) => ({
+        user_id: p.user_id,
+        username: p.username,
+        session_id: p.session_id,
+        character_name: p.character_name,
+        map_x: p.map_x | 0,
+        map_y: p.map_y | 0,
+        map_z: p.map_z | 0,
+        facing_dx: p.facing_dx | 0,
+        facing_dy: p.facing_dy | 0,
+        tick: Number(p.tick) >>> 0,
+        mode: p.mode || "avatar",
+        updated_at_ms: Number(p.updated_at_ms || 0)
+      }))
+    });
     return;
   }
 
