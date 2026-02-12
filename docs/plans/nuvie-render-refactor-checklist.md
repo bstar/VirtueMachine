@@ -1,6 +1,7 @@
 # Nuvie Render Refactor Checklist
 
 Date Started: 2026-02-11
+Last Reconciled: 2026-02-12
 Owner: VirtueMachine renderer slice
 Scope: `modern/client-web` map/visibility/wall/object composition path
 
@@ -66,3 +67,5 @@ Exit criteria:
 - Multiplayer architecture remains out of scope for this checklist.
 - Fallback path must remain available until M4 sign-off.
 - Status update: wall parity work is intentionally paused and moved to deferred backlog while higher-priority gameplay slices continue.
+- Startup/menu and cursor parity work progressed in parallel under R5/R6 and is tracked in `docs/progress.md`.
+- `docs/progress.md` is the authoritative mutable priority board; this checklist remains the scoped tracker for the Nuvie wall/visibility refactor only.

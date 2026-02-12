@@ -2,41 +2,76 @@
 
 Last Updated: 2026-02-12
 
-## Confirmed in Decompiled `GAME.EXE` Source
+## Confirmed Legacy Baseline (`GAME.EXE` Decompiled Source)
 
-- `paper.bmp` is drawn during startup via `C_0903_070B` in `legacy/u6-decompiled/SRC/seg_0903.c`.
-- VGA palette is initialized from `u6pal` via `C_0903_07C4` in `legacy/u6-decompiled/SRC/seg_0903.c`.
-- Main font `U6.CH` is loaded during startup in `legacy/u6-decompiled/SRC/seg_0903.c`.
-- Verb icons are drawn from tile IDs `TIL_190..TIL_198` and `TIL_19E` before game load in `legacy/u6-decompiled/SRC/seg_0903.c`.
-- Gameplay load path then calls `C_0C9C_042A` (reads `schedule`, `basetile`, `savegame/objlist`, `chunks`) in `legacy/u6-decompiled/SRC/seg_0C9C.c`.
+- Startup initializes palette/font/background from original assets:
+  - `u6pal`
+  - `U6.CH`
+  - `paper.bmp`
+- Startup shell draws legacy verb/icon strip (`TIL_190..TIL_198`, `TIL_19E`) before gameplay load path.
+- Gameplay load path (`C_0C9C_042A`) reads core world/save structures (`schedule`, `basetile`, `savegame/objlist`, `chunks`).
 
-## What Is Not Yet Provenanced in This Decompiled Repo
+Primary refs:
 
-- The full title menu presentation text/options (e.g. journey/new/return/configure) are not directly visible as plain strings in the released `legacy/u6-decompiled/SRC` for `GAME.EXE`.
-- Upstream decompiler README states other executables were decompiled but not published in this repo.
-- This implies canonical title/menu draw and input flow may live partly outside the currently released `GAME.EXE` source path.
-- Direct binary evidence from local `u.exe` string table references `intro.ptr`, `intro.shp`, `intro_1.shp`, `intro_2.shp`, and `intro_3.shp`, reinforcing that startup/title presentation is likely handled by the intro executable path.
+- `legacy/u6-decompiled/SRC/seg_0903.c`
+- `legacy/u6-decompiled/SRC/seg_0C9C.c`
 
-## Assets Likely Relevant to Title/Menu Parity
+## Provenance Gap and Resolution Strategy
 
-From the local original game directory (`../ultima6`) we have startup/menu candidates:
+The full title/menu presentation text + sequencing is not fully visible in the released decompiled `GAME.EXE` C source.
+
+Additional evidence points to intro/title ownership outside this published C set:
+
+- `u.exe` references `intro.ptr`, `intro.shp`, `intro_1.shp`, `intro_2.shp`, `intro_3.shp`
+- decompiler README indicates other executables were decompiled but not published in this repo
+
+Therefore startup/menu parity work uses:
+
+1. published gameplay init behavior from decompiled `GAME.EXE`
+2. intro/title asset path evidence from original binaries
+3. ScummVM/Nuvie implementation as reference for draw/input sequencing
+
+## ScummVM/Nuvie Cross-Reference Used
+
+Key references:
+
+- `devtools/create_ultima/files/ultima6/scripts/u6/intro.lua`
+- `engines/ultima/nuvie/script/script_cutscene.cpp`
+- `engines/ultima/nuvie/files/u6_shape.cpp`
+- `engines/ultima/nuvie/core/cursor.cpp`
+
+Confirmed from this path:
+
+- Title art from `titles.shp`
+- Menu art from `mainmenu.shp`
+- Palette-highlight menu selection (indices `14,33,34,35,36`)
+- Cursor assets loaded from `u6mcga.ptr` (U6 path)
+
+## Current Implementation Status (VirtueMachine)
+
+- `[x]` Startup/title flow is in-engine, not HTML overlay.
+- `[x]` `Journey Onward` is the only enabled action and enters throne room preset.
+- `[x]` Keyboard + mouse menu navigation are implemented.
+- `[x]` Real startup art decode/render:
+  - `titles.shp`
+  - `mainmenu.shp`
+- `[x]` Menu highlight behavior uses palette-driven selection logic.
+- `[x]` `Q` returns gameplay back to title flow.
+- `[x]` Legacy cursor path integrated in engine rendering (`u6mcga.ptr`) across startup and game view.
+
+## Asset Set Used for Startup/Menu Path
+
+From original local game directory via optional sync manifest:
 
 - `mainmenu.shp`
 - `titles.shp`
 - `intro.shp`, `intro_1.shp`, `intro_2.shp`, `intro_3.shp`
 - `intro.ptr`
 - `u.exe`, `game.exe`, `ultima6.exe`
+- `u6mcga.ptr`
 
-These have been added to `modern/assets/manifest.optional.txt` for local sync.
+## Remaining Parity Work
 
-## Next Technical Step
-
-1. Add a small startup-asset inspector in `modern/tools` to parse/preview `.shp`/`.ptr` data and identify exact menu/title frames.
-2. Correlate extracted frame geometry with existing in-engine startup renderer.
-3. Only then perform pixel-parity layout pass for the startup menu.
-
-## Current Tooling
-
-- `modern/tools/inspect_shp.js` decodes U6 LZW-wrapped startup assets and reports candidate header/table structure.
-- Example:
-  - `node modern/tools/inspect_shp.js modern/assets/runtime/mainmenu.shp modern/assets/runtime/titles.shp modern/assets/runtime/intro.shp modern/assets/runtime/intro.ptr`
+1. Capture/curate pixel-parity screenshot pairs (legacy reference vs current startup/menu frame).
+2. Finalize command/mode-specific cursor mapping policy (currently visually-correct default pointer is selected, but full mode mapping is pending).
+3. Maintain explicit accepted-gap list if any startup/menu differences remain after screenshot audit.
