@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/world_clock_response.schema.json",
+  "title": "WorldClockResponse",
+  "type": "object",
+  "required": ["tick", "time_m", "time_h", "date_d", "date_m", "date_y"],
+  "properties": {
+    "tick": { "type": "integer", "minimum": 0 },
+    "time_m": { "type": "integer", "minimum": 0 },
+    "time_h": { "type": "integer", "minimum": 0 },
+    "date_d": { "type": "integer", "minimum": 1 },
+    "date_m": { "type": "integer", "minimum": 1 },
+    "date_y": { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": false
+}

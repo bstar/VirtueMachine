@@ -13,6 +13,7 @@ const COMMAND_WIRE_SIZE = 16;
 const MOVE_INPUT_MIN_INTERVAL_MS = 120;
 const NET_PRESENCE_HEARTBEAT_TICKS = 4;
 const NET_PRESENCE_POLL_TICKS = 10;
+const NET_CLOCK_POLL_TICKS = 2;
 const TICKS_PER_MINUTE = 4;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
@@ -346,7 +347,9 @@ const state = {
     remotePlayers: [],
     lastPresenceHeartbeatTick: -1,
     lastPresencePollTick: -1,
+    lastClockPollTick: -1,
     presencePollInFlight: false,
+    clockPollInFlight: false,
     lastSavedTick: 0,
     maintenanceAuto: false,
     maintenanceInFlight: false,
@@ -2215,7 +2218,9 @@ async function netLogin() {
   state.net.remotePlayers = [];
   state.net.lastPresenceHeartbeatTick = -1;
   state.net.lastPresencePollTick = -1;
+  state.net.lastClockPollTick = -1;
   await netEnsureCharacter();
+  await netPollWorldClock();
   await netPollPresence();
   updateNetSessionStat();
   setNetStatus("online", `${state.net.username}/${state.net.characterName}`);
@@ -2420,6 +2425,35 @@ async function netPollPresence() {
     });
   } finally {
     state.net.presencePollInFlight = false;
+  }
+}
+
+function applyAuthoritativeWorldClock(clock) {
+  if (!clock || typeof clock !== "object") {
+    return;
+  }
+  const w = state.sim.world;
+  state.sim.tick = Number(clock.tick) >>> 0;
+  w.time_m = Number(clock.time_m) >>> 0;
+  w.time_h = Number(clock.time_h) >>> 0;
+  w.date_d = Number(clock.date_d) >>> 0;
+  w.date_m = Number(clock.date_m) >>> 0;
+  w.date_y = Number(clock.date_y) >>> 0;
+}
+
+async function netPollWorldClock() {
+  if (!isNetAuthenticated()) {
+    return;
+  }
+  if (state.net.clockPollInFlight) {
+    return;
+  }
+  state.net.clockPollInFlight = true;
+  try {
+    const out = await netRequest("/api/world/clock", { method: "GET" }, true);
+    applyAuthoritativeWorldClock(out);
+  } finally {
+    state.net.clockPollInFlight = false;
   }
 }
 
@@ -3397,7 +3431,7 @@ function stepSimTick(sim, queue) {
 
   sim.rngState = xorshift32(sim.rngState);
   sim.worldFlags ^= sim.rngState & 1;
-  if ((nextTick % TICKS_PER_MINUTE) === 0) {
+  if (!isNetAuthenticated() && (nextTick % TICKS_PER_MINUTE) === 0) {
     advanceWorldMinute(sim.world);
   }
   sim.tick = nextTick;
@@ -4700,6 +4734,15 @@ function tickLoop(ts) {
       state.net.lastPresenceHeartbeatTick = state.sim.tick >>> 0;
       netSendPresenceHeartbeat().catch((err) => {
         setNetStatus("error", `Presence heartbeat failed: ${String(err.message || err)}`);
+      });
+    }
+    if (
+      isNetAuthenticated()
+      && (state.sim.tick - state.net.lastClockPollTick) >= NET_CLOCK_POLL_TICKS
+    ) {
+      state.net.lastClockPollTick = state.sim.tick >>> 0;
+      netPollWorldClock().catch((err) => {
+        setNetStatus("error", `Clock sync failed: ${String(err.message || err)}`);
       });
     }
     if (

@@ -16,6 +16,7 @@ Minimal browser client prototype:
 - net backend panel for login/password recovery and remote save/load snapshot flow
 - account rename flow (authenticated username change with current password)
 - live multiplayer presence preview (multiple tabs/users visible in world view)
+- server-authoritative clock sync (authenticated clients poll net clock for tick/time/date)
 - critical-item maintenance controls (manual run + optional auto cadence)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)

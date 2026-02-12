@@ -40,9 +40,14 @@ Authenticated (Bearer token):
 - `PUT /api/characters/:id/snapshot`
 - `POST /api/world/presence/heartbeat`
 - `GET /api/world/presence`
+- `GET /api/world/clock`
 - `GET /api/world/critical-items/policy`
 - `PUT /api/world/critical-items/policy`
 - `POST /api/world/critical-items/maintenance`
+
+Clock note:
+- `/api/world/clock` is authoritative server time/tick.
+- connected clients are expected to sync local world time/date from this endpoint.
 
 ## Contracts
 

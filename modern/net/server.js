@@ -9,12 +9,19 @@ const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
 const DATA_DIR = process.env.VM_NET_DATA_DIR || path.join(__dirname, "data");
 const MAX_BODY = 1024 * 1024;
+const SERVER_TICK_MS = 100;
+const SERVER_TICKS_PER_MINUTE = 4;
+const SERVER_MINUTES_PER_HOUR = 60;
+const SERVER_HOURS_PER_DAY = 24;
+const SERVER_DAYS_PER_MONTH = 28;
+const SERVER_MONTHS_PER_YEAR = 13;
 
 const FILES = {
   users: path.join(DATA_DIR, "users.json"),
   tokens: path.join(DATA_DIR, "tokens.json"),
   characters: path.join(DATA_DIR, "characters.json"),
   presence: path.join(DATA_DIR, "presence.json"),
+  worldClock: path.join(DATA_DIR, "world_clock.json"),
   criticalPolicy: path.join(DATA_DIR, "critical_item_policy.json"),
   recoveriesLog: path.join(DATA_DIR, "critical_item_recoveries.log")
 };
@@ -155,6 +162,74 @@ function defaultCriticalPolicy() {
   ];
 }
 
+function defaultWorldClock() {
+  return {
+    tick: 0,
+    time_m: 0,
+    time_h: 0,
+    date_d: 1,
+    date_m: 1,
+    date_y: 1,
+    last_advanced_at_ms: Date.now()
+  };
+}
+
+function normalizeWorldClock(raw) {
+  const base = defaultWorldClock();
+  if (!raw || typeof raw !== "object") {
+    return base;
+  }
+  return {
+    tick: Number(raw.tick) >>> 0,
+    time_m: Number(raw.time_m) >>> 0,
+    time_h: Number(raw.time_h) >>> 0,
+    date_d: Number(raw.date_d) >>> 0 || 1,
+    date_m: Number(raw.date_m) >>> 0 || 1,
+    date_y: Number(raw.date_y) >>> 0 || 1,
+    last_advanced_at_ms: Number(raw.last_advanced_at_ms) || Date.now()
+  };
+}
+
+function advanceWorldClockMinute(clock) {
+  clock.time_m += 1;
+  if (clock.time_m < SERVER_MINUTES_PER_HOUR) return;
+  clock.time_m = 0;
+  clock.time_h += 1;
+  if (clock.time_h < SERVER_HOURS_PER_DAY) return;
+  clock.time_h = 0;
+  clock.date_d += 1;
+  if (clock.date_d <= SERVER_DAYS_PER_MONTH) return;
+  clock.date_d = 1;
+  clock.date_m += 1;
+  if (clock.date_m <= SERVER_MONTHS_PER_YEAR) return;
+  clock.date_m = 1;
+  clock.date_y += 1;
+}
+
+function updateAuthoritativeClock(state) {
+  const nowMs = Date.now();
+  if (!state.worldClock) {
+    state.worldClock = defaultWorldClock();
+  }
+  const clock = state.worldClock;
+  let deltaMs = nowMs - Number(clock.last_advanced_at_ms || 0);
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+    deltaMs = 0;
+  }
+  const steps = Math.floor(deltaMs / SERVER_TICK_MS);
+  if (steps <= 0) {
+    return clock;
+  }
+  for (let i = 0; i < steps; i += 1) {
+    clock.tick = (clock.tick + 1) >>> 0;
+    if ((clock.tick % SERVER_TICKS_PER_MINUTE) === 0) {
+      advanceWorldClockMinute(clock);
+    }
+  }
+  clock.last_advanced_at_ms = nowMs - (deltaMs % SERVER_TICK_MS);
+  return clock;
+}
+
 function loadState() {
   ensureDataDir();
   const state = {
@@ -162,6 +237,7 @@ function loadState() {
     tokens: readJson(FILES.tokens, []),
     characters: readJson(FILES.characters, []),
     presence: readJson(FILES.presence, []),
+    worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy())
   };
   if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
@@ -178,6 +254,7 @@ function persistState(state) {
   writeJson(FILES.tokens, state.tokens);
   writeJson(FILES.characters, state.characters);
   writeJson(FILES.presence, state.presence);
+  writeJson(FILES.worldClock, state.worldClock);
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
 }
 
@@ -304,7 +381,9 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
   if (req.method === "GET" && url.pathname === "/health") {
-    sendJson(res, 200, { ok: true, service: "virtuemachine-net", now: nowIso() });
+    updateAuthoritativeClock(state);
+    persistState(state);
+    sendJson(res, 200, { ok: true, service: "virtuemachine-net", now: nowIso(), tick: state.worldClock.tick >>> 0 });
     return;
   }
 
@@ -509,6 +588,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const nowMs = Date.now();
+    const clock = updateAuthoritativeClock(state);
     const row = {
       user_id: user.user_id,
       username: user.username,
@@ -519,7 +599,7 @@ const server = http.createServer(async (req, res) => {
       map_z: Number(body && body.map_z) | 0,
       facing_dx: Number(body && body.facing_dx) | 0,
       facing_dy: Number(body && body.facing_dy) | 0,
-      tick: Number(body && body.tick) >>> 0,
+      tick: clock.tick >>> 0,
       mode: String(body && body.mode || "avatar"),
       updated_at_ms: nowMs
     };
@@ -539,7 +619,21 @@ const server = http.createServer(async (req, res) => {
     const cutoff = nowMs - 15000;
     state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
     persistState(state);
-    sendJson(res, 200, { ok: true, now: nowIso() });
+    sendJson(res, 200, { ok: true, now: nowIso(), tick: clock.tick >>> 0 });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/world/clock") {
+    const clock = updateAuthoritativeClock(state);
+    persistState(state);
+    sendJson(res, 200, {
+      tick: clock.tick >>> 0,
+      time_m: clock.time_m >>> 0,
+      time_h: clock.time_h >>> 0,
+      date_d: clock.date_d >>> 0,
+      date_m: clock.date_m >>> 0,
+      date_y: clock.date_y >>> 0
+    });
     return;
   }
 

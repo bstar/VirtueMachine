@@ -173,6 +173,22 @@ async function main() {
     assert.equal(presence.body.players[0]?.username, "avatar_renamed");
     assert.equal(presence.body.players[0]?.map_x, 307);
 
+    const clock1 = await jsonFetch(baseUrl, "/api/world/clock", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(clock1.status, 200);
+    assert.ok(Number.isInteger(clock1.body?.tick));
+    assert.ok(Number.isInteger(clock1.body?.time_h));
+    assert.ok(Number.isInteger(clock1.body?.time_m));
+    await sleep(220);
+    const clock2 = await jsonFetch(baseUrl, "/api/world/clock", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(clock2.status, 200);
+    assert.ok(clock2.body.tick >= clock1.body.tick);
+
     const policy = await jsonFetch(baseUrl, "/api/world/critical-items/policy", {
       method: "GET",
       headers: { authorization: `Bearer ${token}` }
