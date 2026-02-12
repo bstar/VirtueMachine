@@ -134,6 +134,9 @@ const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 const captureWorldHudButton = document.getElementById("captureWorldHudButton");
+const startupOverlay = document.getElementById("startupOverlay");
+const startupJourneyButton = document.getElementById("startupJourneyButton");
+const startupStatus = document.getElementById("startupStatus");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -272,7 +275,9 @@ const state = {
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
   avatarPortraitCanvas: null,
-  u6MainFont: null
+  u6MainFont: null,
+  runtimeReady: false,
+  sessionStarted: false
 };
 
 function isLegacyScaleMode(mode) {
@@ -2041,6 +2046,48 @@ function activeCapturePreset() {
   return CAPTURE_PRESETS.find((p) => p.id === id) ?? CAPTURE_PRESETS[0];
 }
 
+function setStartupOverlayVisible(visible) {
+  if (!startupOverlay) {
+    return;
+  }
+  startupOverlay.classList.toggle("is-hidden", !visible);
+}
+
+function setStartupStatusText(text) {
+  if (startupStatus) {
+    startupStatus.textContent = text;
+  }
+}
+
+function placeCameraAtPresetId(presetId) {
+  const p = CAPTURE_PRESETS.find((v) => v.id === presetId) ?? CAPTURE_PRESETS[0];
+  if (!p) {
+    return;
+  }
+  state.queue.length = 0;
+  state.sim.world.map_x = p.x | 0;
+  state.sim.world.map_y = p.y | 0;
+  state.sim.world.map_z = p.z | 0;
+  if (locationSelect) {
+    locationSelect.value = p.id;
+  }
+}
+
+function startSessionFromTitle() {
+  if (state.sessionStarted || !state.runtimeReady) {
+    return;
+  }
+  placeCameraAtPresetId("lb_throne");
+  setStartupOverlayVisible(false);
+  state.sessionStarted = true;
+  diagBox.className = "diag ok";
+  diagBox.textContent = "Journey Onward: loaded into Lord British's throne room.";
+  requestAnimationFrame((ts) => {
+    state.lastTs = ts;
+    requestAnimationFrame(tickLoop);
+  });
+}
+
 function jumpToPreset() {
   const p = activeCapturePreset();
   if (!p) {
@@ -3720,6 +3767,13 @@ async function loadRuntimeAssets() {
 
 window.addEventListener("keydown", (ev) => {
   const k = ev.key.toLowerCase();
+  if (!state.sessionStarted) {
+    if ((k === "enter" || k === " ") && state.runtimeReady) {
+      startSessionFromTitle();
+      ev.preventDefault();
+    }
+    return;
+  }
   if (k === "p" && ev.shiftKey) {
     captureWorldHudPng();
     ev.preventDefault();
@@ -3748,11 +3802,16 @@ window.addEventListener("resize", () => {
   applyLegacyFrameLayout();
 });
 
-loadRuntimeAssets().then(() => {
-  requestAnimationFrame((ts) => {
-    state.lastTs = ts;
-    requestAnimationFrame(tickLoop);
-  });
+loadRuntimeAssets().finally(() => {
+  state.runtimeReady = true;
+  if (startupJourneyButton) {
+    startupJourneyButton.disabled = false;
+  }
+  if (state.mapCtx) {
+    setStartupStatusText("Journey Onward ready. Press Enter or click to begin in the throne room.");
+  } else {
+    setStartupStatusText("Assets missing: Journey Onward still available in fallback mode.");
+  }
 });
 
 initTheme();
@@ -3767,6 +3826,11 @@ initLegacyScaleMode();
 initLegacyFramePreview();
 initCapturePresets();
 initPanelCopyButtons();
+setStartupOverlayVisible(true);
+if (startupJourneyButton) {
+  startupJourneyButton.disabled = true;
+  startupJourneyButton.addEventListener("click", startSessionFromTitle);
+}
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);
 }

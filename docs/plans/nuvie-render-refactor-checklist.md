@@ -65,3 +65,4 @@ Exit criteria:
 - This is a rendering pipeline refactor, not a sim-core migration.
 - Multiplayer architecture remains out of scope for this checklist.
 - Fallback path must remain available until M4 sign-off.
+- Status update: wall parity work is intentionally paused and moved to deferred backlog while higher-priority gameplay slices continue.

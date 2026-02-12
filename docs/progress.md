@@ -149,6 +149,14 @@ This checklist is intentionally mutable.
 - `[ ]` Add CI artifact upload for layer parity diff reports/screenshots
 - `[ ]` Document accepted parity gaps and unresolved legacy ambiguities
 
+#### Slice R5: Startup Screen Recreation (Title -> Throne Room)
+
+- `[x]` Add startup/title overlay flow to web client runtime
+- `[x]` Expose only `Journey Onward` as selectable startup action
+- `[x]` Route startup entry directly to Lord British throne room preset (`307,347,0`)
+- `[ ]` Replace remaining placeholder title/menu art with decoded legacy assets
+- `[ ]` Add parity screenshot pair for startup/title presentation vs legacy reference
+
 ## Current Sprint Focus
 
 - `[x]` Complete M3.3 (asset pipeline integration)
@@ -167,6 +175,7 @@ This checklist is intentionally mutable.
 - `[x]` Land first terrain+object parity screenshots from canonical locations
 - `[x]` Add shared overlay composition/parity telemetry for renderer + interaction probe coordinate consistency
 - `[x]` Add ghost/avatar control modes with avatar collision path and first door interaction toggle
+- `[~]` Start R5 startup/title flow parity work (journey-only path to throne room)
 
 ## Known Blockers / Risks
 
@@ -176,6 +185,15 @@ This checklist is intentionally mutable.
 - `[ ]` Map/chunk format edge cases may require additional reverse-engineering passes
 - `[~]` Multiplayer implementation deferred; architecture decisions will be made incrementally when R1-R4 work exposes concrete needs
 - `[~]` Legacy object placement storage/encoding for world overlays still needs explicit mapping
+- `[~]` Wall/corner/contextual blackout parity is temporarily deprioritized and parked for a dedicated parity hardening pass after current gameplay slices
+
+## Deferred Backlog (Intentional Pause)
+
+- `[ ]` Wall rendering parity hardening:
+  - doorway threshold floor precedence edge cases
+  - contextual wall variant/corner selection in adjacent rooms
+  - wall-adjacent decor suppression in blacked-out rooms
+  - capture + compare canonical evidence set before re-enabling mode/default changes
 
 ## Next Immediate Task
 

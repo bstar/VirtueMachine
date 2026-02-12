@@ -74,6 +74,7 @@
           <div class="grid grid-cols-2 gap-2">
             <button id="jumpButton" class="control-btn" type="button">Jump (G)</button>
             <button id="captureButton" class="control-btn" type="button">Capture (P)</button>
+            <button id="captureWorldHudButton" class="control-btn col-span-2" type="button">Capture World+HUD (Shift+P)</button>
           </div>
         </div>
 
@@ -96,6 +97,7 @@
           <p>`O` toggle overlay debug labels</p>
           <p>`G` jump to selected capture preset</p>
           <p>`P` capture viewport png</p>
+          <p>`Shift+P` capture world + HUD png</p>
           <p>`V` verify replay stability</p>
           <p>`F` toggle animated tile freeze</p>
           <p>`B` toggle legacy palette FX</p>
@@ -105,6 +107,30 @@
         </div>
       </aside>
     </main>
+    <div id="startupOverlay" class="vm-startup-overlay" role="dialog" aria-modal="true" aria-labelledby="startupTitle">
+      <div class="vm-startup-panel">
+        <p class="vm-startup-kicker">Origin Systems Tribute Build</p>
+        <h2 id="startupTitle" class="vm-startup-title">ULTIMA VI</h2>
+        <p class="vm-startup-subtitle">THE FALSE PROPHET</p>
+
+        <div class="vm-startup-menu" role="menu" aria-label="Main Menu">
+          <button id="startupJourneyButton" class="vm-startup-item is-primary" type="button" role="menuitem">
+            Journey Onward
+          </button>
+          <button class="vm-startup-item" type="button" role="menuitem" disabled aria-disabled="true">
+            Return to Previous Game
+          </button>
+          <button class="vm-startup-item" type="button" role="menuitem" disabled aria-disabled="true">
+            Initiate New Character
+          </button>
+          <button class="vm-startup-item" type="button" role="menuitem" disabled aria-disabled="true">
+            Configure Sound and Music
+          </button>
+        </div>
+
+        <p id="startupStatus" class="vm-startup-status">Loading runtime assets...</p>
+      </div>
+    </div>
     <script type="module" src="./app.js"></script>
   </body>
 </html>
