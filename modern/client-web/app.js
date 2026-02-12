@@ -308,14 +308,25 @@ const state = {
   startupMenuIndex: 0,
   startupTitlePixmaps: null,
   startupMenuPixmap: null,
-  startupCanvasCache: new Map()
+  startupCanvasCache: new Map(),
+  cursorPixmaps: null,
+  cursorIndex: 0,
+  mouseNormX: 0,
+  mouseNormY: 0,
+  mouseInCanvas: false
 };
 
 function isLegacyScaleMode(mode) {
   return mode === "fit" || mode === "1" || mode === "2" || mode === "3" || mode === "4";
 }
 
+function isLegacyFramePreviewOn() {
+  return document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+}
+
 const LEGACY_SCALE_MODES = Object.freeze(["fit", "1", "2", "3", "4"]);
+const CURSOR_ASPECT_X = 1.0;
+const CURSOR_ASPECT_Y = 1.2;
 
 class U6AnimDataJS {
   constructor(entries) {
@@ -1176,7 +1187,7 @@ function decodeU6ShapeFromBuffer(buf) {
     }
   }
 
-  return { width, height, pixels };
+  return { width, height, hotX, hotY, pixels };
 }
 
 function decodeU6ShpArchive(bytes) {
@@ -1218,6 +1229,69 @@ function decodeU6ShpArchive(bytes) {
     out.push(decodeU6ShapeFromBuffer(decoded.slice(start, end)));
   }
   return out;
+}
+
+function decodeU6CursorPtr(bytes) {
+  if (!bytes || bytes.length < 8) {
+    return [];
+  }
+  const decoded = decompressU6Lzw(bytes);
+  if (!decoded || decoded.length < 16) {
+    return [];
+  }
+  const dv = new DataView(decoded.buffer, decoded.byteOffset, decoded.byteLength);
+  const fileSize = dv.getUint32(0, true) >>> 0;
+  if (fileSize <= 0 || fileSize > decoded.length) {
+    return [];
+  }
+  const firstOffsetRaw = dv.getUint32(4, true) >>> 0;
+  const firstOffset = firstOffsetRaw & 0x00ffffff;
+  if (firstOffset < 8 || firstOffset > fileSize || (firstOffset % 4) !== 0) {
+    return [];
+  }
+  const count = Math.floor((firstOffset - 4) / 4);
+  if (count <= 0 || count > 512) {
+    return [];
+  }
+
+  const items = [];
+  for (let i = 0; i < count; i += 1) {
+    const raw = dv.getUint32(4 + (i * 4), true) >>> 0;
+    const flag = (raw >>> 24) & 0xff;
+    const offset = raw & 0x00ffffff;
+    items.push({ flag, offset, size: 0 });
+  }
+
+  for (let i = 0; i < count; i += 1) {
+    const cur = items[i];
+    if (!cur.offset) {
+      continue;
+    }
+    let nextOffset = fileSize;
+    for (let j = i + 1; j < count; j += 1) {
+      if (items[j].offset > cur.offset) {
+        nextOffset = items[j].offset;
+        break;
+      }
+    }
+    cur.size = Math.max(0, nextOffset - cur.offset);
+  }
+
+  const cursors = [];
+  for (const item of items) {
+    if (!item || !item.offset || item.size <= 0 || (item.offset + item.size) > decoded.length) {
+      continue;
+    }
+    let payload = decoded.slice(item.offset, item.offset + item.size);
+    if (item.flag === 0x01 || item.flag === 0x20) {
+      payload = decompressU6Lzw(payload);
+    }
+    const shape = decodeU6ShapeFromBuffer(payload);
+    if (shape) {
+      cursors.push(shape);
+    }
+  }
+  return cursors;
 }
 
 function decodePortraitFromArchive(bytes, index = 0) {
@@ -1659,6 +1733,58 @@ function renderStartupScreen() {
   lv.imageSmoothingEnabled = false;
   lv.clearRect(0, 0, 160, 160);
   lv.drawImage(legacyBackdropCanvas, 8 * scale, 8 * scale, 160 * scale, 160 * scale, 0, 0, 160, 160);
+}
+
+function drawCustomCursorOnContext(g, targetW, targetH) {
+  if (!state.mouseInCanvas || !state.cursorPixmaps || !state.cursorPixmaps.length) {
+    return;
+  }
+  const cursorShape = state.cursorPixmaps[state.cursorIndex] || state.cursorPixmaps[0];
+  if (!cursorShape || !state.basePalette || !g || targetW <= 0 || targetH <= 0) {
+    return;
+  }
+  const cursorCanvas = canvasFromIndexedPixels(cursorShape, getRenderPalette() || state.basePalette, 0xff);
+  if (!cursorCanvas) {
+    return;
+  }
+  const logicalW = state.sessionStarted
+    ? (isLegacyFramePreviewOn() ? 160 : (VIEW_W * 16))
+    : 320;
+  const scale = Math.max(1, Math.floor(targetW / Math.max(1, logicalW)));
+  const scaleX = scale * CURSOR_ASPECT_X;
+  const scaleY = scale * CURSOR_ASPECT_Y;
+  const hotX = Math.min(cursorShape.width - 1, Math.max(0, cursorShape.hotX ?? Math.floor(cursorShape.width * 0.5)));
+  const hotY = Math.min(cursorShape.height - 1, Math.max(0, cursorShape.hotY ?? Math.floor(cursorShape.height * 0.5)));
+  const mouseX = Math.floor(state.mouseNormX * targetW);
+  const mouseY = Math.floor(state.mouseNormY * targetH);
+  const drawW = Math.max(1, Math.round(cursorShape.width * scaleX));
+  const drawH = Math.max(1, Math.round(cursorShape.height * scaleY));
+  let px = mouseX - Math.round(hotX * scaleX);
+  let py = mouseY - Math.round(hotY * scaleY);
+  px = Math.max(0, Math.min(targetW - drawW, px));
+  py = Math.max(0, Math.min(targetH - drawH, py));
+  g.imageSmoothingEnabled = false;
+  g.drawImage(cursorCanvas, px, py, drawW, drawH);
+}
+
+function drawCustomCursorLayer() {
+  if (isLegacyFramePreviewOn()) {
+    if (state.sessionStarted) {
+      if (!legacyViewportCanvas) {
+        return;
+      }
+      const g = legacyViewportCanvas.getContext("2d");
+      drawCustomCursorOnContext(g, legacyViewportCanvas.width | 0, legacyViewportCanvas.height | 0);
+      return;
+    }
+    if (!legacyBackdropCanvas) {
+      return;
+    }
+    const g = legacyBackdropCanvas.getContext("2d");
+    drawCustomCursorOnContext(g, legacyBackdropCanvas.width | 0, legacyBackdropCanvas.height | 0);
+    return;
+  }
+  drawCustomCursorOnContext(ctx, canvas.width | 0, canvas.height | 0);
 }
 
 function composeLegacyViewportFromModernGrid() {
@@ -2397,6 +2523,31 @@ function startSessionFromTitle() {
   state.sessionStarted = true;
   diagBox.className = "diag ok";
   diagBox.textContent = "Journey Onward: loaded into Lord British's throne room.";
+}
+
+function returnToTitleMenu() {
+  if (!state.sessionStarted) {
+    return;
+  }
+  state.queue.length = 0;
+  state.sessionStarted = false;
+  setStartupMenuIndex(0);
+  diagBox.className = "diag ok";
+  diagBox.textContent = "Returned to title menu.";
+}
+
+function cycleCursor(delta) {
+  if (!state.cursorPixmaps || !state.cursorPixmaps.length) {
+    return;
+  }
+  const n = state.cursorPixmaps.length;
+  let idx = (state.cursorIndex + (delta | 0)) % n;
+  if (idx < 0) {
+    idx += n;
+  }
+  state.cursorIndex = idx;
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Cursor ${idx + 1}/${n}`;
 }
 
 function jumpToPreset() {
@@ -3874,6 +4025,15 @@ function resetRun() {
 function tickLoop(ts) {
   state.accMs += ts - state.lastTs;
   state.lastTs = ts;
+  const useCustomCursor = !!(state.cursorPixmaps && state.cursorPixmaps.length > 0);
+  canvas.style.cursor = useCustomCursor ? "none" : "default";
+  if (legacyBackdropCanvas) {
+    legacyBackdropCanvas.style.cursor = useCustomCursor ? "none" : "default";
+  }
+  if (legacyViewportCanvas) {
+    legacyViewportCanvas.style.cursor = useCustomCursor ? "none" : "default";
+    legacyViewportCanvas.style.visibility = state.sessionStarted ? "visible" : "hidden";
+  }
 
   while (state.sessionStarted && state.accMs >= TICK_MS) {
     state.accMs -= TICK_MS;
@@ -3899,6 +4059,7 @@ function tickLoop(ts) {
     composeLegacyViewportFromModernGrid();
     renderLegacyHudStubOnBackdrop();
   }
+  drawCustomCursorLayer();
   updateStats();
   requestAnimationFrame(tickLoop);
 }
@@ -3919,7 +4080,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -3936,9 +4097,10 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/portrait.b"),
       fetch("../assets/runtime/portrait.a"),
       fetch("../assets/runtime/titles.shp"),
-      fetch("../assets/runtime/mainmenu.shp")
+      fetch("../assets/runtime/mainmenu.shp"),
+      fetch("../assets/runtime/u6mcga.ptr")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -3955,7 +4117,8 @@ async function loadRuntimeAssets() {
       portraitBRes.arrayBuffer(),
       portraitARes.arrayBuffer(),
       titlesRes.arrayBuffer(),
-      mainmenuRes.arrayBuffer()
+      mainmenuRes.arrayBuffer(),
+      cursorRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -4004,6 +4167,12 @@ async function loadRuntimeAssets() {
       state.startupMenuPixmap = null;
     }
     state.startupCanvasCache.clear();
+    if (cursorRes.ok && cursorBuf.byteLength > 12) {
+      state.cursorPixmaps = decodeU6CursorPtr(new Uint8Array(cursorBuf));
+      state.cursorIndex = 0;
+    } else {
+      state.cursorPixmaps = null;
+    }
     if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
@@ -4094,6 +4263,7 @@ async function loadRuntimeAssets() {
     state.startupTitlePixmaps = null;
     state.startupMenuPixmap = null;
     state.startupCanvasCache.clear();
+    state.cursorPixmaps = null;
     state.u6MainFont = null;
     state.legacyPaperPixmap = null;
     state.tileFlags = null;
@@ -4145,6 +4315,11 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     return;
   }
+  if (k === "q") {
+    returnToTitleMenu();
+    ev.preventDefault();
+    return;
+  }
   if (k === "w" || k === "k") queueMove(0, -1);
   else if (k === "s" || k === "j") queueMove(0, 1);
   else if (k === "a" || k === "h") queueMove(-1, 0);
@@ -4158,6 +4333,8 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
   else if (k === "e") queueInteractDoor();
+  else if (ev.key === ",") cycleCursor(-1);
+  else if (ev.key === ".") cycleCursor(1);
   else if (ev.key === "[") cycleLegacyScaleMode(-1);
   else if (ev.key === "]") cycleLegacyScaleMode(1);
   else return;
@@ -4177,40 +4354,117 @@ function startupMenuIndexAtLogicalPos(lx, ly) {
   return -1;
 }
 
-function startupMenuIndexAtEvent(ev) {
-  const rect = canvas.getBoundingClientRect();
+function startupMenuIndexAtEvent(ev, surface) {
+  const s = surface || canvas;
+  const rect = s.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) {
     return -1;
   }
-  const px = ((ev.clientX - rect.left) * canvas.width) / rect.width;
-  const py = ((ev.clientY - rect.top) * canvas.height) / rect.height;
-  const menuScale = Math.max(1, Math.floor(canvas.width / 320));
+  const surfaceW = s.width || 0;
+  const surfaceH = s.height || 0;
+  if (surfaceW <= 0 || surfaceH <= 0) {
+    return -1;
+  }
+  const px = ((ev.clientX - rect.left) * surfaceW) / rect.width;
+  const py = ((ev.clientY - rect.top) * surfaceH) / rect.height;
+  const menuScale = Math.max(1, Math.floor(surfaceW / 320));
   const lx = Math.floor(px / menuScale);
   const ly = Math.floor(py / menuScale);
   return startupMenuIndexAtLogicalPos(lx, ly);
 }
 
+function updateCanvasMouseFromEvent(ev, surface) {
+  const s = surface || canvas;
+  const rect = s.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+  const nx = (ev.clientX - rect.left) / rect.width;
+  const ny = (ev.clientY - rect.top) / rect.height;
+  state.mouseNormX = Math.max(0, Math.min(1, nx));
+  state.mouseNormY = Math.max(0, Math.min(1, ny));
+  state.mouseInCanvas = true;
+}
+
 canvas.addEventListener("mousemove", (ev) => {
+  updateCanvasMouseFromEvent(ev, canvas);
   if (state.sessionStarted) {
     return;
   }
-  const idx = startupMenuIndexAtEvent(ev);
+  const idx = startupMenuIndexAtEvent(ev, canvas);
   if (idx >= 0) {
     setStartupMenuIndex(idx);
   }
 });
 
 canvas.addEventListener("click", (ev) => {
+  updateCanvasMouseFromEvent(ev, canvas);
   if (state.sessionStarted) {
     return;
   }
-  const idx = startupMenuIndexAtEvent(ev);
+  const idx = startupMenuIndexAtEvent(ev, canvas);
   if (idx < 0) {
     return;
   }
   setStartupMenuIndex(idx);
   activateStartupMenuSelection();
 });
+
+canvas.addEventListener("mouseenter", (ev) => {
+  updateCanvasMouseFromEvent(ev, canvas);
+});
+
+canvas.addEventListener("mouseleave", () => {
+  state.mouseInCanvas = false;
+});
+
+if (legacyBackdropCanvas) {
+  legacyBackdropCanvas.addEventListener("mousemove", (ev) => {
+    updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
+    if (state.sessionStarted) {
+      return;
+    }
+    const idx = startupMenuIndexAtEvent(ev, legacyBackdropCanvas);
+    if (idx >= 0) {
+      setStartupMenuIndex(idx);
+    }
+  });
+
+  legacyBackdropCanvas.addEventListener("click", (ev) => {
+    updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
+    if (state.sessionStarted) {
+      return;
+    }
+    const idx = startupMenuIndexAtEvent(ev, legacyBackdropCanvas);
+    if (idx < 0) {
+      return;
+    }
+    setStartupMenuIndex(idx);
+    activateStartupMenuSelection();
+  });
+
+  legacyBackdropCanvas.addEventListener("mouseenter", (ev) => {
+    updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
+  });
+
+  legacyBackdropCanvas.addEventListener("mouseleave", () => {
+    state.mouseInCanvas = false;
+  });
+}
+
+if (legacyViewportCanvas) {
+  legacyViewportCanvas.addEventListener("mousemove", (ev) => {
+    updateCanvasMouseFromEvent(ev, legacyViewportCanvas);
+  });
+
+  legacyViewportCanvas.addEventListener("mouseenter", (ev) => {
+    updateCanvasMouseFromEvent(ev, legacyViewportCanvas);
+  });
+
+  legacyViewportCanvas.addEventListener("mouseleave", () => {
+    state.mouseInCanvas = false;
+  });
+}
 
 window.addEventListener("resize", () => {
   applyLegacyFrameLayout();
