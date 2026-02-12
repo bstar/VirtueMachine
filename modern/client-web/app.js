@@ -1735,7 +1735,7 @@ function renderStartupScreen() {
   lv.drawImage(legacyBackdropCanvas, 8 * scale, 8 * scale, 160 * scale, 160 * scale, 0, 0, 160, 160);
 }
 
-function drawCustomCursorOnContext(g, targetW, targetH) {
+function drawCustomCursorOnContext(g, targetW, targetH, opts = null) {
   if (!state.mouseInCanvas || !state.cursorPixmaps || !state.cursorPixmaps.length) {
     return;
   }
@@ -1747,16 +1747,16 @@ function drawCustomCursorOnContext(g, targetW, targetH) {
   if (!cursorCanvas) {
     return;
   }
-  const logicalW = state.sessionStarted
-    ? (isLegacyFramePreviewOn() ? 160 : (VIEW_W * 16))
-    : 320;
+  const logicalW = (opts && Number.isFinite(opts.logicalW) && opts.logicalW > 0)
+    ? opts.logicalW
+    : (state.sessionStarted ? (isLegacyFramePreviewOn() ? 320 : (VIEW_W * 16)) : 320);
   const scale = Math.max(1, Math.floor(targetW / Math.max(1, logicalW)));
   const scaleX = scale * CURSOR_ASPECT_X;
   const scaleY = scale * CURSOR_ASPECT_Y;
   const hotX = Math.min(cursorShape.width - 1, Math.max(0, cursorShape.hotX ?? Math.floor(cursorShape.width * 0.5)));
   const hotY = Math.min(cursorShape.height - 1, Math.max(0, cursorShape.hotY ?? Math.floor(cursorShape.height * 0.5)));
-  const mouseX = Math.floor(state.mouseNormX * targetW);
-  const mouseY = Math.floor(state.mouseNormY * targetH);
+  const mouseX = (opts && Number.isFinite(opts.mouseX)) ? Math.floor(opts.mouseX) : Math.floor(state.mouseNormX * targetW);
+  const mouseY = (opts && Number.isFinite(opts.mouseY)) ? Math.floor(opts.mouseY) : Math.floor(state.mouseNormY * targetH);
   const drawW = Math.max(1, Math.round(cursorShape.width * scaleX));
   const drawH = Math.max(1, Math.round(cursorShape.height * scaleY));
   let px = mouseX - Math.round(hotX * scaleX);
@@ -1769,19 +1769,39 @@ function drawCustomCursorOnContext(g, targetW, targetH) {
 
 function drawCustomCursorLayer() {
   if (isLegacyFramePreviewOn()) {
-    if (state.sessionStarted) {
-      if (!legacyViewportCanvas) {
-        return;
-      }
-      const g = legacyViewportCanvas.getContext("2d");
-      drawCustomCursorOnContext(g, legacyViewportCanvas.width | 0, legacyViewportCanvas.height | 0);
-      return;
-    }
     if (!legacyBackdropCanvas) {
       return;
     }
+    const bw = legacyBackdropCanvas.width | 0;
+    const bh = legacyBackdropCanvas.height | 0;
+    if (bw <= 0 || bh <= 0) {
+      return;
+    }
+    const mx = Math.floor(state.mouseNormX * bw);
+    const my = Math.floor(state.mouseNormY * bh);
+
+    if (state.sessionStarted && legacyViewportCanvas) {
+      const scale = Math.max(1, Math.floor(bw / 320));
+      const mapX = LEGACY_UI_MAP_RECT.x * scale;
+      const mapY = LEGACY_UI_MAP_RECT.y * scale;
+      const mapW = LEGACY_UI_MAP_RECT.w * scale;
+      const mapH = LEGACY_UI_MAP_RECT.h * scale;
+      const overMap = mx >= mapX && mx < (mapX + mapW) && my >= mapY && my < (mapY + mapH);
+      if (overMap) {
+        const vg = legacyViewportCanvas.getContext("2d");
+        const vx = (mx - mapX) / scale;
+        const vy = (my - mapY) / scale;
+        drawCustomCursorOnContext(
+          vg,
+          legacyViewportCanvas.width | 0,
+          legacyViewportCanvas.height | 0,
+          { mouseX: vx, mouseY: vy, logicalW: 160 }
+        );
+        return;
+      }
+    }
     const g = legacyBackdropCanvas.getContext("2d");
-    drawCustomCursorOnContext(g, legacyBackdropCanvas.width | 0, legacyBackdropCanvas.height | 0);
+    drawCustomCursorOnContext(g, bw, bh, { mouseX: mx, mouseY: my, logicalW: 320 });
     return;
   }
   drawCustomCursorOnContext(ctx, canvas.width | 0, canvas.height | 0);
@@ -4033,6 +4053,7 @@ function tickLoop(ts) {
   if (legacyViewportCanvas) {
     legacyViewportCanvas.style.cursor = useCustomCursor ? "none" : "default";
     legacyViewportCanvas.style.visibility = state.sessionStarted ? "visible" : "hidden";
+    legacyViewportCanvas.style.pointerEvents = "none";
   }
 
   while (state.sessionStarted && state.accMs >= TICK_MS) {
@@ -4373,8 +4394,17 @@ function startupMenuIndexAtEvent(ev, surface) {
   return startupMenuIndexAtLogicalPos(lx, ly);
 }
 
+function activeCursorSurface() {
+  if (isLegacyFramePreviewOn()) {
+    if (legacyBackdropCanvas) {
+      return legacyBackdropCanvas;
+    }
+  }
+  return canvas;
+}
+
 function updateCanvasMouseFromEvent(ev, surface) {
-  const s = surface || canvas;
+  const s = activeCursorSurface() || surface || canvas;
   const rect = s.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) {
     return;
