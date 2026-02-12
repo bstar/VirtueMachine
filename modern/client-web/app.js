@@ -14,6 +14,8 @@ const MOVE_INPUT_MIN_INTERVAL_MS = 120;
 const NET_PRESENCE_HEARTBEAT_TICKS = 4;
 const NET_PRESENCE_POLL_TICKS = 10;
 const NET_CLOCK_POLL_TICKS = 2;
+const NET_BACKGROUND_FAIL_WINDOW_MS = 12000;
+const NET_BACKGROUND_FAIL_MAX = 6;
 const TICKS_PER_MINUTE = 4;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
@@ -350,6 +352,9 @@ const state = {
     lastClockPollTick: -1,
     presencePollInFlight: false,
     clockPollInFlight: false,
+    backgroundSyncPaused: false,
+    backgroundFailCount: 0,
+    firstBackgroundFailAtMs: 0,
     lastSavedTick: 0,
     maintenanceAuto: false,
     maintenanceInFlight: false,
@@ -2096,6 +2101,28 @@ function setNetStatus(level, text) {
   }
 }
 
+function resetBackgroundNetFailures() {
+  state.net.backgroundFailCount = 0;
+  state.net.firstBackgroundFailAtMs = 0;
+  state.net.backgroundSyncPaused = false;
+}
+
+function recordBackgroundNetFailure(err, context) {
+  const nowMs = Date.now();
+  if (!state.net.firstBackgroundFailAtMs || (nowMs - state.net.firstBackgroundFailAtMs) > NET_BACKGROUND_FAIL_WINDOW_MS) {
+    state.net.firstBackgroundFailAtMs = nowMs;
+    state.net.backgroundFailCount = 0;
+  }
+  state.net.backgroundFailCount += 1;
+  if (state.net.backgroundFailCount >= NET_BACKGROUND_FAIL_MAX) {
+    state.net.backgroundSyncPaused = true;
+    setNetStatus("offline", "Server unreachable. Auto-sync paused; use Net Login to retry.");
+    return;
+  }
+  const suffix = err ? `: ${String(err.message || err)}` : "";
+  setNetStatus("error", `${context} failed${suffix}`);
+}
+
 function isTypingContext(target) {
   if (!target) {
     return false;
@@ -2201,6 +2228,7 @@ async function netEnsureCharacter() {
 
 async function netLogin() {
   setNetStatus("connecting", "Authenticating...");
+  state.net.backgroundSyncPaused = false;
   state.net.apiBase = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
   const username = String(netUsernameInput?.value || "").trim().toLowerCase();
   const password = String(netPasswordInput?.value || "");
@@ -2222,6 +2250,7 @@ async function netLogin() {
   await netEnsureCharacter();
   await netPollWorldClock();
   await netPollPresence();
+  resetBackgroundNetFailures();
   updateNetSessionStat();
   setNetStatus("online", `${state.net.username}/${state.net.characterName}`);
   try {
@@ -2299,6 +2328,7 @@ async function netSaveSnapshot() {
       snapshot_base64: snapshotBase64
     })
   }, true);
+  resetBackgroundNetFailures();
   state.net.lastSavedTick = Number(out?.snapshot_meta?.saved_tick || 0) >>> 0;
   setNetStatus("online", `Saved tick ${state.net.lastSavedTick}`);
   return out;
@@ -2326,6 +2356,7 @@ async function netLoadSnapshot() {
   state.lastMoveQueueAtMs = -1;
   state.avatarLastMoveTick = -1;
   state.interactionProbeTile = null;
+  resetBackgroundNetFailures();
   setNetStatus("online", `Loaded tick ${Number(out?.snapshot_meta?.saved_tick || 0)}`);
   return out;
 }
@@ -2368,6 +2399,7 @@ async function netRunCriticalMaintenance(opts = {}) {
       })
     }, true);
     const events = Array.isArray(out?.events) ? out.events : [];
+    resetBackgroundNetFailures();
     state.net.recoveryEventCount += events.length;
     state.net.lastMaintenanceTick = state.sim.tick >>> 0;
     updateCriticalRecoveryStat();
@@ -2405,6 +2437,7 @@ async function netSendPresenceHeartbeat() {
       mode: state.movementMode
     })
   }, true);
+  resetBackgroundNetFailures();
 }
 
 async function netPollPresence() {
@@ -2423,6 +2456,7 @@ async function netPollPresence() {
       const sameSession = String(p.session_id || "") === String(state.net.sessionId || "");
       return !sameSession;
     });
+    resetBackgroundNetFailures();
   } finally {
     state.net.presencePollInFlight = false;
   }
@@ -2452,6 +2486,7 @@ async function netPollWorldClock() {
   try {
     const out = await netRequest("/api/world/clock", { method: "GET" }, true);
     applyAuthoritativeWorldClock(out);
+    resetBackgroundNetFailures();
   } finally {
     state.net.clockPollInFlight = false;
   }
@@ -4728,41 +4763,45 @@ function tickLoop(ts) {
     }
     if (
       isNetAuthenticated()
+      && !state.net.backgroundSyncPaused
       && state.sessionStarted
       && (state.sim.tick - state.net.lastPresenceHeartbeatTick) >= NET_PRESENCE_HEARTBEAT_TICKS
     ) {
       state.net.lastPresenceHeartbeatTick = state.sim.tick >>> 0;
       netSendPresenceHeartbeat().catch((err) => {
-        setNetStatus("error", `Presence heartbeat failed: ${String(err.message || err)}`);
+        recordBackgroundNetFailure(err, "Presence heartbeat");
       });
     }
     if (
       isNetAuthenticated()
+      && !state.net.backgroundSyncPaused
       && (state.sim.tick - state.net.lastClockPollTick) >= NET_CLOCK_POLL_TICKS
     ) {
       state.net.lastClockPollTick = state.sim.tick >>> 0;
       netPollWorldClock().catch((err) => {
-        setNetStatus("error", `Clock sync failed: ${String(err.message || err)}`);
+        recordBackgroundNetFailure(err, "Clock sync");
       });
     }
     if (
       isNetAuthenticated()
+      && !state.net.backgroundSyncPaused
       && (state.sim.tick - state.net.lastPresencePollTick) >= NET_PRESENCE_POLL_TICKS
     ) {
       state.net.lastPresencePollTick = state.sim.tick >>> 0;
       netPollPresence().catch((err) => {
-        setNetStatus("error", `Presence poll failed: ${String(err.message || err)}`);
+        recordBackgroundNetFailure(err, "Presence poll");
       });
     }
     if (
       state.net.maintenanceAuto
       && state.net.token
+      && !state.net.backgroundSyncPaused
       && !state.net.maintenanceInFlight
       && (state.sim.tick % 120) === 0
       && state.sim.tick !== state.net.lastMaintenanceTick
     ) {
       netRunCriticalMaintenance({ silent: true }).catch((err) => {
-        setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+        recordBackgroundNetFailure(err, "Maintenance");
         diagBox.className = "diag warn";
         diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
       });
