@@ -1,0 +1,16 @@
+[
+  {
+    "item_id": "item_moonstone",
+    "policy_type": "regenerative_unique",
+    "anchor_locations": [
+      {
+        "x": 307,
+        "y": 347,
+        "z": 0
+      }
+    ],
+    "cooldown_ticks": 120,
+    "min_count": 1,
+    "quest_gate": null
+  }
+]

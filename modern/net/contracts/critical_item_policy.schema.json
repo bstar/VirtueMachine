@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtuemachine/contracts/critical_item_policy.schema.json",
+  "title": "CriticalItemPolicyList",
+  "type": "object",
+  "required": ["critical_item_policy"],
+  "properties": {
+    "critical_item_policy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item_id", "policy_type", "anchor_locations", "cooldown_ticks"],
+        "properties": {
+          "item_id": { "type": "string" },
+          "policy_type": {
+            "type": "string",
+            "enum": ["unique_persistent", "regenerative_unique", "instance_quota"]
+          },
+          "anchor_locations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "integer" },
+                "y": { "type": "integer" },
+                "z": { "type": "integer" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "cooldown_ticks": { "type": "integer", "minimum": 0 },
+          "min_count": { "type": "integer", "minimum": 1 },
+          "quest_gate": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
