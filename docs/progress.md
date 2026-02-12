@@ -70,6 +70,8 @@ This checklist is intentionally mutable.
 
 - `[x]` Network-neutral command envelope groundwork
 - `[x]` Peer checkpoint hash comparison utility
+- `[~]` Auth + remote character persistence contract defined (`docs/architecture/new/multiplayer-state-contract.md`)
+- `[~]` Critical quest-item recovery/respawn policy defined for server authority (DEC-0003)
 - `[ ]` Live synchronized multiplayer prototype
 
 ## Rendering Parity Track
@@ -127,6 +129,7 @@ This checklist is intentionally mutable.
 - `[~]` Continue render parity stabilization with feature-gated `nuvie` path
 - `[ ]` Add deterministic tests for interaction visual-state transitions (R3)
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
+- `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
 
 ## Known Blockers / Risks
 
@@ -150,3 +153,8 @@ Complete R5/R3 closure set:
 1. Capture startup/title parity screenshots against legacy references.
 2. Add deterministic interaction visual-state replay fixtures (doors/open states).
 3. Record any accepted startup/cursor parity gaps and lock default cursor mapping policy.
+
+Then start M5.2 backend seed:
+
+4. Implement minimal auth + character save/load endpoints (server-authoritative).
+5. Implement deterministic critical-item policy table and maintenance pass scaffold.
