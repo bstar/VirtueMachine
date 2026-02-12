@@ -134,9 +134,6 @@ const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 const captureWorldHudButton = document.getElementById("captureWorldHudButton");
-const startupOverlay = document.getElementById("startupOverlay");
-const startupJourneyButton = document.getElementById("startupJourneyButton");
-const startupStatus = document.getElementById("startupStatus");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -175,6 +172,36 @@ const LEGACY_UI_TILE = Object.freeze({
 const LEGACY_POSTURE_ICONS = Object.freeze([0x183, 0x180, 0x181, 0x184, 0x187]);
 const LEGACY_HUD_TEXT_COLOR = "#8b3f24";
 const LEGACY_AVATAR_PORTRAIT_INDEX = 0;
+const STARTUP_MENU = Object.freeze([
+  { id: "intro", label: "Introduction", enabled: false },
+  { id: "create", label: "Create Character", enabled: false },
+  { id: "transfer", label: "Transfer Character", enabled: false },
+  { id: "ack", label: "Acknowledgements", enabled: false },
+  { id: "journey", label: "Journey Onward", enabled: true }
+]);
+const STARTUP_MENU_PAL = Object.freeze([
+  [232, 96, 0],
+  [236, 128, 0],
+  [244, 164, 0],
+  [248, 200, 0],
+  [252, 252, 84],
+  [248, 200, 0],
+  [244, 164, 0],
+  [236, 128, 0],
+  [232, 96, 0]
+]);
+const STARTUP_MENU_PAL_IDX = Object.freeze([14, 33, 34, 35, 36]);
+const STARTUP_MENU_HITBOX = Object.freeze({
+  x0: 56,
+  x1: 264,
+  rows: [
+    [86, 108],
+    [107, 128],
+    [127, 149],
+    [148, 170],
+    [169, 196]
+  ]
+});
 const LEGACY_DIGIT_3X5 = Object.freeze([
   0xF6DE, 0x4924, 0xE7CE, 0xE59E, 0xB792,
   0xF39E, 0xF3DE, 0xE4A4, 0xF7DE, 0xF79E
@@ -277,7 +304,11 @@ const state = {
   avatarPortraitCanvas: null,
   u6MainFont: null,
   runtimeReady: false,
-  sessionStarted: false
+  sessionStarted: false,
+  startupMenuIndex: 0,
+  startupTitlePixmaps: null,
+  startupMenuPixmap: null,
+  startupCanvasCache: new Map()
 };
 
 function isLegacyScaleMode(mode) {
@@ -1063,6 +1094,132 @@ function decodeLegacyPixmap(bytes) {
   };
 }
 
+function decodeU6ShapeFromBuffer(buf) {
+  if (!buf || buf.length < 10) {
+    return null;
+  }
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const x1 = dv.getUint16(0, true);
+  const x2 = dv.getUint16(2, true);
+  const y1 = dv.getUint16(4, true);
+  const y2 = dv.getUint16(6, true);
+  const hotX = x2 | 0;
+  const hotY = y1 | 0;
+  const width = ((x1 + x2 + 1) | 0);
+  const height = ((y1 + y2 + 1) | 0);
+  if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
+    return null;
+  }
+  const pixels = new Uint8Array(width * height);
+  pixels.fill(0xff);
+
+  let off = 8;
+  while ((off + 2) <= buf.length) {
+    let num = dv.getUint16(off, true);
+    off += 2;
+    if (num === 0) {
+      break;
+    }
+    if ((off + 4) > buf.length) {
+      break;
+    }
+    const xPos = dv.getInt16(off, true);
+    off += 2;
+    const yPos = dv.getInt16(off, true);
+    off += 2;
+
+    const encoded = (num & 1) !== 0;
+    num >>>= 1;
+    const rowBase = ((hotY + yPos) * width) + hotX + xPos;
+    if (rowBase < 0 || rowBase >= pixels.length) {
+      break;
+    }
+
+    if (!encoded) {
+      const n = Math.min(num, Math.max(0, buf.length - off));
+      const end = Math.min(pixels.length, rowBase + n);
+      const count = Math.max(0, end - rowBase);
+      if (count > 0) {
+        pixels.set(buf.slice(off, off + count), rowBase);
+      }
+      off += n;
+      continue;
+    }
+
+    let j = 0;
+    while (j < num && off < buf.length) {
+      let num2 = buf[off++] & 0xff;
+      const repeat = (num2 & 1) !== 0;
+      num2 >>>= 1;
+      if (num2 <= 0) {
+        continue;
+      }
+      const writeAt = rowBase + j;
+      const maxWrite = Math.max(0, Math.min(num2, pixels.length - writeAt));
+      if (repeat) {
+        if (off >= buf.length) {
+          break;
+        }
+        const value = buf[off++] & 0xff;
+        if (maxWrite > 0) {
+          pixels.fill(value, writeAt, writeAt + maxWrite);
+        }
+      } else {
+        const avail = Math.max(0, buf.length - off);
+        const copyCount = Math.min(maxWrite, avail);
+        if (copyCount > 0) {
+          pixels.set(buf.slice(off, off + copyCount), writeAt);
+        }
+        off += num2;
+      }
+      j += num2;
+    }
+  }
+
+  return { width, height, pixels };
+}
+
+function decodeU6ShpArchive(bytes) {
+  if (!bytes || bytes.length < 8) {
+    return [];
+  }
+  const decoded = decompressU6Lzw(bytes);
+  if (!decoded || decoded.length < 8) {
+    return [];
+  }
+  const dv = new DataView(decoded.buffer, decoded.byteOffset, decoded.byteLength);
+  const firstOff = dv.getUint32(4, true);
+  if (firstOff < 8 || firstOff >= decoded.length || (firstOff % 4) !== 0) {
+    return [];
+  }
+  const count = Math.floor((firstOff - 4) / 4);
+  if (count <= 0) {
+    return [];
+  }
+  const offs = new Uint32Array(count);
+  for (let i = 0; i < count; i += 1) {
+    offs[i] = dv.getUint32(4 + (i * 4), true) >>> 0;
+  }
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    const start = offs[i] >>> 0;
+    if (start <= 0 || start >= decoded.length) {
+      out.push(null);
+      continue;
+    }
+    let end = decoded.length;
+    for (let j = i + 1; j < count; j += 1) {
+      const cand = offs[j] >>> 0;
+      if (cand > start && cand <= decoded.length) {
+        end = cand;
+        break;
+      }
+    }
+    out.push(decodeU6ShapeFromBuffer(decoded.slice(start, end)));
+  }
+  return out;
+}
+
 function decodePortraitFromArchive(bytes, index = 0) {
   if (!bytes || bytes.length < 8) {
     return null;
@@ -1109,7 +1266,7 @@ function decodePortraitFromArchive(bytes, index = 0) {
   };
 }
 
-function canvasFromIndexedPixels(pixmap, palette) {
+function canvasFromIndexedPixels(pixmap, palette, transparentIndex = null) {
   if (!pixmap || !palette) {
     return null;
   }
@@ -1119,7 +1276,15 @@ function canvasFromIndexedPixels(pixmap, palette) {
   const g = c.getContext("2d");
   const img = g.createImageData(c.width, c.height);
   for (let i = 0, p = 0; i < pixmap.pixels.length; i += 1, p += 4) {
-    const rgb = palette[pixmap.pixels[i] & 0xff] ?? [0, 0, 0];
+    const index = pixmap.pixels[i] & 0xff;
+    if (transparentIndex !== null && index === (transparentIndex & 0xff)) {
+      img.data[p + 0] = 0;
+      img.data[p + 1] = 0;
+      img.data[p + 2] = 0;
+      img.data[p + 3] = 0;
+      continue;
+    }
+    const rgb = palette[index] ?? [0, 0, 0];
     img.data[p + 0] = rgb[0] | 0;
     img.data[p + 1] = rgb[1] | 0;
     img.data[p + 2] = rgb[2] | 0;
@@ -1368,6 +1533,132 @@ function renderLegacyHudStubOnBackdrop() {
     drawTile(LEGACY_UI_TILE.BUTTON_ATTACK_BASE + i, 8 + (i * 16), 176);
   }
   drawTile(LEGACY_UI_TILE.BUTTON_RIGHT, 152, 176);
+}
+
+function drawLegacyTileScaled(g, tileId, sx, sy, scale) {
+  if (!state.tileSet) {
+    return;
+  }
+  const pal = paletteForTile(tileId);
+  const key = paletteKeyForTile(tileId);
+  const tc = state.tileSet.tileCanvas(tileId, pal, key);
+  if (!tc) {
+    return;
+  }
+  g.drawImage(tc, sx, sy, 16 * scale, 16 * scale);
+}
+
+function renderStartupMenuLayer(g, scale) {
+  const x = (v) => v * scale;
+  const y = (v) => v * scale;
+
+  const startupPal = buildStartupPaletteForMenu();
+  const hasStartupArt = startupPal
+    && state.startupTitlePixmaps
+    && state.startupTitlePixmaps[0]
+    && state.startupTitlePixmaps[1]
+    && state.startupMenuPixmap;
+  g.fillStyle = "#000000";
+  g.fillRect(0, 0, x(320), y(200));
+  if (hasStartupArt) {
+    const drawSprite = (key, pixmap, sx, sy) => {
+      if (!pixmap) {
+        return;
+      }
+      const cacheKey = `${key}:${state.startupMenuIndex}`;
+      let sprite = state.startupCanvasCache.get(cacheKey);
+      if (!sprite) {
+        sprite = canvasFromIndexedPixels(pixmap, startupPal, 0xff);
+        state.startupCanvasCache.set(cacheKey, sprite);
+      }
+      if (!sprite) {
+        return;
+      }
+      g.drawImage(sprite, x(sx), y(sy), x(sprite.width), y(sprite.height));
+    };
+    drawSprite("title", state.startupTitlePixmaps[0], 0x13, 0x00);
+    drawSprite("subtitle", state.startupTitlePixmaps[1], 0x3b, 0x2f);
+    drawSprite("menu", state.startupMenuPixmap, 0x31, 0x53);
+    return;
+  }
+
+  for (let i = 0; i < 20; i += 1) {
+    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, x(i * 16), 0, scale);
+    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, x(i * 16), y(184), scale);
+  }
+  for (let i = 1; i < 11; i += 1) {
+    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, 0, y(i * 16), scale);
+    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, x(304), y(i * 16), scale);
+  }
+
+  drawU6MainText(g, "ULTIMA VI", x(112), y(30), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  drawU6MainText(g, "THE FALSE PROPHET", x(94), y(44), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+
+  for (let i = 0; i < STARTUP_MENU.length; i += 1) {
+    const item = STARTUP_MENU[i];
+    const rowY = 74 + (i * 20);
+    const selected = i === state.startupMenuIndex;
+    g.fillStyle = selected ? "#5f2e1d" : "#1f1a14";
+    g.fillRect(x(62), y(rowY), x(196), y(16));
+    g.strokeStyle = selected ? "#d7b981" : "#6a5131";
+    g.strokeRect(x(62) + 0.5, y(rowY) + 0.5, x(196) - 1, y(16) - 1);
+    if (selected) {
+      drawU6MainText(g, ">>", x(68), y(rowY + 4), Math.max(1, scale), "#f2dfb6");
+    }
+    const textColor = item.enabled ? (selected ? "#f2dfb6" : "#d8be8a") : "#76644a";
+    drawU6MainText(g, item.label, x(86), y(rowY + 4), Math.max(1, scale), textColor);
+  }
+
+  drawU6MainText(g, "Use ARROWS + ENTER", x(98), y(162), Math.max(1, scale), "#8e7a55");
+}
+
+function buildStartupPaletteForMenu() {
+  if (!state.basePalette || state.basePalette.length < 256) {
+    return null;
+  }
+  const palette = state.basePalette.map((rgb) => [rgb[0] | 0, rgb[1] | 0, rgb[2] | 0]);
+  const idx = state.startupMenuIndex | 0;
+  for (let i = 0; i < 5; i += 1) {
+    const src = STARTUP_MENU_PAL[(4 + i - idx)] || STARTUP_MENU_PAL[4];
+    const di = STARTUP_MENU_PAL_IDX[i] | 0;
+    palette[di] = [src[0] | 0, src[1] | 0, src[2] | 0];
+  }
+  return palette;
+}
+
+function renderStartupScreen() {
+  const mainScale = Math.max(1, Math.floor(canvas.width / 320));
+  renderStartupMenuLayer(ctx, mainScale);
+
+  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+  if (!enabled || !legacyBackdropCanvas) {
+    return;
+  }
+  const g = legacyBackdropCanvas.getContext("2d");
+  const w = legacyBackdropCanvas.width | 0;
+  const h = legacyBackdropCanvas.height | 0;
+  if (w <= 0 || h <= 0) {
+    return;
+  }
+  g.imageSmoothingEnabled = false;
+  if (state.legacyBackdropBaseCanvas
+    && state.legacyBackdropBaseCanvas.width === w
+    && state.legacyBackdropBaseCanvas.height === h) {
+    g.clearRect(0, 0, w, h);
+    g.drawImage(state.legacyBackdropBaseCanvas, 0, 0);
+  } else {
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, w, h);
+  }
+  const scale = Math.max(1, Math.floor(w / 320));
+  renderStartupMenuLayer(g, scale);
+
+  legacyViewportCanvas.width = 160;
+  legacyViewportCanvas.height = 160;
+  const lv = legacyViewportCanvas.getContext("2d");
+  lv.imageSmoothingEnabled = false;
+  lv.clearRect(0, 0, 160, 160);
+  lv.drawImage(legacyBackdropCanvas, 8 * scale, 8 * scale, 160 * scale, 160 * scale, 0, 0, 160, 160);
 }
 
 function composeLegacyViewportFromModernGrid() {
@@ -2046,16 +2337,36 @@ function activeCapturePreset() {
   return CAPTURE_PRESETS.find((p) => p.id === id) ?? CAPTURE_PRESETS[0];
 }
 
-function setStartupOverlayVisible(visible) {
-  if (!startupOverlay) {
+function setStartupMenuIndex(nextIndex) {
+  if (!STARTUP_MENU.length) {
+    state.startupMenuIndex = 0;
     return;
   }
-  startupOverlay.classList.toggle("is-hidden", !visible);
+  const count = STARTUP_MENU.length;
+  let idx = nextIndex | 0;
+  if (idx < 0) {
+    idx = count - 1;
+  } else if (idx >= count) {
+    idx = 0;
+  }
+  if (state.startupMenuIndex !== idx) {
+    state.startupCanvasCache.clear();
+  }
+  state.startupMenuIndex = idx;
 }
 
-function setStartupStatusText(text) {
-  if (startupStatus) {
-    startupStatus.textContent = text;
+function activateStartupMenuSelection() {
+  if (!STARTUP_MENU.length) {
+    return;
+  }
+  const selected = STARTUP_MENU[state.startupMenuIndex] || STARTUP_MENU[0];
+  if (!selected || !selected.enabled) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `"${selected ? selected.label : "This option"}" is not available in this build.`;
+    return;
+  }
+  if (selected.id === "journey") {
+    startSessionFromTitle();
   }
 }
 
@@ -2074,18 +2385,18 @@ function placeCameraAtPresetId(presetId) {
 }
 
 function startSessionFromTitle() {
-  if (state.sessionStarted || !state.runtimeReady) {
+  if (state.sessionStarted) {
+    return;
+  }
+  if (!state.runtimeReady) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Runtime assets are still loading.";
     return;
   }
   placeCameraAtPresetId("lb_throne");
-  setStartupOverlayVisible(false);
   state.sessionStarted = true;
   diagBox.className = "diag ok";
   diagBox.textContent = "Journey Onward: loaded into Lord British's throne room.";
-  requestAnimationFrame((ts) => {
-    state.lastTs = ts;
-    requestAnimationFrame(tickLoop);
-  });
 }
 
 function jumpToPreset() {
@@ -3119,6 +3430,11 @@ function drawTileGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#0a0f13";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!state.sessionStarted) {
+    renderStartupScreen();
+    statTile.textContent = "startup";
+    return;
+  }
 
   const startX = state.sim.world.map_x - (VIEW_W >> 1);
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
@@ -3559,7 +3875,7 @@ function tickLoop(ts) {
   state.accMs += ts - state.lastTs;
   state.lastTs = ts;
 
-  while (state.accMs >= TICK_MS) {
+  while (state.sessionStarted && state.accMs >= TICK_MS) {
     state.accMs -= TICK_MS;
     state.queue = stepSimTick(state.sim, state.queue);
     if (state.entityLayer) {
@@ -3579,8 +3895,10 @@ function tickLoop(ts) {
   }
 
   drawTileGrid();
-  composeLegacyViewportFromModernGrid();
-  renderLegacyHudStubOnBackdrop();
+  if (state.sessionStarted) {
+    composeLegacyViewportFromModernGrid();
+    renderLegacyHudStubOnBackdrop();
+  }
   updateStats();
   requestAnimationFrame(tickLoop);
 }
@@ -3601,7 +3919,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes, paperRes, fontRes, portraitBRes, portraitARes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -3616,9 +3934,11 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/paper.bmp"),
       fetch("../assets/runtime/u6.ch"),
       fetch("../assets/runtime/portrait.b"),
-      fetch("../assets/runtime/portrait.a")
+      fetch("../assets/runtime/portrait.a"),
+      fetch("../assets/runtime/titles.shp"),
+      fetch("../assets/runtime/mainmenu.shp")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -3633,7 +3953,9 @@ async function loadRuntimeAssets() {
       paperRes.arrayBuffer(),
       fontRes.arrayBuffer(),
       portraitBRes.arrayBuffer(),
-      portraitARes.arrayBuffer()
+      portraitARes.arrayBuffer(),
+      titlesRes.arrayBuffer(),
+      mainmenuRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -3667,6 +3989,21 @@ async function loadRuntimeAssets() {
     } else {
       state.avatarPortraitCanvas = null;
     }
+    if (titlesRes.ok && titlesBuf.byteLength > 8 && mainmenuRes.ok && mainmenuBuf.byteLength > 8) {
+      const titles = decodeU6ShpArchive(new Uint8Array(titlesBuf));
+      const menu = decodeU6ShpArchive(new Uint8Array(mainmenuBuf));
+      if (titles.length >= 2 && titles[0] && titles[1] && menu.length >= 1 && menu[0]) {
+        state.startupTitlePixmaps = [titles[0], titles[1]];
+        state.startupMenuPixmap = menu[0];
+      } else {
+        state.startupTitlePixmaps = null;
+        state.startupMenuPixmap = null;
+      }
+    } else {
+      state.startupTitlePixmaps = null;
+      state.startupMenuPixmap = null;
+    }
+    state.startupCanvasCache.clear();
     if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
@@ -3754,6 +4091,9 @@ async function loadRuntimeAssets() {
     state.palette = null;
     state.basePalette = null;
     state.avatarPortraitCanvas = null;
+    state.startupTitlePixmaps = null;
+    state.startupMenuPixmap = null;
+    state.startupCanvasCache.clear();
     state.u6MainFont = null;
     state.legacyPaperPixmap = null;
     state.tileFlags = null;
@@ -3768,8 +4108,34 @@ async function loadRuntimeAssets() {
 window.addEventListener("keydown", (ev) => {
   const k = ev.key.toLowerCase();
   if (!state.sessionStarted) {
-    if ((k === "enter" || k === " ") && state.runtimeReady) {
-      startSessionFromTitle();
+    if (k === "arrowup") {
+      setStartupMenuIndex(state.startupMenuIndex - 1);
+      ev.preventDefault();
+    } else if (k === "arrowdown") {
+      setStartupMenuIndex(state.startupMenuIndex + 1);
+      ev.preventDefault();
+    } else if (k === "i") {
+      setStartupMenuIndex(0);
+      activateStartupMenuSelection();
+      ev.preventDefault();
+    } else if (k === "c") {
+      setStartupMenuIndex(1);
+      activateStartupMenuSelection();
+      ev.preventDefault();
+    } else if (k === "t") {
+      setStartupMenuIndex(2);
+      activateStartupMenuSelection();
+      ev.preventDefault();
+    } else if (k === "a") {
+      setStartupMenuIndex(3);
+      activateStartupMenuSelection();
+      ev.preventDefault();
+    } else if (k === "j") {
+      setStartupMenuIndex(4);
+      activateStartupMenuSelection();
+      ev.preventDefault();
+    } else if (k === "enter" || k === " ") {
+      activateStartupMenuSelection();
       ev.preventDefault();
     }
     return;
@@ -3798,20 +4164,71 @@ window.addEventListener("keydown", (ev) => {
   ev.preventDefault();
 });
 
+function startupMenuIndexAtLogicalPos(lx, ly) {
+  if (lx < STARTUP_MENU_HITBOX.x0 || lx > STARTUP_MENU_HITBOX.x1) {
+    return -1;
+  }
+  for (let i = 0; i < STARTUP_MENU_HITBOX.rows.length; i += 1) {
+    const row = STARTUP_MENU_HITBOX.rows[i];
+    if (ly > row[0] && ly < row[1]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function startupMenuIndexAtEvent(ev) {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return -1;
+  }
+  const px = ((ev.clientX - rect.left) * canvas.width) / rect.width;
+  const py = ((ev.clientY - rect.top) * canvas.height) / rect.height;
+  const menuScale = Math.max(1, Math.floor(canvas.width / 320));
+  const lx = Math.floor(px / menuScale);
+  const ly = Math.floor(py / menuScale);
+  return startupMenuIndexAtLogicalPos(lx, ly);
+}
+
+canvas.addEventListener("mousemove", (ev) => {
+  if (state.sessionStarted) {
+    return;
+  }
+  const idx = startupMenuIndexAtEvent(ev);
+  if (idx >= 0) {
+    setStartupMenuIndex(idx);
+  }
+});
+
+canvas.addEventListener("click", (ev) => {
+  if (state.sessionStarted) {
+    return;
+  }
+  const idx = startupMenuIndexAtEvent(ev);
+  if (idx < 0) {
+    return;
+  }
+  setStartupMenuIndex(idx);
+  activateStartupMenuSelection();
+});
+
 window.addEventListener("resize", () => {
   applyLegacyFrameLayout();
 });
 
 loadRuntimeAssets().finally(() => {
   state.runtimeReady = true;
-  if (startupJourneyButton) {
-    startupJourneyButton.disabled = false;
-  }
   if (state.mapCtx) {
-    setStartupStatusText("Journey Onward ready. Press Enter or click to begin in the throne room.");
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Startup menu ready: select Journey Onward to enter the throne room.";
   } else {
-    setStartupStatusText("Assets missing: Journey Onward still available in fallback mode.");
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Assets missing: startup menu running in fallback mode.";
   }
+  requestAnimationFrame((ts) => {
+    state.lastTs = ts;
+    requestAnimationFrame(tickLoop);
+  });
 });
 
 initTheme();
@@ -3826,11 +4243,7 @@ initLegacyScaleMode();
 initLegacyFramePreview();
 initCapturePresets();
 initPanelCopyButtons();
-setStartupOverlayVisible(true);
-if (startupJourneyButton) {
-  startupJourneyButton.disabled = true;
-  startupJourneyButton.addEventListener("click", startSessionFromTitle);
-}
+setStartupMenuIndex(0);
 if (jumpButton) {
   jumpButton.addEventListener("click", jumpToPreset);
 }

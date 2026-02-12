@@ -6,6 +6,7 @@ This directory captures what the original game does, how subsystems interact, an
 
 - `module-map.md`: segment-level and subsystem-level map.
 - `symbol-catalog.md`: decompiled symbol meaning/rename tracking.
+- `startup-menu-parity.md`: startup/title flow evidence and parity trace status.
 
 ## Usage
 

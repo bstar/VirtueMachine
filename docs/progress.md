@@ -151,9 +151,13 @@ This checklist is intentionally mutable.
 
 #### Slice R5: Startup Screen Recreation (Title -> Throne Room)
 
-- `[x]` Add startup/title overlay flow to web client runtime
+- `[x]` Add startup/title flow in engine render path using legacy assets/font
 - `[x]` Expose only `Journey Onward` as selectable startup action
 - `[x]` Route startup entry directly to Lord British throne room preset (`307,347,0`)
+- `[x]` Add keyboard menu navigation model with disabled-option feedback
+- `[x]` Document startup/title provenance from released decompiled source and track unresolved title-menu source path
+- `[x]` Expand optional asset sync list with startup/title candidate files (`mainmenu.shp`, `titles.shp`, `intro*.shp`, `intro.ptr`)
+- `[ ]` Trace canonical title-menu provenance (`intro.m`/aux startup path) and document exact draw/input sequence before pixel-parity pass
 - `[ ]` Replace remaining placeholder title/menu art with decoded legacy assets
 - `[ ]` Add parity screenshot pair for startup/title presentation vs legacy reference
 
