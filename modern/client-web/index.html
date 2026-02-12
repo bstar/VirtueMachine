@@ -57,6 +57,7 @@
           <div class="stat-row"><span>Palette Phase</span><strong id="statPalettePhase">-</strong></div>
           <div class="stat-row"><span>Center Tile IDs</span><strong id="statCenterTiles">-</strong></div>
           <div class="stat-row"><span>Center Palette Band</span><strong id="statCenterBand">-</strong></div>
+          <div class="stat-row"><span>Net Session</span><strong id="statNetSession">offline</strong></div>
         </div>
 
         <div class="mt-4 space-y-3">
@@ -75,6 +76,17 @@
             <button id="jumpButton" class="control-btn" type="button">Jump (G)</button>
             <button id="captureButton" class="control-btn" type="button">Capture (P)</button>
             <button id="captureWorldHudButton" class="control-btn col-span-2" type="button">Capture World+HUD (Shift+P)</button>
+          </div>
+
+          <div class="control-block"><label for="netApiBaseInput">Net API Base URL</label><input id="netApiBaseInput" class="control-input" type="text" value="http://127.0.0.1:8081" placeholder="http://127.0.0.1:8081"></div>
+          <div class="control-block"><label for="netUsernameInput">Username</label><input id="netUsernameInput" class="control-input" type="text" value="avatar" placeholder="avatar"></div>
+          <div class="control-block"><label for="netPasswordInput">Password</label><input id="netPasswordInput" class="control-input" type="text" value="quest123" placeholder="quest123"></div>
+          <div class="control-block"><label for="netCharacterNameInput">Character Name</label><input id="netCharacterNameInput" class="control-input" type="text" value="Avatar" placeholder="Avatar"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="netLoginButton" class="control-btn" type="button">Net Login (I)</button>
+            <button id="netRecoverButton" class="control-btn" type="button">Recover Pass</button>
+            <button id="netSaveButton" class="control-btn" type="button">Save Remote (Y)</button>
+            <button id="netLoadButton" class="control-btn" type="button">Load Remote (U)</button>
           </div>
         </div>
 
@@ -103,6 +115,9 @@
           <p>`B` toggle legacy palette FX</p>
           <p>`M` toggle ghost/avatar mode</p>
           <p>`E` interact with facing door (avatar mode)</p>
+          <p>`I` net login (selected user/password)</p>
+          <p>`Y` save current sim snapshot to net backend</p>
+          <p>`U` load sim snapshot from net backend</p>
           <p>`,` / `.` cycle cursor glyph</p>
           <p>`[` / `]` cycle legacy scale</p>
         </div>

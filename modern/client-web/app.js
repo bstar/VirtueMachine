@@ -116,6 +116,7 @@ const statReplay = document.getElementById("statReplay");
 const statPalettePhase = document.getElementById("statPalettePhase");
 const statCenterTiles = document.getElementById("statCenterTiles");
 const statCenterBand = document.getElementById("statCenterBand");
+const statNetSession = document.getElementById("statNetSession");
 const topTimeOfDay = document.getElementById("topTimeOfDay");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
@@ -134,6 +135,14 @@ const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 const captureWorldHudButton = document.getElementById("captureWorldHudButton");
+const netApiBaseInput = document.getElementById("netApiBaseInput");
+const netUsernameInput = document.getElementById("netUsernameInput");
+const netPasswordInput = document.getElementById("netPasswordInput");
+const netCharacterNameInput = document.getElementById("netCharacterNameInput");
+const netLoginButton = document.getElementById("netLoginButton");
+const netRecoverButton = document.getElementById("netRecoverButton");
+const netSaveButton = document.getElementById("netSaveButton");
+const netLoadButton = document.getElementById("netLoadButton");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -145,6 +154,9 @@ const MOVEMENT_MODE_KEY = "vm_movement_mode";
 const RENDER_MODE_KEY = "vm_render_mode";
 const LEGACY_FRAME_PREVIEW_KEY = "vm_legacy_frame_preview";
 const LEGACY_SCALE_MODE_KEY = "vm_legacy_scale_mode";
+const NET_API_BASE_KEY = "vm_net_api_base";
+const NET_USERNAME_KEY = "vm_net_username";
+const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
   cornerTL: 0x1b0,
@@ -313,7 +325,16 @@ const state = {
   cursorIndex: 0,
   mouseNormX: 0,
   mouseNormY: 0,
-  mouseInCanvas: false
+  mouseInCanvas: false,
+  net: {
+    apiBase: "http://127.0.0.1:8081",
+    token: "",
+    userId: "",
+    username: "",
+    characterId: "",
+    characterName: "",
+    lastSavedTick: 0
+  }
 };
 
 function isLegacyScaleMode(mode) {
@@ -1989,7 +2010,8 @@ function initPanelCopyButtons() {
     "statSource",
     "statHash",
     "statReplay",
-    "statCenterTiles"
+    "statCenterTiles",
+    "statNetSession"
   ]);
   const rows = document.querySelectorAll(".stat-row");
   for (const row of rows) {
@@ -2019,6 +2041,257 @@ function initPanelCopyButtons() {
     const btn = makeCopyButton(() => diagBox.textContent || "");
     wrap.appendChild(btn);
     diagBox.parentElement.insertBefore(wrap, diagBox.nextSibling);
+  }
+}
+
+function updateNetSessionStat() {
+  if (!statNetSession) {
+    return;
+  }
+  if (!state.net.token || !state.net.userId) {
+    statNetSession.textContent = "offline";
+    return;
+  }
+  const name = state.net.characterName || "(no-char)";
+  statNetSession.textContent = `${state.net.username}/${name}`;
+}
+
+function normalizeLoadedSimState(candidate) {
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+  if (!candidate.world || typeof candidate.world !== "object") {
+    return null;
+  }
+  return {
+    tick: Number(candidate.tick) >>> 0,
+    rngState: Number(candidate.rngState) >>> 0,
+    worldFlags: Number(candidate.worldFlags) >>> 0,
+    commandsApplied: Number(candidate.commandsApplied) >>> 0,
+    doorOpenStates: { ...(candidate.doorOpenStates ?? {}) },
+    world: {
+      is_on_quest: Number(candidate.world.is_on_quest) >>> 0,
+      next_sleep: Number(candidate.world.next_sleep) >>> 0,
+      time_m: Number(candidate.world.time_m) >>> 0,
+      time_h: Number(candidate.world.time_h) >>> 0,
+      date_d: Number(candidate.world.date_d) >>> 0,
+      date_m: Number(candidate.world.date_m) >>> 0,
+      date_y: Number(candidate.world.date_y) >>> 0,
+      wind_dir: Number(candidate.world.wind_dir) | 0,
+      active: Number(candidate.world.active) >>> 0,
+      map_x: Number(candidate.world.map_x) | 0,
+      map_y: Number(candidate.world.map_y) | 0,
+      map_z: Number(candidate.world.map_z) | 0,
+      in_combat: Number(candidate.world.in_combat) >>> 0,
+      sound_enabled: Number(candidate.world.sound_enabled) >>> 0
+    }
+  };
+}
+
+function encodeSimSnapshotBase64(sim) {
+  const raw = JSON.stringify(cloneSimState(sim));
+  return btoa(unescape(encodeURIComponent(raw)));
+}
+
+function decodeSimSnapshotBase64(snapshotBase64) {
+  const raw = decodeURIComponent(escape(atob(String(snapshotBase64 || ""))));
+  return normalizeLoadedSimState(JSON.parse(raw));
+}
+
+async function netRequest(route, init = {}, auth = true) {
+  const base = String(state.net.apiBase || "").trim().replace(/\/+$/, "");
+  if (!base) {
+    throw new Error("Net API base URL is empty");
+  }
+  const headers = { ...(init.headers || {}) };
+  if (auth && state.net.token) {
+    headers.authorization = `Bearer ${state.net.token}`;
+  }
+  const res = await fetch(`${base}${route}`, { ...init, headers });
+  const text = await res.text();
+  const body = text.trim() ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const msg = body?.error?.message || `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
+async function netEnsureCharacter() {
+  const characterName = String(netCharacterNameInput?.value || "Avatar").trim() || "Avatar";
+  const list = await netRequest("/api/characters", { method: "GET" }, true);
+  const chars = Array.isArray(list?.characters) ? list.characters : [];
+  let pick = chars.find((c) => String(c.name || "").toLowerCase() === characterName.toLowerCase());
+  if (!pick) {
+    pick = await netRequest("/api/characters", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: characterName })
+    }, true);
+  }
+  state.net.characterId = String(pick.character_id || "");
+  state.net.characterName = characterName;
+}
+
+async function netLogin() {
+  state.net.apiBase = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
+  const username = String(netUsernameInput?.value || "").trim().toLowerCase();
+  const password = String(netPasswordInput?.value || "");
+  if (!username || !password) {
+    throw new Error("Username and password are required");
+  }
+  const login = await netRequest("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username, password })
+  }, false);
+  state.net.token = String(login?.token || "");
+  state.net.userId = String(login?.user?.user_id || "");
+  state.net.username = String(login?.user?.username || username);
+  await netEnsureCharacter();
+  updateNetSessionStat();
+  try {
+    localStorage.setItem(NET_API_BASE_KEY, state.net.apiBase);
+    localStorage.setItem(NET_USERNAME_KEY, state.net.username);
+    localStorage.setItem(NET_CHARACTER_NAME_KEY, state.net.characterName);
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+async function netRecoverPassword() {
+  const base = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
+  const username = String(netUsernameInput?.value || "").trim().toLowerCase();
+  if (!username) {
+    throw new Error("Username is required");
+  }
+  state.net.apiBase = base;
+  const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}`, { method: "GET" }, false);
+  if (netPasswordInput) {
+    netPasswordInput.value = String(out?.password_plaintext || "");
+  }
+  return out;
+}
+
+async function netSaveSnapshot() {
+  if (!state.net.token) {
+    await netLogin();
+  } else if (!state.net.characterId) {
+    await netEnsureCharacter();
+  }
+  const snapshotBase64 = encodeSimSnapshotBase64(state.sim);
+  const out = await netRequest(`/api/characters/${encodeURIComponent(state.net.characterId)}/snapshot`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      schema_version: 1,
+      sim_core_version: "client-web-js",
+      saved_tick: state.sim.tick >>> 0,
+      snapshot_base64: snapshotBase64
+    })
+  }, true);
+  state.net.lastSavedTick = Number(out?.snapshot_meta?.saved_tick || 0) >>> 0;
+  return out;
+}
+
+async function netLoadSnapshot() {
+  if (!state.net.token) {
+    await netLogin();
+  } else if (!state.net.characterId) {
+    await netEnsureCharacter();
+  }
+  const out = await netRequest(`/api/characters/${encodeURIComponent(state.net.characterId)}/snapshot`, { method: "GET" }, true);
+  if (!out?.snapshot_base64) {
+    throw new Error("No snapshot is saved for this character yet");
+  }
+  const loaded = decodeSimSnapshotBase64(out.snapshot_base64);
+  if (!loaded) {
+    throw new Error("Snapshot payload is invalid");
+  }
+  state.sim = loaded;
+  state.queue = [];
+  state.commandLog = [];
+  state.accMs = 0;
+  state.lastMoveQueueAtMs = -1;
+  state.avatarLastMoveTick = -1;
+  state.interactionProbeTile = null;
+  return out;
+}
+
+function initNetPanel() {
+  let savedBase = "http://127.0.0.1:8081";
+  let savedUser = "avatar";
+  let savedChar = "Avatar";
+  try {
+    savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
+    savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
+    savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+  if (netApiBaseInput) {
+    netApiBaseInput.value = savedBase;
+  }
+  if (netUsernameInput) {
+    netUsernameInput.value = savedUser;
+  }
+  if (netCharacterNameInput) {
+    netCharacterNameInput.value = savedChar;
+  }
+  state.net.apiBase = savedBase;
+  state.net.username = savedUser;
+  state.net.characterName = savedChar;
+  updateNetSessionStat();
+
+  if (netLoginButton) {
+    netLoginButton.addEventListener("click", async () => {
+      try {
+        await netLogin();
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
+      } catch (err) {
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netRecoverButton) {
+    netRecoverButton.addEventListener("click", async () => {
+      try {
+        const out = await netRecoverPassword();
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Recovered password for ${out?.user?.username || "user"}.`;
+      } catch (err) {
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Password recovery failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netSaveButton) {
+    netSaveButton.addEventListener("click", async () => {
+      try {
+        await netSaveSnapshot();
+        updateNetSessionStat();
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
+      } catch (err) {
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netLoadButton) {
+    netLoadButton.addEventListener("click", async () => {
+      try {
+        const out = await netLoadSnapshot();
+        updateNetSessionStat();
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
+      } catch (err) {
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
+      }
+    });
   }
 }
 
@@ -4354,6 +4627,29 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
   else if (k === "e") queueInteractDoor();
+  else if (k === "i") netLogin().then(() => {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
+  }).catch((err) => {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+  });
+  else if (k === "y") netSaveSnapshot().then(() => {
+    updateNetSessionStat();
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
+  }).catch((err) => {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
+  });
+  else if (k === "u") netLoadSnapshot().then((out) => {
+    updateNetSessionStat();
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
+  }).catch((err) => {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
+  });
   else if (ev.key === ",") cycleCursor(-1);
   else if (ev.key === ".") cycleCursor(1);
   else if (ev.key === "[") cycleLegacyScaleMode(-1);
@@ -4526,6 +4822,7 @@ initRenderMode();
 initLegacyScaleMode();
 initLegacyFramePreview();
 initCapturePresets();
+initNetPanel();
 initPanelCopyButtons();
 setStartupMenuIndex(0);
 if (jumpButton) {
