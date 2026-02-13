@@ -36,6 +36,7 @@ const LEGACY_CORNER_TABLE = [
 ];
 const OBJ_COORD_USE_MASK = 0x18;
 const OBJ_COORD_USE_LOCXYZ = 0x00;
+const OBJ_STATUS_INVISIBLE = 0x02;
 const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
 const AVATAR_ENTITY_ID = 1;
@@ -49,7 +50,7 @@ const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a
 const OBJECT_TYPES_SOLID_ENV = new Set([
   0x0a3, 0x0a4, 0x0b0, 0x0b1, 0x0c6, 0x0d8, 0x0d9,
   0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
-  0x147, 0x0fc
+  0x147
 ]);
 function isRenderableWorldObjectType(type) {
   const t = type & 0x03ff;
@@ -61,6 +62,31 @@ function isRenderableWorldObjectType(type) {
     return false;
   }
   return true;
+}
+
+function isImplicitSolidObjectTile(objType, tileId) {
+  if (OBJECT_TYPES_DOOR.has(objType & 0x03ff)) {
+    return false;
+  }
+  if (!state.tileFlags) {
+    return false;
+  }
+  const tf = state.tileFlags[tileId & 0x07ff] ?? 0;
+  if ((tf & 0x20) !== 0) {
+    return true;
+  }
+  /* Legacy data has many large furniture props without explicit nos-step flags.
+     Use multi-tile footprint as a collision fallback, but never for foreground/top decor. */
+  if ((tf & 0xc0) !== 0) {
+    if ((tf & 0x10) !== 0) {
+      return false;
+    }
+    if (OBJECT_TYPES_TOP_DECOR.has(objType & 0x03ff)) {
+      return false;
+    }
+    return true;
+  }
+  return false;
 }
 
 const HASH_OFFSET = 1469598103934665603n;
@@ -285,6 +311,9 @@ const state = {
   showOverlayDebug: false,
   enablePaletteFx: true,
   movementMode: "ghost",
+  useCursorActive: false,
+  useCursorX: 0,
+  useCursorY: 0,
   avatarFacingDx: 0,
   avatarFacingDy: 1,
   avatarLastMoveTick: -1,
@@ -783,6 +812,9 @@ class U6ObjectLayerJS {
       const off = 2 + (i * 8);
       const status = bytes[off + 0];
       if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
+        continue;
+      }
+      if (status & OBJ_STATUS_INVISIBLE) {
         continue;
       }
 
@@ -2440,7 +2472,7 @@ async function netLogin() {
   await netEnsureCharacter();
   let resumedFromSnapshot = false;
   try {
-    const out = await netRequest(`/api/characters/${encodeURIComponent(state.net.characterId)}/snapshot`, { method: "GET" }, true);
+    const out = await netRequest("/api/world/snapshot", { method: "GET" }, true);
     if (out?.snapshot_base64) {
       const loaded = decodeSimSnapshotBase64(out.snapshot_base64);
       if (loaded) {
@@ -2654,14 +2686,12 @@ async function netLogoutAndPersist() {
 }
 
 async function netSaveSnapshot() {
-  setNetStatus("sync", "Saving remote snapshot...");
+  setNetStatus("sync", "Saving world snapshot...");
   if (!state.net.token) {
     await netLogin();
-  } else if (!state.net.characterId) {
-    await netEnsureCharacter();
   }
   const snapshotBase64 = encodeSimSnapshotBase64(state.sim);
-  const out = await netRequest(`/api/characters/${encodeURIComponent(state.net.characterId)}/snapshot`, {
+  const out = await netRequest("/api/world/snapshot", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -2678,15 +2708,13 @@ async function netSaveSnapshot() {
 }
 
 async function netLoadSnapshot() {
-  setNetStatus("sync", "Loading remote snapshot...");
+  setNetStatus("sync", "Loading world snapshot...");
   if (!state.net.token) {
     await netLogin();
-  } else if (!state.net.characterId) {
-    await netEnsureCharacter();
   }
-  const out = await netRequest(`/api/characters/${encodeURIComponent(state.net.characterId)}/snapshot`, { method: "GET" }, true);
+  const out = await netRequest("/api/world/snapshot", { method: "GET" }, true);
   if (!out?.snapshot_base64) {
-    throw new Error("No snapshot is saved for this character yet");
+    throw new Error("No world snapshot is saved yet");
   }
   const loaded = decodeSimSnapshotBase64(out.snapshot_base64);
   if (!loaded) {
@@ -3280,6 +3308,9 @@ function initPaletteFxMode() {
 function setMovementMode(mode) {
   const next = mode === "avatar" ? "avatar" : "ghost";
   state.movementMode = next;
+  if (next !== "avatar") {
+    state.useCursorActive = false;
+  }
   if (movementModeToggle) {
     movementModeToggle.value = next;
   }
@@ -3479,6 +3510,26 @@ function resolveDoorTileIdForVisibility(sim, obj) {
   return resolveDoorTileId(sim, obj);
 }
 
+function objectFootprintTiles(sim, o, ox, oy) {
+  const wrap10 = (v) => v & 0x3ff;
+  const sx = wrap10(ox);
+  const sy = wrap10(oy);
+  const tileId = resolveDoorTileId(sim, o) & 0xffff;
+  const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
+  const out = [{ x: sx, y: sy, tileId }];
+  if (tf & 0x80) {
+    out.push({ x: wrap10(sx - 1), y: sy, tileId: (tileId - 1) & 0xffff });
+  }
+  if (tf & 0x40) {
+    const upTile = (tf & 0x80) ? (tileId - 2) : (tileId - 1);
+    out.push({ x: sx, y: wrap10(sy - 1), tileId: upTile & 0xffff });
+  }
+  if ((tf & 0xc0) === 0xc0) {
+    out.push({ x: wrap10(sx - 1), y: wrap10(sy - 1), tileId: (tileId - 3) & 0xffff });
+  }
+  return out;
+}
+
 function isBlockedAt(sim, wx, wy, wz) {
   if (!state.mapCtx) {
     return false;
@@ -3495,34 +3546,27 @@ function isBlockedAt(sim, wx, wy, wz) {
     const tx = wrap10(wx);
     const ty = wrap10(wy);
     const checkObjectBlockAt = (o, ox, oy) => {
-      const tileId = resolveDoorTileId(sim, o);
-      const tf = state.tileFlags[tileId & 0x07ff] ?? 0;
-      const sx = wrap10(ox);
-      const sy = wrap10(oy);
-      if (isSolidEnvObject(o) && sx === tx && sy === ty) {
-        return true;
-      }
-      if ((tf & 0x04) !== 0 && sx === tx && sy === ty) {
-        return true;
-      }
-      if ((tf & 0x80) !== 0 && tx === wrap10(sx - 1) && ty === sy) {
-        const spill = (tileId - 1) & 0xffff;
-        const sf = state.tileFlags[spill & 0x07ff] ?? 0;
-        if ((sf & 0x04) !== 0) {
+      const cells = objectFootprintTiles(sim, o, ox, oy);
+      const isDoor = isCloseableDoorObject(o);
+      const doorOpen = isDoor ? isDoorFrameOpen(o, resolvedDoorFrame(sim, o)) : false;
+      for (const c of cells) {
+        if (c.x !== tx || c.y !== ty) {
+          continue;
+        }
+        if (isDoor) {
+          if (!doorOpen) {
+            return true;
+          }
+          const ctf = state.tileFlags ? (state.tileFlags[c.tileId & 0x07ff] ?? 0) : 0;
+          if ((ctf & 0x04) !== 0 || (ctf & 0x20) !== 0) {
+            return true;
+          }
+          continue;
+        }
+        if (isSolidEnvObject(o)) {
           return true;
         }
-      }
-      if ((tf & 0x40) !== 0 && tx === sx && ty === wrap10(sy - 1)) {
-        const spill = (tileId - 1) & 0xffff;
-        const sf = state.tileFlags[spill & 0x07ff] ?? 0;
-        if ((sf & 0x04) !== 0) {
-          return true;
-        }
-      }
-      if ((tf & 0xc0) === 0xc0 && tx === wrap10(sx - 1) && ty === wrap10(sy - 1)) {
-        const spill = (tileId - 3) & 0xffff;
-        const sf = state.tileFlags[spill & 0x07ff] ?? 0;
-        if ((sf & 0x04) !== 0) {
+        if (isImplicitSolidObjectTile(o.type, c.tileId)) {
           return true;
         }
       }
@@ -3717,11 +3761,46 @@ function tryInteractFurnitureInFacingDirection(sim, dx, dy) {
   return tryInteractFurnitureObject(sim, furnitureAtCell(sim, tx, ty));
 }
 
-function tryInteractFacing(sim, dx, dy) {
-  if (tryToggleDoorInFacingDirection(sim, dx, dy)) {
+function tryToggleDoorAtCell(sim, tx, ty, tz) {
+  if (!state.objectLayer) {
+    return false;
+  }
+  const overlays = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
+  for (const o of overlays) {
+    if (!isCloseableDoorObject(o)) {
+      continue;
+    }
+    const beforeFrame = resolvedDoorFrame(sim, o);
+    const beforeOpen = isDoorFrameOpen(o, beforeFrame);
+    toggleDoorState(sim, o);
+    const afterFrame = resolvedDoorFrame(sim, o);
+    const afterOpen = isDoorFrameOpen(o, afterFrame);
+    diagBox.className = "diag ok";
+    diagBox.textContent = afterOpen && !beforeOpen
+      ? `Opened door at ${tx},${ty},${tz}`
+      : (!afterOpen && beforeOpen
+        ? `Closed door at ${tx},${ty},${tz}`
+        : `Toggled door at ${tx},${ty},${tz}`);
     return true;
   }
-  return tryInteractFurnitureInFacingDirection(sim, dx, dy);
+  return false;
+}
+
+function tryInteractAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  if (tryToggleDoorAtCell(sim, tx, ty, tz)) {
+    return true;
+  }
+  return tryInteractFurnitureObject(sim, furnitureAtCell(sim, tx, ty));
+}
+
+function tryInteractFacing(sim, dx, dy) {
+  const tx = (sim.world.map_x + dx) | 0;
+  const ty = (sim.world.map_y + dy) | 0;
+  if (tryInteractAtCell(sim, tx, ty)) {
+    return true;
+  }
+  return false;
 }
 
 function initCapturePresets() {
@@ -3828,7 +3907,7 @@ function startSessionFromTitle() {
     return;
   }
   if (!state.net.resumeFromSnapshot) {
-    placeCameraAtPresetId("lb_throne");
+    placeCameraAtPresetId("avatar_start");
   }
   state.sessionStarted = true;
   const resumed = !!state.net.resumeFromSnapshot;
@@ -3836,7 +3915,7 @@ function startSessionFromTitle() {
   diagBox.className = "diag ok";
   diagBox.textContent = resumed
     ? "Journey Onward: resumed at last saved position."
-    : "Journey Onward: loaded into Lord British's throne room.";
+    : "Journey Onward: loaded at the legacy avatar start position.";
 }
 
 function returnToTitleMenu() {
@@ -3844,6 +3923,7 @@ function returnToTitleMenu() {
     return;
   }
   state.queue.length = 0;
+  state.useCursorActive = false;
   state.sessionStarted = false;
   setStartupMenuIndex(0);
   diagBox.className = "diag ok";
@@ -4130,6 +4210,18 @@ function applyCommand(sim, cmd) {
     if (state.movementMode === "avatar") {
       tryInteractFacing(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
+  } else if (cmd.type === 3) {
+    if (state.movementMode === "avatar") {
+      const tx = cmd.arg0 | 0;
+      const ty = cmd.arg1 | 0;
+      const dx = Math.sign(tx - (sim.world.map_x | 0));
+      const dy = Math.sign(ty - (sim.world.map_y | 0));
+      if (dx !== 0 || dy !== 0) {
+        state.avatarFacingDx = dx;
+        state.avatarFacingDy = dy;
+      }
+      tryInteractAtCell(sim, tx, ty);
+    }
   }
   sim.commandsApplied += 1;
 }
@@ -4293,6 +4385,18 @@ function queueInteractDoor() {
     return;
   }
   const bytes = packCommand(state.sim.tick + 1, 2, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
+  const cmd = unpackCommand(bytes);
+  state.queue.push(cmd);
+  state.commandLog.push({ ...cmd });
+}
+
+function queueInteractAtCell(wx, wy) {
+  if (state.movementMode !== "avatar") {
+    return;
+  }
+  const tx = wx | 0;
+  const ty = wy | 0;
+  const bytes = packCommand(state.sim.tick + 1, 3, tx, ty);
   const cmd = unpackCommand(bytes);
   state.queue.push(cmd);
   state.commandLog.push({ ...cmd });
@@ -5075,6 +5179,9 @@ function drawTileGrid() {
 
   const startX = state.sim.world.map_x - (VIEW_W >> 1);
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
+  if (state.useCursorActive) {
+    clampUseCursorToView();
+  }
   const renderPalette = getRenderPalette();
   const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
   const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
@@ -5293,6 +5400,17 @@ function drawTileGrid() {
     ctx.strokeStyle = "#f1f3f5";
     ctx.lineWidth = 2;
     ctx.strokeRect(cx + 2, cy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+  }
+  if (state.useCursorActive && state.movementMode === "avatar") {
+    const ugx = (state.useCursorX | 0) - startX;
+    const ugy = (state.useCursorY | 0) - startY;
+    if (ugx >= 0 && ugy >= 0 && ugx < VIEW_W && ugy < VIEW_H) {
+      const upx = ugx * TILE_SIZE;
+      const upy = ugy * TILE_SIZE;
+      ctx.strokeStyle = "#f6d365";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(upx + 2, upy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    }
   }
 
   renderCharacterStubPanel();
@@ -5515,6 +5633,7 @@ function resetRun() {
   state.centerPaletteBand = "none";
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
+  state.useCursorActive = false;
   state.avatarLastMoveTick = -1;
   state.lastMoveQueueAtMs = -1;
   state.lastMoveInputDx = 0;
@@ -5828,6 +5947,54 @@ async function loadRuntimeAssets() {
   }
 }
 
+function viewStartX() {
+  return (state.sim.world.map_x | 0) - (VIEW_W >> 1);
+}
+
+function viewStartY() {
+  return (state.sim.world.map_y | 0) - (VIEW_H >> 1);
+}
+
+function clampUseCursorToView() {
+  const startX = viewStartX();
+  const startY = viewStartY();
+  const maxX = startX + VIEW_W - 1;
+  const maxY = startY + VIEW_H - 1;
+  state.useCursorX = clampI32(state.useCursorX | 0, startX, maxX);
+  state.useCursorY = clampI32(state.useCursorY | 0, startY, maxY);
+}
+
+function beginUseCursor() {
+  if (state.movementMode !== "avatar") {
+    return;
+  }
+  const px = state.sim.world.map_x | 0;
+  const py = state.sim.world.map_y | 0;
+  const dx = state.avatarFacingDx | 0;
+  const dy = state.avatarFacingDy | 0;
+  state.useCursorX = px + dx;
+  state.useCursorY = py + dy;
+  state.useCursorActive = true;
+  clampUseCursorToView();
+}
+
+function moveUseCursor(dx, dy) {
+  if (!state.useCursorActive) {
+    return;
+  }
+  state.useCursorX = (state.useCursorX + (dx | 0)) | 0;
+  state.useCursorY = (state.useCursorY + (dy | 0)) | 0;
+  clampUseCursorToView();
+}
+
+function commitUseCursorInteract() {
+  if (!state.useCursorActive) {
+    return;
+  }
+  queueInteractAtCell(state.useCursorX | 0, state.useCursorY | 0);
+  state.useCursorActive = false;
+}
+
 window.addEventListener("keydown", (ev) => {
   if (netAccountModal && !netAccountModal.classList.contains("hidden")) {
     if (ev.key === "Escape") {
@@ -5888,10 +6055,22 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     return;
   }
-  if (k === "w" || k === "k") queueMove(0, -1);
-  else if (k === "s" || k === "j") queueMove(0, 1);
-  else if (k === "a" || k === "h") queueMove(-1, 0);
-  else if (k === "d" || k === "l") queueMove(1, 0);
+  if (state.useCursorActive) {
+    if (k === "arrowup") moveUseCursor(0, -1);
+    else if (k === "arrowdown") moveUseCursor(0, 1);
+    else if (k === "arrowleft") moveUseCursor(-1, 0);
+    else if (k === "arrowright") moveUseCursor(1, 0);
+    else if (k === "u" || k === "enter" || k === " ") commitUseCursorInteract();
+    else if (k === "escape") state.useCursorActive = false;
+    else return;
+    ev.preventDefault();
+    return;
+  }
+
+  if (k === "arrowup" || k === "w" || k === "k" || k === "8") queueMove(0, -1);
+  else if (k === "arrowdown" || k === "s" || k === "j" || k === "2") queueMove(0, 1);
+  else if (k === "arrowleft" || k === "a" || k === "h" || k === "4") queueMove(-1, 0);
+  else if (k === "arrowright" || k === "d" || k === "l" || k === "6") queueMove(1, 0);
   else if (k === "g") jumpToPreset();
   else if (k === "o") setOverlayDebug(!state.showOverlayDebug);
   else if (k === "p") captureViewportPng();
@@ -5900,6 +6079,21 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "f") setAnimationMode(state.animationFrozen ? "live" : "freeze");
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
+  else if (k === "u") {
+    if (ev.shiftKey) {
+      netLoadSnapshot().then((out) => {
+        updateNetSessionStat();
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
+      }).catch((err) => {
+        setNetStatus("error", `Load failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
+      });
+    } else {
+      beginUseCursor();
+    }
+  }
   else if (k === "e") queueInteractDoor();
   else if (k === "i") {
     if (isNetAuthenticated()) {
@@ -5930,15 +6124,6 @@ window.addEventListener("keydown", (ev) => {
     setNetStatus("error", `Save failed: ${String(err.message || err)}`);
     diagBox.className = "diag warn";
     diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
-  });
-  else if (k === "u") netLoadSnapshot().then((out) => {
-    updateNetSessionStat();
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
-  }).catch((err) => {
-    setNetStatus("error", `Load failed: ${String(err.message || err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
   });
   else if (k === "n") netRunCriticalMaintenance({ silent: false }).catch((err) => {
     setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);

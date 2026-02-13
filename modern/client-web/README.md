@@ -3,7 +3,7 @@
 Minimal browser client prototype:
 
 - fixed-tick runtime loop
-- command-envelope-driven movement input (`W/A/S/D` + `H/J/K/L`)
+- command-envelope-driven movement input (arrow keys primary, legacy fallbacks kept)
 - deterministic world clock/date progression in HUD
 - state hash display for replay/debug tracking
 - replay stability check (`V`) with downloadable checkpoint CSV
@@ -78,9 +78,14 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 
 ## Controls
 
-- `W/A/S/D` or `H/J/K/L`: queue movement commands
+- `Arrow Keys`: queue movement commands
+- `W/A/S/D`, `H/J/K/L`: movement fallbacks
 - `M`: toggle control mode (ghost/avatar)
-- `E`: interact with facing object (door, chair, bed) in avatar mode
+- `U`: legacy-style Use cursor in avatar mode
+- `Arrow Keys` while Use cursor is active: move interaction box
+- `Enter`/`U` while Use cursor is active: interact at box location
+- `Esc` while Use cursor is active: cancel Use cursor
+- `E`: facing-tile interact fallback (door/chair/bed) in avatar mode
 - `R`: reset run state to initial seed/world
 - `O`: toggle overlay debug tile labels
 - `F`: toggle animated tile freeze/live phase
@@ -89,7 +94,7 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `G`: jump to selected canonical capture preset
 - `P`: capture viewport PNG
 - `Y`: save current sim snapshot to net backend
-- `U`: load current character snapshot from net backend
+- `Shift+U`: load current character snapshot from net backend
 - `N`: run critical-item maintenance now
 - `V`: run replay determinism verification (sim + animation checkpoints) and produce downloadable checkpoints CSV
 
