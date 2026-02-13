@@ -1,6 +1,6 @@
 # Project Progress Checklist
 
-Last Updated: 2026-02-12
+Last Updated: 2026-02-13
 
 ## Milestone Status
 
@@ -62,9 +62,10 @@ This checklist is intentionally mutable.
 - `[x]` Animated tiles (water/fire/wheels) with deterministic phase control
 - `[x]` Interaction baseline (avatar mode, door toggle, collision behavior)
 - `[x]` NPC render + deterministic movement pilot + occlusion guards
-- `[~]` Rendering parity hardening:
-  - keep `current` and `nuvie` feature-gated paths
-  - retain deferred wall/corner blackout hardening slice
+- `[x]` Rendering parity hardening (blackout/wall/corner baseline restored):
+  - `nuvie` feature-gated path removed
+  - legacy-like blackout/wall behavior restored as default renderer path
+  - hidden-room wall-adjacent decor suppression restored by source-cell visibility
 
 ### M5 Multiplayer
 
@@ -88,9 +89,10 @@ This checklist is intentionally mutable.
 
 - `[x]` Composition/overlay model unification for render + interaction probes
 - `[x]` Fixture-based regression tests for composition semantics
-- `[~]` Nuvie boundary reshape refactor:
-  - scaffolded and feature-gated
-  - final acceptance and default-mode decision pending
+- `[x]` Blackout/wall/corner parity stabilization pass:
+  - retained legacy-like blackout logic as single default path
+  - removed `nuvie` runtime mode fork
+  - fixed hidden-room wall decor leak in composition model
 
 ### R3: Interactive Visual State Determinism
 
@@ -126,35 +128,42 @@ This checklist is intentionally mutable.
 
 - `[x]` Complete startup/menu art parity implementation pass
 - `[x]` Complete in-engine legacy cursor integration pass
-- `[~]` Continue render parity stabilization with feature-gated `nuvie` path
+- `[x]` Resolve blackout wall-render parity and remove Nuvie mode fork
 - `[ ]` Add deterministic tests for interaction visual-state transitions (R3)
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
+- `[ ]` Add environmental object collision pass (chairs, beds, tables, furniture)
+- `[ ]` Add seated/lying interaction states:
+  - avatar can sit in chairs and lie/sleep in beds
+  - NPCs can enter sit/sleep states with deterministic pose/state transitions
 
 ## Known Blockers / Risks
 
 - `[~]` Full canonical title-menu ownership is split across assets/executable paths not entirely represented in released decompiled C source.
-- `[~]` Wall/corner/contextual blackout parity remains intentionally deferred to a dedicated hardening pass.
+- `[x]` Wall/corner/contextual blackout parity hardening pass completed for current default renderer path.
 - `[~]` Browser renderer still owns logic that should ultimately be centralized in sim-core authority boundaries.
 - `[ ]` Multiplayer remains deferred until rendering/interactions reach stable parity confidence.
+- `[~]` Audio parity work is intentionally paused while interaction/collision parity slices are prioritized.
 
 ## Deferred Backlog (Intentional Pause)
 
-- `[ ]` Wall rendering parity hardening:
-  - doorway threshold floor precedence edge cases
-  - contextual wall variant/corner selection in adjacent rooms
-  - wall-adjacent decor suppression in blacked-out rooms
-  - canonical capture/compare evidence set before default mode flip
+- `[~]` Audio parity program (paused):
+  - OPL backend fidelity work
+  - ScummVM/Nuvie reference tuning
+  - worklet/runtime hardening after gameplay-interaction slices
 
 ## Next Immediate Task
 
-Complete R5/R3 closure set:
+Complete interaction-parity slice before resuming audio:
 
-1. Capture startup/title parity screenshots against legacy references.
-2. Add deterministic interaction visual-state replay fixtures (doors/open states).
-3. Record any accepted startup/cursor parity gaps and lock default cursor mapping policy.
+1. Implement environmental collision matrix for furniture-class objects (chairs, beds, tables, shelves, dressers).
+2. Add interaction verbs/states for `sit` and `sleep` with deterministic command/tick handling.
+3. Bind avatar sit/sleep rendering states and collision occupancy rules.
+4. Add NPC sit/sleep state transitions with deterministic scheduling hooks (time-of-day ready boundary, if static for now).
+5. Add replay/hash fixtures covering sit/sleep transitions and occupancy collision.
 
-Then start M5.2 backend seed:
+Then continue R5/R3 closure and M5:
 
-4. Implement minimal auth + character save/load endpoints (server-authoritative).
-5. Implement deterministic critical-item policy table and maintenance pass scaffold.
+6. Capture startup/title parity screenshots against legacy references.
+7. Add deterministic interaction visual-state replay fixtures (doors + sit/sleep states).
+8. Continue M5 backend/game-state authority slices.

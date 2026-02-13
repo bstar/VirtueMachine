@@ -1,7 +1,7 @@
 # Audio Safe Rollout Checklist
 
-Last Updated: 2026-02-12
-Branch: `feature/audio-opl-safe`
+Last Updated: 2026-02-13
+Branch: `main` (audio work paused)
 
 ## Goal
 
@@ -10,6 +10,14 @@ Add faithful legacy-style audio without ever regressing core interaction stabili
 
 Primary fidelity target: match ScummVM/Nuvie playback behavior for Ultima VI
 music/SFX as closely as practical in browser constraints.
+
+## Current Status
+
+Audio fidelity work is intentionally paused while interaction parity work is prioritized:
+- environmental collision completion
+- avatar/NPC sit/sleep state support
+
+Resume audio slices only after those interaction slices are stable and test-covered.
 
 ## Non-Negotiable Guardrails
 
@@ -85,6 +93,6 @@ Acceptance:
 
 If any slice causes interaction instability:
 
-1. Revert that slice immediately on `feature/audio-opl-safe`.
+1. Revert that slice immediately on current working branch.
 2. Keep prior stable slice as branch tip.
 3. Document failure mode and reproduction notes before retrying.
