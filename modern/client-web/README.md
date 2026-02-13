@@ -80,23 +80,25 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 
 - `Arrow Keys`: queue movement commands
 - `W/A/S/D`, `H/J/K/L`: movement fallbacks
-- `M`: toggle control mode (ghost/avatar)
-- `U`: legacy-style Use cursor in avatar mode
+- Legacy command keys recognized: `A C T L G D M U R B I` (target verbs enter targeting mode)
+- `U`: legacy-style Use target mode in avatar mode
 - `Arrow Keys` while Use cursor is active: move interaction box
 - `Enter`/`U` while Use cursor is active: interact at box location
 - `Esc` while Use cursor is active: cancel Use cursor
-- `E`: facing-tile interact fallback (door/chair/bed) in avatar mode
-- `R`: reset run state to initial seed/world
-- `O`: toggle overlay debug tile labels
-- `F`: toggle animated tile freeze/live phase
-- `B`: toggle legacy palette FX (fire/water color cycling)
-- `I`: net login using panel credentials
-- `G`: jump to selected canonical capture preset
-- `P`: capture viewport PNG
-- `Y`: save current sim snapshot to net backend
+- `0-9`: legacy party selection keys (mapped; party command flow pending)
+- `Ctrl+S`: save world snapshot
+- `Ctrl+R`: load world snapshot
+- `Ctrl+Z`: sound toggle flag
+- `Ctrl+H`: help panel toggle
+- `Ctrl+V`: version banner (stub)
+- `Shift+I`: net login using panel credentials
+- `Shift+Y`: save current sim snapshot to net backend
 - `Shift+U`: load current character snapshot from net backend
-- `N`: run critical-item maintenance now
-- `V`: run replay determinism verification (sim + animation checkpoints) and produce downloadable checkpoints CSV
+- `Shift+N`: run critical-item maintenance now
+- `Shift+G`: jump to selected canonical capture preset
+- `Shift+P`: capture viewport PNG
+- `Shift+Alt+P`: capture world+HUD PNG
+- `Shift+O/F/B/M/R/V`: debug overlay/animation/palette/mode/reset/replay controls
 
 Useful parity presets:
 

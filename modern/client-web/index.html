@@ -19,6 +19,7 @@
               <h1 class="vm-game-title text-2xl font-bold tracking-tight">VIRTUE MACHINE</h1>
               <p class="vm-game-subtitle mt-1 text-sm">Web Debug View</p>
               <p class="vm-game-time mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
+              <p class="vm-game-time mt-1 text-sm">Input Mode: <strong id="topInputMode" class="font-semibold">Title Menu</strong></p>
               <p class="vm-game-time mt-1 text-sm">Net: <span id="topNetIndicator" class="vm-net-indicator" aria-hidden="true"></span> <strong id="topNetStatus" class="font-semibold">idle - Not logged in.</strong></p>
               <p class="vm-game-time mt-1 text-sm">Startup: <strong class="font-semibold">Only Journey Onward is currently playable.</strong></p>
             </div>
@@ -32,7 +33,7 @@
                   <span class="text-[11px] vm-muted-text">Character Name</span>
                   <input id="netCharacterNameInput" class="control-input text-xs" type="text" value="Avatar" placeholder="Avatar" aria-label="Character Name">
                 </label>
-                <button id="netLoginButton" class="control-btn text-xs px-3" type="button">Net Login (I)</button>
+                <button id="netLoginButton" class="control-btn text-xs px-3" type="button">Net Login (Shift+I)</button>
                 <button id="netAccountOpenButton" class="control-btn text-xs px-3" type="button">Account</button>
               </div>
               <div class="mt-1 flex items-center gap-2">
@@ -95,18 +96,18 @@
           <div class="control-block"><label for="legacyScaleModeToggle">Legacy Scale</label><select id="legacyScaleModeToggle" class="control-input"><option value="fit">Integer Fit</option><option value="1">Perfect 1x (320x200)</option><option value="2">2x</option><option value="3">3x</option><option value="4">4x (Default)</option></select></div>
           <div class="control-block"><label for="locationSelect">Capture Preset</label><select id="locationSelect" class="control-input"></select></div>
           <div class="grid grid-cols-2 gap-2">
-            <button id="jumpButton" class="control-btn" type="button">Jump (G)</button>
-            <button id="captureButton" class="control-btn" type="button">Capture (P)</button>
-            <button id="captureWorldHudButton" class="control-btn col-span-2" type="button">Capture World+HUD (Shift+P)</button>
+            <button id="jumpButton" class="control-btn" type="button">Jump (Shift+G)</button>
+            <button id="captureButton" class="control-btn" type="button">Capture (Shift+P)</button>
+            <button id="captureWorldHudButton" class="control-btn col-span-2" type="button">Capture World+HUD (Shift+Alt+P)</button>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <button id="netSaveButton" class="control-btn" type="button">Save Remote (Y)</button>
-            <button id="netLoadButton" class="control-btn" type="button">Load Remote (U)</button>
+            <button id="netSaveButton" class="control-btn" type="button">Save Remote (Shift+Y)</button>
+            <button id="netLoadButton" class="control-btn" type="button">Load Remote (Shift+U)</button>
           </div>
           <div class="control-block"><label for="netMaintenanceToggle">Critical Maintenance</label><select id="netMaintenanceToggle" class="control-input"><option value="off">Off (Default)</option><option value="on">Auto (every 120 ticks)</option></select></div>
           <div class="grid grid-cols-2 gap-2">
-            <button id="netMaintenanceButton" class="control-btn col-span-2" type="button">Run Maintenance (N)</button>
+            <button id="netMaintenanceButton" class="control-btn col-span-2" type="button">Run Maintenance (Shift+N)</button>
           </div>
         </div>
 
@@ -124,27 +125,22 @@
 
         <div class="vm-help mt-4 p-3 text-xs">
           <h3 class="mb-2 text-sm font-semibold">Controls</h3>
-          <p>`W A S D` or `H J K L` move</p>
-          <p>`R` recenter</p>
-          <p>`O` toggle overlay debug labels</p>
-          <p>`G` jump to selected capture preset</p>
-          <p>`P` capture viewport png</p>
-          <p>`Shift+P` capture world + HUD png</p>
-          <p>`V` verify replay stability</p>
-          <p>`F` toggle animated tile freeze</p>
-          <p>`B` toggle legacy palette FX</p>
-          <p>`M` toggle ghost/avatar mode</p>
-          <p>`E` interact with facing door (avatar mode)</p>
-          <p>Use header Login button (or `I`) to login/logout</p>
+          <p>`Arrow Keys` move (legacy fallbacks: `WASD` / `HJKL`)</p>
+          <p>`U` Use target mode; arrows move target; `Enter`/`U` confirm; `Esc` cancel</p>
+          <p>Legacy verb keys: `A C T L G D M U R B I`</p>
+          <p>`0-9` legacy party/solo keys (mapped; party command flow pending)</p>
+          <p>`Space` / `Esc` pass turn</p>
+          <p>Use header Login button (or `Shift+I`) to login/logout</p>
           <p>Use `Account` button for recovery, verification, and password changes</p>
           <p>Password recovery requires verified recovery email</p>
           <p>Passwords are intentionally insecure in this prototype; never reuse important passwords</p>
           <p>Journey Onward requires login</p>
-          <p>`Y` save current sim snapshot to net backend</p>
-          <p>`U` load sim snapshot from net backend</p>
-          <p>`N` run critical-item maintenance now</p>
-          <p>`,` / `.` cycle cursor glyph</p>
-          <p>`[` / `]` cycle legacy scale</p>
+          <p>`Ctrl+S` save world snapshot, `Ctrl+R` load world snapshot</p>
+          <p>`Ctrl+Z` sound toggle, `Ctrl+H` help toggle, `Ctrl+V` version banner</p>
+          <p>`Shift+Y` save snapshot, `Shift+U` load snapshot, `Shift+N` maintenance</p>
+          <p>`Shift+O/F/B/M/G/R/V` debug toggles + preset/replay</p>
+          <p>`Shift+P` capture viewport, `Shift+Alt+P` capture world+HUD</p>
+          <p>`Shift+,` / `Shift+.` cycle cursor glyph, `Shift+[` / `Shift+]` scale</p>
         </div>
       </aside>
     </main>

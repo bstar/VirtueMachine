@@ -122,6 +122,7 @@ const statCriticalRecoveries = document.getElementById("statCriticalRecoveries")
 const topTimeOfDay = document.getElementById("topTimeOfDay");
 const topNetStatus = document.getElementById("topNetStatus");
 const topNetIndicator = document.getElementById("topNetIndicator");
+const topInputMode = document.getElementById("topInputMode");
 const netQuickStatus = document.getElementById("netQuickStatus");
 const netAccountOpenButton = document.getElementById("netAccountOpenButton");
 const netAccountModal = document.getElementById("netAccountModal");
@@ -228,6 +229,26 @@ const STARTUP_MENU_PAL = Object.freeze([
   [232, 96, 0]
 ]);
 const STARTUP_MENU_PAL_IDX = Object.freeze([14, 33, 34, 35, 36]);
+const LEGACY_TARGET_VERB = Object.freeze({
+  ATTACK: "attack",
+  CAST: "cast",
+  TALK: "talk",
+  LOOK: "look",
+  GET: "get",
+  DROP: "drop",
+  MOVE: "move",
+  USE: "use"
+});
+const LEGACY_TARGET_VERB_LABEL = Object.freeze({
+  [LEGACY_TARGET_VERB.ATTACK]: "Attack",
+  [LEGACY_TARGET_VERB.CAST]: "Cast",
+  [LEGACY_TARGET_VERB.TALK]: "Talk",
+  [LEGACY_TARGET_VERB.LOOK]: "Look",
+  [LEGACY_TARGET_VERB.GET]: "Get",
+  [LEGACY_TARGET_VERB.DROP]: "Drop",
+  [LEGACY_TARGET_VERB.MOVE]: "Move",
+  [LEGACY_TARGET_VERB.USE]: "Use"
+});
 const STARTUP_MENU_HITBOX = Object.freeze({
   x0: 56,
   x1: 264,
@@ -312,6 +333,7 @@ const state = {
   enablePaletteFx: true,
   movementMode: "ghost",
   useCursorActive: false,
+  targetVerb: "",
   useCursorX: 0,
   useCursorY: 0,
   avatarFacingDx: 0,
@@ -2114,7 +2136,7 @@ function updateNetAuthButton() {
     return;
   }
   const authed = isNetAuthenticated();
-  netLoginButton.textContent = authed ? "Logout (I)" : "Net Login (I)";
+  netLoginButton.textContent = authed ? "Logout (Shift+I)" : "Net Login (Shift+I)";
   netLoginButton.classList.remove("control-btn--login", "control-btn--logout");
   netLoginButton.classList.add(authed ? "control-btn--logout" : "control-btn--login");
 }
@@ -3310,6 +3332,7 @@ function setMovementMode(mode) {
   state.movementMode = next;
   if (next !== "avatar") {
     state.useCursorActive = false;
+    state.targetVerb = "";
   }
   if (movementModeToggle) {
     movementModeToggle.value = next;
@@ -3924,6 +3947,7 @@ function returnToTitleMenu() {
   }
   state.queue.length = 0;
   state.useCursorActive = false;
+  state.targetVerb = "";
   state.sessionStarted = false;
   setStartupMenuIndex(0);
   diagBox.className = "diag ok";
@@ -5428,6 +5452,16 @@ function updateStats() {
   if (topTimeOfDay) {
     topTimeOfDay.textContent = `${timeOfDayLabel(w.time_h)} (${hh}:${mm})`;
   }
+  if (topInputMode) {
+    if (!state.sessionStarted) {
+      topInputMode.textContent = "Title Menu";
+    } else if (state.useCursorActive) {
+      const label = LEGACY_TARGET_VERB_LABEL[state.targetVerb] || "Target";
+      topInputMode.textContent = `${label} Target`;
+    } else {
+      topInputMode.textContent = state.movementMode === "avatar" ? "World" : "Ghost";
+    }
+  }
   statQueued.textContent = String(state.queue.length);
   if (state.objectLayer) {
     statObjects.textContent = `${state.objectOverlayCount} / ${state.objectLayer.totalLoaded}`;
@@ -5634,6 +5668,7 @@ function resetRun() {
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
   state.useCursorActive = false;
+  state.targetVerb = "";
   state.avatarLastMoveTick = -1;
   state.lastMoveQueueAtMs = -1;
   state.lastMoveInputDx = 0;
@@ -5964,8 +5999,12 @@ function clampUseCursorToView() {
   state.useCursorY = clampI32(state.useCursorY | 0, startY, maxY);
 }
 
-function beginUseCursor() {
+function beginTargetCursor(verb) {
   if (state.movementMode !== "avatar") {
+    return;
+  }
+  const v = String(verb || "").toLowerCase();
+  if (!LEGACY_TARGET_VERB_LABEL[v]) {
     return;
   }
   const px = state.sim.world.map_x | 0;
@@ -5974,8 +6013,11 @@ function beginUseCursor() {
   const dy = state.avatarFacingDy | 0;
   state.useCursorX = px + dx;
   state.useCursorY = py + dy;
+  state.targetVerb = v;
   state.useCursorActive = true;
   clampUseCursorToView();
+  diagBox.className = "diag ok";
+  diagBox.textContent = `${LEGACY_TARGET_VERB_LABEL[v]}: move target with arrows, confirm with Enter/U, cancel with Esc.`;
 }
 
 function moveUseCursor(dx, dy) {
@@ -5991,8 +6033,240 @@ function commitUseCursorInteract() {
   if (!state.useCursorActive) {
     return;
   }
-  queueInteractAtCell(state.useCursorX | 0, state.useCursorY | 0);
+  const tx = state.useCursorX | 0;
+  const ty = state.useCursorY | 0;
+  const verb = String(state.targetVerb || "");
+  if (!verb || verb === LEGACY_TARGET_VERB.USE) {
+    queueInteractAtCell(tx, ty);
+  } else {
+    const label = LEGACY_TARGET_VERB_LABEL[verb] || "Action";
+    diagBox.className = "diag warn";
+    diagBox.textContent = `${label} target at ${tx},${ty}: legacy key mapped, action system not implemented yet.`;
+  }
   state.useCursorActive = false;
+  state.targetVerb = "";
+}
+
+function cancelTargetCursor() {
+  if (!state.useCursorActive) {
+    return;
+  }
+  state.useCursorActive = false;
+  state.targetVerb = "";
+  diagBox.className = "diag ok";
+  diagBox.textContent = "Targeting cancelled.";
+}
+
+function moveDeltaFromKey(ev, allowDiagonal) {
+  const k = String(ev.key || "").toLowerCase();
+  const code = String(ev.code || "");
+  if (k === "arrowup" || k === "w" || k === "k" || code === "Numpad8") return [0, -1];
+  if (k === "arrowdown" || k === "s" || k === "j" || code === "Numpad2") return [0, 1];
+  if (k === "arrowleft" || k === "a" || k === "h" || code === "Numpad4") return [-1, 0];
+  if (k === "arrowright" || k === "d" || k === "l" || code === "Numpad6") return [1, 0];
+  if (!allowDiagonal) {
+    return null;
+  }
+  if (code === "Numpad7") return [-1, -1];
+  if (code === "Numpad9") return [1, -1];
+  if (code === "Numpad1") return [-1, 1];
+  if (code === "Numpad3") return [1, 1];
+  return null;
+}
+
+function beginLegacyVerbTarget(verb) {
+  if (state.movementMode !== "avatar") {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Legacy targeting requires Avatar mode.";
+    return false;
+  }
+  beginTargetCursor(verb);
+  return state.useCursorActive;
+}
+
+function promptNetLoginLogout() {
+  if (isNetAuthenticated()) {
+    netLogout();
+    return;
+  }
+  if (hasMultipleSavedAccounts()) {
+    populateNetAccountSelect();
+    setAccountModalOpen(true);
+    setNetStatus("idle", "Choose an account in Account Setup, then login.");
+    return;
+  }
+  netLogin().then(() => {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
+  }).catch((err) => {
+    setNetStatus("error", `Login failed: ${String(err.message || err)}`);
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+  });
+}
+
+function saveWorldSnapshotHotkey() {
+  netSaveSnapshot().then(() => {
+    updateNetSessionStat();
+    diagBox.className = "diag ok";
+    diagBox.textContent = `World snapshot saved at tick ${state.sim.tick >>> 0}.`;
+  }).catch((err) => {
+    setNetStatus("error", `Save failed: ${String(err.message || err)}`);
+    diagBox.className = "diag warn";
+    diagBox.textContent = `World save failed: ${String(err.message || err)}`;
+  });
+}
+
+function loadWorldSnapshotHotkey() {
+  netLoadSnapshot().then((out) => {
+    updateNetSessionStat();
+    diagBox.className = "diag ok";
+    diagBox.textContent = `World snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
+  }).catch((err) => {
+    setNetStatus("error", `Load failed: ${String(err.message || err)}`);
+    diagBox.className = "diag warn";
+    diagBox.textContent = `World load failed: ${String(err.message || err)}`;
+  });
+}
+
+function runLegacyNonTargetAction(k) {
+  if (k === "r") {
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Rest: legacy key mapped; rest system integration pending.";
+    return true;
+  }
+  if (k === "b") {
+    state.sim.world.in_combat = state.sim.world.in_combat ? 0 : 1;
+    diagBox.className = "diag ok";
+    diagBox.textContent = state.sim.world.in_combat ? "Combat mode: ON" : "Combat mode: OFF";
+    return true;
+  }
+  if (k === "i") {
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Inventory: legacy key mapped; inventory UI integration pending.";
+    return true;
+  }
+  return false;
+}
+
+function runLegacyCommandKey(k) {
+  if (k === "a") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.ATTACK);
+  if (k === "c") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.CAST);
+  if (k === "t") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.TALK);
+  if (k === "l") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.LOOK);
+  if (k === "g") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.GET);
+  if (k === "d") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.DROP);
+  if (k === "m") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.MOVE);
+  if (k === "u") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.USE);
+  return runLegacyNonTargetAction(k);
+}
+
+function runDebugHotkeys(ev) {
+  const k = String(ev.key || "").toLowerCase();
+  if (ev.ctrlKey && k === "s") {
+    saveWorldSnapshotHotkey();
+    return true;
+  }
+  if (ev.ctrlKey && k === "r") {
+    loadWorldSnapshotHotkey();
+    return true;
+  }
+  if (ev.ctrlKey && k === "z") {
+    state.sim.world.sound_enabled = state.sim.world.sound_enabled ? 0 : 1;
+    diagBox.className = "diag ok";
+    diagBox.textContent = state.sim.world.sound_enabled ? "Sound enabled." : "Sound disabled.";
+    return true;
+  }
+  if (ev.ctrlKey && k === "h") {
+    const helpPanel = document.querySelector(".vm-help");
+    if (helpPanel) {
+      helpPanel.classList.toggle("hidden");
+      diagBox.className = "diag ok";
+      diagBox.textContent = helpPanel.classList.contains("hidden") ? "Help hidden." : "Help visible.";
+    }
+    return true;
+  }
+  if (ev.ctrlKey && k === "v") {
+    diagBox.className = "diag ok";
+    diagBox.textContent = "VirtueMachine: legacy Ctrl+V key mapped (version string TBD).";
+    return true;
+  }
+  if (!ev.shiftKey) {
+    return false;
+  }
+  if (k === "i") {
+    promptNetLoginLogout();
+    return true;
+  }
+  if (k === "y") {
+    saveWorldSnapshotHotkey();
+    return true;
+  }
+  if (k === "u") {
+    loadWorldSnapshotHotkey();
+    return true;
+  }
+  if (k === "n") {
+    netRunCriticalMaintenance({ silent: false }).catch((err) => {
+      setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
+    });
+    return true;
+  }
+  if (k === "p") {
+    if (ev.altKey) {
+      captureWorldHudPng();
+    } else {
+      captureViewportPng();
+    }
+    return true;
+  }
+  if (k === "o") {
+    setOverlayDebug(!state.showOverlayDebug);
+    return true;
+  }
+  if (k === "f") {
+    setAnimationMode(state.animationFrozen ? "live" : "freeze");
+    return true;
+  }
+  if (k === "b") {
+    setPaletteFxMode(!state.enablePaletteFx);
+    return true;
+  }
+  if (k === "m") {
+    setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
+    return true;
+  }
+  if (k === "g") {
+    jumpToPreset();
+    return true;
+  }
+  if (k === "r") {
+    resetRun();
+    return true;
+  }
+  if (k === "v") {
+    verifyReplayStability();
+    return true;
+  }
+  if (ev.code === "Comma") {
+    cycleCursor(-1);
+    return true;
+  }
+  if (ev.code === "Period") {
+    cycleCursor(1);
+    return true;
+  }
+  if (ev.code === "BracketLeft") {
+    cycleLegacyScaleMode(-1);
+    return true;
+  }
+  if (ev.code === "BracketRight") {
+    cycleLegacyScaleMode(1);
+    return true;
+  }
+  return false;
 }
 
 window.addEventListener("keydown", (ev) => {
@@ -6006,136 +6280,102 @@ window.addEventListener("keydown", (ev) => {
   if (isTypingContext(ev.target)) {
     return;
   }
-  const k = ev.key.toLowerCase();
+
+  const k = String(ev.key || "").toLowerCase();
   if (!state.sessionStarted) {
     if (k === "arrowup") {
       setStartupMenuIndex(state.startupMenuIndex - 1);
-      ev.preventDefault();
     } else if (k === "arrowdown") {
       setStartupMenuIndex(state.startupMenuIndex + 1);
-      ev.preventDefault();
     } else if (k === "i") {
       setStartupMenuIndex(0);
       activateStartupMenuSelection();
-      ev.preventDefault();
     } else if (k === "c") {
       setStartupMenuIndex(1);
       activateStartupMenuSelection();
-      ev.preventDefault();
     } else if (k === "t") {
       setStartupMenuIndex(2);
       activateStartupMenuSelection();
-      ev.preventDefault();
     } else if (k === "a") {
       setStartupMenuIndex(3);
       activateStartupMenuSelection();
-      ev.preventDefault();
     } else if (k === "j") {
       setStartupMenuIndex(4);
       activateStartupMenuSelection();
-      ev.preventDefault();
     } else if (k === "enter" || k === " ") {
       activateStartupMenuSelection();
-      ev.preventDefault();
+    } else {
+      return;
     }
-    return;
-  }
-  if (k === "c") {
-    void copyHoverReportToClipboard();
     ev.preventDefault();
     return;
   }
-  if (k === "p" && ev.shiftKey) {
-    captureWorldHudPng();
-    ev.preventDefault();
-    return;
-  }
+
   if (k === "q") {
     returnToTitleMenu();
     ev.preventDefault();
     return;
   }
-  if (state.useCursorActive) {
-    if (k === "arrowup") moveUseCursor(0, -1);
-    else if (k === "arrowdown") moveUseCursor(0, 1);
-    else if (k === "arrowleft") moveUseCursor(-1, 0);
-    else if (k === "arrowright") moveUseCursor(1, 0);
-    else if (k === "u" || k === "enter" || k === " ") commitUseCursorInteract();
-    else if (k === "escape") state.useCursorActive = false;
-    else return;
+  if (k === "c" && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+    void copyHoverReportToClipboard();
     ev.preventDefault();
     return;
   }
 
-  if (k === "arrowup" || k === "w" || k === "k" || k === "8") queueMove(0, -1);
-  else if (k === "arrowdown" || k === "s" || k === "j" || k === "2") queueMove(0, 1);
-  else if (k === "arrowleft" || k === "a" || k === "h" || k === "4") queueMove(-1, 0);
-  else if (k === "arrowright" || k === "d" || k === "l" || k === "6") queueMove(1, 0);
-  else if (k === "g") jumpToPreset();
-  else if (k === "o") setOverlayDebug(!state.showOverlayDebug);
-  else if (k === "p") captureViewportPng();
-  else if (k === "r") resetRun();
-  else if (k === "v") verifyReplayStability();
-  else if (k === "f") setAnimationMode(state.animationFrozen ? "live" : "freeze");
-  else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
-  else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
-  else if (k === "u") {
-    if (ev.shiftKey) {
-      netLoadSnapshot().then((out) => {
-        updateNetSessionStat();
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
-      }).catch((err) => {
-        setNetStatus("error", `Load failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
-      });
-    } else {
-      beginUseCursor();
+  if (state.useCursorActive) {
+    const delta = moveDeltaFromKey(ev, true);
+    if (delta) {
+      moveUseCursor(delta[0], delta[1]);
+      ev.preventDefault();
+      return;
     }
-  }
-  else if (k === "e") queueInteractDoor();
-  else if (k === "i") {
-    if (isNetAuthenticated()) {
-      netLogout();
-    } else {
-      if (hasMultipleSavedAccounts()) {
-        populateNetAccountSelect();
-        setAccountModalOpen(true);
-        setNetStatus("idle", "Choose an account in Account Setup, then login.");
-        ev.preventDefault();
-        return;
-      }
-      netLogin().then(() => {
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
-      }).catch((err) => {
-        setNetStatus("error", `Login failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
-      });
+    if (k === "u" || k === "enter" || k === " ") {
+      commitUseCursorInteract();
+      ev.preventDefault();
+      return;
     }
+    if (k === "escape") {
+      cancelTargetCursor();
+      ev.preventDefault();
+      return;
+    }
+    if (runLegacyCommandKey(k)) {
+      ev.preventDefault();
+      return;
+    }
+    if (runDebugHotkeys(ev)) {
+      ev.preventDefault();
+      return;
+    }
+    return;
   }
-  else if (k === "y") netSaveSnapshot().then(() => {
-    updateNetSessionStat();
+
+  const delta = moveDeltaFromKey(ev, false);
+  if (delta) {
+    queueMove(delta[0], delta[1]);
+    ev.preventDefault();
+    return;
+  }
+
+  if (k === " " || k === "escape") {
     diagBox.className = "diag ok";
-    diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
-  }).catch((err) => {
-    setNetStatus("error", `Save failed: ${String(err.message || err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
-  });
-  else if (k === "n") netRunCriticalMaintenance({ silent: false }).catch((err) => {
-    setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
-  });
-  else if (ev.key === ",") cycleCursor(-1);
-  else if (ev.key === ".") cycleCursor(1);
-  else if (ev.key === "[") cycleLegacyScaleMode(-1);
-  else if (ev.key === "]") cycleLegacyScaleMode(1);
-  else return;
-  ev.preventDefault();
+    diagBox.textContent = "Pass turn.";
+    ev.preventDefault();
+    return;
+  }
+  if ((ev.code.startsWith("Digit") || ev.code.startsWith("Numpad")) && k >= "0" && k <= "9") {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Party switch ${k}: legacy key mapped; full party command mode pending.`;
+    ev.preventDefault();
+    return;
+  }
+  if (runLegacyCommandKey(k)) {
+    ev.preventDefault();
+    return;
+  }
+  if (runDebugHotkeys(ev)) {
+    ev.preventDefault();
+  }
 });
 
 function startupMenuIndexAtLogicalPos(lx, ly) {

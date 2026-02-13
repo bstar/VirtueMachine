@@ -61,6 +61,9 @@ This checklist is intentionally mutable.
 - `[x]` Static object layer from legacy save data (`objblk`, `objlist`)
 - `[x]` Animated tiles (water/fire/wheels) with deterministic phase control
 - `[x]` Interaction baseline (avatar mode, door toggle, collision behavior)
+- `[~]` Keyboard parity expansion:
+  - legacy verb keys mapped and mode-aware target cursor flow wired
+  - command backend parity (`attack/cast/talk/look/get/drop/move`) still pending
 - `[x]` NPC render + deterministic movement pilot + occlusion guards
 - `[x]` Rendering parity hardening (blackout/wall/corner baseline restored):
   - `nuvie` feature-gated path removed
@@ -129,6 +132,7 @@ This checklist is intentionally mutable.
 - `[x]` Complete startup/menu art parity implementation pass
 - `[x]` Complete in-engine legacy cursor integration pass
 - `[x]` Resolve blackout wall-render parity and remove Nuvie mode fork
+- `[~]` Add mode-aware legacy keyboard parity matrix + target-cursor flow
 - `[ ]` Add deterministic tests for interaction visual-state transitions (R3)
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
