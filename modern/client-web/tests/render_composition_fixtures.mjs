@@ -235,10 +235,43 @@ function runLegacyStreamOrderingFixture() {
   assert.equal(right.tileId, 0x3b4, "right tile mismatch");
 }
 
+function runLegacyInjectionHookFixture() {
+  const startX = 300;
+  const startY = 340;
+  const wz = 0;
+  const tileFlags = new Uint8Array(0x800);
+  const objectLayer = makeObjectLayer([]);
+
+  const out = buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx: {
+      visibleAtWorld() { return true; }
+    },
+    objectLayer,
+    tileFlags,
+    resolveAnimatedObjectTile(o) { return o.tileId; },
+    hasWallTerrain() { return false; },
+    injectLegacyOverlays({ insertWorldTile }) {
+      insertWorldTile(301, 341, 0x1ba, 1, { x: 301, y: 341, type: "legacy-test", objType: 0x18a }, "0x1ba");
+      return 1;
+    }
+  });
+
+  assert.equal(out.overlayCount, 1, "legacy inject hook should contribute overlay count");
+  const list = out.overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
+  assert(Array.isArray(list) && list.length > 0, "injected overlay should exist at world cell");
+  assert.equal(list[0].tileId, 0x1ba, "injected tile mismatch");
+}
+
 runSpillOrderingFixture();
 runVisibilitySuppressionFixture();
 runActorOcclusionParityFixture();
 runTransparencyFixture();
 runLegacyStreamOrderingFixture();
+runLegacyInjectionHookFixture();
 
 console.log("render_composition_fixtures: ok");

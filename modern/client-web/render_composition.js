@@ -36,7 +36,8 @@ export function buildOverlayCellsModel(opts) {
     tileFlags,
     resolveAnimatedObjectTile,
     resolveFootprintTile,
-    hasWallTerrain
+    hasWallTerrain,
+    injectLegacyOverlays
   } = opts;
 
   if (!objectLayer || typeof objectLayer.objectsAt !== "function") {
@@ -214,6 +215,25 @@ export function buildOverlayCellsModel(opts) {
           overlayCount += 1;
         }
       }
+    }
+  }
+
+  if (typeof injectLegacyOverlays === "function") {
+    const addCount = injectLegacyOverlays({
+      startX,
+      startY,
+      viewW,
+      viewH,
+      wz,
+      viewCtx,
+      stream,
+      insertWorldTile(wx, wy, tileId, bp06 = 0, source = null, debugLabel = "") {
+        const src = source || { x: wx, y: wy, type: "legacy-special", objType: 0 };
+        insertLegacyCellTile((wx | 0) - startX, (wy | 0) - startY, tileId, bp06, src, debugLabel);
+      }
+    });
+    if (Number.isFinite(addCount) && addCount > 0) {
+      overlayCount += Math.floor(addCount);
     }
   }
 

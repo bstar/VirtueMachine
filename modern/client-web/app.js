@@ -58,6 +58,8 @@ const OBJECT_TYPES_SOLID_ENV = new Set([
   0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
   0x147
 ]);
+const LEGACY_LENS_BRITANNIA = { type: 0x18a, x: 0x39e, y: 0x358, z: 0, rightTile: 0x1ba, leftTile: 0x1bb };
+const LEGACY_LENS_GARGOYLE = { type: 0x18c, x: 0x3a2, y: 0x358, z: 0, rightTile: 0x1b8, leftTile: 0x1b9 };
 function isRenderableWorldObjectType(type) {
   const t = type & 0x03ff;
   if (t >= ENTITY_TYPE_ACTOR_MIN && t <= ENTITY_TYPE_ACTOR_MAX) {
@@ -892,6 +894,58 @@ class U6ObjectLayerJS {
     }
   }
 
+  objectAnchorKey(obj) {
+    return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff},${obj.type & 0x3ff}`;
+  }
+
+  isObjectRemovedByKey(obj) {
+    const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
+    if (!removedCount) {
+      return false;
+    }
+    const removed = state?.sim?.removedObjectKeys;
+    if (!removed || typeof removed !== "object") {
+      return false;
+    }
+    return !!removed[this.objectAnchorKey(obj)];
+  }
+
+  hasMirrorReflector(obj) {
+    const key = this.coordKey(obj.x | 0, ((obj.y | 0) + 1) & 0x3ff, obj.z | 0);
+    const below = this.byCoord.get(key) ?? [];
+    for (const candidate of below) {
+      if (!candidate || !candidate.renderable) {
+        continue;
+      }
+      if ((candidate.order | 0) === (obj.order | 0) && (candidate.type | 0) === (obj.type | 0)) {
+        continue;
+      }
+      if (this.isObjectRemovedByKey(candidate)) {
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  applyLegacyRuntimeFixes(obj) {
+    if (!obj) {
+      return obj;
+    }
+    if ((obj.type & 0x03ff) !== 0x07b || (obj.frame | 0) >= 2) {
+      return obj;
+    }
+    const nextFrame = this.hasMirrorReflector(obj) ? 1 : 0;
+    if ((obj.frame | 0) === nextFrame) {
+      return obj;
+    }
+    return {
+      ...obj,
+      frame: nextFrame,
+      tileId: ((obj.baseTile | 0) + nextFrame) & 0xffff
+    };
+  }
+
   async loadOutdoor(fetcher) {
     this.byCoord.clear();
     this.entries = [];
@@ -926,16 +980,16 @@ class U6ObjectLayerJS {
     const list = this.byCoord.get(this.coordKey(x, y, z)) ?? [];
     const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
     if (!removedCount) {
-      return list;
+      return list.map((o) => this.applyLegacyRuntimeFixes(o));
     }
     const removed = state?.sim?.removedObjectKeys;
     if (!removed || typeof removed !== "object") {
-      return list;
+      return list.map((o) => this.applyLegacyRuntimeFixes(o));
     }
     return list.filter((o) => {
       const key = `${o.x & 0x3ff},${o.y & 0x3ff},${o.z & 0x0f},${o.order & 0xffff},${o.type & 0x3ff}`;
       return !removed[key];
-    });
+    }).map((o) => this.applyLegacyRuntimeFixes(o));
   }
 
   objectsInWindowLegacyOrder(startX, startY, viewW, viewH, z) {
@@ -962,7 +1016,7 @@ class U6ObjectLayerJS {
           continue;
         }
       }
-      out.push(o);
+      out.push(this.applyLegacyRuntimeFixes(o));
     }
     return out;
   }
@@ -4534,7 +4588,8 @@ async function captureParitySnapshotJson() {
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
     resolveFootprintTile: (obj) => resolveDoorTileId(state.sim, obj),
-    hasWallTerrain
+    hasWallTerrain,
+    injectLegacyOverlays: injectLegacyOverlaySpecials
   });
   const overlayCells = overlayBuild.overlayCells || [];
   const cells = [];
@@ -5720,6 +5775,96 @@ function renderCharacterStubPanel() {
   }
 }
 
+function legacyLensSpecForObject(obj) {
+  const t = obj ? (obj.type & 0x03ff) : -1;
+  if (t === LEGACY_LENS_BRITANNIA.type) {
+    return LEGACY_LENS_BRITANNIA;
+  }
+  if (t === LEGACY_LENS_GARGOYLE.type) {
+    return LEGACY_LENS_GARGOYLE;
+  }
+  return null;
+}
+
+function legacyAreaLightAtWorld(_wx, _wy, _wz) {
+  /* AreaLight parity hook: runtime does not yet expose canonical AreaLight[][].
+     Keep disabled until that data source is available. */
+  return 0;
+}
+
+function injectLegacyOverlaySpecials(ctx) {
+  const {
+    startX,
+    startY,
+    viewW,
+    viewH,
+    wz,
+    viewCtx,
+    stream,
+    insertWorldTile
+  } = ctx;
+  let injected = 0;
+  const list = Array.isArray(stream) ? stream : [];
+  for (const o of list) {
+    if (!o || !o.renderable) {
+      continue;
+    }
+    const wx = o.x | 0;
+    const wy = o.y | 0;
+    if (viewCtx && !viewCtx.visibleAtWorld(wx, wy)) {
+      continue;
+    }
+    const lens = legacyLensSpecForObject(o);
+    if (
+      lens
+      && (wx | 0) === (lens.x | 0)
+      && (wy | 0) === (lens.y | 0)
+      && ((o.z | 0) === (lens.z | 0))
+      && ((wz | 0) === (lens.z | 0))
+    ) {
+      const gx = wx - startX;
+      if (gx !== 0) {
+        insertWorldTile(wx + 1, wy, lens.rightTile, 1, {
+          x: wx,
+          y: wy,
+          type: "legacy-lens-right",
+          objType: o.type
+        }, `0x${lens.rightTile.toString(16)}`);
+        injected += 1;
+      }
+      if (gx < (viewW - 1)) {
+        insertWorldTile(wx - 1, wy, lens.leftTile, 1, {
+          x: wx,
+          y: wy,
+          type: "legacy-lens-left",
+          objType: o.type
+        }, `0x${lens.leftTile.toString(16)}`);
+        injected += 1;
+      }
+    }
+  }
+
+  for (let gy = 0; gy < viewH; gy += 1) {
+    for (let gx = 0; gx < viewW; gx += 1) {
+      const wx = startX + gx;
+      const wy = startY + gy;
+      const light = legacyAreaLightAtWorld(wx, wy, wz) | 0;
+      if (light > 0 && light < 4) {
+        const tileId = (0x1bc + light) & 0xffff;
+        insertWorldTile(wx, wy, tileId, 3, {
+          x: wx,
+          y: wy,
+          type: "legacy-obscurity",
+          objType: 0
+        }, `0x${tileId.toString(16)}`);
+        injected += 1;
+      }
+    }
+  }
+
+  return injected;
+}
+
 function buildOverlayCells(startX, startY, wz, viewCtx) {
   return buildOverlayCellsModel({
     viewW: VIEW_W,
@@ -5732,7 +5877,8 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
     resolveFootprintTile: (obj) => resolveDoorTileId(state.sim, obj),
-    hasWallTerrain
+    hasWallTerrain,
+    injectLegacyOverlays: injectLegacyOverlaySpecials
   });
 }
 
