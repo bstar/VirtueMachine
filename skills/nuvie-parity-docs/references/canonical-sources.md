@@ -1,9 +1,16 @@
 # Canonical Sources For Nuvie Parity
 
+## Purpose Boundary
+
+- VirtueMachine does not target Nuvie behavior as the end state.
+- VirtueMachine targets original Ultima VI behavior from decompiled legacy code + original data.
+- Nuvie/ScummVM sources are used to gather clues when legacy logic is hard to interpret.
+
 ## Rule
 
-- Treat ScummVM Nuvie as canonical: `https://github.com/scummvm/scummvm/tree/master/engines/ultima/nuvie`
+- For Nuvie clue-reading, treat ScummVM Nuvie as canonical: `https://github.com/scummvm/scummvm/tree/master/engines/ultima/nuvie`
 - Treat standalone Nuvie as historical/archive context: `https://github.com/nuvie/nuvie`
+- Do not accept a Nuvie-only argument as sufficient for a VirtueMachine behavior change.
 
 ## Freshness Checks
 
@@ -58,4 +65,5 @@ Standalone Nuvie historical URLs:
 - Coordinate-level report (affected cells)
 - Raw object record decode (`type`, `frame`, `tile`, packed coords)
 - Classification label from skill workflow
-- Why ScummVM evidence supports the chosen behavior
+- Legacy evidence showing why behavior matches original logic/data
+- Optional: ScummVM/Nuvie clue that helped locate that legacy evidence

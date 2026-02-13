@@ -7,9 +7,16 @@ description: Use this skill when validating VirtueMachine rendering or interacti
 
 Use this workflow for parity investigations where behavior looks wrong but should be verified against legacy/Nuvie evidence before changing runtime code.
 
+## Fidelity Hierarchy (Must Follow)
+
+- Primary target: original Ultima VI behavior from decompiled legacy code and original data.
+- Secondary aid: ScummVM/Nuvie may be consulted only to generate clues when legacy intent is unclear.
+- Do not treat Nuvie/ScummVM as the implementation target for VirtueMachine systems.
+- Any Nuvie-derived decision must map back to legacy evidence before code changes.
+
 ## Canonical Source Policy
 
-- Canonical upstream for Nuvie behavior is `scummvm/scummvm` under `engines/ultima/nuvie`.
+- Canonical upstream for Nuvie clue-reading is `scummvm/scummvm` under `engines/ultima/nuvie`.
 - Standalone `nuvie/nuvie` is historical context only and must not override ScummVM parity evidence.
 - Always verify source freshness before deep parity work (latest commit date for ScummVM Nuvie path).
 - Critical references live in `references/canonical-sources.md`.
@@ -24,7 +31,7 @@ Use this workflow for parity investigations where behavior looks wrong but shoul
 
 1. Confirm current runtime asset provenance.
 2. Capture coordinate-level evidence in VirtueMachine.
-3. Compare against legacy code and Nuvie/ScummVM references.
+3. Compare against legacy code first; use Nuvie/ScummVM only for clue generation.
 4. Classify issue source.
 5. Update parity docs with evidence and decision.
 
@@ -47,8 +54,9 @@ Use this workflow for parity investigations where behavior looks wrong but shoul
 - Validate coordinate decoding and status semantics against:
   - `legacy/u6-decompiled/SRC/u6.h`
   - relevant segment logic (`seg_0A33.c`, `seg_1184.c`, `seg_2FC1.c`, etc.)
-- Use ScummVM Nuvie references first to cross-check presentation rules.
+- Use ScummVM Nuvie references only after legacy review, to gather hypotheses.
 - Use standalone Nuvie only when ScummVM lacks the relevant routine and document that exception.
+- Before implementing a fix, cite the legacy routine/data evidence that justifies it.
 
 ## Step 4: Classification
 
