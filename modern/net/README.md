@@ -37,6 +37,7 @@ Environment variables:
 - `VM_NET_HOST` (default `127.0.0.1`)
 - `VM_NET_PORT` (default `8081`)
 - `VM_NET_DATA_DIR` (default `modern/net/data`)
+- `VM_NET_PRESENCE_TTL_MS` (default `10000`, stale presence reap window)
 - `VM_EMAIL_MODE` (`resend`, `smtp`, or `log`, default `resend`)
 - `VM_EMAIL_FROM` (default `no-reply@virtuemachine.local`)
 - `VM_EMAIL_SMTP_HOST` (default `127.0.0.1`)
@@ -91,6 +92,7 @@ Authenticated (Bearer token):
 - `GET /api/characters/:id/snapshot`
 - `PUT /api/characters/:id/snapshot`
 - `POST /api/world/presence/heartbeat`
+- `POST /api/world/presence/leave`
 - `GET /api/world/presence`
 - `GET /api/world/clock`
 - `GET /api/world/critical-items/policy`

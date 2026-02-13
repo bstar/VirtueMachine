@@ -238,6 +238,54 @@ body {
   color: #f6e8c4;
 }
 
+.vm-header > div:first-child strong {
+  position: relative;
+  left: 1px;
+}
+
+.vm-net-indicator {
+  display: inline-block;
+  width: 0.56rem;
+  height: 0.56rem;
+  border-radius: 999px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+  margin-right: 0.2rem;
+  background: #4b5563;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3) inset;
+  transition: background-color 120ms linear, box-shadow 120ms linear, transform 120ms linear;
+}
+
+/* Safari baseline alignment runs slightly low for this inline indicator. */
+@supports (-webkit-touch-callout: none) {
+  .vm-net-indicator {
+    top: -1px;
+  }
+}
+
+.vm-net-indicator[data-state="offline"],
+.vm-net-indicator[data-state="error"] {
+  background: #dc2626;
+}
+
+.vm-net-indicator[data-state="connecting"] {
+  background: #d97706;
+}
+
+.vm-net-indicator[data-state="sync"],
+.vm-net-indicator[data-state="online"] {
+  background: #16a34a;
+}
+
+.vm-net-indicator.is-active {
+  box-shadow:
+    0 0 0 1px rgb(22 163 74 / 0.7) inset,
+    0 0 8px 1px rgb(34 197 94 / 0.75);
+  transform: scale(1.1);
+}
+
 .vm-muted-text {
   color: var(--vm-muted);
 }

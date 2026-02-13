@@ -208,6 +208,24 @@ async function main() {
     assert.equal(heartbeat.status, 200);
     assert.equal(heartbeat.body?.ok, true);
 
+    const heartbeatSecondSession = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        session_id: "test-session-2",
+        character_name: "Avatar",
+        map_x: 309,
+        map_y: 349,
+        map_z: 0,
+        facing_dx: 1,
+        facing_dy: 0,
+        tick: 45,
+        mode: "avatar"
+      })
+    });
+    assert.equal(heartbeatSecondSession.status, 200);
+    assert.equal(heartbeatSecondSession.body?.ok, true);
+
     const presence = await jsonFetch(baseUrl, "/api/world/presence", {
       method: "GET",
       headers: { authorization: `Bearer ${token}` }
@@ -216,7 +234,26 @@ async function main() {
     assert.ok(Array.isArray(presence.body?.players));
     assert.equal(presence.body.players.length, 1);
     assert.equal(presence.body.players[0]?.username, "avatar_renamed");
-    assert.equal(presence.body.players[0]?.map_x, 307);
+    assert.equal(presence.body.players[0]?.map_x, 309);
+    assert.equal(presence.body.players[0]?.session_id, "test-session-2");
+
+    const leave = await jsonFetch(baseUrl, "/api/world/presence/leave", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        session_id: "test-session-2"
+      })
+    });
+    assert.equal(leave.status, 200);
+    assert.equal(leave.body?.ok, true);
+
+    const presenceAfterLeave = await jsonFetch(baseUrl, "/api/world/presence", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(presenceAfterLeave.status, 200);
+    assert.ok(Array.isArray(presenceAfterLeave.body?.players));
+    assert.equal(presenceAfterLeave.body.players.length, 0);
 
     const clock1 = await jsonFetch(baseUrl, "/api/world/clock", {
       method: "GET",

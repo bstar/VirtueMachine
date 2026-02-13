@@ -17,6 +17,7 @@ const SERVER_MINUTES_PER_HOUR = 60;
 const SERVER_HOURS_PER_DAY = 24;
 const SERVER_DAYS_PER_MONTH = 28;
 const SERVER_MONTHS_PER_YEAR = 13;
+const PRESENCE_TTL_MS = Math.max(1000, Number.parseInt(process.env.VM_NET_PRESENCE_TTL_MS || "10000", 10) || 10000);
 const EMAIL_MODE = String(process.env.VM_EMAIL_MODE || "smtp").trim().toLowerCase();
 const EMAIL_FROM = String(process.env.VM_EMAIL_FROM || "no-reply@virtuemachine.local").trim();
 const EMAIL_SMTP_HOST = String(process.env.VM_EMAIL_SMTP_HOST || "127.0.0.1").trim();
@@ -297,6 +298,24 @@ function persistState(state) {
   writeJson(FILES.presence, state.presence);
   writeJson(FILES.worldClock, state.worldClock);
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
+}
+
+function prunePresence(state, nowMs = Date.now()) {
+  const cutoff = nowMs - PRESENCE_TTL_MS;
+  state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+}
+
+function upsertPresenceRow(state, row, nowMs = Date.now()) {
+  const userId = String(row.user_id || "");
+  const sessionId = String(row.session_id || "");
+  const prior = Array.isArray(state.presence) ? state.presence : [];
+  state.presence = prior.filter((p) => {
+    const pUserId = String(p.user_id || "");
+    const pSessionId = String(p.session_id || "");
+    return pUserId !== userId && pSessionId !== sessionId;
+  });
+  state.presence.push(row);
+  prunePresence(state, nowMs);
 }
 
 function requireUser(state, req, res) {
@@ -683,6 +702,7 @@ function runCriticalItemMaintenance(state, payload) {
 }
 
 const state = loadState();
+prunePresence(state);
 persistState(state);
 
 const server = http.createServer(async (req, res) => {
@@ -749,6 +769,9 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 401, "auth_invalid", "invalid username/password");
       return;
     }
+    // Ensure old sessions for this account do not survive re-login as ghost presences.
+    state.presence = state.presence.filter((p) => String(p.user_id || "") !== String(user.user_id));
+    prunePresence(state);
     const token = issueToken(state, user.user_id);
     persistState(state);
     sendJson(res, 200, {
@@ -1088,23 +1111,33 @@ const server = http.createServer(async (req, res) => {
       mode: String(body && body.mode || "avatar"),
       updated_at_ms: nowMs
     };
-    const key = `${row.user_id}:${row.session_id}`;
-    let replaced = false;
-    state.presence = state.presence.map((p) => {
-      const pKey = `${String(p.user_id || "")}:${String(p.session_id || "")}`;
-      if (pKey === key) {
-        replaced = true;
-        return row;
-      }
-      return p;
-    });
-    if (!replaced) {
-      state.presence.push(row);
-    }
-    const cutoff = nowMs - 15000;
-    state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+    upsertPresenceRow(state, row, nowMs);
     persistState(state);
     sendJson(res, 200, { ok: true, now: nowIso(), tick: clock.tick >>> 0 });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/world/presence/leave") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const sessionId = String(body && body.session_id || "").trim();
+    if (!sessionId || sessionId.length < 8) {
+      sendError(res, 400, "bad_session_id", "session_id is required");
+      return;
+    }
+    const key = `${user.user_id}:${sessionId}`;
+    state.presence = state.presence.filter((p) => {
+      const pKey = `${String(p.user_id || "")}:${String(p.session_id || "")}`;
+      return pKey !== key;
+    });
+    prunePresence(state);
+    persistState(state);
+    sendJson(res, 200, { ok: true, removed: key });
     return;
   }
 
@@ -1123,9 +1156,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/presence") {
-    const nowMs = Date.now();
-    const cutoff = nowMs - 15000;
-    state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+    prunePresence(state);
     persistState(state);
     sendJson(res, 200, {
       players: state.presence.map((p) => ({
