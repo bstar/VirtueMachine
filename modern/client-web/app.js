@@ -141,7 +141,6 @@ const debugOverlayToggle = document.getElementById("debugOverlayToggle");
 const animationToggle = document.getElementById("animationToggle");
 const paletteFxToggle = document.getElementById("paletteFxToggle");
 const movementModeToggle = document.getElementById("movementModeToggle");
-const renderModeToggle = document.getElementById("renderModeToggle");
 const capturePreviewToggle = document.getElementById("capturePreviewToggle");
 const legacyScaleModeToggle = document.getElementById("legacyScaleModeToggle");
 const charStubCanvas = document.getElementById("charStubCanvas");
@@ -176,7 +175,6 @@ const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
 const ANIMATION_KEY = "vm_animation";
 const PALETTE_FX_KEY = "vm_palette_fx";
 const MOVEMENT_MODE_KEY = "vm_movement_mode";
-const RENDER_MODE_KEY = "vm_render_mode";
 const LEGACY_FRAME_PREVIEW_KEY = "vm_legacy_frame_preview";
 const LEGACY_SCALE_MODE_KEY = "vm_legacy_scale_mode";
 const NET_API_BASE_KEY = "vm_net_api_base";
@@ -269,7 +267,6 @@ const THEMES = [
   "ash"
 ];
 const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
-const RENDER_MODES = ["current", "nuvie"];
 const CAPTURE_PRESETS = [
   { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
   { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
@@ -313,14 +310,12 @@ const state = {
   objectOverlayCount: 0,
   entityOverlayCount: 0,
   renderParityMismatches: 0,
-  renderModeDebug: null,
   interactionProbeTile: null,
   npcOcclusionBlockedMoves: 0,
   showGrid: false,
   showOverlayDebug: false,
   enablePaletteFx: true,
   movementMode: "ghost",
-  renderMode: "current",
   avatarFacingDx: 0,
   avatarFacingDy: 1,
   avatarLastMoveTick: -1,
@@ -3333,38 +3328,6 @@ function initMovementMode() {
   }
 }
 
-function setRenderMode(mode) {
-  const next = RENDER_MODES.includes(mode) ? mode : "current";
-  state.renderMode = next;
-  document.documentElement.setAttribute("data-render-mode", next);
-  if (renderModeToggle) {
-    renderModeToggle.value = next;
-  }
-  try {
-    localStorage.setItem(RENDER_MODE_KEY, next);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-}
-
-function initRenderMode() {
-  let saved = "current";
-  try {
-    const fromStorage = localStorage.getItem(RENDER_MODE_KEY);
-    if (fromStorage && RENDER_MODES.includes(fromStorage)) {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-  setRenderMode(saved);
-  if (renderModeToggle) {
-    renderModeToggle.addEventListener("change", () => {
-      setRenderMode(renderModeToggle.value);
-    });
-  }
-}
-
 function setLegacyFramePreview(enabled) {
   const on = !!enabled;
   document.documentElement.setAttribute("data-legacy-frame-preview", on ? "on" : "off");
@@ -3831,7 +3794,7 @@ function captureViewportPng() {
     g.fillText("Ultima VI parity capture", textX, y);
     y += 15;
     g.fillStyle = "#8ea8cf";
-    g.fillText(`mode: ${state.renderMode}`, textX, y);
+    g.fillText("mode: legacy", textX, y);
     y = panelY + headerH + 24;
 
     const drawRow = (label, value) => {
@@ -4310,7 +4273,7 @@ function buildLegacyViewContext(startX, startY, wz) {
         const wy = startY + gy - PAD;
         const overlays = state.objectLayer.objectsAt(wx, wy, wz);
         for (const o of overlays) {
-          const tileId = resolveDoorTileIdForVisibility(state.sim, o);
+          const tileId = resolveAnimatedObjectTile(o);
           applyObjFlags(gx, gy, tileId);
         }
       }
@@ -4490,26 +4453,7 @@ function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
   if (terrainLow !== (0x04 | 0x02)) {
     return rawTile;
   }
-  if (viewCtx) {
-    const fullyVisible = (
-      viewCtx.visibleAtWorld(wx, wy)
-      && viewCtx.visibleAtWorld(wx, wy - 1)
-      && viewCtx.visibleAtWorld(wx + 1, wy)
-      && viewCtx.visibleAtWorld(wx, wy + 1)
-      && viewCtx.visibleAtWorld(wx - 1, wy)
-    );
-    if (!fullyVisible) {
-      return rawTile;
-    }
-  }
-  const key = `${wz}:${wx}:${wy}:${rawTile & 0xffff}`;
-  const cached = state.cornerVariantCache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const resolved = applyLegacyCornerVariant(rawTile, wx, wy, wz, viewCtx) & 0xffff;
-  state.cornerVariantCache.set(key, resolved);
-  return resolved;
+  return applyLegacyCornerVariant(rawTile, wx, wy, wz, viewCtx) & 0xffff;
 }
 
 function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
@@ -4543,72 +4487,10 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
   return { rawTiles, displayTiles };
 }
 
-function applyNuvieBoundaryReshape(displayTiles, startX, startY) {
-  const debug = {
-    reshapedTiles: 0,
-    cornerSubs: 0
-  };
-  const inView = (gx, gy) => gx >= 0 && gy >= 0 && gx < VIEW_W && gy < VIEW_H;
-  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
-  const isBlack = (gx, gy) => !inView(gx, gy) || (displayTiles[cellIndex(gx, gy)] & 0xffff) === 0x0ff;
-
-  for (let gy = 0; gy < VIEW_H; gy += 1) {
-    for (let gx = 0; gx < VIEW_W; gx += 1) {
-      const idx = cellIndex(gx, gy);
-      const tile = displayTiles[idx] & 0xffff;
-      if (tile === 0x0ff) {
-        continue;
-      }
-      if (tile < 140 || tile > 187) {
-        continue;
-      }
-
-      const blackN = isBlack(gx, gy - 1);
-      const blackE = isBlack(gx + 1, gy);
-      const blackS = isBlack(gx, gy + 1);
-      const blackW = isBlack(gx - 1, gy);
-      if (!(blackN || blackE || blackS || blackW)) {
-        continue;
-      }
-
-      /* Temporarily disabled while we rebuild parity from fixtures.
-         Keep diagnostics path active but do not mutate tiles here. */
-    }
-  }
-  return debug;
-}
-
-function buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx) {
-  const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
-  let blackTiles = 0;
-  for (let i = 0; i < base.displayTiles.length; i += 1) {
-    if ((base.displayTiles[i] & 0xffff) === 0x0ff) {
-      blackTiles += 1;
-    }
-  }
-  const reshapeDebug = applyNuvieBoundaryReshape(base.displayTiles, startX, startY);
-  base.debug = {
-    blackTiles,
-    ...reshapeDebug
-  };
-  return base;
-}
-
 function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
-  if (state.renderMode === "nuvie") {
-    return buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx);
-  }
   const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
   base.debug = null;
   return base;
-}
-
-function shouldSuppressOverlayNuvie(entry, gx, gy, displayTiles) {
-  void entry;
-  void gx;
-  void gy;
-  void displayTiles;
-  return false;
 }
 
 function avatarFacingFrameOffset() {
@@ -4823,7 +4705,7 @@ function drawTileGrid() {
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
   const renderPalette = getRenderPalette();
   const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
-  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles, debug: baseDebug } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
+  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayBuild = buildOverlayCells(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayCells = overlayBuild.overlayCells;
   const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
@@ -4863,7 +4745,6 @@ function drawTileGrid() {
   let centerPaletteBand = "none";
   const overlayCount = overlayBuild.overlayCount;
   let entityCount = 0;
-  let nuvieOverlaySuppressed = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
       const cell = cellIndex(gx, gy);
@@ -4918,10 +4799,6 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          if (state.renderMode === "nuvie" && shouldSuppressOverlayNuvie(t, gx, gy, baseDisplayTiles)) {
-            nuvieOverlaySuppressed += 1;
-            continue;
-          }
           if (!t.occluder) {
             drawOverlayEntry(t, px, py);
           }
@@ -5037,14 +4914,6 @@ function drawTileGrid() {
   state.centerRawTile = centerRawTile;
   state.centerAnimatedTile = centerAnimatedTile || centerTile;
   state.centerPaletteBand = centerPaletteBand;
-  state.renderModeDebug = state.renderMode === "nuvie"
-    ? {
-      blackTiles: baseDebug ? baseDebug.blackTiles : 0,
-      reshapedTiles: baseDebug ? baseDebug.reshapedTiles : 0,
-      cornerSubs: baseDebug ? baseDebug.cornerSubs : 0,
-      overlaySuppressed: nuvieOverlaySuppressed
-    }
-    : null;
 
   const cx = (VIEW_W >> 1) * TILE_SIZE;
   const cy = (VIEW_H >> 1) * TILE_SIZE;
@@ -5084,11 +4953,11 @@ function updateStats() {
   }
   if (statRenderParity) {
     if (state.renderParityMismatches > 0) {
-      statRenderParity.textContent = `warn (${state.renderParityMismatches}) [${state.renderMode}]`;
+      statRenderParity.textContent = `warn (${state.renderParityMismatches})`;
     } else if (state.interactionProbeTile != null) {
-      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)}) [${state.renderMode}]`;
+      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)})`;
     } else {
-      statRenderParity.textContent = `ok [${state.renderMode}]`;
+      statRenderParity.textContent = "ok";
     }
   }
   if (statAvatarState) {
@@ -5110,12 +4979,7 @@ function updateStats() {
     statCenterTiles.textContent = `0x${state.centerRawTile.toString(16)} -> 0x${state.centerAnimatedTile.toString(16)}`;
   }
   if (statCenterBand) {
-    if (state.renderMode === "nuvie" && state.renderModeDebug) {
-      const d = state.renderModeDebug;
-      statCenterBand.textContent = `${state.centerPaletteBand} | b:${d.blackTiles} r:${d.reshapedTiles} c:${d.cornerSubs} o:${d.overlaySuppressed}`;
-    } else {
-      statCenterBand.textContent = state.centerPaletteBand;
-    }
+    statCenterBand.textContent = state.centerPaletteBand;
   }
   if (statNetPlayers) {
     const remote = Array.isArray(state.net.remotePlayers) ? state.net.remotePlayers.length : 0;
@@ -5274,7 +5138,6 @@ function resetRun() {
   state.centerRawTile = 0;
   state.centerAnimatedTile = 0;
   state.centerPaletteBand = "none";
-  state.renderModeDebug = null;
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
   state.avatarLastMoveTick = -1;
@@ -5998,7 +5861,6 @@ initOverlayDebug();
 initAnimationMode();
 initPaletteFxMode();
 initMovementMode();
-initRenderMode();
 initLegacyScaleMode();
 initLegacyFramePreview();
 initCapturePresets();
