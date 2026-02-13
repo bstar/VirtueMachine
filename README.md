@@ -131,4 +131,12 @@ Defaults:
 
 - Source: `../ultima6` (relative to repo root) unless `U6_ASSET_SRC` is set.
 - Destination: `modern/assets/runtime` unless `U6_ASSET_DEST` is set.
-- Savegame object overlay files (`savegame/objblk??`, `savegame/objlist`) are copied to `modern/assets/runtime/savegame` when present.
+- Savegame object files (`savegame/objblk??`, `savegame/objlist`) are copied to:
+  - `modern/assets/runtime/savegame` (runtime compatibility)
+  - `modern/assets/pristine/savegame` (immutable baseline for render/net parity)
+
+Baseline tooling:
+
+- `./modern/tools/import_baseline_profile.sh <profile_name> /path/to/ultima6 --activate`
+- `./modern/tools/activate_baseline_profile.sh <profile_name> --reload-net`
+- `./modern/tools/check_lb_bedroom.sh`

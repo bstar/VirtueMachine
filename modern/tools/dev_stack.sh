@@ -16,6 +16,8 @@ DEV_WEB_PORT="${DEV_WEB_PORT:-8080}"
 VM_NET_HOST="${VM_NET_HOST:-127.0.0.1}"
 VM_NET_PORT="${VM_NET_PORT:-8081}"
 VM_NET_DATA_DIR="${VM_NET_DATA_DIR:-$ROOT_DIR/modern/net/data}"
+VM_NET_RUNTIME_DIR="${VM_NET_RUNTIME_DIR:-}"
+VM_NET_OBJECT_BASELINE_DIR="${VM_NET_OBJECT_BASELINE_DIR:-$ROOT_DIR/modern/assets/pristine/savegame}"
 VM_EMAIL_MODE="${VM_EMAIL_MODE:-resend}"
 VM_EMAIL_FROM="${VM_EMAIL_FROM:-no-reply@virtuemachine.local}"
 VM_EMAIL_SMTP_HOST="${VM_EMAIL_SMTP_HOST:-127.0.0.1}"
@@ -30,6 +32,15 @@ WEB_LOG="${DEV_WEB_LOG:-$ROOT_DIR/.tmp-dev-web.log}"
 NET_LOG="${DEV_NET_LOG:-$ROOT_DIR/.tmp-dev-net.log}"
 
 mkdir -p "$VM_NET_DATA_DIR"
+
+if [[ -z "$VM_NET_RUNTIME_DIR" ]]; then
+  # Prefer pristine external runtime dir when present.
+  if [[ -d "$ROOT_DIR/../ultima6/savegame" ]]; then
+    VM_NET_RUNTIME_DIR="$ROOT_DIR/../ultima6"
+  else
+    VM_NET_RUNTIME_DIR="$ROOT_DIR/modern/assets/runtime"
+  fi
+fi
 
 cleanup() {
   local code=$?
@@ -53,7 +64,7 @@ python3 "$ROOT_DIR/modern/tools/secure_web_server.py" \
   >"$WEB_LOG" 2>&1 &
 WEB_PID=$!
 
-VM_NET_HOST="$VM_NET_HOST" VM_NET_PORT="$VM_NET_PORT" VM_NET_DATA_DIR="$VM_NET_DATA_DIR" \
+VM_NET_HOST="$VM_NET_HOST" VM_NET_PORT="$VM_NET_PORT" VM_NET_DATA_DIR="$VM_NET_DATA_DIR" VM_NET_RUNTIME_DIR="$VM_NET_RUNTIME_DIR" VM_NET_OBJECT_BASELINE_DIR="$VM_NET_OBJECT_BASELINE_DIR" \
 VM_EMAIL_MODE="$VM_EMAIL_MODE" VM_EMAIL_FROM="$VM_EMAIL_FROM" \
 VM_EMAIL_SMTP_HOST="$VM_EMAIL_SMTP_HOST" VM_EMAIL_SMTP_PORT="$VM_EMAIL_SMTP_PORT" VM_EMAIL_SMTP_SECURE="$VM_EMAIL_SMTP_SECURE" \
 VM_EMAIL_SMTP_USER="$VM_EMAIL_SMTP_USER" VM_EMAIL_SMTP_PASS="$VM_EMAIL_SMTP_PASS" \
@@ -78,6 +89,8 @@ cat <<EOF
 VirtueMachine dev stack is up.
 Web client: http://${DEV_WEB_BIND}:${DEV_WEB_PORT}/modern/client-web/
 Net API:    http://${VM_NET_HOST}:${VM_NET_PORT}/health
+Runtime:    ${VM_NET_RUNTIME_DIR}
+Baseline:   ${VM_NET_OBJECT_BASELINE_DIR}
 Email:      mode=${VM_EMAIL_MODE} smtp=${VM_EMAIL_SMTP_HOST}:${VM_EMAIL_SMTP_PORT} secure=${VM_EMAIL_SMTP_SECURE}
             resend=${VM_EMAIL_RESEND_BASE_URL} key=$([[ -n "${VM_EMAIL_RESEND_API_KEY}" ]] && echo set || echo missing)
 Logs:

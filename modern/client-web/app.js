@@ -17,6 +17,9 @@ const NET_PRESENCE_POLL_TICKS = 10;
 const NET_CLOCK_POLL_TICKS = 2;
 const NET_BACKGROUND_FAIL_WINDOW_MS = 12000;
 const NET_BACKGROUND_FAIL_MAX = 6;
+const PRISTINE_OBJECT_PATH = "../assets/pristine/savegame";
+const PRISTINE_BASELINE_VERSION_PATH = "../assets/pristine/.baseline_version";
+const PRISTINE_BASELINE_POLL_TICKS = 20;
 const TICKS_PER_MINUTE = 4;
 const WORLD_PROP_RESET_MINUTES = 5;
 const WORLD_PROP_RESET_TICKS = WORLD_PROP_RESET_MINUTES * 60 * TICKS_PER_MINUTE;
@@ -126,6 +129,7 @@ const topTimeOfDay = document.getElementById("topTimeOfDay");
 const topNetStatus = document.getElementById("topNetStatus");
 const topNetIndicator = document.getElementById("topNetIndicator");
 const topInputMode = document.getElementById("topInputMode");
+const topCopyStatus = document.getElementById("topCopyStatus");
 const netQuickStatus = document.getElementById("netQuickStatus");
 const netAccountOpenButton = document.getElementById("netAccountOpenButton");
 const netAccountModal = document.getElementById("netAccountModal");
@@ -147,6 +151,8 @@ const locationSelect = document.getElementById("locationSelect");
 const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 const captureWorldHudButton = document.getElementById("captureWorldHudButton");
+const parityRadiusInput = document.getElementById("parityRadiusInput");
+const paritySnapshotButton = document.getElementById("paritySnapshotButton");
 const netApiBaseInput = document.getElementById("netApiBaseInput");
 const netAccountSelect = document.getElementById("netAccountSelect");
 const netUsernameInput = document.getElementById("netUsernameInput");
@@ -366,6 +372,9 @@ const state = {
   avatarPortraitCanvas: null,
   u6MainFont: null,
   runtimeReady: false,
+  pristineBaselineVersion: "",
+  pristineBaselinePollInFlight: false,
+  pristineBaselineLastPollTick: -1,
   sessionStarted: false,
   startupMenuIndex: 0,
   startupTitlePixmaps: null,
@@ -2051,29 +2060,80 @@ function initFont() {
 
 async function copyTextToClipboard(text) {
   const v = String(text ?? "");
+  let lastErr = "";
   try {
-    if (navigator.clipboard && window.isSecureContext) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
       await navigator.clipboard.writeText(v);
       return true;
     }
-  } catch (_err) {
-    // fallback below
+  } catch (err) {
+    lastErr = String(err && err.message ? err.message : err);
   }
   try {
     const ta = document.createElement("textarea");
     ta.value = v;
-    ta.setAttribute("readonly", "");
     ta.style.position = "fixed";
     ta.style.left = "-9999px";
     ta.style.top = "0";
     document.body.appendChild(ta);
+    ta.focus();
     ta.select();
+    ta.setSelectionRange(0, ta.value.length);
     const ok = document.execCommand("copy");
     document.body.removeChild(ta);
-    return !!ok;
-  } catch (_err) {
+    if (ok) {
+      return true;
+    }
+    if (!lastErr) {
+      lastErr = "execCommand(copy) returned false";
+    }
+    if (diagBox) {
+      diagBox.dataset.copyError = lastErr || "copy blocked";
+    }
+    return false;
+  } catch (err) {
+    if (!lastErr) {
+      lastErr = String(err && err.message ? err.message : err);
+    }
+    if (diagBox) {
+      diagBox.dataset.copyError = lastErr || "copy blocked";
+    }
     return false;
   }
+}
+
+function setCopyStatus(ok, detail = "") {
+  if (topCopyStatus) {
+    topCopyStatus.textContent = ok ? "ok" : (detail ? `failed (${detail})` : "failed");
+  }
+}
+
+function copyTextToClipboardSync(text) {
+  const v = String(text ?? "");
+  let lastErr = "";
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = v;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) {
+      return { ok: true, reason: "" };
+    }
+    lastErr = "execCommand(copy) returned false";
+  } catch (err) {
+    lastErr = String(err && err.message ? err.message : err);
+  }
+  if (diagBox) {
+    diagBox.dataset.copyError = lastErr || "copy blocked";
+  }
+  return { ok: false, reason: lastErr || "copy blocked" };
 }
 
 function makeCopyButton(getText) {
@@ -4390,6 +4450,140 @@ function captureWorldHudPng() {
   diagBox.textContent = `Captured ${filename}`;
 }
 
+function clampParityRadius(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return 12;
+  }
+  return Math.max(1, Math.min(32, Math.floor(n)));
+}
+
+function downloadJsonFile(filename, data) {
+  const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function captureParitySnapshotJson() {
+  if (!state.sessionStarted || !state.mapCtx) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Parity snapshot unavailable: session not started.";
+    return;
+  }
+  const radius = clampParityRadius(parityRadiusInput ? parityRadiusInput.value : 12);
+  const cx = state.sim.world.map_x | 0;
+  const cy = state.sim.world.map_y | 0;
+  const cz = state.sim.world.map_z | 0;
+  const viewW = (radius * 2) + 1;
+  const viewH = (radius * 2) + 1;
+  const startX = cx - radius;
+  const startY = cy - radius;
+  const viewCtx = buildLegacyViewContext(startX, startY, cz);
+  const overlayBuild = buildOverlayCellsModel({
+    viewW,
+    viewH,
+    startX,
+    startY,
+    wz: cz,
+    viewCtx,
+    objectLayer: state.tileSet ? state.objectLayer : null,
+    tileFlags: state.tileFlags,
+    resolveAnimatedObjectTile,
+    resolveFootprintTile: (obj) => resolveDoorTileId(state.sim, obj),
+    hasWallTerrain
+  });
+  const overlayCells = overlayBuild.overlayCells || [];
+  const cells = [];
+  for (let gy = 0; gy < viewH; gy += 1) {
+    for (let gx = 0; gx < viewW; gx += 1) {
+      const wx = startX + gx;
+      const wy = startY + gy;
+      const rawTile = state.mapCtx.tileAt(wx, wy, cz) & 0xffff;
+      const animTile = resolveAnimatedTile(rawTile) & 0xffff;
+      const tileFlag = state.tileFlags ? (state.tileFlags[rawTile & 0x07ff] ?? 0) : 0;
+      const terrain = state.terrainType ? (state.terrainType[rawTile & 0x07ff] ?? 0) : 0;
+      const overlays = (overlayCells[(gy * viewW) + gx] || []).map((o, idx) => ({
+        idx,
+        tileHex: hex(o.tileId),
+        floor: o.floor ? 1 : 0,
+        occluder: o.occluder ? 1 : 0,
+        sourceX: o.sourceX | 0,
+        sourceY: o.sourceY | 0,
+        sourceType: String(o.sourceType || "main"),
+        sourceObjTypeHex: hex(o.sourceObjType ?? 0)
+      }));
+      const objects = state.objectLayer
+        ? state.objectLayer.objectsAt(wx, wy, cz).map((o, idx) => {
+          const tileId = resolveDoorTileId(state.sim, o) & 0xffff;
+          const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
+          return {
+            idx,
+            typeHex: hex(o.type),
+            frame: o.frame | 0,
+            tileHex: hex(tileId),
+            tileFlagsHex: hex(tf),
+            order: o.order | 0
+          };
+        })
+        : [];
+      cells.push({
+        x: wx,
+        y: wy,
+        z: cz,
+        map: {
+          rawHex: hex(rawTile),
+          animHex: hex(animTile),
+          tileFlagsHex: hex(tileFlag),
+          terrainHex: hex(terrain)
+        },
+        visibility: {
+          visible: viewCtx ? (viewCtx.visibleAtWorld(wx, wy) ? 1 : 0) : 1,
+          open: viewCtx ? (viewCtx.openAtWorld(wx, wy) ? 1 : 0) : 0
+        },
+        overlay: overlays,
+        objects
+      });
+    }
+  }
+  const payload = {
+    kind: "VirtueMachineRoomParitySnapshot",
+    capturedAt: new Date().toISOString(),
+    tick: state.sim.tick >>> 0,
+    center: { x: cx, y: cy, z: cz },
+    radius,
+    bounds: {
+      x0: startX,
+      y0: startY,
+      x1: startX + viewW - 1,
+      y1: startY + viewH - 1,
+      z: cz
+    },
+    parity: {
+      overlayCount: overlayBuild.overlayCount | 0,
+      hiddenSuppressedCount: overlayBuild.parity?.hiddenSuppressedCount | 0,
+      spillOutOfBoundsCount: overlayBuild.parity?.spillOutOfBoundsCount | 0,
+      unsortedSourceCount: overlayBuild.parity?.unsortedSourceCount | 0
+    },
+    cells
+  };
+  const copied = await copyTextToClipboard(JSON.stringify(payload, null, 2));
+  if (copied) {
+    setCopyStatus(true);
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Copied parity snapshot to clipboard (center=${cx},${cy},${cz} radius=${radius}).`;
+  } else {
+    setCopyStatus(false, "parity snapshot copy failed");
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Failed to copy parity snapshot to clipboard.";
+  }
+}
+
 function cloneSimState(sim) {
   return {
     tick: sim.tick >>> 0,
@@ -5499,6 +5693,7 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
+    resolveFootprintTile: (obj) => resolveDoorTileId(state.sim, obj),
     hasWallTerrain
   });
 }
@@ -5532,6 +5727,20 @@ function drawTileGrid() {
   const overlayBuild = buildOverlayCells(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayCells = overlayBuild.overlayCells;
   const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
+  const shouldDrawOverlayEntry = (gx, gy, entry) => {
+    if (!viewCtx) {
+      return true;
+    }
+    const wx = startX + gx;
+    const wy = startY + gy;
+    if (viewCtx.visibleAtWorld(wx, wy)) {
+      return true;
+    }
+    if (!entry) {
+      return false;
+    }
+    return viewCtx.visibleAtWorld(entry.sourceX | 0, entry.sourceY | 0);
+  };
   const drawOverlayEntry = (entry, px, py) => {
     const op = paletteForTile(entry.tileId);
     const ok = paletteKeyForTile(entry.tileId);
@@ -5617,12 +5826,9 @@ function drawTileGrid() {
       for (let gx = 0; gx < VIEW_W; gx += 1) {
         const px = gx * TILE_SIZE;
         const py = gy * TILE_SIZE;
-        if (viewCtx && !viewCtx.visibleAtWorld(startX + gx, startY + gy)) {
-          continue;
-        }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          if (!t.floor) {
+          if (!t.floor && shouldDrawOverlayEntry(gx, gy, t)) {
             drawOverlayEntry(t, px, py);
           }
         }
@@ -5720,12 +5926,9 @@ function drawTileGrid() {
       for (let gx = 0; gx < VIEW_W; gx += 1) {
         const px = gx * TILE_SIZE;
         const py = gy * TILE_SIZE;
-        if (viewCtx && !viewCtx.visibleAtWorld(startX + gx, startY + gy)) {
-          continue;
-        }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          if (t.floor) {
+          if (t.floor && shouldDrawOverlayEntry(gx, gy, t)) {
             drawOverlayEntry(t, px, py);
           }
         }
@@ -6079,6 +6282,14 @@ function tickLoop(ts) {
         diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
       });
     }
+    if (
+      state.sessionStarted
+      && !state.pristineBaselinePollInFlight
+      && (state.sim.tick - state.pristineBaselineLastPollTick) >= PRISTINE_BASELINE_POLL_TICKS
+    ) {
+      state.pristineBaselineLastPollTick = state.sim.tick >>> 0;
+      refreshPristineBaseline(false).catch((_err) => {});
+    }
   }
 
   drawTileGrid();
@@ -6089,6 +6300,72 @@ function tickLoop(ts) {
   drawCustomCursorLayer();
   updateStats();
   requestAnimationFrame(tickLoop);
+}
+
+function clearObjectTransientState() {
+  if (!state.sim) {
+    return;
+  }
+  state.sim.doorOpenStates = {};
+  state.sim.removedObjectKeys = {};
+  state.sim.removedObjectAtTick = {};
+  state.sim.removedObjectCount = 0;
+}
+
+async function fetchPristineBaselineVersion() {
+  const res = await fetch(PRISTINE_BASELINE_VERSION_PATH, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`missing baseline version marker (${PRISTINE_BASELINE_VERSION_PATH})`);
+  }
+  return String(await res.text()).trim();
+}
+
+async function loadPristineObjectBaseline(baseTiles) {
+  if (!baseTiles || baseTiles.length < 0x400) {
+    throw new Error("invalid base tile table for pristine object baseline");
+  }
+  const objectLayer = new U6ObjectLayerJS(baseTiles);
+  await objectLayer.loadOutdoor((name) => fetch(`${PRISTINE_OBJECT_PATH}/${name}`, { cache: "no-store" }));
+  const objListRes = await fetch(`${PRISTINE_OBJECT_PATH}/objlist`, { cache: "no-store" });
+  if (objectLayer.filesLoaded < 64 || !objListRes.ok) {
+    throw new Error("missing pristine object baseline (expected modern/assets/pristine/savegame)");
+  }
+  const objListBuf = await objListRes.arrayBuffer();
+  const entityLayer = new U6EntityLayerJS(baseTiles);
+  if (objListBuf.byteLength >= 0x0900) {
+    entityLayer.load(new Uint8Array(objListBuf));
+  }
+  return { objectLayer, entityLayer };
+}
+
+async function refreshPristineBaseline(force = false) {
+  if (!state.tileSet || !state.objectLayer || !state.entityLayer) {
+    return false;
+  }
+  if (state.pristineBaselinePollInFlight) {
+    return false;
+  }
+  state.pristineBaselinePollInFlight = true;
+  try {
+    const version = await fetchPristineBaselineVersion();
+    if (!force && version && state.pristineBaselineVersion && version === state.pristineBaselineVersion) {
+      return false;
+    }
+    const loaded = await loadPristineObjectBaseline(state.objectLayer.baseTiles);
+    state.objectLayer = loaded.objectLayer;
+    state.entityLayer = loaded.entityLayer;
+    state.pristineBaselineVersion = version;
+    clearObjectTransientState();
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Pristine baseline reloaded (version ${version || "unknown"}).`;
+    return true;
+  } catch (err) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Pristine baseline reload failed: ${String(err.message || err)}`;
+    return false;
+  } finally {
+    state.pristineBaselinePollInFlight = false;
+  }
 }
 
 async function loadRuntimeAssets() {
@@ -6107,7 +6384,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, objListRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -6118,7 +6395,6 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/objtiles.vga"),
       fetch("../assets/runtime/basetile"),
       fetch("../assets/runtime/animdata"),
-      fetch("../assets/runtime/savegame/objlist"),
       fetch("../assets/runtime/paper.bmp"),
       fetch("../assets/runtime/u6.ch"),
       fetch("../assets/runtime/portrait.b"),
@@ -6127,7 +6403,7 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/mainmenu.shp"),
       fetch("../assets/runtime/u6mcga.ptr")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, objListBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -6138,7 +6414,6 @@ async function loadRuntimeAssets() {
       objTileRes.arrayBuffer(),
       baseTileRes.arrayBuffer(),
       animRes.arrayBuffer(),
-      objListRes.arrayBuffer(),
       paperRes.arrayBuffer(),
       fontRes.arrayBuffer(),
       portraitBRes.arrayBuffer(),
@@ -6232,14 +6507,11 @@ async function loadRuntimeAssets() {
 
     if (baseTileRes.ok && baseTileBuf.byteLength >= 2048) {
       const baseTiles = buildBaseTileTable(new Uint8Array(baseTileBuf));
-      state.objectLayer = new U6ObjectLayerJS(baseTiles);
-      await state.objectLayer.loadOutdoor((name) => fetch(`../assets/runtime/savegame/${name}`));
-      if (objListRes.ok && objListBuf.byteLength >= 0x0900) {
-        state.entityLayer = new U6EntityLayerJS(baseTiles);
-        state.entityLayer.load(new Uint8Array(objListBuf));
-      } else {
-        state.entityLayer = null;
-      }
+      const loaded = await loadPristineObjectBaseline(baseTiles);
+      state.objectLayer = loaded.objectLayer;
+      state.entityLayer = loaded.entityLayer;
+      state.pristineBaselineVersion = await fetchPristineBaselineVersion();
+      state.pristineBaselineLastPollTick = state.sim.tick >>> 0;
       if (animRes.ok && animBuf.byteLength >= 2) {
         state.animData = U6AnimDataJS.fromBytes(new Uint8Array(animBuf));
       } else {
@@ -6249,6 +6521,8 @@ async function loadRuntimeAssets() {
       state.objectLayer = null;
       state.entityLayer = null;
       state.animData = null;
+      state.pristineBaselineVersion = "";
+      state.pristineBaselineLastPollTick = -1;
     }
 
     if (state.tileSet) {
@@ -6295,6 +6569,8 @@ async function loadRuntimeAssets() {
     state.legacyPaperPixmap = null;
     state.tileFlags = null;
     state.terrainType = null;
+    state.pristineBaselineVersion = "";
+    state.pristineBaselineLastPollTick = -1;
     applyLegacyFrameLayout();
     statSource.textContent = "synthetic fallback";
     diagBox.className = "diag warn";
@@ -6604,6 +6880,13 @@ window.addEventListener("keydown", (ev) => {
   }
 
   const k = String(ev.key || "").toLowerCase();
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
+    const isHoverCopyCombo = k === "c" && ev.shiftKey;
+    if (!isHoverCopyCombo) {
+      // Let browser/system shortcuts work (copy/paste/select-all/find/etc).
+      return;
+    }
+  }
   if (!state.sessionStarted) {
     if (k === "arrowup") {
       setStartupMenuIndex(state.startupMenuIndex - 1);
@@ -6638,7 +6921,13 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     return;
   }
-  if (k === "c" && ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+  if (
+    ((k === "c" && ev.shiftKey && ev.ctrlKey && !ev.altKey && !ev.metaKey)
+      || (ev.code === "Backquote" && ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey))
+  ) {
+    if (topCopyStatus) {
+      topCopyStatus.textContent = "copying...";
+    }
     void copyHoverReportToClipboard();
     ev.preventDefault();
     return;
@@ -6698,7 +6987,7 @@ window.addEventListener("keydown", (ev) => {
   if (runDebugHotkeys(ev)) {
     ev.preventDefault();
   }
-});
+}, true);
 
 function startupMenuIndexAtLogicalPos(lx, ly) {
   if (lx < STARTUP_MENU_HITBOX.x0 || lx > STARTUP_MENU_HITBOX.x1) {
@@ -6787,7 +7076,23 @@ function hex(value, width = 0) {
 }
 
 function buildHoverReportText() {
-  const cell = hoveredWorldCellFromMouse();
+  let cell = hoveredWorldCellFromMouse();
+  if (!cell && state.sessionStarted && state.mapCtx && state.sim && state.sim.world) {
+    const wz = state.sim.world.map_z | 0;
+    const startX = (state.sim.world.map_x | 0) - (VIEW_W >> 1);
+    const startY = (state.sim.world.map_y | 0) - (VIEW_H >> 1);
+    const gx = VIEW_W >> 1;
+    const gy = VIEW_H >> 1;
+    cell = {
+      x: state.sim.world.map_x | 0,
+      y: state.sim.world.map_y | 0,
+      z: wz,
+      gx,
+      gy,
+      startX,
+      startY
+    };
+  }
   if (!cell || !state.mapCtx) {
     return null;
   }
@@ -6837,7 +7142,8 @@ function buildHoverReportText() {
   return lines.join("\n");
 }
 
-async function copyHoverReportToClipboard() {
+async function copyHoverReportToClipboard(options = {}) {
+  const enrich = options.enrich !== false;
   const report = buildHoverReportText();
   if (!report) {
     diagBox.className = "diag warn";
@@ -6845,41 +7151,87 @@ async function copyHoverReportToClipboard() {
     return;
   }
   let enrichedReport = report;
-  try {
-    const cell = hoveredWorldCellFromMouse();
-    if (cell && isNetAuthenticated()) {
-      const out = await netFetchWorldObjectsAtCell(cell.x | 0, cell.y | 0, cell.z | 0);
-      if (out && Array.isArray(out.objects)) {
-        const rows = [];
-        rows.push("server_objects:");
-        if (!out.objects.length) {
-          rows.push("server_obj: none");
-        } else {
-          for (let i = 0; i < out.objects.length; i += 1) {
-            const o = out.objects[i];
-            const fp = Array.isArray(o.footprint)
-              ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
-              : "";
-            rows.push(
-              `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")}${fp ? ` fp=${fp}` : ""}`
-            );
+  if (enrich) {
+    try {
+      const cell = hoveredWorldCellFromMouse();
+      if (cell && isNetAuthenticated()) {
+        const out = await netFetchWorldObjectsAtCell(cell.x | 0, cell.y | 0, cell.z | 0);
+        if (out && Array.isArray(out.objects)) {
+          const rows = [];
+          rows.push("server_objects:");
+          if (!out.objects.length) {
+            rows.push("server_obj: none");
+          } else {
+            for (let i = 0; i < out.objects.length; i += 1) {
+              const o = out.objects[i];
+              const fp = Array.isArray(o.footprint)
+                ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
+                : "";
+              rows.push(
+                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")}${fp ? ` fp=${fp}` : ""}`
+              );
+            }
           }
+          enrichedReport = `${report}\n${rows.join("\n")}`;
         }
-        enrichedReport = `${report}\n${rows.join("\n")}`;
       }
+    } catch (_err) {
+      // Keep base local hover report available if net authority fetch fails.
     }
-  } catch (_err) {
-    // Keep base local hover report available if net authority fetch fails.
   }
   const ok = await copyTextToClipboard(enrichedReport);
   if (ok) {
     const line = enrichedReport.split("\n")[1] || "";
     diagBox.className = "diag ok";
+    if (diagBox && diagBox.dataset) {
+      delete diagBox.dataset.copyError;
+    }
     diagBox.textContent = `Copied hover report (${line.replace(/^cell:\\s*/, "")}).`;
+    setCopyStatus(true);
   } else {
     diagBox.className = "diag warn";
-    diagBox.textContent = "Failed to copy hover report to clipboard.";
+    const why = diagBox && diagBox.dataset && diagBox.dataset.copyError
+      ? ` (${diagBox.dataset.copyError})`
+      : "";
+    diagBox.textContent = `Failed to copy hover report to clipboard${why}.`;
+    setCopyStatus(false, why.replace(/^\s*\(|\)\s*$/g, ""));
   }
+}
+
+function handleShiftContextMenu(ev, surface) {
+  if (!ev.shiftKey) {
+    return;
+  }
+  ev.preventDefault();
+}
+
+function handleShiftRightMouseDownCopy(ev, surface) {
+  if (!ev.shiftKey || ev.button !== 2) {
+    return;
+  }
+  ev.preventDefault();
+  ev.stopPropagation();
+  updateCanvasMouseFromEvent(ev, surface);
+  setCopyStatus(false, "copying...");
+  const report = buildHoverReportText();
+  if (!report) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Hover report unavailable. Move cursor over the world view.";
+    setCopyStatus(false, "no hover cell");
+    return;
+  }
+  const sync = copyTextToClipboardSync(report);
+  if (sync.ok) {
+    if (diagBox && diagBox.dataset) {
+      delete diagBox.dataset.copyError;
+    }
+    diagBox.className = "diag ok";
+    const line = report.split("\n")[1] || "";
+    diagBox.textContent = `Copied hover report (${line.replace(/^cell:\\s*/, "")}).`;
+    setCopyStatus(true);
+    return;
+  }
+  setCopyStatus(false, sync.reason || "copy blocked");
 }
 
 function activeCursorSurface() {
@@ -6913,6 +7265,14 @@ canvas.addEventListener("mousemove", (ev) => {
   if (idx >= 0) {
     setStartupMenuIndex(idx);
   }
+});
+
+canvas.addEventListener("contextmenu", (ev) => {
+  handleShiftContextMenu(ev, canvas);
+});
+
+canvas.addEventListener("mousedown", (ev) => {
+  handleShiftRightMouseDownCopy(ev, canvas);
 });
 
 canvas.addEventListener("click", (ev) => {
@@ -6961,6 +7321,14 @@ if (legacyBackdropCanvas) {
     activateStartupMenuSelection();
   });
 
+  legacyBackdropCanvas.addEventListener("contextmenu", (ev) => {
+    handleShiftContextMenu(ev, legacyBackdropCanvas);
+  });
+
+  legacyBackdropCanvas.addEventListener("mousedown", (ev) => {
+    handleShiftRightMouseDownCopy(ev, legacyBackdropCanvas);
+  });
+
   legacyBackdropCanvas.addEventListener("mouseenter", (ev) => {
     updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
   });
@@ -6977,6 +7345,14 @@ if (legacyViewportCanvas) {
 
   legacyViewportCanvas.addEventListener("mouseenter", (ev) => {
     updateCanvasMouseFromEvent(ev, legacyViewportCanvas);
+  });
+
+  legacyViewportCanvas.addEventListener("contextmenu", (ev) => {
+    handleShiftContextMenu(ev, legacyViewportCanvas);
+  });
+
+  legacyViewportCanvas.addEventListener("mousedown", (ev) => {
+    handleShiftRightMouseDownCopy(ev, legacyViewportCanvas);
   });
 
   legacyViewportCanvas.addEventListener("mouseleave", () => {
@@ -7024,4 +7400,9 @@ if (captureButton) {
 }
 if (captureWorldHudButton) {
   captureWorldHudButton.addEventListener("click", captureWorldHudPng);
+}
+if (paritySnapshotButton) {
+  paritySnapshotButton.addEventListener("click", () => {
+    void captureParitySnapshotJson();
+  });
 }

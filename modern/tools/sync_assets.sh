@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MANIFEST="$ROOT_DIR/modern/assets/manifest.required.txt"
 OPTIONAL_MANIFEST="$ROOT_DIR/modern/assets/manifest.optional.txt"
 DEST_DIR="${U6_ASSET_DEST:-$ROOT_DIR/modern/assets/runtime}"
+PRISTINE_DIR="${U6_ASSET_PRISTINE_DEST:-$ROOT_DIR/modern/assets/pristine/savegame}"
+PRISTINE_ROOT="$(cd "$PRISTINE_DIR/.." && pwd)"
 SRC_DIR="${1:-${U6_ASSET_SRC:-$ROOT_DIR/../ultima6}}"
 
 if [[ ! -d "$SRC_DIR" ]]; then
@@ -20,6 +22,7 @@ fi
 
 mkdir -p "$DEST_DIR"
 mkdir -p "$DEST_DIR/savegame"
+mkdir -p "$PRISTINE_DIR"
 
 copied=0
 missing=0
@@ -74,6 +77,7 @@ if [[ -n "$world_obj_source" ]]; then
   src_objlist="$(find "$world_obj_source" -maxdepth 1 -type f -iname "objlist" | head -n 1 || true)"
   if [[ -n "$src_objlist" ]]; then
     cp -f "$src_objlist" "$DEST_DIR/savegame/objlist"
+    cp -f "$src_objlist" "$PRISTINE_DIR/objlist"
     savegame_copied=$((savegame_copied + 1))
   else
     echo "Missing optional world object asset: objlist (source: $world_obj_source)"
@@ -83,6 +87,7 @@ if [[ -n "$world_obj_source" ]]; then
     [[ -n "$src_blk" ]] || continue
     base_name="$(basename "$src_blk" | tr '[:upper:]' '[:lower:]')"
     cp -f "$src_blk" "$DEST_DIR/savegame/$base_name"
+    cp -f "$src_blk" "$PRISTINE_DIR/$base_name"
     savegame_copied=$((savegame_copied + 1))
   done < <(find "$world_obj_source" -maxdepth 1 -type f -iname "objblk??" | sort)
 else
@@ -91,6 +96,9 @@ fi
 
 echo "Copied $copied assets into $DEST_DIR"
 echo "Copied $savegame_copied savegame assets into $DEST_DIR/savegame"
+echo "Copied pristine object baseline into $PRISTINE_DIR"
+printf "%s\n" "sync-default" > "$PRISTINE_ROOT/.active_profile"
+printf "%s:%s\n" "sync-default" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$PRISTINE_ROOT/.baseline_version"
 if [[ -n "$world_obj_source" ]]; then
   echo "World object source: $world_obj_source"
   if [[ "$world_obj_source" == "$SRC_DIR/savegame" ]]; then

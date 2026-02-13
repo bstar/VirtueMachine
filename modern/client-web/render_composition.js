@@ -35,6 +35,7 @@ export function buildOverlayCellsModel(opts) {
     objectLayer,
     tileFlags,
     resolveAnimatedObjectTile,
+    resolveFootprintTile,
     hasWallTerrain
   } = opts;
 
@@ -65,12 +66,6 @@ export function buildOverlayCellsModel(opts) {
   const insertLegacyCellTile = (gx, gy, tileId, bp06, source, debugLabel = "") => {
     if (!inView(gx, gy)) {
       parity.spillOutOfBoundsCount += 1;
-      return;
-    }
-    const wx = startX + gx;
-    const wy = startY + gy;
-    if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
-      parity.hiddenSuppressedCount += 1;
       return;
     }
     const list = overlayCells[cellIndex(gx, gy)];
@@ -129,6 +124,7 @@ export function buildOverlayCellsModel(opts) {
         if (animObjTile < 0) {
           continue;
         }
+        const footprintTile = resolveFootprintTile ? resolveFootprintTile(o) : animObjTile;
         insertLegacyCellTile(
           gx,
           gy,
@@ -138,15 +134,15 @@ export function buildOverlayCellsModel(opts) {
           `0x${animObjTile.toString(16)}`
         );
 
-        const tf = tileFlags ? (tileFlags[animObjTile & 0x07ff] ?? 0) : 0;
+        const tf = tileFlags ? (tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
         if (tf & 0x80) {
-          insertLegacyCellTile(gx - 1, gy, animObjTile - 1, 1, { x: wx, y: wy, type: "spill-left", objType: o.type }, `0x${(animObjTile - 1).toString(16)}`);
+          insertLegacyCellTile(gx - 1, gy, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-left", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
           if (tf & 0x40) {
-            insertLegacyCellTile(gx, gy - 1, animObjTile - 2, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(animObjTile - 2).toString(16)}`);
-            insertLegacyCellTile(gx - 1, gy - 1, animObjTile - 3, 1, { x: wx, y: wy, type: "spill-up-left", objType: o.type }, `0x${(animObjTile - 3).toString(16)}`);
+            insertLegacyCellTile(gx, gy - 1, footprintTile - 2, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 2).toString(16)}`);
+            insertLegacyCellTile(gx - 1, gy - 1, footprintTile - 3, 1, { x: wx, y: wy, type: "spill-up-left", objType: o.type }, `0x${(footprintTile - 3).toString(16)}`);
           }
         } else if (tf & 0x40) {
-          insertLegacyCellTile(gx, gy - 1, animObjTile - 1, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(animObjTile - 1).toString(16)}`);
+          insertLegacyCellTile(gx, gy - 1, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
         }
         overlayCount += 1;
       }

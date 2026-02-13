@@ -22,6 +22,8 @@
               <p class="vm-game-time mt-1 text-sm">Input Mode: <strong id="topInputMode" class="font-semibold">Title Menu</strong></p>
               <p class="vm-game-time mt-1 text-sm">Net: <span id="topNetIndicator" class="vm-net-indicator" aria-hidden="true"></span> <strong id="topNetStatus" class="font-semibold">idle - Not logged in.</strong></p>
               <p class="vm-game-time mt-1 text-sm">Startup: <strong class="font-semibold">Only Journey Onward is currently playable.</strong></p>
+              <p class="vm-game-time mt-1 text-sm">Hover Report: <strong class="font-semibold">Shift+RightClick</strong> (or <strong class="font-semibold">Shift+`</strong>)</p>
+              <p class="vm-game-time mt-1 text-sm">Copy Status: <strong id="topCopyStatus" class="font-semibold">idle</strong></p>
             </div>
             <div class="w-[620px] max-w-[60vw] shrink-0 vm-net-header-compact">
               <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-2 items-end">
@@ -100,6 +102,13 @@
             <button id="captureButton" class="control-btn" type="button">Capture (Shift+P)</button>
             <button id="captureWorldHudButton" class="control-btn col-span-2" type="button">Capture World+HUD (Shift+Alt+P)</button>
           </div>
+          <div class="grid grid-cols-[1fr_auto] gap-2 mt-2 items-end">
+            <label class="control-block">
+              <span class="text-[11px] vm-muted-text">Parity Radius</span>
+              <input id="parityRadiusInput" class="control-input text-xs" type="number" min="1" max="32" step="1" value="12">
+            </label>
+            <button id="paritySnapshotButton" class="control-btn text-xs px-3" type="button">Parity Snapshot</button>
+          </div>
 
           <div class="grid grid-cols-2 gap-2">
             <button id="netSaveButton" class="control-btn" type="button">Save Remote (Shift+Y)</button>
@@ -122,7 +131,6 @@
         <div class="diag mt-4 p-2 text-xs" id="diagBox">
           awaiting runtime checks...
         </div>
-
         <div class="vm-help mt-4 p-3 text-xs">
           <h3 class="mb-2 text-sm font-semibold">Controls</h3>
           <p>`Arrow Keys` move (legacy fallback: `WASD`)</p>
@@ -140,7 +148,7 @@
           <p>`Shift+Y` save snapshot, `Shift+U` load snapshot, `Shift+N` maintenance</p>
           <p>`Shift+O/F/B/M/G/R/V` debug toggles + preset/replay</p>
           <p>`Shift+P` capture viewport, `Shift+Alt+P` capture world+HUD</p>
-          <p>`Shift+C` copy hover parity report</p>
+          <p>`Shift+RightClick` or `Shift+Backquote` copy hover parity report</p>
           <p>`Shift+,` / `Shift+.` cycle cursor glyph, `Shift+[` / `Shift+]` scale</p>
         </div>
       </aside>

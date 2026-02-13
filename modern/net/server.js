@@ -11,6 +11,7 @@ const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
 const DATA_DIR = process.env.VM_NET_DATA_DIR || path.join(__dirname, "data");
 const RUNTIME_DIR = process.env.VM_NET_RUNTIME_DIR || path.join(__dirname, "..", "assets", "runtime");
+const OBJECT_BASELINE_DIR = process.env.VM_NET_OBJECT_BASELINE_DIR || path.join(__dirname, "..", "assets", "pristine", "savegame");
 const MAX_BODY = 1024 * 1024;
 const SERVER_TICK_MS = 100;
 const SERVER_TICKS_PER_MINUTE = 4;
@@ -290,19 +291,16 @@ function loadTileFlagMap(runtimeDir) {
   }
 }
 
-function selectObjblkSourceDir(runtimeDir) {
-  const candidates = [runtimeDir, path.join(runtimeDir, "savegame")];
-  for (const dir of candidates) {
-    try {
-      const names = fs.readdirSync(dir);
-      if (names.some((name) => /^objblk[a-h][a-h]$/i.test(name))) {
-        return dir;
-      }
-    } catch (_err) {
-      // Ignore missing/unreadable candidate dir.
-    }
+function assertObjBaselineDir(dir) {
+  const names = fs.readdirSync(dir);
+  const objblkCount = names.filter((name) => /^objblk[a-h][a-h]$/i.test(name)).length;
+  if (objblkCount < 64) {
+    throw new Error(`incomplete object baseline in ${dir}: expected >=64 objblk files, found ${objblkCount}`);
   }
-  return null;
+  if (!names.some((name) => /^objlist$/i.test(name))) {
+    throw new Error(`missing objlist in object baseline dir: ${dir}`);
+  }
+  return dir;
 }
 
 function parseObjBlkRecords(bytes, areaId, baseTileMap) {
@@ -347,17 +345,8 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
 }
 
 function loadWorldObjectBaseline(runtimeDir) {
-  const sourceDir = selectObjblkSourceDir(runtimeDir);
+  const sourceDir = assertObjBaselineDir(OBJECT_BASELINE_DIR);
   const loadedAt = nowIso();
-  if (!sourceDir) {
-    return {
-      source_dir: null,
-      loaded_at: loadedAt,
-      files_loaded: 0,
-      baseline_count: 0,
-      objects: []
-    };
-  }
   const baseTileMap = loadBaseTileMap(runtimeDir);
   const objects = [];
   let filesLoaded = 0;
@@ -500,6 +489,7 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
 function worldObjectMeta(state) {
   const wo = state.worldObjects;
   return {
+    baseline_dir: OBJECT_BASELINE_DIR,
     source_dir: wo.baseline.source_dir,
     loaded_at: wo.baseline.loaded_at,
     files_loaded: wo.baseline.files_loaded >>> 0,
@@ -509,6 +499,11 @@ function worldObjectMeta(state) {
     delta_moved_count: Object.keys(wo.deltas.moved || {}).length >>> 0,
     delta_spawned_count: Array.isArray(wo.deltas.spawned) ? wo.deltas.spawned.length >>> 0 : 0
   };
+}
+
+function reloadWorldObjectBaseline(state) {
+  state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
+  writeJson(FILES.worldObjectDeltas, []);
 }
 
 function advanceWorldClockMinute(clock) {
@@ -1572,11 +1567,22 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/objects/reset") {
-    state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
+    reloadWorldObjectBaseline(state);
     persistState(state);
     sendJson(res, 200, {
       ok: true,
       reset_at: nowIso(),
+      meta: worldObjectMeta(state)
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/world/objects/reload-baseline") {
+    reloadWorldObjectBaseline(state);
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      reloaded_at: nowIso(),
       meta: worldObjectMeta(state)
     });
     return;
