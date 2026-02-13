@@ -25,6 +25,7 @@ copied=0
 missing=0
 optional_missing=0
 savegame_copied=0
+world_obj_source=""
 
 copy_from_manifest() {
   local manifest_file="$1"
@@ -58,13 +59,24 @@ copy_from_manifest() {
 copy_from_manifest "$MANIFEST" 1
 copy_from_manifest "$OPTIONAL_MANIFEST" 0
 
-if [[ -d "$SRC_DIR/savegame" ]]; then
-  src_objlist="$(find "$SRC_DIR/savegame" -maxdepth 1 -type f -iname "objlist" | head -n 1 || true)"
+# World object sources:
+# 1) canonical root runtime files (preferred, usually pristine for parity)
+# 2) savegame directory (fallback; may reflect player-modified world state)
+for candidate in "$SRC_DIR" "$SRC_DIR/savegame"; do
+  [[ -d "$candidate" ]] || continue
+  if find "$candidate" -maxdepth 1 -type f -iname "objblk??" -print -quit | grep -q .; then
+    world_obj_source="$candidate"
+    break
+  fi
+done
+
+if [[ -n "$world_obj_source" ]]; then
+  src_objlist="$(find "$world_obj_source" -maxdepth 1 -type f -iname "objlist" | head -n 1 || true)"
   if [[ -n "$src_objlist" ]]; then
     cp -f "$src_objlist" "$DEST_DIR/savegame/objlist"
     savegame_copied=$((savegame_copied + 1))
   else
-    echo "Missing optional savegame asset: savegame/objlist"
+    echo "Missing optional world object asset: objlist (source: $world_obj_source)"
   fi
 
   while IFS= read -r src_blk; do
@@ -72,13 +84,20 @@ if [[ -d "$SRC_DIR/savegame" ]]; then
     base_name="$(basename "$src_blk" | tr '[:upper:]' '[:lower:]')"
     cp -f "$src_blk" "$DEST_DIR/savegame/$base_name"
     savegame_copied=$((savegame_copied + 1))
-  done < <(find "$SRC_DIR/savegame" -maxdepth 1 -type f -iname "objblk??" | sort)
+  done < <(find "$world_obj_source" -maxdepth 1 -type f -iname "objblk??" | sort)
 else
-  echo "Missing optional savegame directory: $SRC_DIR/savegame"
+  echo "Missing optional world object assets: objblk?? (checked: $SRC_DIR and $SRC_DIR/savegame)"
 fi
 
 echo "Copied $copied assets into $DEST_DIR"
 echo "Copied $savegame_copied savegame assets into $DEST_DIR/savegame"
+if [[ -n "$world_obj_source" ]]; then
+  echo "World object source: $world_obj_source"
+  if [[ "$world_obj_source" == "$SRC_DIR/savegame" ]]; then
+    echo "WARNING: world objects sourced from savegame; placements may reflect a non-pristine world state."
+    echo "For strict baseline parity, provide a source directory with canonical root objblk??/objlist files."
+  fi
+fi
 
 if [[ $missing -ne 0 ]]; then
   echo "Missing $missing required assets. Fix source directory and rerun."

@@ -74,6 +74,10 @@ For static world object overlays (optional, if present):
 - `modern/assets/runtime/savegame/objblk??`
 - `modern/assets/runtime/savegame/objlist`
 
+`sync_assets.sh` now prefers canonical world object files from the source root
+(`objblk??`/`objlist`) and only falls back to `savegame/`. This avoids ingesting
+player-mutated save-state placement drift by default.
+
 If missing/unavailable, it renders a deterministic synthetic fallback grid.
 
 ## Controls

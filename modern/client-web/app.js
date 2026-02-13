@@ -18,6 +18,8 @@ const NET_CLOCK_POLL_TICKS = 2;
 const NET_BACKGROUND_FAIL_WINDOW_MS = 12000;
 const NET_BACKGROUND_FAIL_MAX = 6;
 const TICKS_PER_MINUTE = 4;
+const WORLD_PROP_RESET_MINUTES = 5;
+const WORLD_PROP_RESET_TICKS = WORLD_PROP_RESET_MINUTES * 60 * TICKS_PER_MINUTE;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 28;
@@ -1976,6 +1978,7 @@ function createInitialSimState() {
     commandsApplied: 0,
     doorOpenStates: {},
     removedObjectKeys: {},
+    removedObjectAtTick: {},
     removedObjectCount: 0,
     inventory: {},
     avatarPose: "stand",
@@ -2406,6 +2409,20 @@ function normalizeLoadedSimState(candidate) {
     }
     normalizedRemoved[key] = Number(v) ? 1 : 0;
   }
+  const normalizedRemovedAtTick = {};
+  for (const [k, v] of Object.entries(candidate.removedObjectAtTick ?? {})) {
+    const key = String(k || "").trim();
+    if (!key) {
+      continue;
+    }
+    normalizedRemovedAtTick[key] = Number(v) >>> 0;
+  }
+  const snapshotTick = Number(candidate.tick) >>> 0;
+  for (const key of Object.keys(normalizedRemoved)) {
+    if (!Object.prototype.hasOwnProperty.call(normalizedRemovedAtTick, key)) {
+      normalizedRemovedAtTick[key] = snapshotTick;
+    }
+  }
   const removedObjectCount = Number(candidate.removedObjectCount) >>> 0;
   const normalizedRemovedCount = removedObjectCount > 0
     ? removedObjectCount
@@ -2417,6 +2434,7 @@ function normalizeLoadedSimState(candidate) {
     commandsApplied: Number(candidate.commandsApplied) >>> 0,
     doorOpenStates: { ...(candidate.doorOpenStates ?? {}) },
     removedObjectKeys: normalizedRemoved,
+    removedObjectAtTick: normalizedRemovedAtTick,
     removedObjectCount: normalizedRemovedCount >>> 0,
     inventory: normalizedInventory,
     avatarPose: (candidate.avatarPose === "sit" || candidate.avatarPose === "sleep")
@@ -3512,9 +3530,13 @@ function markObjectRemoved(sim, obj) {
   if (!sim.removedObjectKeys) {
     sim.removedObjectKeys = {};
   }
+  if (!sim.removedObjectAtTick) {
+    sim.removedObjectAtTick = {};
+  }
   const key = objectAnchorKey(obj);
   if (!sim.removedObjectKeys[key]) {
     sim.removedObjectKeys[key] = 1;
+    sim.removedObjectAtTick[key] = Number(sim.tick) >>> 0;
     sim.removedObjectCount = (Number(sim.removedObjectCount) + 1) >>> 0;
   }
 }
@@ -4364,6 +4386,7 @@ function cloneSimState(sim) {
     commandsApplied: sim.commandsApplied >>> 0,
     doorOpenStates: { ...(sim.doorOpenStates ?? {}) },
     removedObjectKeys: { ...(sim.removedObjectKeys ?? {}) },
+    removedObjectAtTick: { ...(sim.removedObjectAtTick ?? {}) },
     removedObjectCount: Number(sim.removedObjectCount) >>> 0,
     inventory: { ...(sim.inventory ?? {}) },
     avatarPose: String(sim.avatarPose || "stand"),
@@ -4403,6 +4426,33 @@ function advanceWorldMinute(world) {
   if (world.date_m <= MONTHS_PER_YEAR) return;
   world.date_m = 1;
   world.date_y += 1;
+}
+
+function expireRemovedWorldProps(sim, tickNow) {
+  const removed = sim.removedObjectKeys;
+  if (!removed || typeof removed !== "object") {
+    sim.removedObjectCount = 0;
+    return;
+  }
+  const atTick = sim.removedObjectAtTick || {};
+  let remaining = 0;
+  for (const key of Object.keys(removed)) {
+    if (!removed[key]) {
+      delete removed[key];
+      delete atTick[key];
+      continue;
+    }
+    const removedTick = Number(atTick[key]) >>> 0;
+    const age = (tickNow - removedTick) >>> 0;
+    if (age >= WORLD_PROP_RESET_TICKS) {
+      delete removed[key];
+      delete atTick[key];
+      continue;
+    }
+    remaining += 1;
+  }
+  sim.removedObjectAtTick = atTick;
+  sim.removedObjectCount = remaining >>> 0;
 }
 
 function applyCommand(sim, cmd) {
@@ -4471,6 +4521,7 @@ function stepSimTick(sim, queue) {
 
   sim.rngState = xorshift32(sim.rngState);
   sim.worldFlags ^= sim.rngState & 1;
+  expireRemovedWorldProps(sim, nextTick);
   if (!isNetAuthenticated() && (nextTick % TICKS_PER_MINUTE) === 0) {
     advanceWorldMinute(sim.world);
   }
@@ -4536,6 +4587,12 @@ function simStateHash(sim) {
     }
     h = hashMixU32(h, sim.removedObjectKeys[k] ? 1 : 0);
   }
+  const removedAtTick = sim.removedObjectAtTick ?? {};
+  h = hashMixU32(h, removedKeys.length);
+  for (const k of removedKeys) {
+    h = hashMixU32(h, Number(removedAtTick[k]) >>> 0);
+  }
+  h = hashMixU32(h, Number(sim.removedObjectCount) >>> 0);
   const inventoryKeys = Object.keys(sim.inventory ?? {}).sort();
   h = hashMixU32(h, inventoryKeys.length);
   for (const k of inventoryKeys) {
