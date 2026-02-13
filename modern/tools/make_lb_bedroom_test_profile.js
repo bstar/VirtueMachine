@@ -10,7 +10,11 @@ const PRISTINE_ROOT = path.join(ROOT, "modern", "assets", "pristine");
 const PATCHES = [
   { object_key: "a12i096", x: 300, y: 350, z: 0, note: "clock" },
   { object_key: "a12i0ae", x: 301, y: 350, z: 0, note: "mirror" },
-  { object_key: "a12i0ce", x: 301, y: 352, z: 0, note: "stool" }
+  { object_key: "a12i0ce", x: 301, y: 352, z: 0, note: "stool" },
+  { object_key: "a12i0ff", x: 297, y: 355, z: 0, note: "book" },
+  { object_key: "a12i0fe", x: 298, y: 355, z: 0, frame: 2, note: "table corner swap" },
+  { object_key: "a12i100", x: 297, y: 355, z: 0, frame: 0, note: "table corner swap" },
+  { object_key: "a12i116", x: 301, y: 357, z: 0, note: "plant down one cell" }
 ];
 
 function parseArgs(argv) {
@@ -67,7 +71,7 @@ function areaToObjblkName(area) {
   return `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
 }
 
-function patchObjblkRecord(filePath, index, x, y, z) {
+function patchObjblkRecord(filePath, index, x, y, z, frame = null) {
   const buf = fs.readFileSync(filePath);
   const count = buf[0] | (buf[1] << 8);
   if (index < 0 || index >= count) {
@@ -78,6 +82,13 @@ function patchObjblkRecord(filePath, index, x, y, z) {
   buf[off + 1] = b0;
   buf[off + 2] = b1;
   buf[off + 3] = b2;
+  if (Number.isInteger(frame) && frame >= 0 && frame <= 0x3f) {
+    const shapeType = buf[off + 4] | (buf[off + 5] << 8);
+    const type = shapeType & 0x03ff;
+    const nextShapeType = type | ((frame & 0x3f) << 10);
+    buf[off + 4] = nextShapeType & 0xff;
+    buf[off + 5] = (nextShapeType >> 8) & 0xff;
+  }
   fs.writeFileSync(filePath, buf);
 }
 
@@ -99,7 +110,7 @@ function main() {
     const parsed = parseObjectKey(p.object_key);
     const fileName = areaToObjblkName(parsed.area);
     const filePath = path.join(dstDir, fileName);
-    patchObjblkRecord(filePath, parsed.index, p.x, p.y, p.z);
+    patchObjblkRecord(filePath, parsed.index, p.x, p.y, p.z, p.frame ?? null);
     applied.push({
       ...p,
       file: fileName,
