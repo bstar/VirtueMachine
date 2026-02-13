@@ -62,6 +62,25 @@ export function buildOverlayCellsModel(opts) {
   const visibleAtWorld = viewCtx && typeof viewCtx.visibleAtWorld === "function"
     ? viewCtx.visibleAtWorld.bind(viewCtx)
     : null;
+  const compareLegacySourceOrder = (a, b) => {
+    if ((a.y | 0) !== (b.y | 0)) {
+      return (a.y | 0) - (b.y | 0);
+    }
+    if ((a.x | 0) !== (b.x | 0)) {
+      return (a.x | 0) - (b.x | 0);
+    }
+    if ((a.z | 0) !== (b.z | 0)) {
+      return (b.z | 0) - (a.z | 0);
+    }
+    const aArea = (a.sourceArea ?? 0) | 0;
+    const bArea = (b.sourceArea ?? 0) | 0;
+    if (aArea !== bArea) {
+      return aArea - bArea;
+    }
+    const aIndex = (a.sourceIndex ?? a.order ?? 0) | 0;
+    const bIndex = (b.sourceIndex ?? b.order ?? 0) | 0;
+    return aIndex - bIndex;
+  };
 
   const insertLegacyCellTile = (gx, gy, tileId, bp06, source, debugLabel = "") => {
     if (!inView(gx, gy)) {
@@ -97,54 +116,103 @@ export function buildOverlayCellsModel(opts) {
   };
 
   let overlayCount = 0;
-  for (let gy = 0; gy < viewH; gy += 1) {
-    for (let gx = 0; gx < viewW; gx += 1) {
-      const wx = startX + gx;
-      const wy = startY + gy;
-      const overlays = objectLayer.objectsAt(wx, wy, wz);
-      let prevDrawPri = Number.NEGATIVE_INFINITY;
-      let prevOrder = Number.NEGATIVE_INFINITY;
-      for (const o of overlays) {
-        if (!o.renderable) {
-          continue;
-        }
-        // Legacy behavior: only process overlays from cells that are visible.
-        // This prevents hidden-room wall decor from spilling into visible cells.
-        if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
-          parity.hiddenSuppressedCount += 1;
-          continue;
-        }
-        if (o.drawPri < prevDrawPri || (o.drawPri === prevDrawPri && o.order < prevOrder)) {
-          parity.unsortedSourceCount += 1;
-        }
-        prevDrawPri = o.drawPri;
-        prevOrder = o.order;
+  const stream = (typeof objectLayer.objectsInWindowLegacyOrder === "function")
+    ? objectLayer.objectsInWindowLegacyOrder(startX, startY, viewW, viewH, wz)
+    : null;
 
-        const animObjTile = resolveAnimatedObjectTile(o);
-        if (animObjTile < 0) {
-          continue;
-        }
-        const footprintTile = resolveFootprintTile ? resolveFootprintTile(o) : animObjTile;
-        insertLegacyCellTile(
-          gx,
-          gy,
-          animObjTile,
-          0,
-          { x: wx, y: wy, type: "main", objType: o.type },
-          `0x${animObjTile.toString(16)}`
-        );
+  if (Array.isArray(stream)) {
+    let prev = null;
+    for (const o of stream) {
+      if (!o || !o.renderable) {
+        continue;
+      }
+      if (prev && compareLegacySourceOrder(prev, o) > 0) {
+        parity.unsortedSourceCount += 1;
+      }
+      prev = o;
+      const wx = o.x | 0;
+      const wy = o.y | 0;
+      // Legacy behavior: only process overlays from cells that are visible.
+      // This prevents hidden-room wall decor from spilling into visible cells.
+      if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
+        parity.hiddenSuppressedCount += 1;
+        continue;
+      }
+      const gx = wx - startX;
+      const gy = wy - startY;
+      const animObjTile = resolveAnimatedObjectTile(o);
+      if (animObjTile < 0) {
+        continue;
+      }
+      const footprintTile = resolveFootprintTile ? resolveFootprintTile(o) : animObjTile;
+      insertLegacyCellTile(
+        gx,
+        gy,
+        animObjTile,
+        0,
+        { x: wx, y: wy, type: "main", objType: o.type },
+        `0x${animObjTile.toString(16)}`
+      );
 
-        const tf = tileFlags ? (tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
-        if (tf & 0x80) {
-          insertLegacyCellTile(gx - 1, gy, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-left", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
-          if (tf & 0x40) {
-            insertLegacyCellTile(gx, gy - 1, footprintTile - 2, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 2).toString(16)}`);
-            insertLegacyCellTile(gx - 1, gy - 1, footprintTile - 3, 1, { x: wx, y: wy, type: "spill-up-left", objType: o.type }, `0x${(footprintTile - 3).toString(16)}`);
+      const tf = tileFlags ? (tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
+      if (tf & 0x80) {
+        insertLegacyCellTile(gx - 1, gy, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-left", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
+        if (tf & 0x40) {
+          insertLegacyCellTile(gx, gy - 1, footprintTile - 2, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 2).toString(16)}`);
+          insertLegacyCellTile(gx - 1, gy - 1, footprintTile - 3, 1, { x: wx, y: wy, type: "spill-up-left", objType: o.type }, `0x${(footprintTile - 3).toString(16)}`);
+        }
+      } else if (tf & 0x40) {
+        insertLegacyCellTile(gx, gy - 1, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
+      }
+      overlayCount += 1;
+    }
+  } else {
+    for (let gy = 0; gy < viewH; gy += 1) {
+      for (let gx = 0; gx < viewW; gx += 1) {
+        const wx = startX + gx;
+        const wy = startY + gy;
+        const overlays = objectLayer.objectsAt(wx, wy, wz);
+        let prev = null;
+        for (const o of overlays) {
+          if (!o.renderable) {
+            continue;
           }
-        } else if (tf & 0x40) {
-          insertLegacyCellTile(gx, gy - 1, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
+          // Legacy behavior: only process overlays from cells that are visible.
+          // This prevents hidden-room wall decor from spilling into visible cells.
+          if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
+            parity.hiddenSuppressedCount += 1;
+            continue;
+          }
+          if (prev && compareLegacySourceOrder(prev, o) > 0) {
+            parity.unsortedSourceCount += 1;
+          }
+          prev = o;
+          const animObjTile = resolveAnimatedObjectTile(o);
+          if (animObjTile < 0) {
+            continue;
+          }
+          const footprintTile = resolveFootprintTile ? resolveFootprintTile(o) : animObjTile;
+          insertLegacyCellTile(
+            gx,
+            gy,
+            animObjTile,
+            0,
+            { x: wx, y: wy, type: "main", objType: o.type },
+            `0x${animObjTile.toString(16)}`
+          );
+
+          const tf = tileFlags ? (tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
+          if (tf & 0x80) {
+            insertLegacyCellTile(gx - 1, gy, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-left", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
+            if (tf & 0x40) {
+              insertLegacyCellTile(gx, gy - 1, footprintTile - 2, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 2).toString(16)}`);
+              insertLegacyCellTile(gx - 1, gy - 1, footprintTile - 3, 1, { x: wx, y: wy, type: "spill-up-left", objType: o.type }, `0x${(footprintTile - 3).toString(16)}`);
+            }
+          } else if (tf & 0x40) {
+            insertLegacyCellTile(gx, gy - 1, footprintTile - 1, 1, { x: wx, y: wy, type: "spill-up", objType: o.type }, `0x${(footprintTile - 1).toString(16)}`);
+          }
+          overlayCount += 1;
         }
-        overlayCount += 1;
       }
     }
   }

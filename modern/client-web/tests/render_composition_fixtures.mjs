@@ -15,6 +15,15 @@ function key(x, y, z) {
 
 function makeObjectLayer(entries) {
   const by = new Map();
+  const stream = entries.slice().sort((a, b) => {
+    if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
+    if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
+    if ((a.z | 0) !== (b.z | 0)) return (b.z | 0) - (a.z | 0);
+    if (((a.sourceArea ?? 0) | 0) !== ((b.sourceArea ?? 0) | 0)) {
+      return ((a.sourceArea ?? 0) | 0) - ((b.sourceArea ?? 0) | 0);
+    }
+    return ((a.sourceIndex ?? a.order ?? 0) | 0) - ((b.sourceIndex ?? b.order ?? 0) | 0);
+  });
   for (const e of entries) {
     const k = key(e.x, e.y, e.z);
     if (!by.has(k)) {
@@ -25,6 +34,17 @@ function makeObjectLayer(entries) {
   return {
     objectsAt(x, y, z) {
       return by.get(key(x, y, z)) ?? [];
+    },
+    objectsInWindowLegacyOrder(startX, startY, viewW, viewH, wz) {
+      const endX = startX + viewW;
+      const endY = startY + viewH;
+      return stream.filter((o) => (
+        (o.z | 0) === (wz | 0)
+        && (o.x | 0) >= startX
+        && (o.x | 0) < endX
+        && (o.y | 0) >= startY
+        && (o.y | 0) < endY
+      ));
     }
   };
 }
@@ -177,9 +197,48 @@ function runTransparencyFixture() {
   assert.equal(isLegacyPixelTransparent(0, 0x050, 0xff), false, "non-mask tiles should not auto-transparent");
 }
 
+function runLegacyStreamOrderingFixture() {
+  const startX = 300;
+  const startY = 340;
+  const wz = 0;
+  const tileFlags = new Uint8Array(0x800);
+  const objectLayer = makeObjectLayer([
+    {
+      x: 301, y: 341, z: 0,
+      type: 0x114, renderable: true, order: 4, sourceArea: 0, sourceIndex: 4, tileId: 0x3b4
+    },
+    {
+      x: 300, y: 341, z: 0,
+      type: 0x114, renderable: true, order: 3, sourceArea: 0, sourceIndex: 3, tileId: 0x3b3
+    }
+  ]);
+
+  const out = buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx: {
+      visibleAtWorld() { return true; }
+    },
+    objectLayer,
+    tileFlags,
+    resolveAnimatedObjectTile(o) { return o.tileId; },
+    hasWallTerrain() { return false; }
+  });
+
+  assert.equal(out.parity.unsortedSourceCount, 0, "legacy stream order should be monotonic");
+  const left = topInteractiveOverlayAtModel(out.overlayCells, VIEW_W, VIEW_H, startX, startY, 300, 341);
+  const right = topInteractiveOverlayAtModel(out.overlayCells, VIEW_W, VIEW_H, startX, startY, 301, 341);
+  assert.equal(left.tileId, 0x3b3, "left tile mismatch");
+  assert.equal(right.tileId, 0x3b4, "right tile mismatch");
+}
+
 runSpillOrderingFixture();
 runVisibilitySuppressionFixture();
 runActorOcclusionParityFixture();
 runTransparencyFixture();
+runLegacyStreamOrderingFixture();
 
 console.log("render_composition_fixtures: ok");

@@ -802,6 +802,7 @@ class U6ObjectLayerJS {
   constructor(baseTiles) {
     this.baseTiles = baseTiles;
     this.byCoord = new Map();
+    this.entries = [];
     this.totalLoaded = 0;
     this.filesLoaded = 0;
   }
@@ -817,20 +818,23 @@ class U6ObjectLayerJS {
     return `${x & 0x3ff},${y & 0x3ff},${z & 0x0f}`;
   }
 
-  drawPriority(type) {
-    if (OBJECT_TYPES_FLOOR_DECOR.has(type)) {
-      return -1;
+  compareLegacyRenderOrder(a, b) {
+    if ((a.y | 0) !== (b.y | 0)) {
+      return (a.y | 0) - (b.y | 0);
     }
-    if (OBJECT_TYPES_TOP_DECOR.has(type)) {
-      return 2;
+    if ((a.x | 0) !== (b.x | 0)) {
+      return (a.x | 0) - (b.x | 0);
     }
-    if (OBJECT_TYPES_DOOR.has(type)) {
-      return 1;
+    if ((a.z | 0) !== (b.z | 0)) {
+      return (b.z | 0) - (a.z | 0);
     }
-    return 0;
+    if ((a.sourceArea | 0) !== (b.sourceArea | 0)) {
+      return (a.sourceArea | 0) - (b.sourceArea | 0);
+    }
+    return (a.sourceIndex | 0) - (b.sourceIndex | 0);
   }
 
-  parseObjBlk(bytes) {
+  parseObjBlk(bytes, areaId = 0) {
     if (!bytes || bytes.length < 2) {
       return [];
     }
@@ -868,7 +872,8 @@ class U6ObjectLayerJS {
         frame,
         tileId,
         order: i,
-        drawPri: this.drawPriority(type),
+        sourceArea: areaId & 0x3f,
+        sourceIndex: i,
         renderable: isRenderableWorldObjectType(type)
       });
     }
@@ -882,12 +887,14 @@ class U6ObjectLayerJS {
         this.byCoord.set(key, []);
       }
       this.byCoord.get(key).push(e);
+      this.entries.push(e);
       this.totalLoaded += 1;
     }
   }
 
   async loadOutdoor(fetcher) {
     this.byCoord.clear();
+    this.entries = [];
     this.totalLoaded = 0;
     this.filesLoaded = 0;
 
@@ -899,16 +906,18 @@ class U6ObjectLayerJS {
           continue;
         }
         const buf = new Uint8Array(await res.arrayBuffer());
-        this.addEntries(this.parseObjBlk(buf));
+        const areaId = ((ay & 0x7) << 3) | (ax & 0x7);
+        this.addEntries(this.parseObjBlk(buf, areaId));
         this.filesLoaded += 1;
       }
     }
+    this.entries.sort((a, b) => this.compareLegacyRenderOrder(a, b));
     for (const list of this.byCoord.values()) {
       list.sort((a, b) => {
-        if (a.drawPri !== b.drawPri) {
-          return a.drawPri - b.drawPri;
+        if ((a.sourceArea | 0) !== (b.sourceArea | 0)) {
+          return (a.sourceArea | 0) - (b.sourceArea | 0);
         }
-        return a.order - b.order;
+        return (a.sourceIndex | 0) - (b.sourceIndex | 0);
       });
     }
   }
@@ -927,6 +936,35 @@ class U6ObjectLayerJS {
       const key = `${o.x & 0x3ff},${o.y & 0x3ff},${o.z & 0x0f},${o.order & 0xffff},${o.type & 0x3ff}`;
       return !removed[key];
     });
+  }
+
+  objectsInWindowLegacyOrder(startX, startY, viewW, viewH, z) {
+    const endX = (startX + viewW) | 0;
+    const endY = (startY + viewH) | 0;
+    const targetZ = z | 0;
+    const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
+    const removed = (removedCount && state?.sim?.removedObjectKeys && typeof state.sim.removedObjectKeys === "object")
+      ? state.sim.removedObjectKeys
+      : null;
+    const out = [];
+    for (const o of this.entries) {
+      if ((o.z | 0) !== targetZ) {
+        continue;
+      }
+      const ox = o.x | 0;
+      const oy = o.y | 0;
+      if (ox < startX || ox >= endX || oy < startY || oy >= endY) {
+        continue;
+      }
+      if (removed) {
+        const key = `${o.x & 0x3ff},${o.y & 0x3ff},${o.z & 0x0f},${o.order & 0xffff},${o.type & 0x3ff}`;
+        if (removed[key]) {
+          continue;
+        }
+      }
+      out.push(o);
+    }
+    return out;
   }
 }
 
