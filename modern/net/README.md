@@ -99,7 +99,7 @@ Authenticated (Bearer token):
 - `GET /api/world/critical-items/policy`
 - `PUT /api/world/critical-items/policy`
 - `POST /api/world/critical-items/maintenance`
-- `GET /api/world/objects` (server-authoritative world object query; supports `x,y,z,radius,limit`)
+- `GET /api/world/objects` (server-authoritative world object query; supports `x,y,z,radius,limit,projection,include_footprint`)
 - `POST /api/world/objects/reset` (reset world object deltas to baseline)
 
 Clock note:
@@ -110,6 +110,8 @@ World object authority note:
 - server loads baseline world objects from runtime assets (`objblk??` + `basetile`)
 - deltas are persisted in `modern/net/data/world_object_deltas.json`
 - use `/api/world/objects` for explicit server truth during parity debugging
+ - `projection=anchor` filters by legacy anchor cells
+ - `projection=footprint` filters by occupied footprint cells (double-width/height expansion)
 
 ## Contracts
 

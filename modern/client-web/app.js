@@ -2972,7 +2972,7 @@ async function netFetchWorldObjectsAtCell(x, y, z) {
     return null;
   }
   const out = await netRequest(
-    `/api/world/objects?x=${encodeURIComponent(x | 0)}&y=${encodeURIComponent(y | 0)}&z=${encodeURIComponent(z | 0)}&radius=0&limit=128`,
+    `/api/world/objects?x=${encodeURIComponent(x | 0)}&y=${encodeURIComponent(y | 0)}&z=${encodeURIComponent(z | 0)}&radius=0&limit=128&projection=footprint&include_footprint=1`,
     { method: "GET" },
     true
   );
@@ -6857,8 +6857,11 @@ async function copyHoverReportToClipboard() {
         } else {
           for (let i = 0; i < out.objects.length; i += 1) {
             const o = out.objects[i];
+            const fp = Array.isArray(o.footprint)
+              ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
+              : "";
             rows.push(
-              `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")}`
+              `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")}${fp ? ` fp=${fp}` : ""}`
             );
           }
         }

@@ -105,7 +105,7 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `Shift+Alt+P`: capture world+HUD PNG
 - `Shift+O/F/B/M/R/V`: debug overlay/animation/palette/mode/reset/replay controls
 - `Shift+C`: copy hover parity report to clipboard
-  - when authenticated, report now appends `server_obj[...]` rows from `/api/world/objects` for the hovered cell
+  - when authenticated, report now appends `server_obj[...]` rows from `/api/world/objects` for the hovered cell using footprint projection (`fp=...`)
 
 Useful parity presets:
 

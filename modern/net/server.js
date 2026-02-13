@@ -277,6 +277,19 @@ function loadBaseTileMap(runtimeDir) {
   }
 }
 
+function loadTileFlagMap(runtimeDir) {
+  const tileflagPath = path.join(runtimeDir, "tileflag");
+  try {
+    const buf = fs.readFileSync(tileflagPath);
+    if (buf.length >= 0x1000) {
+      return new Uint8Array(buf.slice(0x800, 0x1000));
+    }
+    return new Uint8Array(buf.slice(0, 0x800));
+  } catch (_err) {
+    return new Uint8Array(0x800);
+  }
+}
+
 function selectObjblkSourceDir(runtimeDir) {
   const candidates = [runtimeDir, path.join(runtimeDir, "savegame")];
   for (const dir of candidates) {
@@ -431,8 +444,29 @@ function normalizeWorldObjectDeltas(raw) {
   return out;
 }
 
+function objectFootprintCells(obj, tileFlags) {
+  const x = obj.x | 0;
+  const y = obj.y | 0;
+  const z = obj.z | 0;
+  const out = [{ x, y, z }];
+  const tf = tileFlags ? (tileFlags[obj.tile_id & 0x07ff] ?? 0) : 0;
+  const dblH = (tf & 0x80) !== 0;
+  const dblV = (tf & 0x40) !== 0;
+  if (dblH) {
+    out.push({ x: x - 1, y, z });
+  }
+  if (dblV) {
+    out.push({ x, y: y - 1, z });
+  }
+  if (dblH && dblV) {
+    out.push({ x: x - 1, y: y - 1, z });
+  }
+  return out;
+}
+
 function buildWorldObjectState(runtimeDir, rawDeltas) {
   const baseline = loadWorldObjectBaseline(runtimeDir);
+  const tileFlags = loadTileFlagMap(runtimeDir);
   const deltas = normalizeWorldObjectDeltas(rawDeltas);
   const active = [];
   for (const b of baseline.objects) {
@@ -457,6 +491,7 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
   }
   return {
     baseline,
+    tileFlags,
     deltas,
     active
   };
@@ -1474,20 +1509,48 @@ const server = http.createServer(async (req, res) => {
     const wzRaw = queryIntOr(url, "z", Number.NaN);
     const hasZ = Number.isFinite(wzRaw);
     const radius = clampInt(queryIntOr(url, "radius", 0), 0, 16);
-    const limit = clampInt(queryIntOr(url, "limit", 256), 1, 2048);
+    const limit = clampInt(queryIntOr(url, "limit", 4096), 1, 200000);
+    const projection = String(url.searchParams.get("projection") || "anchor").trim().toLowerCase() === "footprint"
+      ? "footprint"
+      : "anchor";
+    const includeFootprint = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
+    const withFootprint = includeFootprint === "1" || includeFootprint === "true" || includeFootprint === "on";
     const out = [];
     for (const obj of state.worldObjects.active) {
       if (hasZ && (obj.z | 0) !== (wzRaw | 0)) {
         continue;
       }
       if (hasX && hasY) {
-        const dx = Math.abs((obj.x | 0) - (wx | 0));
-        const dy = Math.abs((obj.y | 0) - (wy | 0));
-        if (dx > radius || dy > radius) {
-          continue;
+        if (projection === "footprint") {
+          const cells = objectFootprintCells(obj, state.worldObjects.tileFlags);
+          let hit = false;
+          for (const c of cells) {
+            const dx = Math.abs((c.x | 0) - (wx | 0));
+            const dy = Math.abs((c.y | 0) - (wy | 0));
+            if (dx <= radius && dy <= radius) {
+              hit = true;
+              break;
+            }
+          }
+          if (!hit) {
+            continue;
+          }
+        } else {
+          const dx = Math.abs((obj.x | 0) - (wx | 0));
+          const dy = Math.abs((obj.y | 0) - (wy | 0));
+          if (dx > radius || dy > radius) {
+            continue;
+          }
         }
       }
-      out.push(obj);
+      if (withFootprint) {
+        out.push({
+          ...obj,
+          footprint: objectFootprintCells(obj, state.worldObjects.tileFlags)
+        });
+      } else {
+        out.push(obj);
+      }
       if (out.length >= limit) {
         break;
       }
@@ -1499,7 +1562,9 @@ const server = http.createServer(async (req, res) => {
         y: hasY ? (wy | 0) : null,
         z: hasZ ? (wzRaw | 0) : null,
         radius: radius | 0,
-        limit: limit | 0
+        limit: limit | 0,
+        projection,
+        include_footprint: withFootprint
       },
       objects: out
     });
