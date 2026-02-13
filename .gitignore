@@ -26,3 +26,4 @@ modern/assets/pristine/
 
 # Local multiplayer runtime state (never commit)
 modern/net/data/*.json
+modern/net/data/summary.txt
