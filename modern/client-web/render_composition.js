@@ -74,9 +74,10 @@ export function buildOverlayCellsModel(opts) {
       return;
     }
     const list = overlayCells[cellIndex(gx, gy)];
+    const isFloor = overlayTileIsFloor(tileId, tileFlags);
     const entry = {
       tileId: tileId & 0xffff,
-      floor: overlayTileIsFloor(tileId, tileFlags),
+      floor: isFloor,
       occluder: overlayTileIsOccluder(tileId, tileFlags, hasWallTerrain),
       sourceX: source.x,
       sourceY: source.y,

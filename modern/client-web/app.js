@@ -39,60 +39,29 @@ const OBJ_COORD_USE_LOCXYZ = 0x00;
 const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
 const AVATAR_ENTITY_ID = 1;
+const LEGACY_SLEEP_SHAPE_TYPE = 0x092;
 const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
 const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
 const OBJECT_TYPES_CLOSEABLE_DOOR = new Set([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
+const OBJECT_TYPES_CHAIR = new Set([0x0fc]);
+const OBJECT_TYPES_BED = new Set([0x0a3]);
 const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
-const OBJECT_TYPES_RENDER = new Set([
-  0x062, /* open chest */
-  0x07a, /* candle */
-  0x05f, /* grapes */
-  0x060, /* butter */
-  0x080, /* loaf of bread */
-  0x081, /* portion of meat */
-  0x084, /* cheese */
-  0x0a2, /* stove */
-  0x0a3, /* bed */
-  0x0a4, /* fireplace */
-  0x0b0, /* chest of drawers */
-  0x0b1, /* desk */
-  0x0ba, /* open barrel */
-  0x0c6, /* cutting table */
-  0x0ce, /* throne-room decor variant */
-  0x0d5, /* throne-room decor variant */
-  0x0d8, /* bookshelf */
-  0x0d9, /* anvil */
-  0x0d1, /* meat rib type */
-  0x0dc, /* throne-room trim */
-  0x0dd, /* throne-room trim */
-  0x0de, /* throne-room trim */
-  0x0e4, /* table square corner */
-  0x0e6, /* table round corner */
-  0x0ea, /* fountain */
-  0x0ed, /* table middle */
-  0x0ec, /* fire field */
-  0x0ef, /* table round corner alt */
-  0x0fa, /* table square corner alt */
-  0x10f, /* doorsill */
-  0x110, /* throne-room wall segment */
-  0x111, /* throne-room wall segment */
-  0x114, /* throne-room trim segment */
-  0x117, /* table */
-  0x129, /* oaken door */
-  0x12a, /* windowed door */
-  0x12b, /* cedar door */
-  0x12c, /* steel door */
-  0x12d, /* doorway */
-  0x12e, /* throne-room stair carpet edge */
-  0x12f, /* throne-room carpet/dais */
-  0x130, /* throne-room carpet/dais */
-  0x137, /* stone table */
-  0x147, /* throne */
-  0x120, /* water wheel */
-  0x125, /* spinning wheel */
-  0x0fc, /* chair */
-  0x14e /* secret door */
+const OBJECT_TYPES_SOLID_ENV = new Set([
+  0x0a3, 0x0a4, 0x0b0, 0x0b1, 0x0c6, 0x0d8, 0x0d9,
+  0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
+  0x147, 0x0fc
 ]);
+function isRenderableWorldObjectType(type) {
+  const t = type & 0x03ff;
+  if (t >= ENTITY_TYPE_ACTOR_MIN && t <= ENTITY_TYPE_ACTOR_MAX) {
+    return false;
+  }
+  /* Legacy ShowObject short-circuits this base tile family. */
+  if (t === 0x14f) {
+    return false;
+  }
+  return true;
+}
 
 const HASH_OFFSET = 1469598103934665603n;
 const HASH_PRIME = 1099511628211n;
@@ -834,7 +803,7 @@ class U6ObjectLayerJS {
         tileId,
         order: i,
         drawPri: this.drawPriority(type),
-        renderable: OBJECT_TYPES_RENDER.has(type)
+        renderable: isRenderableWorldObjectType(type)
       });
     }
     return entries;
@@ -1939,6 +1908,8 @@ function createInitialSimState() {
     worldFlags: 0,
     commandsApplied: 0,
     doorOpenStates: {},
+    avatarPose: "stand",
+    avatarPoseAnchor: null,
     world: { ...INITIAL_WORLD }
   };
 }
@@ -2355,6 +2326,18 @@ function normalizeLoadedSimState(candidate) {
     worldFlags: Number(candidate.worldFlags) >>> 0,
     commandsApplied: Number(candidate.commandsApplied) >>> 0,
     doorOpenStates: { ...(candidate.doorOpenStates ?? {}) },
+    avatarPose: (candidate.avatarPose === "sit" || candidate.avatarPose === "sleep")
+      ? candidate.avatarPose
+      : "stand",
+    avatarPoseAnchor: candidate.avatarPoseAnchor && typeof candidate.avatarPoseAnchor === "object"
+      ? {
+        x: Number(candidate.avatarPoseAnchor.x) | 0,
+        y: Number(candidate.avatarPoseAnchor.y) | 0,
+        z: Number(candidate.avatarPoseAnchor.z) | 0,
+        order: Number(candidate.avatarPoseAnchor.order) | 0,
+        type: Number(candidate.avatarPoseAnchor.type) | 0
+      }
+      : null,
     world: {
       is_on_quest: Number(candidate.world.is_on_quest) >>> 0,
       next_sleep: Number(candidate.world.next_sleep) >>> 0,
@@ -3406,6 +3389,35 @@ function isCloseableDoorObject(obj) {
   return !!obj && OBJECT_TYPES_CLOSEABLE_DOOR.has(obj.type);
 }
 
+function isChairObject(obj) {
+  return !!obj && OBJECT_TYPES_CHAIR.has(obj.type);
+}
+
+function isBedObject(obj) {
+  return !!obj && OBJECT_TYPES_BED.has(obj.type);
+}
+
+function isSolidEnvObject(obj) {
+  return !!obj && OBJECT_TYPES_SOLID_ENV.has(obj.type);
+}
+
+function objectAnchorKey(obj) {
+  return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff},${obj.type & 0x3ff}`;
+}
+
+function findObjectByAnchor(anchor) {
+  if (!anchor || !state.objectLayer) {
+    return null;
+  }
+  const overlays = state.objectLayer.objectsAt(anchor.x | 0, anchor.y | 0, anchor.z | 0);
+  for (const o of overlays) {
+    if ((o.order | 0) === (anchor.order | 0) && (o.type | 0) === (anchor.type | 0)) {
+      return o;
+    }
+  }
+  return null;
+}
+
 function doorStateKey(obj) {
   return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff}`;
 }
@@ -3487,6 +3499,9 @@ function isBlockedAt(sim, wx, wy, wz) {
       const tf = state.tileFlags[tileId & 0x07ff] ?? 0;
       const sx = wrap10(ox);
       const sy = wrap10(oy);
+      if (isSolidEnvObject(o) && sx === tx && sy === ty) {
+        return true;
+      }
       if ((tf & 0x04) !== 0 && sx === tx && sy === ty) {
         return true;
       }
@@ -3575,6 +3590,138 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
     return true;
   }
   return false;
+}
+
+function clearAvatarPose(sim) {
+  sim.avatarPose = "stand";
+  sim.avatarPoseAnchor = null;
+}
+
+function furnitureAtCell(sim, tx, ty) {
+  if (!state.objectLayer) {
+    return null;
+  }
+  const tz = sim.world.map_z | 0;
+  const overlays = [];
+  const seen = new Set();
+  const addCandidatesAt = (sx, sy) => {
+    for (const o of state.objectLayer.objectsAt(sx, sy, tz)) {
+      if (!isChairObject(o) && !isBedObject(o)) {
+        continue;
+      }
+      const cells = furnitureOccupancyCells(o);
+      if (!cells.some((c) => (c.x | 0) === (tx | 0) && (c.y | 0) === (ty | 0))) {
+        continue;
+      }
+      const key = `${o.order | 0}:${o.type | 0}:${o.x | 0}:${o.y | 0}:${o.z | 0}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      overlays.push(o);
+    }
+  };
+  addCandidatesAt(tx, ty);
+  addCandidatesAt((tx + 1) | 0, ty | 0);
+  addCandidatesAt(tx | 0, (ty + 1) | 0);
+  addCandidatesAt((tx + 1) | 0, (ty + 1) | 0);
+
+  const chairs = [];
+  const beds = [];
+  for (const o of overlays) {
+    if (isChairObject(o)) {
+      chairs.push(o);
+    } else if (isBedObject(o)) {
+      beds.push(o);
+    }
+  }
+  if (chairs.length > 0) {
+    return chairs[0];
+  }
+  if (beds.length === 1) {
+    return beds[0];
+  }
+  if (beds.length > 1) {
+    const fromX = sim.world.map_x | 0;
+    const fromY = sim.world.map_y | 0;
+    beds.sort((a, b) => {
+      const as = bedInteractionScore(a, fromX, fromY);
+      const bs = bedInteractionScore(b, fromX, fromY);
+      if (as.valid !== bs.valid) {
+        return as.valid ? -1 : 1;
+      }
+      if (as.dist !== bs.dist) {
+        return as.dist - bs.dist;
+      }
+      return (a.order | 0) - (b.order | 0);
+    });
+    return beds[0];
+  }
+  return null;
+}
+
+function tryInteractFurnitureObject(sim, o) {
+  if (!o) {
+    if (sim.avatarPose !== "stand") {
+      clearAvatarPose(sim);
+      diagBox.className = "diag ok";
+      diagBox.textContent = "Stood up.";
+      return true;
+    }
+    return false;
+  }
+
+  const nextPose = isBedObject(o) ? "sleep" : "sit";
+  const currentKey = sim.avatarPoseAnchor
+    ? `${sim.avatarPoseAnchor.x & 0x3ff},${sim.avatarPoseAnchor.y & 0x3ff},${sim.avatarPoseAnchor.z & 0x0f},${sim.avatarPoseAnchor.order & 0xffff},${sim.avatarPoseAnchor.type & 0x3ff}`
+    : "";
+  const targetKey = objectAnchorKey(o);
+  if (sim.avatarPose === nextPose && currentKey === targetKey) {
+    clearAvatarPose(sim);
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Stood up.";
+    return true;
+  }
+
+  const fromX = sim.world.map_x | 0;
+  const fromY = sim.world.map_y | 0;
+  sim.avatarPose = nextPose;
+  sim.avatarPoseAnchor = {
+    x: o.x | 0,
+    y: o.y | 0,
+    z: o.z | 0,
+    order: o.order | 0,
+    type: o.type | 0
+  };
+  if (nextPose === "sleep" && isBedObject(o)) {
+    const sleepCell = preferredSleepCellForBed(o, fromX, fromY);
+    sim.world.map_x = sleepCell.x | 0;
+    sim.world.map_y = sleepCell.y | 0;
+    sim.world.map_z = sleepCell.z | 0;
+  } else {
+    // Align avatar position to interacted furniture tile so sit/sleep is spatially coherent.
+    sim.world.map_x = o.x | 0;
+    sim.world.map_y = o.y | 0;
+    sim.world.map_z = o.z | 0;
+  }
+  diagBox.className = "diag ok";
+  diagBox.textContent = nextPose === "sleep"
+    ? `Sleeping at ${o.x},${o.y},${o.z}`
+    : `Sitting at ${o.x},${o.y},${o.z}`;
+  return true;
+}
+
+function tryInteractFurnitureInFacingDirection(sim, dx, dy) {
+  const tx = (sim.world.map_x + dx) | 0;
+  const ty = (sim.world.map_y + dy) | 0;
+  return tryInteractFurnitureObject(sim, furnitureAtCell(sim, tx, ty));
+}
+
+function tryInteractFacing(sim, dx, dy) {
+  if (tryToggleDoorInFacingDirection(sim, dx, dy)) {
+    return true;
+  }
+  return tryInteractFurnitureInFacingDirection(sim, dx, dy);
 }
 
 function initCapturePresets() {
@@ -3920,6 +4067,8 @@ function cloneSimState(sim) {
     worldFlags: sim.worldFlags >>> 0,
     commandsApplied: sim.commandsApplied >>> 0,
     doorOpenStates: { ...(sim.doorOpenStates ?? {}) },
+    avatarPose: String(sim.avatarPose || "stand"),
+    avatarPoseAnchor: sim.avatarPoseAnchor ? { ...sim.avatarPoseAnchor } : null,
     world: { ...sim.world }
   };
 }
@@ -3959,6 +4108,9 @@ function advanceWorldMinute(world) {
 
 function applyCommand(sim, cmd) {
   if (cmd.type === 1) {
+    if (sim.avatarPose !== "stand") {
+      clearAvatarPose(sim);
+    }
     const nx = clampI32(sim.world.map_x + cmd.arg0, -4096, 4095);
     const ny = clampI32(sim.world.map_y + cmd.arg1, -4096, 4095);
     if (state.movementMode === "avatar") {
@@ -3966,6 +4118,9 @@ function applyCommand(sim, cmd) {
         sim.world.map_x = nx;
         sim.world.map_y = ny;
         state.avatarLastMoveTick = sim.tick >>> 0;
+      } else {
+        // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
+        tryInteractFurnitureObject(sim, furnitureAtCell(sim, nx, ny));
       }
     } else {
       sim.world.map_x = nx;
@@ -3973,7 +4128,7 @@ function applyCommand(sim, cmd) {
     }
   } else if (cmd.type === 2) {
     if (state.movementMode === "avatar") {
-      tryToggleDoorInFacingDirection(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryInteractFacing(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
   }
   sim.commandsApplied += 1;
@@ -4030,6 +4185,18 @@ function simStateHash(sim) {
   h = hashMixU32(h, asU32Signed(sim.world.map_z));
   h = hashMixU32(h, sim.world.in_combat);
   h = hashMixU32(h, sim.world.sound_enabled);
+  const avatarPose = sim.avatarPose === "sleep" ? 2 : (sim.avatarPose === "sit" ? 1 : 0);
+  h = hashMixU32(h, avatarPose);
+  if (sim.avatarPoseAnchor) {
+    h = hashMixU32(h, 1);
+    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.x));
+    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.y));
+    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.z));
+    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.order));
+    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.type));
+  } else {
+    h = hashMixU32(h, 0);
+  }
   const doorKeys = Object.keys(sim.doorOpenStates ?? {}).sort();
   h = hashMixU32(h, doorKeys.length);
   for (const k of doorKeys) {
@@ -4500,6 +4667,128 @@ function avatarFacingFrameOffset() {
   return 3;
 }
 
+function sleepFrameOffsetForBed(bedObj) {
+  if (!bedObj) {
+    return 0;
+  }
+  return sleepFrameOffsetForBedAtCell(bedObj, bedObj.x | 0, bedObj.y | 0);
+}
+
+function tileFlagsForTile(tileId) {
+  if (!state.tileFlags) {
+    return 0;
+  }
+  return state.tileFlags[tileId & 0x07ff] ?? 0;
+}
+
+function furnitureOccupancyCells(obj) {
+  if (!obj) {
+    return [];
+  }
+  const cells = [{ x: obj.x | 0, y: obj.y | 0 }];
+  const tileId = ((obj.baseTile | 0) + (obj.frame | 0)) & 0xffff;
+  const tf = tileFlagsForTile(tileId);
+  if (tf & 0x80) {
+    cells.push({ x: (obj.x | 0) - 1, y: obj.y | 0 });
+  }
+  if (tf & 0x40) {
+    cells.push({ x: obj.x | 0, y: (obj.y | 0) - 1 });
+  }
+  if ((tf & 0xc0) === 0xc0) {
+    cells.push({ x: (obj.x | 0) - 1, y: (obj.y | 0) - 1 });
+  }
+  return cells;
+}
+
+function sleepBedCellFrameOffset(bedObj, wx, wy) {
+  if (!bedObj) {
+    return 0;
+  }
+  const bx = bedObj.x | 0;
+  const by = bedObj.y | 0;
+  const tileId = ((bedObj.baseTile | 0) + (bedObj.frame | 0)) & 0xffff;
+  const tf = tileFlagsForTile(tileId);
+  const hasDoubleH = (tf & 0x80) !== 0;
+  const hasDoubleV = (tf & 0x40) !== 0;
+
+  if (wx === bx && wy === by) {
+    return 0;
+  }
+  if (hasDoubleH && wx === (bx - 1) && wy === by) {
+    return 1;
+  }
+  if (hasDoubleV && wx === bx && wy === (by - 1)) {
+    return hasDoubleH ? 2 : 1;
+  }
+  if (hasDoubleH && hasDoubleV && wx === (bx - 1) && wy === (by - 1)) {
+    return 3;
+  }
+  return 0;
+}
+
+function preferredSleepCellForBed(bedObj, fromX, fromY) {
+  const cells = furnitureOccupancyCells(bedObj);
+  if (!cells.length) {
+    return { x: bedObj.x | 0, y: bedObj.y | 0, z: bedObj.z | 0 };
+  }
+  let best = cells[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const cell of cells) {
+    const normalized = (((bedObj.frame | 0) - sleepBedCellFrameOffset(bedObj, cell.x, cell.y)) & 0x07);
+    const legacySleepValid = normalized === 0 || normalized === 6;
+    const dist = Math.abs((fromX | 0) - cell.x) + Math.abs((fromY | 0) - cell.y);
+    const score = (legacySleepValid ? 0 : 1000) + dist;
+    if (score < bestScore) {
+      best = cell;
+      bestScore = score;
+    }
+  }
+  return { x: best.x | 0, y: best.y | 0, z: bedObj.z | 0 };
+}
+
+function sleepFrameOffsetForBedAtCell(bedObj, wx, wy) {
+  if (!bedObj) {
+    return 0;
+  }
+  /* Legacy AI_SLEEP path in seg_1E0F checks `(GetFrame(bed) - D_0658)`:
+     only normalized 0 and 6 are valid sleep orientations, with 6 using frame 1. */
+  const cellOffset = sleepBedCellFrameOffset(bedObj, wx | 0, wy | 0);
+  const normalized = (((bedObj.frame | 0) - cellOffset) & 0x07);
+  return normalized === 6 ? 1 : 0;
+}
+
+function bedInteractionScore(bedObj, fromX, fromY) {
+  const cells = furnitureOccupancyCells(bedObj);
+  if (!cells.length) {
+    return { valid: false, dist: 0 };
+  }
+  let valid = false;
+  let validDist = Number.POSITIVE_INFINITY;
+  let anyDist = Number.POSITIVE_INFINITY;
+  for (const cell of cells) {
+    const dist = Math.abs((fromX | 0) - (cell.x | 0)) + Math.abs((fromY | 0) - (cell.y | 0));
+    if (dist < anyDist) {
+      anyDist = dist;
+    }
+    const normalized = (((bedObj.frame | 0) - sleepBedCellFrameOffset(bedObj, cell.x | 0, cell.y | 0)) & 0x07);
+    if (normalized === 0 || normalized === 6) {
+      valid = true;
+      if (dist < validDist) {
+        validDist = dist;
+      }
+    }
+  }
+  return { valid, dist: valid ? validDist : anyDist };
+}
+
+function sleepBaseTileForEntity(entity) {
+  if (!state.entityLayer || !state.entityLayer.baseTiles) {
+    return entity.baseTile | 0;
+  }
+  const legacySleepBase = state.entityLayer.baseTiles[LEGACY_SLEEP_SHAPE_TYPE] ?? 0;
+  return legacySleepBase > 0 ? (legacySleepBase | 0) : (entity.baseTile | 0);
+}
+
 function avatarRenderTileId() {
   if (!state.entityLayer || !state.entityLayer.entries) {
     return null;
@@ -4508,8 +4797,31 @@ function avatarRenderTileId() {
   if (!avatar || !avatar.baseTile) {
     return null;
   }
+  if (state.sim.avatarPose === "sleep") {
+    const sleepBase = sleepBaseTileForEntity(avatar);
+    const bed = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    if (bed && isBedObject(bed)) {
+      return (
+        sleepBase
+        + sleepFrameOffsetForBedAtCell(
+          bed,
+          state.sim.world.map_x | 0,
+          state.sim.world.map_y | 0
+        )
+      ) & 0xffff;
+    }
+    return (sleepBase + 0) & 0xffff;
+  }
   const walkMoving = state.avatarLastMoveTick >= 0 && ((state.sim.tick - state.avatarLastMoveTick) & 0xff) < 4;
   const dirGroup = avatarFacingFrameOffset();
+  if (state.sim.avatarPose === "sit") {
+    const chair = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    if (chair && isChairObject(chair)) {
+      const chairFrame = (chair.frame | 0) & 0x03;
+      return (avatar.baseTile + 3 + (chairFrame << 2)) & 0xffff;
+    }
+    return (avatar.baseTile + (dirGroup << 2) + 0) & 0xffff;
+  }
   let frame = avatar.frame | 0;
   /* Legacy actor classes (OBJ_178..183 and OBJ_199..19A) use 4 frames per direction:
      dir*4 + {0,1,2,3}, with 1 as stable standing frame. */
@@ -4525,6 +4837,66 @@ function avatarRenderTileId() {
     frame = (dirGroup << 1) + step;
   }
   return (avatar.baseTile + frame) & 0xffff;
+}
+
+function entityPoseAt(entity) {
+  if (!state.objectLayer) {
+    return "stand";
+  }
+  const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
+  for (const o of overlays) {
+    if (isBedObject(o)) {
+      return "sleep";
+    }
+    if (isChairObject(o)) {
+      return "sit";
+    }
+  }
+  return "stand";
+}
+
+function entityChairAt(entity) {
+  if (!state.objectLayer) {
+    return null;
+  }
+  const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
+  for (const o of overlays) {
+    if (isChairObject(o)) {
+      return o;
+    }
+  }
+  return null;
+}
+
+function entityBedAt(entity) {
+  if (!state.objectLayer) {
+    return null;
+  }
+  const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
+  for (const o of overlays) {
+    if (isBedObject(o)) {
+      return o;
+    }
+  }
+  return null;
+}
+
+function entityRenderTileId(e) {
+  const pose = entityPoseAt(e);
+  if (pose === "sleep") {
+    const sleepBase = sleepBaseTileForEntity(e);
+    const bed = entityBedAt(e);
+    return (sleepBase + sleepFrameOffsetForBedAtCell(bed, e.x | 0, e.y | 0)) & 0xffff;
+  }
+  if (pose === "sit") {
+    const chair = entityChairAt(e);
+    if (chair) {
+      const chairFrame = (chair.frame | 0) & 0x03;
+      return (e.baseTile + 3 + (chairFrame << 2)) & 0xffff;
+    }
+    return (e.baseTile + 3) & 0xffff;
+  }
+  return resolveAnimatedObjectTile(e);
 }
 
 function avatarBaseTileId() {
@@ -4799,7 +5171,7 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          if (!t.occluder) {
+          if (!t.floor) {
             drawOverlayEntry(t, px, py);
           }
         }
@@ -4822,7 +5194,7 @@ function drawTileGrid() {
       if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
         continue;
       }
-      const animEntityTile = resolveAnimatedObjectTile(e);
+      const animEntityTile = entityRenderTileId(e);
       drawEntityTile(animEntityTile, gx, gy);
       const tf = state.tileFlags ? (state.tileFlags[animEntityTile & 0x7ff] ?? 0) : 0;
       if (tf & 0x80) {
@@ -4902,7 +5274,7 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          if (t.occluder) {
+          if (t.floor) {
             drawOverlayEntry(t, px, py);
           }
         }
@@ -4964,8 +5336,11 @@ function updateStats() {
     const facing = state.avatarFacingDx < 0 ? "W"
       : state.avatarFacingDx > 0 ? "E"
         : state.avatarFacingDy < 0 ? "N" : "S";
+    const pose = state.sim.avatarPose === "sleep"
+      ? "sleep"
+      : (state.sim.avatarPose === "sit" ? "sit" : "stand");
     statAvatarState.textContent = state.movementMode === "avatar"
-      ? `avatar (${facing})`
+      ? `avatar (${facing}, ${pose})`
       : "ghost";
   }
   if (statNpcOcclusionBlocks) {
