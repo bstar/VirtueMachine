@@ -112,6 +112,12 @@ export function buildOverlayCellsModel(opts) {
         if (!o.renderable) {
           continue;
         }
+        // Legacy behavior: only process overlays from cells that are visible.
+        // This prevents hidden-room wall decor from spilling into visible cells.
+        if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
+          parity.hiddenSuppressedCount += 1;
+          continue;
+        }
         if (o.drawPri < prevDrawPri || (o.drawPri === prevDrawPri && o.order < prevOrder)) {
           parity.unsortedSourceCount += 1;
         }

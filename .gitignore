@@ -16,6 +16,12 @@ node_modules/
 # Logs
 *.log
 
+# Local env overrides (never commit secrets)
+.env.local
+
 # Local/proprietary game assets (never commit)
 local/
 modern/assets/runtime/
+
+# Local multiplayer runtime state (never commit)
+modern/net/data/*.json

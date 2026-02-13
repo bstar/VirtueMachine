@@ -126,6 +126,12 @@ const statNetPlayers = document.getElementById("statNetPlayers");
 const statCriticalRecoveries = document.getElementById("statCriticalRecoveries");
 const topTimeOfDay = document.getElementById("topTimeOfDay");
 const topNetStatus = document.getElementById("topNetStatus");
+const topNetIndicator = document.getElementById("topNetIndicator");
+const netQuickStatus = document.getElementById("netQuickStatus");
+const netAccountOpenButton = document.getElementById("netAccountOpenButton");
+const netAccountModal = document.getElementById("netAccountModal");
+const netAccountModalBackdrop = document.getElementById("netAccountModalBackdrop");
+const netAccountCloseButton = document.getElementById("netAccountCloseButton");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
@@ -135,7 +141,6 @@ const debugOverlayToggle = document.getElementById("debugOverlayToggle");
 const animationToggle = document.getElementById("animationToggle");
 const paletteFxToggle = document.getElementById("paletteFxToggle");
 const movementModeToggle = document.getElementById("movementModeToggle");
-const renderModeToggle = document.getElementById("renderModeToggle");
 const capturePreviewToggle = document.getElementById("capturePreviewToggle");
 const legacyScaleModeToggle = document.getElementById("legacyScaleModeToggle");
 const charStubCanvas = document.getElementById("charStubCanvas");
@@ -144,14 +149,22 @@ const jumpButton = document.getElementById("jumpButton");
 const captureButton = document.getElementById("captureButton");
 const captureWorldHudButton = document.getElementById("captureWorldHudButton");
 const netApiBaseInput = document.getElementById("netApiBaseInput");
+const netAccountSelect = document.getElementById("netAccountSelect");
 const netUsernameInput = document.getElementById("netUsernameInput");
 const netPasswordInput = document.getElementById("netPasswordInput");
+const netPasswordToggleButton = document.getElementById("netPasswordToggleButton");
+const netNewPasswordInput = document.getElementById("netNewPasswordInput");
+const netChangePasswordButton = document.getElementById("netChangePasswordButton");
 const netCharacterNameInput = document.getElementById("netCharacterNameInput");
+const netEmailInput = document.getElementById("netEmailInput");
+const netEmailCodeInput = document.getElementById("netEmailCodeInput");
 const netLoginButton = document.getElementById("netLoginButton");
 const netRecoverButton = document.getElementById("netRecoverButton");
+const netSetEmailButton = document.getElementById("netSetEmailButton");
+const netSendVerifyButton = document.getElementById("netSendVerifyButton");
+const netVerifyEmailButton = document.getElementById("netVerifyEmailButton");
 const netSaveButton = document.getElementById("netSaveButton");
 const netLoadButton = document.getElementById("netLoadButton");
-const netRenameButton = document.getElementById("netRenameButton");
 const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
 const netMaintenanceButton = document.getElementById("netMaintenanceButton");
 
@@ -162,13 +175,18 @@ const DEBUG_OVERLAY_KEY = "vm_overlay_debug";
 const ANIMATION_KEY = "vm_animation";
 const PALETTE_FX_KEY = "vm_palette_fx";
 const MOVEMENT_MODE_KEY = "vm_movement_mode";
-const RENDER_MODE_KEY = "vm_render_mode";
 const LEGACY_FRAME_PREVIEW_KEY = "vm_legacy_frame_preview";
 const LEGACY_SCALE_MODE_KEY = "vm_legacy_scale_mode";
 const NET_API_BASE_KEY = "vm_net_api_base";
 const NET_USERNAME_KEY = "vm_net_username";
+const NET_PASSWORD_KEY = "vm_net_password";
+const NET_PASSWORD_VISIBLE_KEY = "vm_net_password_visible";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
+const NET_EMAIL_KEY = "vm_net_email";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
+const NET_PROFILES_KEY = "vm_net_profiles";
+const NET_PROFILE_SELECTED_KEY = "vm_net_profile_selected";
+const NET_ACTIVITY_PULSE_MS = 280;
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
   cornerTL: 0x1b0,
@@ -249,7 +267,6 @@ const THEMES = [
   "ash"
 ];
 const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
-const RENDER_MODES = ["current", "nuvie"];
 const CAPTURE_PRESETS = [
   { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
   { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
@@ -293,14 +310,12 @@ const state = {
   objectOverlayCount: 0,
   entityOverlayCount: 0,
   renderParityMismatches: 0,
-  renderModeDebug: null,
   interactionProbeTile: null,
   npcOcclusionBlockedMoves: 0,
   showGrid: false,
   showOverlayDebug: false,
   enablePaletteFx: true,
   movementMode: "ghost",
-  renderMode: "current",
   avatarFacingDx: 0,
   avatarFacingDy: 1,
   avatarLastMoveTick: -1,
@@ -322,7 +337,7 @@ const state = {
   accMs: 0,
   replayUrl: null,
   legacyPaperPixmap: null,
-  legacyScaleMode: "fit",
+  legacyScaleMode: "4",
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
   avatarPortraitCanvas: null,
@@ -343,6 +358,8 @@ const state = {
     token: "",
     userId: "",
     username: "",
+    email: "",
+    emailVerified: false,
     sessionId: (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Math.random().toString(16).slice(2)}_${Date.now()}`,
     characterId: "",
     characterName: "",
@@ -360,6 +377,7 @@ const state = {
     maintenanceInFlight: false,
     lastMaintenanceTick: -1,
     recoveryEventCount: 0,
+    resumeFromSnapshot: false,
     statusLevel: "idle",
     statusText: "Not logged in."
   }
@@ -1737,9 +1755,6 @@ function renderStartupMenuLayer(g, scale) {
   }
 
   drawU6MainText(g, "Use ARROWS + ENTER", x(98), y(162), Math.max(1, scale), "#8e7a55");
-  if (!isNetAuthenticated()) {
-    drawU6MainText(g, "LOGIN REQUIRED", x(108), y(174), Math.max(1, scale), "#8e6a42");
-  }
 }
 
 function buildStartupPaletteForMenu() {
@@ -1960,7 +1975,7 @@ function initTheme() {
 }
 
 function setFont(fontName) {
-  const font = FONTS.includes(fontName) ? fontName : "sans";
+  const font = FONTS.includes(fontName) ? fontName : "silkscreen";
   document.documentElement.setAttribute("data-font", font);
   if (fontSelect) {
     fontSelect.value = font;
@@ -1973,7 +1988,7 @@ function setFont(fontName) {
 }
 
 function initFont() {
-  let saved = "sans";
+  let saved = "silkscreen";
   try {
     const fromStorage = localStorage.getItem(FONT_KEY);
     if (fromStorage) {
@@ -2091,6 +2106,16 @@ function updateNetSessionStat() {
   statNetSession.textContent = `${state.net.username}/${name}`;
 }
 
+function updateNetAuthButton() {
+  if (!netLoginButton) {
+    return;
+  }
+  const authed = isNetAuthenticated();
+  netLoginButton.textContent = authed ? "Logout (I)" : "Net Login (I)";
+  netLoginButton.classList.remove("control-btn--login", "control-btn--logout");
+  netLoginButton.classList.add(authed ? "control-btn--logout" : "control-btn--login");
+}
+
 function setNetStatus(level, text) {
   const lvl = String(level || "idle");
   const msg = String(text || "");
@@ -2099,6 +2124,174 @@ function setNetStatus(level, text) {
   if (topNetStatus) {
     topNetStatus.textContent = `${lvl} - ${msg}`;
   }
+  if (topNetIndicator) {
+    let indicatorState = "offline";
+    if (isNetAuthenticated()) {
+      if (lvl === "error") {
+        indicatorState = "error";
+      } else if (lvl === "sync") {
+        indicatorState = "sync";
+      } else if (lvl === "connecting") {
+        indicatorState = "connecting";
+      } else if (lvl === "offline") {
+        indicatorState = "offline";
+      } else {
+        indicatorState = "online";
+      }
+    } else if (lvl === "connecting") {
+      indicatorState = "connecting";
+    } else if (lvl === "error") {
+      indicatorState = "error";
+    }
+    topNetIndicator.dataset.state = indicatorState;
+  }
+  if (netQuickStatus) {
+    netQuickStatus.textContent = isNetAuthenticated() ? "Account: Signed in" : "Account: Signed out";
+  }
+  updateNetAuthButton();
+}
+
+let netActivityPulseTimer = 0;
+function pulseNetIndicator() {
+  if (!topNetIndicator) {
+    return;
+  }
+  topNetIndicator.classList.add("is-active");
+  if (netActivityPulseTimer) {
+    clearTimeout(netActivityPulseTimer);
+  }
+  netActivityPulseTimer = setTimeout(() => {
+    topNetIndicator.classList.remove("is-active");
+    netActivityPulseTimer = 0;
+  }, NET_ACTIVITY_PULSE_MS);
+}
+
+function profileKey(profile) {
+  const apiBase = String(profile?.apiBase || "").trim().toLowerCase();
+  const username = String(profile?.username || "").trim().toLowerCase();
+  return `${apiBase}|${username}`;
+}
+
+function sanitizeProfile(profile) {
+  const apiBase = String(profile?.apiBase || "").trim();
+  const username = String(profile?.username || "").trim().toLowerCase();
+  if (!apiBase || !username) {
+    return null;
+  }
+  return {
+    apiBase,
+    username,
+    password: String(profile?.password || ""),
+    characterName: String(profile?.characterName || "Avatar").trim() || "Avatar",
+    email: String(profile?.email || "").trim().toLowerCase()
+  };
+}
+
+function loadNetProfiles() {
+  try {
+    const raw = localStorage.getItem(NET_PROFILES_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    for (const row of arr) {
+      const p = sanitizeProfile(row);
+      if (p) out.push(p);
+    }
+    return out;
+  } catch (_err) {
+    return [];
+  }
+}
+
+function saveNetProfiles(profiles) {
+  try {
+    localStorage.setItem(NET_PROFILES_KEY, JSON.stringify(profiles));
+  } catch (_err) {
+    // ignore storage failures
+  }
+}
+
+function setSelectedProfileKey(key) {
+  try {
+    localStorage.setItem(NET_PROFILE_SELECTED_KEY, String(key || ""));
+  } catch (_err) {
+    // ignore storage failures
+  }
+}
+
+function getSelectedProfileKey() {
+  try {
+    return String(localStorage.getItem(NET_PROFILE_SELECTED_KEY) || "");
+  } catch (_err) {
+    return "";
+  }
+}
+
+function populateNetAccountSelect() {
+  if (!netAccountSelect) {
+    return [];
+  }
+  const profiles = loadNetProfiles();
+  const selected = getSelectedProfileKey();
+  netAccountSelect.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = profiles.length ? "Select saved account..." : "No saved accounts yet";
+  netAccountSelect.appendChild(placeholder);
+  for (const p of profiles) {
+    const opt = document.createElement("option");
+    opt.value = profileKey(p);
+    opt.textContent = `${p.username} @ ${p.apiBase}`;
+    if (opt.value === selected) {
+      opt.selected = true;
+    }
+    netAccountSelect.appendChild(opt);
+  }
+  return profiles;
+}
+
+function applyNetProfile(profile) {
+  const p = sanitizeProfile(profile);
+  if (!p) {
+    return false;
+  }
+  if (netApiBaseInput) netApiBaseInput.value = p.apiBase;
+  if (netUsernameInput) netUsernameInput.value = p.username;
+  if (netPasswordInput) netPasswordInput.value = p.password;
+  if (netCharacterNameInput) netCharacterNameInput.value = p.characterName;
+  if (netEmailInput) netEmailInput.value = p.email;
+  setSelectedProfileKey(profileKey(p));
+  return true;
+}
+
+function upsertNetProfileFromInputs() {
+  const p = sanitizeProfile({
+    apiBase: netApiBaseInput?.value,
+    username: netUsernameInput?.value,
+    password: netPasswordInput?.value,
+    characterName: netCharacterNameInput?.value,
+    email: netEmailInput?.value
+  });
+  if (!p) {
+    return;
+  }
+  const key = profileKey(p);
+  const profiles = loadNetProfiles().filter((row) => profileKey(row) !== key);
+  profiles.unshift(p);
+  while (profiles.length > 12) {
+    profiles.pop();
+  }
+  saveNetProfiles(profiles);
+  setSelectedProfileKey(key);
+  populateNetAccountSelect();
+  if (netAccountSelect) {
+    netAccountSelect.value = key;
+  }
+}
+
+function hasMultipleSavedAccounts() {
+  return loadNetProfiles().length > 1;
 }
 
 function resetBackgroundNetFailures() {
@@ -2204,9 +2397,21 @@ async function netRequest(route, init = {}, auth = true) {
   const text = await res.text();
   const body = text.trim() ? JSON.parse(text) : null;
   if (!res.ok) {
+    if (res.status === 401) {
+      state.net.token = "";
+      state.net.userId = "";
+      state.net.characterId = "";
+      state.net.remotePlayers = [];
+      state.net.backgroundSyncPaused = false;
+      state.net.backgroundFailCount = 0;
+      state.net.firstBackgroundFailAtMs = 0;
+      updateNetSessionStat();
+      setNetStatus("idle", "Session expired. Please log in.");
+    }
     const msg = body?.error?.message || `${res.status} ${res.statusText}`;
     throw new Error(msg);
   }
+  pulseNetIndicator();
   return body;
 }
 
@@ -2243,71 +2448,226 @@ async function netLogin() {
   state.net.token = String(login?.token || "");
   state.net.userId = String(login?.user?.user_id || "");
   state.net.username = String(login?.user?.username || username);
+  state.net.email = String(login?.user?.email || "");
+  state.net.emailVerified = !!login?.user?.email_verified;
   state.net.remotePlayers = [];
   state.net.lastPresenceHeartbeatTick = -1;
   state.net.lastPresencePollTick = -1;
   state.net.lastClockPollTick = -1;
   await netEnsureCharacter();
+  let resumedFromSnapshot = false;
+  try {
+    const out = await netRequest(`/api/characters/${encodeURIComponent(state.net.characterId)}/snapshot`, { method: "GET" }, true);
+    if (out?.snapshot_base64) {
+      const loaded = decodeSimSnapshotBase64(out.snapshot_base64);
+      if (loaded) {
+        state.sim = loaded;
+        state.queue = [];
+        state.commandLog = [];
+        state.accMs = 0;
+        state.lastMoveQueueAtMs = -1;
+        state.avatarLastMoveTick = -1;
+        state.interactionProbeTile = null;
+        resumedFromSnapshot = true;
+      }
+    }
+  } catch (_err) {
+    // No prior snapshot for this character is a valid first-login state.
+  }
   await netPollWorldClock();
   await netPollPresence();
+  state.net.resumeFromSnapshot = resumedFromSnapshot;
   resetBackgroundNetFailures();
   updateNetSessionStat();
-  setNetStatus("online", `${state.net.username}/${state.net.characterName}`);
+  setNetStatus("online", resumedFromSnapshot
+    ? `${state.net.username}/${state.net.characterName} (resumed)`
+    : `${state.net.username}/${state.net.characterName}`);
+  if (netEmailInput && state.net.email) {
+    netEmailInput.value = state.net.email;
+  }
   try {
     localStorage.setItem(NET_API_BASE_KEY, state.net.apiBase);
     localStorage.setItem(NET_USERNAME_KEY, state.net.username);
     localStorage.setItem(NET_CHARACTER_NAME_KEY, state.net.characterName);
+    localStorage.setItem(NET_EMAIL_KEY, state.net.email || "");
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
+  upsertNetProfileFromInputs();
+}
+
+async function netSetEmail() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  const email = String(netEmailInput?.value || "").trim().toLowerCase();
+  if (!email) {
+    throw new Error("Recovery email is required");
+  }
+  setNetStatus("sync", "Saving recovery email...");
+  const out = await netRequest("/api/auth/set-email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email })
+  }, true);
+  state.net.email = String(out?.user?.email || email);
+  state.net.emailVerified = !!out?.user?.email_verified;
+  try {
+    localStorage.setItem(NET_EMAIL_KEY, state.net.email);
+  } catch (_err) {
+    // ignore storage failures
+  }
+  upsertNetProfileFromInputs();
+  setNetStatus("online", state.net.emailVerified ? "Email verified" : "Email set (verification required)");
+  return out;
+}
+
+async function netSendEmailVerification() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  setNetStatus("sync", "Sending verification email...");
+  const out = await netRequest("/api/auth/send-email-verification", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({})
+  }, true);
+  setNetStatus("online", "Verification code sent to recovery email");
+  return out;
+}
+
+async function netVerifyEmail() {
+  if (!state.net.token) {
+    await netLogin();
+  }
+  const code = String(netEmailCodeInput?.value || "").trim();
+  if (!code) {
+    throw new Error("Verification code is required");
+  }
+  setNetStatus("sync", "Verifying recovery email...");
+  const out = await netRequest("/api/auth/verify-email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code })
+  }, true);
+  state.net.email = String(out?.user?.email || state.net.email || "");
+  state.net.emailVerified = !!out?.user?.email_verified;
+  if (netEmailInput && state.net.email) {
+    netEmailInput.value = state.net.email;
+  }
+  setNetStatus("online", "Recovery email verified");
+  return out;
 }
 
 async function netRecoverPassword() {
   const base = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
   const username = String(netUsernameInput?.value || "").trim().toLowerCase();
+  const email = String(netEmailInput?.value || "").trim().toLowerCase();
   if (!username) {
     throw new Error("Username is required");
   }
-  state.net.apiBase = base;
-  setNetStatus("connecting", "Recovering password...");
-  const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}`, { method: "GET" }, false);
-  if (netPasswordInput) {
-    netPasswordInput.value = String(out?.password_plaintext || "");
+  if (!email) {
+    throw new Error("Recovery email is required");
   }
-  setNetStatus("online", `Recovered password for ${out?.user?.username || username}`);
+  state.net.apiBase = base;
+  setNetStatus("connecting", "Sending password recovery email...");
+  const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}`, { method: "GET" }, false);
+  setNetStatus("online", `Recovery email sent for ${out?.user?.username || username}`);
   return out;
 }
 
-async function netRenameUsername() {
+async function netChangePassword() {
   if (!state.net.token) {
     await netLogin();
   }
-  const newUsername = String(netUsernameInput?.value || "").trim().toLowerCase();
-  const password = String(netPasswordInput?.value || "");
-  if (!newUsername || newUsername.length < 2) {
-    throw new Error("New username is required");
+  const oldPassword = String(netPasswordInput?.value || "");
+  const newPassword = String(netNewPasswordInput?.value || "");
+  if (!oldPassword) {
+    throw new Error("Current password is required");
   }
-  if (!password) {
-    throw new Error("Password is required");
+  if (!newPassword) {
+    throw new Error("New password is required");
   }
-  setNetStatus("sync", `Renaming to ${newUsername}...`);
-  const out = await netRequest("/api/auth/rename-username", {
+  if (newPassword === oldPassword) {
+    throw new Error("New password must be different");
+  }
+  setNetStatus("sync", "Updating account password...");
+  const out = await netRequest("/api/auth/change-password", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      new_username: newUsername,
-      password
+      old_password: oldPassword,
+      new_password: newPassword
     })
   }, true);
-  state.net.username = String(out?.user?.username || newUsername);
-  updateNetSessionStat();
+  if (netPasswordInput) {
+    netPasswordInput.value = newPassword;
+  }
+  if (netNewPasswordInput) {
+    netNewPasswordInput.value = "";
+  }
   try {
-    localStorage.setItem(NET_USERNAME_KEY, state.net.username);
+    localStorage.setItem(NET_PASSWORD_KEY, newPassword);
   } catch (_err) {
     // ignore storage failures
   }
-  setNetStatus("online", `Renamed ${out?.old_username || "user"} -> ${state.net.username}`);
+  upsertNetProfileFromInputs();
+  setNetStatus("online", "Password updated");
   return out;
+}
+
+function netLogout() {
+  void netLogoutAndPersist();
+}
+
+async function netLogoutAndPersist() {
+  let saveErr = null;
+  let leaveErr = null;
+  if (state.net.token && state.net.userId) {
+    try {
+      await netSaveSnapshot();
+    } catch (err) {
+      saveErr = err;
+    }
+    try {
+      await netLeavePresence();
+    } catch (err) {
+      leaveErr = err;
+    }
+  }
+  state.net.token = "";
+  state.net.userId = "";
+  state.net.characterId = "";
+  state.net.remotePlayers = [];
+  state.net.lastPresenceHeartbeatTick = -1;
+  state.net.lastPresencePollTick = -1;
+  state.net.lastClockPollTick = -1;
+  state.net.resumeFromSnapshot = false;
+  state.net.backgroundSyncPaused = false;
+  state.net.backgroundFailCount = 0;
+  state.net.firstBackgroundFailAtMs = 0;
+  if (state.sessionStarted) {
+    returnToTitleMenu();
+  } else {
+    setStartupMenuIndex(0);
+  }
+  updateNetSessionStat();
+  setNetStatus("idle", "Not logged in.");
+  if (saveErr || leaveErr) {
+    diagBox.className = "diag warn";
+    const parts = [];
+    if (saveErr) {
+      parts.push(`position save failed: ${String(saveErr.message || saveErr)}`);
+    }
+    if (leaveErr) {
+      parts.push(`presence cleanup failed: ${String(leaveErr.message || leaveErr)}`);
+    }
+    diagBox.textContent = `Logged out with warnings (${parts.join("; ")}).`;
+  } else {
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Logged out. Position saved and presence cleared.";
+  }
+  updateNetAuthButton();
 }
 
 async function netSaveSnapshot() {
@@ -2440,6 +2800,20 @@ async function netSendPresenceHeartbeat() {
   resetBackgroundNetFailures();
 }
 
+async function netLeavePresence() {
+  if (!isNetAuthenticated()) {
+    return;
+  }
+  await netRequest("/api/world/presence/leave", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      session_id: state.net.sessionId
+    })
+  }, true);
+  resetBackgroundNetFailures();
+}
+
 async function netPollPresence() {
   if (!isNetAuthenticated()) {
     state.net.remotePlayers = [];
@@ -2452,10 +2826,21 @@ async function netPollPresence() {
   try {
     const out = await netRequest("/api/world/presence", { method: "GET" }, true);
     const players = Array.isArray(out?.players) ? out.players : [];
-    state.net.remotePlayers = players.filter((p) => {
+    const filtered = players.filter((p) => {
       const sameSession = String(p.session_id || "") === String(state.net.sessionId || "");
-      return !sameSession;
+      const sameUser = String(p.user_id || "") === String(state.net.userId || "");
+      const sameUsername = String(p.username || "").toLowerCase() === String(state.net.username || "").toLowerCase();
+      return !sameSession && !sameUser && !sameUsername;
     });
+    const newestByIdentity = new Map();
+    for (const p of filtered) {
+      const key = String(p.user_id || p.username || p.session_id || "");
+      const prev = newestByIdentity.get(key);
+      if (!prev || Number(p.updated_at_ms || 0) >= Number(prev.updated_at_ms || 0)) {
+        newestByIdentity.set(key, p);
+      }
+    }
+    state.net.remotePlayers = [...newestByIdentity.values()];
     resetBackgroundNetFailures();
   } finally {
     state.net.presencePollInFlight = false;
@@ -2492,14 +2877,29 @@ async function netPollWorldClock() {
   }
 }
 
+function setAccountModalOpen(open) {
+  if (!netAccountModal) {
+    return;
+  }
+  const visible = !!open;
+  netAccountModal.classList.toggle("hidden", !visible);
+  netAccountModal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
 function initNetPanel() {
   let savedBase = "http://127.0.0.1:8081";
   let savedUser = "avatar";
+  let savedPass = "quest123";
+  let savedEmail = "";
+  let savedPassVisible = "off";
   let savedChar = "Avatar";
   let savedMaintenance = "off";
   try {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
+    savedPass = localStorage.getItem(NET_PASSWORD_KEY) || savedPass;
+    savedEmail = localStorage.getItem(NET_EMAIL_KEY) || savedEmail;
+    savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
     savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
   } catch (_err) {
@@ -2511,13 +2911,106 @@ function initNetPanel() {
   if (netUsernameInput) {
     netUsernameInput.value = savedUser;
   }
+  if (netPasswordInput) {
+    netPasswordInput.value = savedPass;
+    netPasswordInput.type = savedPassVisible === "on" ? "text" : "password";
+  }
+  if (netPasswordToggleButton) {
+    const isVisible = savedPassVisible === "on";
+    netPasswordToggleButton.textContent = isVisible ? "Hide" : "Show";
+    netPasswordToggleButton.title = isVisible ? "Hide password" : "Show password";
+  }
+  if (netEmailInput) {
+    netEmailInput.value = savedEmail;
+  }
   if (netCharacterNameInput) {
     netCharacterNameInput.value = savedChar;
   }
+  populateNetAccountSelect();
+  if (netAccountSelect && netAccountSelect.value) {
+    const key = netAccountSelect.value;
+    const profile = loadNetProfiles().find((row) => profileKey(row) === key);
+    if (profile) {
+      applyNetProfile(profile);
+    }
+  }
   state.net.apiBase = savedBase;
   state.net.username = savedUser;
+  state.net.email = savedEmail;
   state.net.characterName = savedChar;
   setNetStatus("idle", "Not logged in.");
+
+  if (netApiBaseInput) {
+    netApiBaseInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_API_BASE_KEY, String(netApiBaseInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netAccountSelect) {
+    netAccountSelect.addEventListener("change", () => {
+      const key = String(netAccountSelect.value || "");
+      if (!key) {
+        return;
+      }
+      const profile = loadNetProfiles().find((row) => profileKey(row) === key);
+      if (profile) {
+        applyNetProfile(profile);
+      }
+    });
+  }
+  if (netUsernameInput) {
+    netUsernameInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_USERNAME_KEY, String(netUsernameInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netPasswordInput) {
+    netPasswordInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_PASSWORD_KEY, String(netPasswordInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netCharacterNameInput) {
+    netCharacterNameInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_CHARACTER_NAME_KEY, String(netCharacterNameInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netEmailInput) {
+    netEmailInput.addEventListener("input", () => {
+      try {
+        localStorage.setItem(NET_EMAIL_KEY, String(netEmailInput.value || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+  if (netPasswordToggleButton && netPasswordInput) {
+    netPasswordToggleButton.addEventListener("click", () => {
+      const show = netPasswordInput.type === "password";
+      netPasswordInput.type = show ? "text" : "password";
+      netPasswordToggleButton.textContent = show ? "Hide" : "Show";
+      netPasswordToggleButton.title = show ? "Hide password" : "Show password";
+      try {
+        localStorage.setItem(NET_PASSWORD_VISIBLE_KEY, show ? "on" : "off");
+      } catch (_err) {
+        // ignore storage failures
+      }
+    });
+  }
+
   state.net.maintenanceAuto = savedMaintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
@@ -2532,11 +3025,29 @@ function initNetPanel() {
   }
   updateNetSessionStat();
   updateCriticalRecoveryStat();
+  updateNetAuthButton();
+  if (netAccountOpenButton) {
+    netAccountOpenButton.addEventListener("click", () => {
+      populateNetAccountSelect();
+      setAccountModalOpen(true);
+    });
+  }
+  if (netAccountCloseButton) {
+    netAccountCloseButton.addEventListener("click", () => setAccountModalOpen(false));
+  }
+  if (netAccountModalBackdrop) {
+    netAccountModalBackdrop.addEventListener("click", () => setAccountModalOpen(false));
+  }
 
   if (netLoginButton) {
     netLoginButton.addEventListener("click", async () => {
+      if (isNetAuthenticated()) {
+        netLogout();
+        return;
+      }
       try {
         await netLogin();
+        setAccountModalOpen(false);
         diagBox.className = "diag ok";
         diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
       } catch (err) {
@@ -2551,11 +3062,66 @@ function initNetPanel() {
       try {
         const out = await netRecoverPassword();
         diagBox.className = "diag ok";
-        diagBox.textContent = `Recovered password for ${out?.user?.username || "user"}.`;
+        diagBox.textContent = `Recovery email sent for ${out?.user?.username || "user"}.`;
       } catch (err) {
         setNetStatus("error", `Recovery failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Password recovery failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netSetEmailButton) {
+    netSetEmailButton.addEventListener("click", async () => {
+      try {
+        const out = await netSetEmail();
+        diagBox.className = "diag ok";
+        const verified = !!out?.user?.email_verified;
+        diagBox.textContent = verified
+          ? `Recovery email set and verified (${out?.user?.email || ""}).`
+          : `Recovery email set (${out?.user?.email || ""}). Verification required.`;
+      } catch (err) {
+        setNetStatus("error", `Set email failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Set email failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netSendVerifyButton) {
+    netSendVerifyButton.addEventListener("click", async () => {
+      try {
+        await netSendEmailVerification();
+        diagBox.className = "diag ok";
+        diagBox.textContent = "Verification code sent to recovery email.";
+      } catch (err) {
+        setNetStatus("error", `Send code failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Send code failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netVerifyEmailButton) {
+    netVerifyEmailButton.addEventListener("click", async () => {
+      try {
+        await netVerifyEmail();
+        diagBox.className = "diag ok";
+        diagBox.textContent = "Recovery email verified.";
+      } catch (err) {
+        setNetStatus("error", `Verify email failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Verify email failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (netChangePasswordButton) {
+    netChangePasswordButton.addEventListener("click", async () => {
+      try {
+        await netChangePassword();
+        diagBox.className = "diag ok";
+        diagBox.textContent = "Account password updated.";
+      } catch (err) {
+        setNetStatus("error", `Change password failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Change password failed: ${String(err.message || err)}`;
       }
     });
   }
@@ -2584,19 +3150,6 @@ function initNetPanel() {
         setNetStatus("error", `Load failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
-      }
-    });
-  }
-  if (netRenameButton) {
-    netRenameButton.addEventListener("click", async () => {
-      try {
-        const out = await netRenameUsername();
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Renamed ${out?.old_username || "user"} to ${state.net.username}.`;
-      } catch (err) {
-        setNetStatus("error", `Rename failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Rename failed: ${String(err.message || err)}`;
       }
     });
   }
@@ -2771,38 +3324,6 @@ function initMovementMode() {
   if (movementModeToggle) {
     movementModeToggle.addEventListener("change", () => {
       setMovementMode(movementModeToggle.value);
-    });
-  }
-}
-
-function setRenderMode(mode) {
-  const next = RENDER_MODES.includes(mode) ? mode : "current";
-  state.renderMode = next;
-  document.documentElement.setAttribute("data-render-mode", next);
-  if (renderModeToggle) {
-    renderModeToggle.value = next;
-  }
-  try {
-    localStorage.setItem(RENDER_MODE_KEY, next);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-}
-
-function initRenderMode() {
-  let saved = "current";
-  try {
-    const fromStorage = localStorage.getItem(RENDER_MODE_KEY);
-    if (fromStorage && RENDER_MODES.includes(fromStorage)) {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-  setRenderMode(saved);
-  if (renderModeToggle) {
-    renderModeToggle.addEventListener("change", () => {
-      setRenderMode(renderModeToggle.value);
     });
   }
 }
@@ -3159,10 +3680,16 @@ function startSessionFromTitle() {
     diagBox.textContent = "Runtime assets are still loading.";
     return;
   }
-  placeCameraAtPresetId("lb_throne");
+  if (!state.net.resumeFromSnapshot) {
+    placeCameraAtPresetId("lb_throne");
+  }
   state.sessionStarted = true;
+  const resumed = !!state.net.resumeFromSnapshot;
+  state.net.resumeFromSnapshot = false;
   diagBox.className = "diag ok";
-  diagBox.textContent = "Journey Onward: loaded into Lord British's throne room.";
+  diagBox.textContent = resumed
+    ? "Journey Onward: resumed at last saved position."
+    : "Journey Onward: loaded into Lord British's throne room.";
 }
 
 function returnToTitleMenu() {
@@ -3267,7 +3794,7 @@ function captureViewportPng() {
     g.fillText("Ultima VI parity capture", textX, y);
     y += 15;
     g.fillStyle = "#8ea8cf";
-    g.fillText(`mode: ${state.renderMode}`, textX, y);
+    g.fillText("mode: legacy", textX, y);
     y = panelY + headerH + 24;
 
     const drawRow = (label, value) => {
@@ -3746,7 +4273,7 @@ function buildLegacyViewContext(startX, startY, wz) {
         const wy = startY + gy - PAD;
         const overlays = state.objectLayer.objectsAt(wx, wy, wz);
         for (const o of overlays) {
-          const tileId = resolveDoorTileIdForVisibility(state.sim, o);
+          const tileId = resolveAnimatedObjectTile(o);
           applyObjFlags(gx, gy, tileId);
         }
       }
@@ -3926,26 +4453,7 @@ function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
   if (terrainLow !== (0x04 | 0x02)) {
     return rawTile;
   }
-  if (viewCtx) {
-    const fullyVisible = (
-      viewCtx.visibleAtWorld(wx, wy)
-      && viewCtx.visibleAtWorld(wx, wy - 1)
-      && viewCtx.visibleAtWorld(wx + 1, wy)
-      && viewCtx.visibleAtWorld(wx, wy + 1)
-      && viewCtx.visibleAtWorld(wx - 1, wy)
-    );
-    if (!fullyVisible) {
-      return rawTile;
-    }
-  }
-  const key = `${wz}:${wx}:${wy}:${rawTile & 0xffff}`;
-  const cached = state.cornerVariantCache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const resolved = applyLegacyCornerVariant(rawTile, wx, wy, wz, viewCtx) & 0xffff;
-  state.cornerVariantCache.set(key, resolved);
-  return resolved;
+  return applyLegacyCornerVariant(rawTile, wx, wy, wz, viewCtx) & 0xffff;
 }
 
 function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
@@ -3979,72 +4487,10 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
   return { rawTiles, displayTiles };
 }
 
-function applyNuvieBoundaryReshape(displayTiles, startX, startY) {
-  const debug = {
-    reshapedTiles: 0,
-    cornerSubs: 0
-  };
-  const inView = (gx, gy) => gx >= 0 && gy >= 0 && gx < VIEW_W && gy < VIEW_H;
-  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
-  const isBlack = (gx, gy) => !inView(gx, gy) || (displayTiles[cellIndex(gx, gy)] & 0xffff) === 0x0ff;
-
-  for (let gy = 0; gy < VIEW_H; gy += 1) {
-    for (let gx = 0; gx < VIEW_W; gx += 1) {
-      const idx = cellIndex(gx, gy);
-      const tile = displayTiles[idx] & 0xffff;
-      if (tile === 0x0ff) {
-        continue;
-      }
-      if (tile < 140 || tile > 187) {
-        continue;
-      }
-
-      const blackN = isBlack(gx, gy - 1);
-      const blackE = isBlack(gx + 1, gy);
-      const blackS = isBlack(gx, gy + 1);
-      const blackW = isBlack(gx - 1, gy);
-      if (!(blackN || blackE || blackS || blackW)) {
-        continue;
-      }
-
-      /* Temporarily disabled while we rebuild parity from fixtures.
-         Keep diagnostics path active but do not mutate tiles here. */
-    }
-  }
-  return debug;
-}
-
-function buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx) {
-  const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
-  let blackTiles = 0;
-  for (let i = 0; i < base.displayTiles.length; i += 1) {
-    if ((base.displayTiles[i] & 0xffff) === 0x0ff) {
-      blackTiles += 1;
-    }
-  }
-  const reshapeDebug = applyNuvieBoundaryReshape(base.displayTiles, startX, startY);
-  base.debug = {
-    blackTiles,
-    ...reshapeDebug
-  };
-  return base;
-}
-
 function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
-  if (state.renderMode === "nuvie") {
-    return buildBaseTileBuffersNuvie(startX, startY, wz, viewCtx);
-  }
   const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
   base.debug = null;
   return base;
-}
-
-function shouldSuppressOverlayNuvie(entry, gx, gy, displayTiles) {
-  void entry;
-  void gx;
-  void gy;
-  void displayTiles;
-  return false;
 }
 
 function avatarFacingFrameOffset() {
@@ -4259,7 +4705,7 @@ function drawTileGrid() {
   const startY = state.sim.world.map_y - (VIEW_H >> 1);
   const renderPalette = getRenderPalette();
   const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
-  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles, debug: baseDebug } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
+  const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayBuild = buildOverlayCells(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayCells = overlayBuild.overlayCells;
   const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
@@ -4299,7 +4745,6 @@ function drawTileGrid() {
   let centerPaletteBand = "none";
   const overlayCount = overlayBuild.overlayCount;
   let entityCount = 0;
-  let nuvieOverlaySuppressed = 0;
   for (let gy = 0; gy < VIEW_H; gy += 1) {
     for (let gx = 0; gx < VIEW_W; gx += 1) {
       const cell = cellIndex(gx, gy);
@@ -4354,10 +4799,6 @@ function drawTileGrid() {
         }
         const list = overlayCells[cellIndex(gx, gy)];
         for (const t of list) {
-          if (state.renderMode === "nuvie" && shouldSuppressOverlayNuvie(t, gx, gy, baseDisplayTiles)) {
-            nuvieOverlaySuppressed += 1;
-            continue;
-          }
           if (!t.occluder) {
             drawOverlayEntry(t, px, py);
           }
@@ -4403,15 +4844,12 @@ function drawTileGrid() {
       entityCount += 1;
     }
   }
-  if (state.sessionStarted && Array.isArray(state.net.remotePlayers)) {
+  if (state.sessionStarted && isNetAuthenticated() && Array.isArray(state.net.remotePlayers)) {
     for (const p of state.net.remotePlayers) {
       const pxw = Number(p.map_x) | 0;
       const pyw = Number(p.map_y) | 0;
       const pzw = Number(p.map_z) | 0;
       if (pzw !== (state.sim.world.map_z | 0)) {
-        continue;
-      }
-      if (viewCtx && !viewCtx.visibleAtWorld(pxw, pyw)) {
         continue;
       }
       const gx = pxw - startX;
@@ -4476,14 +4914,6 @@ function drawTileGrid() {
   state.centerRawTile = centerRawTile;
   state.centerAnimatedTile = centerAnimatedTile || centerTile;
   state.centerPaletteBand = centerPaletteBand;
-  state.renderModeDebug = state.renderMode === "nuvie"
-    ? {
-      blackTiles: baseDebug ? baseDebug.blackTiles : 0,
-      reshapedTiles: baseDebug ? baseDebug.reshapedTiles : 0,
-      cornerSubs: baseDebug ? baseDebug.cornerSubs : 0,
-      overlaySuppressed: nuvieOverlaySuppressed
-    }
-    : null;
 
   const cx = (VIEW_W >> 1) * TILE_SIZE;
   const cy = (VIEW_H >> 1) * TILE_SIZE;
@@ -4523,11 +4953,11 @@ function updateStats() {
   }
   if (statRenderParity) {
     if (state.renderParityMismatches > 0) {
-      statRenderParity.textContent = `warn (${state.renderParityMismatches}) [${state.renderMode}]`;
+      statRenderParity.textContent = `warn (${state.renderParityMismatches})`;
     } else if (state.interactionProbeTile != null) {
-      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)}) [${state.renderMode}]`;
+      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)})`;
     } else {
-      statRenderParity.textContent = `ok [${state.renderMode}]`;
+      statRenderParity.textContent = "ok";
     }
   }
   if (statAvatarState) {
@@ -4549,12 +4979,7 @@ function updateStats() {
     statCenterTiles.textContent = `0x${state.centerRawTile.toString(16)} -> 0x${state.centerAnimatedTile.toString(16)}`;
   }
   if (statCenterBand) {
-    if (state.renderMode === "nuvie" && state.renderModeDebug) {
-      const d = state.renderModeDebug;
-      statCenterBand.textContent = `${state.centerPaletteBand} | b:${d.blackTiles} r:${d.reshapedTiles} c:${d.cornerSubs} o:${d.overlaySuppressed}`;
-    } else {
-      statCenterBand.textContent = state.centerPaletteBand;
-    }
+    statCenterBand.textContent = state.centerPaletteBand;
   }
   if (statNetPlayers) {
     const remote = Array.isArray(state.net.remotePlayers) ? state.net.remotePlayers.length : 0;
@@ -4713,7 +5138,6 @@ function resetRun() {
   state.centerRawTile = 0;
   state.centerAnimatedTile = 0;
   state.centerPaletteBand = "none";
-  state.renderModeDebug = null;
   state.renderParityMismatches = 0;
   state.interactionProbeTile = null;
   state.avatarLastMoveTick = -1;
@@ -5030,6 +5454,13 @@ async function loadRuntimeAssets() {
 }
 
 window.addEventListener("keydown", (ev) => {
+  if (netAccountModal && !netAccountModal.classList.contains("hidden")) {
+    if (ev.key === "Escape") {
+      setAccountModalOpen(false);
+      ev.preventDefault();
+    }
+    return;
+  }
   if (isTypingContext(ev.target)) {
     return;
   }
@@ -5067,6 +5498,11 @@ window.addEventListener("keydown", (ev) => {
     }
     return;
   }
+  if (k === "c") {
+    void copyHoverReportToClipboard();
+    ev.preventDefault();
+    return;
+  }
   if (k === "p" && ev.shiftKey) {
     captureWorldHudPng();
     ev.preventDefault();
@@ -5090,14 +5526,27 @@ window.addEventListener("keydown", (ev) => {
   else if (k === "b") setPaletteFxMode(!state.enablePaletteFx);
   else if (k === "m") setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
   else if (k === "e") queueInteractDoor();
-  else if (k === "i") netLogin().then(() => {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
-  }).catch((err) => {
-    setNetStatus("error", `Login failed: ${String(err.message || err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
-  });
+  else if (k === "i") {
+    if (isNetAuthenticated()) {
+      netLogout();
+    } else {
+      if (hasMultipleSavedAccounts()) {
+        populateNetAccountSelect();
+        setAccountModalOpen(true);
+        setNetStatus("idle", "Choose an account in Account Setup, then login.");
+        ev.preventDefault();
+        return;
+      }
+      netLogin().then(() => {
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
+      }).catch((err) => {
+        setNetStatus("error", `Login failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+      });
+    }
+  }
   else if (k === "y") netSaveSnapshot().then(() => {
     updateNetSessionStat();
     diagBox.className = "diag ok";
@@ -5159,6 +5608,129 @@ function startupMenuIndexAtEvent(ev, surface) {
   const lx = Math.floor(px / menuScale);
   const ly = Math.floor(py / menuScale);
   return startupMenuIndexAtLogicalPos(lx, ly);
+}
+
+function clampInt(v, lo, hi) {
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v | 0;
+}
+
+function hoveredWorldCellFromMouse() {
+  if (!state.sessionStarted || !state.mouseInCanvas || !state.mapCtx) {
+    return null;
+  }
+  const wz = state.sim.world.map_z | 0;
+  const startX = (state.sim.world.map_x | 0) - (VIEW_W >> 1);
+  const startY = (state.sim.world.map_y | 0) - (VIEW_H >> 1);
+  if (isLegacyFramePreviewOn() && legacyBackdropCanvas) {
+    const bw = legacyBackdropCanvas.width | 0;
+    const bh = legacyBackdropCanvas.height | 0;
+    if (bw <= 0 || bh <= 0) {
+      return null;
+    }
+    const mx = Math.floor(state.mouseNormX * bw);
+    const my = Math.floor(state.mouseNormY * bh);
+    const scale = Math.max(1, Math.floor(bw / 320));
+    const mapX = LEGACY_UI_MAP_RECT.x * scale;
+    const mapY = LEGACY_UI_MAP_RECT.y * scale;
+    const mapW = LEGACY_UI_MAP_RECT.w * scale;
+    const mapH = LEGACY_UI_MAP_RECT.h * scale;
+    if (mx < mapX || mx >= (mapX + mapW) || my < mapY || my >= (mapY + mapH)) {
+      return null;
+    }
+    const lx = (mx - mapX) / scale;
+    const ly = (my - mapY) / scale;
+    const gx = clampInt(Math.floor((lx / 160) * VIEW_W), 0, VIEW_W - 1);
+    const gy = clampInt(Math.floor((ly / 160) * VIEW_H), 0, VIEW_H - 1);
+    return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
+  }
+
+  const w = canvas.width | 0;
+  const h = canvas.height | 0;
+  if (w <= 0 || h <= 0) {
+    return null;
+  }
+  const mx = Math.floor(state.mouseNormX * w);
+  const my = Math.floor(state.mouseNormY * h);
+  const gx = clampInt(Math.floor((mx / w) * VIEW_W), 0, VIEW_W - 1);
+  const gy = clampInt(Math.floor((my / h) * VIEW_H), 0, VIEW_H - 1);
+  return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
+}
+
+function hex(value, width = 0) {
+  const n = Number(value) >>> 0;
+  const s = n.toString(16);
+  return `0x${width > 0 ? s.padStart(width, "0") : s}`;
+}
+
+function buildHoverReportText() {
+  const cell = hoveredWorldCellFromMouse();
+  if (!cell || !state.mapCtx) {
+    return null;
+  }
+  const wx = cell.x | 0;
+  const wy = cell.y | 0;
+  const wz = cell.z | 0;
+  const tick = animationTick();
+  const rawTile = state.mapCtx.tileAt(wx, wy, wz) & 0xffff;
+  const animTile = resolveAnimatedTileAtTick(rawTile, tick) & 0xffff;
+  const tileFlag = state.tileFlags ? (state.tileFlags[rawTile & 0x07ff] ?? 0) : 0;
+  const terrain = state.terrainType ? (state.terrainType[rawTile & 0x07ff] ?? 0) : 0;
+  const viewCtx = buildLegacyViewContext(cell.startX, cell.startY, wz);
+  const visible = viewCtx ? (viewCtx.visibleAtWorld(wx, wy) ? 1 : 0) : 1;
+  const open = viewCtx ? (viewCtx.openAtWorld(wx, wy) ? 1 : 0) : 0;
+
+  const overlayBuild = buildOverlayCells(cell.startX, cell.startY, wz, viewCtx);
+  const list = overlayBuild.overlayCells
+    ? (overlayBuild.overlayCells[(cell.gy * VIEW_W) + cell.gx] || [])
+    : [];
+  const overlays = list.map((o, idx) => (
+    `overlay[${idx}]: tile=${hex(o.tileId)} floor=${o.floor ? 1 : 0} occ=${o.occluder ? 1 : 0} src=${o.sourceX},${o.sourceY} ${o.sourceType}`
+  ));
+
+  const objects = state.objectLayer ? state.objectLayer.objectsAt(wx, wy, wz) : [];
+  const objLines = objects.map((o, idx) => {
+    const tileId = resolveDoorTileId(state.sim, o) & 0xffff;
+    const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
+    return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0}`;
+  });
+
+  const lines = [
+    "VirtueMachine Hover Report",
+    `cell: ${wx},${wy},${wz}`,
+    `map: raw=${hex(rawTile)} anim=${hex(animTile)} tf=${hex(tileFlag)} terrain=${hex(terrain)}`,
+    `visibility: visible=${visible} open=${open}`
+  ];
+  if (overlays.length) {
+    lines.push(...overlays);
+  } else {
+    lines.push("overlay: none");
+  }
+  if (objLines.length) {
+    lines.push(...objLines);
+  } else {
+    lines.push("objects@cell: none");
+  }
+  return lines.join("\n");
+}
+
+async function copyHoverReportToClipboard() {
+  const report = buildHoverReportText();
+  if (!report) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Hover report unavailable. Move cursor over the world view.";
+    return;
+  }
+  const ok = await copyTextToClipboard(report);
+  if (ok) {
+    const line = report.split("\n")[1] || "";
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Copied hover report (${line.replace(/^cell:\\s*/, "")}).`;
+  } else {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Failed to copy hover report to clipboard.";
+  }
 }
 
 function activeCursorSurface() {
@@ -5289,7 +5861,6 @@ initOverlayDebug();
 initAnimationMode();
 initPaletteFxMode();
 initMovementMode();
-initRenderMode();
 initLegacyScaleMode();
 initLegacyFramePreview();
 initCapturePresets();

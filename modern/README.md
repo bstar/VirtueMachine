@@ -18,12 +18,17 @@ Run both the web client server and net API server together:
 ./modern/tools/dev_stack.sh
 ```
 
+`dev_stack.sh` auto-loads env overrides from `.env.local` at repo root (or `VM_DEV_ENV_FILE`), so you can keep local secrets/config out of git.
+
 Config via env vars:
 
 - `DEV_WEB_BIND` (default `0.0.0.0`)
 - `DEV_WEB_PORT` (default `8080`)
 - `VM_NET_HOST` (default `127.0.0.1`)
 - `VM_NET_PORT` (default `8081`)
+- `VM_EMAIL_MODE` (`resend` default, `smtp` alternative, `log` fallback)
+- `VM_EMAIL_FROM`, `VM_EMAIL_RESEND_API_KEY` (for Resend mode)
+- `VM_EMAIL_SMTP_HOST`, `VM_EMAIL_SMTP_PORT`, `VM_EMAIL_SMTP_USER`, `VM_EMAIL_SMTP_PASS` (for SMTP mode)
 
 ## Constraint
 

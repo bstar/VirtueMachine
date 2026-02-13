@@ -53,7 +53,8 @@ async function main() {
       ...process.env,
       VM_NET_HOST: host,
       VM_NET_PORT: String(port),
-      VM_NET_DATA_DIR: dataDir
+      VM_NET_DATA_DIR: dataDir,
+      VM_EMAIL_MODE: "log"
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -86,34 +87,78 @@ async function main() {
     });
     assert.equal(badLogin.status, 401);
 
-    const recovered = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar", {
+    const recoveredUnverified = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
       method: "GET"
     });
-    assert.equal(recovered.status, 200);
-    assert.equal(recovered.body?.password_plaintext, "quest123");
+    assert.equal(recoveredUnverified.status, 403);
 
-    const rename = await jsonFetch(baseUrl, "/api/auth/rename-username", {
+    const setEmail = await jsonFetch(baseUrl, "/api/auth/set-email", {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({
-        new_username: "avatar_renamed",
-        password: "quest123"
+        email: "avatar@example.com"
       })
     });
-    assert.equal(rename.status, 200);
-    assert.equal(rename.body?.user?.username, "avatar_renamed");
-    assert.equal(rename.body?.old_username, "avatar");
+    assert.equal(setEmail.status, 200);
+    assert.equal(setEmail.body?.user?.email, "avatar@example.com");
+    assert.equal(setEmail.body?.user?.email_verified, false);
 
-    const recoveredOld = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar", {
+    const sendVerify = await jsonFetch(baseUrl, "/api/auth/send-email-verification", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({})
+    });
+    assert.equal(sendVerify.status, 200);
+
+    const outboxPath = path.join(dataDir, "email_outbox.log");
+    const outboxLines = fs.readFileSync(outboxPath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    assert.ok(outboxLines.length >= 1);
+    const verifyMail = JSON.parse(outboxLines[outboxLines.length - 1]);
+    const matchCode = String(verifyMail?.body_text || "").match(/(\d{6})/);
+    assert.ok(matchCode && matchCode[1], "verification email must contain 6-digit code");
+    const verifyCode = matchCode[1];
+
+    const verifyEmail = await jsonFetch(baseUrl, "/api/auth/verify-email", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ code: verifyCode })
+    });
+    assert.equal(verifyEmail.status, 200);
+    assert.equal(verifyEmail.body?.user?.email_verified, true);
+
+    const changePassword = await jsonFetch(baseUrl, "/api/auth/change-password", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        old_password: "quest123",
+        new_password: "quest456"
+      })
+    });
+    assert.equal(changePassword.status, 200);
+    assert.equal(changePassword.body?.ok, true);
+
+    const oldPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "avatar", password: "quest123" })
+    });
+    assert.equal(oldPasswordLogin.status, 401);
+
+    const newPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "avatar", password: "quest456" })
+    });
+    assert.equal(newPasswordLogin.status, 200);
+
+    const recovered = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
       method: "GET"
     });
-    assert.equal(recoveredOld.status, 404);
-
-    const recoveredNew = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar_renamed", {
-      method: "GET"
-    });
-    assert.equal(recoveredNew.status, 200);
-    assert.equal(recoveredNew.body?.password_plaintext, "quest123");
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body?.delivered, true);
 
     const createChar = await jsonFetch(baseUrl, "/api/characters", {
       method: "POST",
@@ -163,6 +208,24 @@ async function main() {
     assert.equal(heartbeat.status, 200);
     assert.equal(heartbeat.body?.ok, true);
 
+    const heartbeatSecondSession = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        session_id: "test-session-2",
+        character_name: "Avatar",
+        map_x: 309,
+        map_y: 349,
+        map_z: 0,
+        facing_dx: 1,
+        facing_dy: 0,
+        tick: 45,
+        mode: "avatar"
+      })
+    });
+    assert.equal(heartbeatSecondSession.status, 200);
+    assert.equal(heartbeatSecondSession.body?.ok, true);
+
     const presence = await jsonFetch(baseUrl, "/api/world/presence", {
       method: "GET",
       headers: { authorization: `Bearer ${token}` }
@@ -171,7 +234,26 @@ async function main() {
     assert.ok(Array.isArray(presence.body?.players));
     assert.equal(presence.body.players.length, 1);
     assert.equal(presence.body.players[0]?.username, "avatar_renamed");
-    assert.equal(presence.body.players[0]?.map_x, 307);
+    assert.equal(presence.body.players[0]?.map_x, 309);
+    assert.equal(presence.body.players[0]?.session_id, "test-session-2");
+
+    const leave = await jsonFetch(baseUrl, "/api/world/presence/leave", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        session_id: "test-session-2"
+      })
+    });
+    assert.equal(leave.status, 200);
+    assert.equal(leave.body?.ok, true);
+
+    const presenceAfterLeave = await jsonFetch(baseUrl, "/api/world/presence", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(presenceAfterLeave.status, 200);
+    assert.ok(Array.isArray(presenceAfterLeave.body?.players));
+    assert.equal(presenceAfterLeave.body.players.length, 0);
 
     const clock1 = await jsonFetch(baseUrl, "/api/world/clock", {
       method: "GET",
