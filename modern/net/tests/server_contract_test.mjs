@@ -103,6 +103,23 @@ async function main() {
     assert.equal(setEmail.body?.user?.email, "avatar@example.com");
     assert.equal(setEmail.body?.user?.email_verified, false);
 
+    const worldObjects = await jsonFetch(baseUrl, "/api/world/objects?x=307&y=347&z=0&radius=0&limit=32", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(worldObjects.status, 200);
+    assert.ok(worldObjects.body?.meta);
+    assert.ok(Array.isArray(worldObjects.body?.objects));
+    assert.ok(Number.isInteger(worldObjects.body?.meta?.active_count));
+
+    const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({})
+    });
+    assert.equal(worldObjectsReset.status, 200);
+    assert.equal(worldObjectsReset.body?.ok, true);
+
     const sendVerify = await jsonFetch(baseUrl, "/api/auth/send-email-verification", {
       method: "POST",
       headers: authHeaders,

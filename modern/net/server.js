@@ -10,6 +10,7 @@ const tls = require("node:tls");
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
 const DATA_DIR = process.env.VM_NET_DATA_DIR || path.join(__dirname, "data");
+const RUNTIME_DIR = process.env.VM_NET_RUNTIME_DIR || path.join(__dirname, "..", "assets", "runtime");
 const MAX_BODY = 1024 * 1024;
 const SERVER_TICK_MS = 100;
 const SERVER_TICKS_PER_MINUTE = 4;
@@ -39,7 +40,8 @@ const FILES = {
   presence: path.join(DATA_DIR, "presence.json"),
   worldClock: path.join(DATA_DIR, "world_clock.json"),
   criticalPolicy: path.join(DATA_DIR, "critical_item_policy.json"),
-  recoveriesLog: path.join(DATA_DIR, "critical_item_recoveries.log")
+  recoveriesLog: path.join(DATA_DIR, "critical_item_recoveries.log"),
+  worldObjectDeltas: path.join(DATA_DIR, "world_object_deltas.json")
 };
 
 function nowIso() {
@@ -230,6 +232,250 @@ function normalizeWorldClock(raw) {
   };
 }
 
+function parseU16LE(bytes, off) {
+  return (bytes[off] | (bytes[off + 1] << 8)) >>> 0;
+}
+
+function decodePackedCoord(raw0, raw1, raw2) {
+  return {
+    x: (raw0 | ((raw1 & 0x03) << 8)) >>> 0,
+    y: ((raw1 >> 2) | ((raw2 & 0x0f) << 6)) >>> 0,
+    z: ((raw2 >> 4) & 0x0f) >>> 0
+  };
+}
+
+function clampInt(n, lo, hi) {
+  const v = Number(n) | 0;
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
+}
+
+function queryIntOr(url, key, fallback) {
+  if (!url.searchParams.has(key)) {
+    return fallback;
+  }
+  const v = Number(url.searchParams.get(key));
+  if (!Number.isFinite(v)) {
+    return fallback;
+  }
+  return v | 0;
+}
+
+function loadBaseTileMap(runtimeDir) {
+  const basetilePath = path.join(runtimeDir, "basetile");
+  try {
+    const buf = fs.readFileSync(basetilePath);
+    const map = new Uint16Array(0x400);
+    const n = Math.min(0x400, Math.floor(buf.length / 2));
+    for (let i = 0; i < n; i += 1) {
+      map[i] = parseU16LE(buf, i * 2) & 0xffff;
+    }
+    return map;
+  } catch (_err) {
+    return new Uint16Array(0x400);
+  }
+}
+
+function selectObjblkSourceDir(runtimeDir) {
+  const candidates = [runtimeDir, path.join(runtimeDir, "savegame")];
+  for (const dir of candidates) {
+    try {
+      const names = fs.readdirSync(dir);
+      if (names.some((name) => /^objblk[a-h][a-h]$/i.test(name))) {
+        return dir;
+      }
+    } catch (_err) {
+      // Ignore missing/unreadable candidate dir.
+    }
+  }
+  return null;
+}
+
+function parseObjBlkRecords(bytes, areaId, baseTileMap) {
+  if (!bytes || bytes.length < 2) {
+    return [];
+  }
+  let count = parseU16LE(bytes, 0);
+  const maxCount = Math.min(0x0c00, Math.floor((bytes.length - 2) / 8));
+  if (count > maxCount) {
+    count = maxCount;
+  }
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    const off = 2 + (i * 8);
+    const status = bytes[off + 0] >>> 0;
+    if ((status & 0x18) !== 0) {
+      continue;
+    }
+    const pos = decodePackedCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
+    const shapeType = parseU16LE(bytes, off + 4);
+    const type = shapeType & 0x03ff;
+    const frame = (shapeType >> 10) & 0x003f;
+    const amount = parseU16LE(bytes, off + 6);
+    const baseTile = baseTileMap[type] ?? 0;
+    const tileId = (baseTile + frame) & 0xffff;
+    out.push({
+      object_key: `a${areaId.toString(16).padStart(2, "0")}i${i.toString(16).padStart(3, "0")}`,
+      source_area: areaId >>> 0,
+      source_index: i >>> 0,
+      status: status & 0xff,
+      shape_type: shapeType & 0xffff,
+      amount: amount & 0xffff,
+      type: type & 0x3ff,
+      frame: frame & 0x3f,
+      tile_id: tileId & 0xffff,
+      x: pos.x & 0x3ff,
+      y: pos.y & 0x3ff,
+      z: pos.z & 0x0f
+    });
+  }
+  return out;
+}
+
+function loadWorldObjectBaseline(runtimeDir) {
+  const sourceDir = selectObjblkSourceDir(runtimeDir);
+  const loadedAt = nowIso();
+  if (!sourceDir) {
+    return {
+      source_dir: null,
+      loaded_at: loadedAt,
+      files_loaded: 0,
+      baseline_count: 0,
+      objects: []
+    };
+  }
+  const baseTileMap = loadBaseTileMap(runtimeDir);
+  const objects = [];
+  let filesLoaded = 0;
+  for (let ay = 0; ay < 8; ay += 1) {
+    for (let ax = 0; ax < 8; ax += 1) {
+      const name = `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
+      const full = path.join(sourceDir, name);
+      let bytes = null;
+      try {
+        bytes = fs.readFileSync(full);
+      } catch (_err) {
+        bytes = null;
+      }
+      if (!bytes) {
+        continue;
+      }
+      const areaId = ((ay << 3) | ax) >>> 0;
+      const parsed = parseObjBlkRecords(bytes, areaId, baseTileMap);
+      for (const row of parsed) {
+        objects.push(row);
+      }
+      filesLoaded += 1;
+    }
+  }
+  return {
+    source_dir: sourceDir,
+    loaded_at: loadedAt,
+    files_loaded: filesLoaded >>> 0,
+    baseline_count: objects.length >>> 0,
+    objects
+  };
+}
+
+function normalizeWorldObjectDeltas(raw) {
+  const out = {
+    schema_version: 1,
+    removed: {},
+    moved: {},
+    spawned: []
+  };
+  if (!raw || typeof raw !== "object") {
+    return out;
+  }
+  if (raw.schema_version === 1) {
+    out.schema_version = 1;
+  }
+  if (raw.removed && typeof raw.removed === "object") {
+    for (const [k, v] of Object.entries(raw.removed)) {
+      if (v) {
+        out.removed[String(k)] = true;
+      }
+    }
+  }
+  if (raw.moved && typeof raw.moved === "object") {
+    for (const [k, v] of Object.entries(raw.moved)) {
+      if (!v || typeof v !== "object") {
+        continue;
+      }
+      out.moved[String(k)] = {
+        x: Number(v.x) | 0,
+        y: Number(v.y) | 0,
+        z: Number(v.z) | 0
+      };
+    }
+  }
+  if (Array.isArray(raw.spawned)) {
+    out.spawned = raw.spawned
+      .filter((v) => v && typeof v === "object")
+      .map((v, i) => ({
+        object_key: String(v.object_key || `spawn_${i}`),
+        source_area: Number(v.source_area) >>> 0,
+        source_index: Number(v.source_index) >>> 0,
+        status: Number(v.status) & 0xff,
+        shape_type: Number(v.shape_type) & 0xffff,
+        amount: Number(v.amount) & 0xffff,
+        type: Number(v.type) & 0x3ff,
+        frame: Number(v.frame) & 0x3f,
+        tile_id: Number(v.tile_id) & 0xffff,
+        x: Number(v.x) | 0,
+        y: Number(v.y) | 0,
+        z: Number(v.z) | 0
+      }));
+  }
+  return out;
+}
+
+function buildWorldObjectState(runtimeDir, rawDeltas) {
+  const baseline = loadWorldObjectBaseline(runtimeDir);
+  const deltas = normalizeWorldObjectDeltas(rawDeltas);
+  const active = [];
+  for (const b of baseline.objects) {
+    if (deltas.removed[b.object_key]) {
+      continue;
+    }
+    const moved = deltas.moved[b.object_key];
+    if (moved) {
+      active.push({
+        ...b,
+        x: moved.x | 0,
+        y: moved.y | 0,
+        z: moved.z | 0,
+        source_kind: "baseline_moved"
+      });
+    } else {
+      active.push({ ...b, source_kind: "baseline" });
+    }
+  }
+  for (const s of deltas.spawned) {
+    active.push({ ...s, source_kind: "spawned" });
+  }
+  return {
+    baseline,
+    deltas,
+    active
+  };
+}
+
+function worldObjectMeta(state) {
+  const wo = state.worldObjects;
+  return {
+    source_dir: wo.baseline.source_dir,
+    loaded_at: wo.baseline.loaded_at,
+    files_loaded: wo.baseline.files_loaded >>> 0,
+    baseline_count: wo.baseline.baseline_count >>> 0,
+    active_count: wo.active.length >>> 0,
+    delta_removed_count: Object.keys(wo.deltas.removed || {}).length >>> 0,
+    delta_moved_count: Object.keys(wo.deltas.moved || {}).length >>> 0,
+    delta_spawned_count: Array.isArray(wo.deltas.spawned) ? wo.deltas.spawned.length >>> 0 : 0
+  };
+}
+
 function advanceWorldClockMinute(clock) {
   clock.time_m += 1;
   if (clock.time_m < SERVER_MINUTES_PER_HOUR) return;
@@ -272,6 +518,8 @@ function updateAuthoritativeClock(state) {
 
 function loadState() {
   ensureDataDir();
+  const rawWorldObjectDeltas = readJson(FILES.worldObjectDeltas, null);
+  const worldObjects = buildWorldObjectState(RUNTIME_DIR, rawWorldObjectDeltas);
   const state = {
     users: readJson(FILES.users, []),
     tokens: readJson(FILES.tokens, []),
@@ -288,7 +536,8 @@ function loadState() {
     }),
     presence: readJson(FILES.presence, []),
     worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
-    criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy())
+    criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
+    worldObjects
   };
   if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
     state.criticalPolicy = defaultCriticalPolicy();
@@ -336,6 +585,7 @@ function persistState(state) {
   writeJson(FILES.presence, state.presence);
   writeJson(FILES.worldClock, state.worldClock);
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
+  writeJson(FILES.worldObjectDeltas, state.worldObjects.deltas);
 }
 
 function prunePresence(state, nowMs = Date.now()) {
@@ -765,7 +1015,8 @@ const server = http.createServer(async (req, res) => {
       service: "virtuemachine-net",
       now: nowIso(),
       tick: state.worldClock.tick >>> 0,
-      email_mode: EMAIL_MODE
+      email_mode: EMAIL_MODE,
+      world_objects: worldObjectMeta(state)
     });
     return;
   }
@@ -1211,6 +1462,57 @@ const server = http.createServer(async (req, res) => {
         mode: p.mode || "avatar",
         updated_at_ms: Number(p.updated_at_ms || 0)
       }))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/world/objects") {
+    const hasX = url.searchParams.has("x");
+    const hasY = url.searchParams.has("y");
+    const wx = queryIntOr(url, "x", 0);
+    const wy = queryIntOr(url, "y", 0);
+    const wzRaw = queryIntOr(url, "z", Number.NaN);
+    const hasZ = Number.isFinite(wzRaw);
+    const radius = clampInt(queryIntOr(url, "radius", 0), 0, 16);
+    const limit = clampInt(queryIntOr(url, "limit", 256), 1, 2048);
+    const out = [];
+    for (const obj of state.worldObjects.active) {
+      if (hasZ && (obj.z | 0) !== (wzRaw | 0)) {
+        continue;
+      }
+      if (hasX && hasY) {
+        const dx = Math.abs((obj.x | 0) - (wx | 0));
+        const dy = Math.abs((obj.y | 0) - (wy | 0));
+        if (dx > radius || dy > radius) {
+          continue;
+        }
+      }
+      out.push(obj);
+      if (out.length >= limit) {
+        break;
+      }
+    }
+    sendJson(res, 200, {
+      meta: worldObjectMeta(state),
+      query: {
+        x: hasX ? (wx | 0) : null,
+        y: hasY ? (wy | 0) : null,
+        z: hasZ ? (wzRaw | 0) : null,
+        radius: radius | 0,
+        limit: limit | 0
+      },
+      objects: out
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/world/objects/reset") {
+    state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      reset_at: nowIso(),
+      meta: worldObjectMeta(state)
     });
     return;
   }

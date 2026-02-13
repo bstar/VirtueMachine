@@ -2967,6 +2967,18 @@ async function netPollWorldClock() {
   }
 }
 
+async function netFetchWorldObjectsAtCell(x, y, z) {
+  if (!isNetAuthenticated()) {
+    return null;
+  }
+  const out = await netRequest(
+    `/api/world/objects?x=${encodeURIComponent(x | 0)}&y=${encodeURIComponent(y | 0)}&z=${encodeURIComponent(z | 0)}&radius=0&limit=128`,
+    { method: "GET" },
+    true
+  );
+  return out && typeof out === "object" ? out : null;
+}
+
 function setAccountModalOpen(open) {
   if (!netAccountModal) {
     return;
@@ -6832,9 +6844,33 @@ async function copyHoverReportToClipboard() {
     diagBox.textContent = "Hover report unavailable. Move cursor over the world view.";
     return;
   }
-  const ok = await copyTextToClipboard(report);
+  let enrichedReport = report;
+  try {
+    const cell = hoveredWorldCellFromMouse();
+    if (cell && isNetAuthenticated()) {
+      const out = await netFetchWorldObjectsAtCell(cell.x | 0, cell.y | 0, cell.z | 0);
+      if (out && Array.isArray(out.objects)) {
+        const rows = [];
+        rows.push("server_objects:");
+        if (!out.objects.length) {
+          rows.push("server_obj: none");
+        } else {
+          for (let i = 0; i < out.objects.length; i += 1) {
+            const o = out.objects[i];
+            rows.push(
+              `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")}`
+            );
+          }
+        }
+        enrichedReport = `${report}\n${rows.join("\n")}`;
+      }
+    }
+  } catch (_err) {
+    // Keep base local hover report available if net authority fetch fails.
+  }
+  const ok = await copyTextToClipboard(enrichedReport);
   if (ok) {
-    const line = report.split("\n")[1] || "";
+    const line = enrichedReport.split("\n")[1] || "";
     diagBox.className = "diag ok";
     diagBox.textContent = `Copied hover report (${line.replace(/^cell:\\s*/, "")}).`;
   } else {
