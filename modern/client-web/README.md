@@ -79,8 +79,9 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 ## Controls
 
 - `Arrow Keys`: queue movement commands
-- `W/A/S/D`, `H/J/K/L`: movement fallbacks
+- `W/A/S/D`: movement fallback
 - Legacy command keys recognized: `A C T L G D M U R B I` (target verbs enter targeting mode)
+- Implemented target verbs (first pass): `L` Look, `T` Talk, `G` Get, `U` Use
 - `U`: legacy-style Use target mode in avatar mode
 - `Arrow Keys` while Use cursor is active: move interaction box
 - `Enter`/`U` while Use cursor is active: interact at box location
@@ -99,6 +100,7 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `Shift+P`: capture viewport PNG
 - `Shift+Alt+P`: capture world+HUD PNG
 - `Shift+O/F/B/M/R/V`: debug overlay/animation/palette/mode/reset/replay controls
+- `Shift+C`: copy hover parity report to clipboard
 
 Useful parity presets:
 

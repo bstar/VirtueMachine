@@ -63,7 +63,8 @@ This checklist is intentionally mutable.
 - `[x]` Interaction baseline (avatar mode, door toggle, collision behavior)
 - `[~]` Keyboard parity expansion:
   - legacy verb keys mapped and mode-aware target cursor flow wired
-  - command backend parity (`attack/cast/talk/look/get/drop/move`) still pending
+  - first-pass target verb backends landed for `look/talk/get/use`
+  - command backend parity (`attack/cast/drop/move`) still pending
 - `[x]` NPC render + deterministic movement pilot + occlusion guards
 - `[x]` Rendering parity hardening (blackout/wall/corner baseline restored):
   - `nuvie` feature-gated path removed

@@ -19,7 +19,7 @@ Key evidence:
 ### World Mode
 
 - `Arrow Keys`: movement (primary)
-- `W/A/S/D`, `H/J/K/L`: movement fallbacks
+- `W/A/S/D`: movement fallback
 - `A C T L G D M U`: enter legacy target mode with verb-specific label
 - `R`: rest key recognized (stub)
 - `B`: begin/break combat key recognized (currently toggles `in_combat` flag)
@@ -35,6 +35,7 @@ Key evidence:
 - `Esc`: cancel target mode
 
 `Use` target currently executes live interaction (`door/chair/bed`) at target tile.
+`Look`, `Talk`, and `Get` now execute first-pass deterministic target commands.
 Other verbs are wired as parity-recognized stubs pending gameplay-system implementation.
 
 ### Debug/Net Hotkeys (moved off plain legacy letters)
@@ -50,7 +51,9 @@ Other verbs are wired as parity-recognized stubs pending gameplay-system impleme
 
 ## Known Gaps
 
-- verb backends for `Attack/Cast/Talk/Look/Get/Drop/Move` are not fully connected to legacy game logic yet.
+- verb backends for `Attack/Cast/Drop/Move` are not fully connected to legacy game logic yet.
+- `Talk` is currently a deterministic proximity-target stub (no full dialogue pipeline yet).
+- `Get` currently removes a selected portable world object and increments prototype inventory counters.
 - party/solo command mode switching (`0-9`) is key-recognized but not behavior-complete.
 - explicit cursor graphic mode-switching by command is still pending (`docs/architecture/legacy/startup-menu-parity.md`).
 
@@ -59,4 +62,4 @@ Other verbs are wired as parity-recognized stubs pending gameplay-system impleme
 1. Plain letter keys are reserved for legacy gameplay verbs first.
 2. Modern debug/net controls must use modified combos (`Shift+...` or `Ctrl+...`) to avoid keyspace collisions.
 3. Target-mode input semantics must stay stable: move, confirm, cancel.
-4. Movement primary remains arrow keys as a QoL default, while legacy fallbacks remain available.
+4. Movement primary remains arrow keys as a QoL default, with `W/A/S/D` as a non-legacy fallback only.

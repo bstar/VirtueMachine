@@ -10,6 +10,7 @@ const TILE_SIZE = 64;
 const VIEW_W = 11;
 const VIEW_H = 11;
 const COMMAND_WIRE_SIZE = 16;
+const COMMAND_LOG_MAX = 50000;
 const MOVE_INPUT_MIN_INTERVAL_MS = 120;
 const NET_PRESENCE_HEARTBEAT_TICKS = 4;
 const NET_PRESENCE_POLL_TICKS = 10;
@@ -902,7 +903,19 @@ class U6ObjectLayerJS {
   }
 
   objectsAt(x, y, z) {
-    return this.byCoord.get(this.coordKey(x, y, z)) ?? [];
+    const list = this.byCoord.get(this.coordKey(x, y, z)) ?? [];
+    const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
+    if (!removedCount) {
+      return list;
+    }
+    const removed = state?.sim?.removedObjectKeys;
+    if (!removed || typeof removed !== "object") {
+      return list;
+    }
+    return list.filter((o) => {
+      const key = `${o.x & 0x3ff},${o.y & 0x3ff},${o.z & 0x0f},${o.order & 0xffff},${o.type & 0x3ff}`;
+      return !removed[key];
+    });
   }
 }
 
@@ -1962,6 +1975,9 @@ function createInitialSimState() {
     worldFlags: 0,
     commandsApplied: 0,
     doorOpenStates: {},
+    removedObjectKeys: {},
+    removedObjectCount: 0,
+    inventory: {},
     avatarPose: "stand",
     avatarPoseAnchor: null,
     world: { ...INITIAL_WORLD }
@@ -2374,12 +2390,35 @@ function normalizeLoadedSimState(candidate) {
   if (!candidate.world || typeof candidate.world !== "object") {
     return null;
   }
+  const normalizedInventory = {};
+  for (const [k, v] of Object.entries(candidate.inventory ?? {})) {
+    const key = String(k || "").trim();
+    if (!key) {
+      continue;
+    }
+    normalizedInventory[key] = Number(v) >>> 0;
+  }
+  const normalizedRemoved = {};
+  for (const [k, v] of Object.entries(candidate.removedObjectKeys ?? {})) {
+    const key = String(k || "").trim();
+    if (!key) {
+      continue;
+    }
+    normalizedRemoved[key] = Number(v) ? 1 : 0;
+  }
+  const removedObjectCount = Number(candidate.removedObjectCount) >>> 0;
+  const normalizedRemovedCount = removedObjectCount > 0
+    ? removedObjectCount
+    : Object.keys(normalizedRemoved).length;
   return {
     tick: Number(candidate.tick) >>> 0,
     rngState: Number(candidate.rngState) >>> 0,
     worldFlags: Number(candidate.worldFlags) >>> 0,
     commandsApplied: Number(candidate.commandsApplied) >>> 0,
     doorOpenStates: { ...(candidate.doorOpenStates ?? {}) },
+    removedObjectKeys: normalizedRemoved,
+    removedObjectCount: normalizedRemovedCount >>> 0,
+    inventory: normalizedInventory,
     avatarPose: (candidate.avatarPose === "sit" || candidate.avatarPose === "sleep")
       ? candidate.avatarPose
       : "stand",
@@ -3459,6 +3498,159 @@ function objectAnchorKey(obj) {
   return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff},${obj.type & 0x3ff}`;
 }
 
+function isObjectRemoved(sim, obj) {
+  if (!sim || !obj) {
+    return false;
+  }
+  return !!(sim.removedObjectKeys && sim.removedObjectKeys[objectAnchorKey(obj)]);
+}
+
+function markObjectRemoved(sim, obj) {
+  if (!sim || !obj) {
+    return;
+  }
+  if (!sim.removedObjectKeys) {
+    sim.removedObjectKeys = {};
+  }
+  const key = objectAnchorKey(obj);
+  if (!sim.removedObjectKeys[key]) {
+    sim.removedObjectKeys[key] = 1;
+    sim.removedObjectCount = (Number(sim.removedObjectCount) + 1) >>> 0;
+  }
+}
+
+function inventoryKeyForObject(obj) {
+  const typeHex = (obj.type & 0x3ff).toString(16).padStart(3, "0");
+  const frameHex = (obj.frame & 0x3f).toString(16).padStart(2, "0");
+  return `obj_${typeHex}_${frameHex}`;
+}
+
+function addObjectToInventory(sim, obj) {
+  if (!sim.inventory) {
+    sim.inventory = {};
+  }
+  const key = inventoryKeyForObject(obj);
+  const prev = Number(sim.inventory[key]) >>> 0;
+  sim.inventory[key] = (prev + 1) >>> 0;
+}
+
+function isLikelyPickupObjectType(type) {
+  const t = type & 0x03ff;
+  if (OBJECT_TYPES_DOOR.has(t)) return false;
+  if (OBJECT_TYPES_CHAIR.has(t)) return false;
+  if (OBJECT_TYPES_BED.has(t)) return false;
+  if (OBJECT_TYPES_SOLID_ENV.has(t)) return false;
+  if (OBJECT_TYPES_TOP_DECOR.has(t)) return false;
+  return true;
+}
+
+function topWorldObjectAtCell(sim, tx, ty, tz, opts = {}) {
+  if (!state.objectLayer) {
+    return null;
+  }
+  const pickupOnly = !!opts.pickupOnly;
+  const list = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const o = list[i];
+    if (!o.renderable || isObjectRemoved(sim, o)) {
+      continue;
+    }
+    if (pickupOnly && !isLikelyPickupObjectType(o.type)) {
+      continue;
+    }
+    return o;
+  }
+  return null;
+}
+
+function nearestTalkTargetAtCell(sim, tx, ty, tz) {
+  if (!state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
+    return null;
+  }
+  for (const e of state.entityLayer.entries) {
+    if ((e.z | 0) !== (tz | 0)) continue;
+    if ((e.x | 0) !== (tx | 0)) continue;
+    if ((e.y | 0) !== (ty | 0)) continue;
+    if ((e.id | 0) === AVATAR_ENTITY_ID) continue;
+    return e;
+  }
+  return null;
+}
+
+function tryLookAtCell(sim, tx, ty) {
+  if (!state.mapCtx) {
+    return false;
+  }
+  const tz = sim.world.map_z | 0;
+  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
+  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
+  if (Math.max(dx, dy) > 7) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Look: ${tx},${ty} is out of range.`;
+    return false;
+  }
+  const obj = topWorldObjectAtCell(sim, tx, ty, tz);
+  if (obj) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Look: object type 0x${(obj.type & 0x3ff).toString(16)} frame ${obj.frame | 0} at ${tx},${ty},${tz}.`;
+    return true;
+  }
+  const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
+  if (actor) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Look: actor 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}.`;
+    return true;
+  }
+  const tile = state.mapCtx.tileAt(tx | 0, ty | 0, tz | 0) & 0xffff;
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Look: tile 0x${tile.toString(16)} at ${tx},${ty},${tz}.`;
+  return true;
+}
+
+function tryTalkAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
+  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
+  if (Math.max(dx, dy) > 1) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Talk: target must be adjacent (${tx},${ty}).`;
+    return false;
+  }
+  const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
+  if (!actor) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Talk: nobody there at ${tx},${ty},${tz}.`;
+    return false;
+  }
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Talk: actor 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (dialogue system pending).`;
+  return true;
+}
+
+function tryGetAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
+  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
+  if (Math.max(dx, dy) > 1) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
+    return false;
+  }
+  const obj = topWorldObjectAtCell(sim, tx, ty, tz, { pickupOnly: true });
+  if (!obj) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
+    return false;
+  }
+  addObjectToInventory(sim, obj);
+  markObjectRemoved(sim, obj);
+  const invKey = inventoryKeyForObject(obj);
+  const count = Number(sim.inventory[invKey]) >>> 0;
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Get: picked 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${invKey}=${count}).`;
+  return true;
+}
+
 function findObjectByAnchor(anchor) {
   if (!anchor || !state.objectLayer) {
     return null;
@@ -4171,6 +4363,9 @@ function cloneSimState(sim) {
     worldFlags: sim.worldFlags >>> 0,
     commandsApplied: sim.commandsApplied >>> 0,
     doorOpenStates: { ...(sim.doorOpenStates ?? {}) },
+    removedObjectKeys: { ...(sim.removedObjectKeys ?? {}) },
+    removedObjectCount: Number(sim.removedObjectCount) >>> 0,
+    inventory: { ...(sim.inventory ?? {}) },
     avatarPose: String(sim.avatarPose || "stand"),
     avatarPoseAnchor: sim.avatarPoseAnchor ? { ...sim.avatarPoseAnchor } : null,
     world: { ...sim.world }
@@ -4245,6 +4440,18 @@ function applyCommand(sim, cmd) {
         state.avatarFacingDy = dy;
       }
       tryInteractAtCell(sim, tx, ty);
+    }
+  } else if (cmd.type === 4) {
+    if (state.movementMode === "avatar") {
+      tryLookAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === 5) {
+    if (state.movementMode === "avatar") {
+      tryTalkAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === 6) {
+    if (state.movementMode === "avatar") {
+      tryGetAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
   }
   sim.commandsApplied += 1;
@@ -4321,6 +4528,22 @@ function simStateHash(sim) {
     }
     h = hashMixU32(h, sim.doorOpenStates[k] ? 1 : 0);
   }
+  const removedKeys = Object.keys(sim.removedObjectKeys ?? {}).sort();
+  h = hashMixU32(h, removedKeys.length);
+  for (const k of removedKeys) {
+    for (let i = 0; i < k.length; i += 1) {
+      h = hashMixU32(h, k.charCodeAt(i));
+    }
+    h = hashMixU32(h, sim.removedObjectKeys[k] ? 1 : 0);
+  }
+  const inventoryKeys = Object.keys(sim.inventory ?? {}).sort();
+  h = hashMixU32(h, inventoryKeys.length);
+  for (const k of inventoryKeys) {
+    for (let i = 0; i < k.length; i += 1) {
+      h = hashMixU32(h, k.charCodeAt(i));
+    }
+    h = hashMixU32(h, Number(sim.inventory[k]) >>> 0);
+  }
   return h;
 }
 
@@ -4358,6 +4581,14 @@ function unpackCommand(bytes) {
   };
 }
 
+function appendCommandLog(cmd) {
+  state.commandLog.push({ ...cmd });
+  const extra = state.commandLog.length - COMMAND_LOG_MAX;
+  if (extra > 0) {
+    state.commandLog.splice(0, extra);
+  }
+}
+
 function queueMove(dx, dy) {
   dx |= 0;
   dy |= 0;
@@ -4389,7 +4620,7 @@ function queueMove(dx, dy) {
           break;
         }
       }
-      state.commandLog.push({ ...cmd });
+      appendCommandLog(cmd);
       return;
     }
   }
@@ -4401,7 +4632,7 @@ function queueMove(dx, dy) {
   }
 
   state.queue.push(cmd);
-  state.commandLog.push({ ...cmd });
+  appendCommandLog(cmd);
 }
 
 function queueInteractDoor() {
@@ -4411,7 +4642,7 @@ function queueInteractDoor() {
   const bytes = packCommand(state.sim.tick + 1, 2, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
   const cmd = unpackCommand(bytes);
   state.queue.push(cmd);
-  state.commandLog.push({ ...cmd });
+  appendCommandLog(cmd);
 }
 
 function queueInteractAtCell(wx, wy) {
@@ -4423,7 +4654,27 @@ function queueInteractAtCell(wx, wy) {
   const bytes = packCommand(state.sim.tick + 1, 3, tx, ty);
   const cmd = unpackCommand(bytes);
   state.queue.push(cmd);
-  state.commandLog.push({ ...cmd });
+  appendCommandLog(cmd);
+}
+
+function queueLegacyTargetVerb(verb, wx, wy) {
+  if (state.movementMode !== "avatar") {
+    return;
+  }
+  const v = String(verb || "").toLowerCase();
+  let type = 0;
+  if (v === LEGACY_TARGET_VERB.LOOK) type = 4;
+  else if (v === LEGACY_TARGET_VERB.TALK) type = 5;
+  else if (v === LEGACY_TARGET_VERB.GET) type = 6;
+  if (!type) {
+    return;
+  }
+  const tx = wx | 0;
+  const ty = wy | 0;
+  const bytes = packCommand(state.sim.tick + 1, type, tx, ty);
+  const cmd = unpackCommand(bytes);
+  state.queue.push(cmd);
+  appendCommandLog(cmd);
 }
 
 function buildPaletteFromU6Pal(bytes) {
@@ -6038,6 +6289,8 @@ function commitUseCursorInteract() {
   const verb = String(state.targetVerb || "");
   if (!verb || verb === LEGACY_TARGET_VERB.USE) {
     queueInteractAtCell(tx, ty);
+  } else if (verb === LEGACY_TARGET_VERB.LOOK || verb === LEGACY_TARGET_VERB.TALK || verb === LEGACY_TARGET_VERB.GET) {
+    queueLegacyTargetVerb(verb, tx, ty);
   } else {
     const label = LEGACY_TARGET_VERB_LABEL[verb] || "Action";
     diagBox.className = "diag warn";
@@ -6060,10 +6313,10 @@ function cancelTargetCursor() {
 function moveDeltaFromKey(ev, allowDiagonal) {
   const k = String(ev.key || "").toLowerCase();
   const code = String(ev.code || "");
-  if (k === "arrowup" || k === "w" || k === "k" || code === "Numpad8") return [0, -1];
-  if (k === "arrowdown" || k === "s" || k === "j" || code === "Numpad2") return [0, 1];
-  if (k === "arrowleft" || k === "a" || k === "h" || code === "Numpad4") return [-1, 0];
-  if (k === "arrowright" || k === "d" || k === "l" || code === "Numpad6") return [1, 0];
+  if (k === "arrowup" || k === "w" || code === "Numpad8") return [0, -1];
+  if (k === "arrowdown" || k === "s" || code === "Numpad2") return [0, 1];
+  if (k === "arrowleft" || k === "a" || code === "Numpad4") return [-1, 0];
+  if (k === "arrowright" || k === "d" || code === "Numpad6") return [1, 0];
   if (!allowDiagonal) {
     return null;
   }
@@ -6316,7 +6569,7 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     return;
   }
-  if (k === "c" && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+  if (k === "c" && ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
     void copyHoverReportToClipboard();
     ev.preventDefault();
     return;
