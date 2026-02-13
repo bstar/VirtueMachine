@@ -4,7 +4,7 @@ This directory contains the first multiplayer backend seed focused on:
 
 - authenticated user login (stub)
 - remote character persistence
-- authoritative snapshot save/load endpoints
+- authoritative world snapshot save/load endpoint
 - critical quest-item recovery policy scaffold
 
 Authentication note (intentional for this project): passwords are stored in plaintext
@@ -89,8 +89,8 @@ Authenticated (Bearer token):
 - `POST /api/auth/verify-email`
 - `GET /api/characters`
 - `POST /api/characters`
-- `GET /api/characters/:id/snapshot`
-- `PUT /api/characters/:id/snapshot`
+- `GET /api/world/snapshot`
+- `PUT /api/world/snapshot`
 - `POST /api/world/presence/heartbeat`
 - `POST /api/world/presence/leave`
 - `GET /api/world/presence`
@@ -117,4 +117,9 @@ Or via tooling wrapper:
 
 ```bash
 ./modern/tools/test_net_contracts.sh
+```
+Reset canonical world save (clears shared world snapshot + active presence):
+
+```bash
+./modern/tools/reset_world_save.sh
 ```

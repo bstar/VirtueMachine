@@ -34,6 +34,7 @@ const FILES = {
   users: path.join(DATA_DIR, "users.json"),
   tokens: path.join(DATA_DIR, "tokens.json"),
   characters: path.join(DATA_DIR, "characters.json"),
+  worldSnapshot: path.join(DATA_DIR, "world_snapshot.json"),
   emailOutbox: path.join(DATA_DIR, "email_outbox.log"),
   presence: path.join(DATA_DIR, "presence.json"),
   worldClock: path.join(DATA_DIR, "world_clock.json"),
@@ -275,6 +276,16 @@ function loadState() {
     users: readJson(FILES.users, []),
     tokens: readJson(FILES.tokens, []),
     characters: readJson(FILES.characters, []),
+    worldSnapshot: readJson(FILES.worldSnapshot, {
+      snapshot_meta: {
+        schema_version: 1,
+        sim_core_version: "unknown",
+        saved_tick: 0,
+        snapshot_hash: null
+      },
+      snapshot_base64: null,
+      updated_at: nowIso()
+    }),
     presence: readJson(FILES.presence, []),
     worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy())
@@ -288,6 +299,32 @@ function loadState() {
   for (const user of state.users) {
     ensureUserSchema(user);
   }
+  if (!state.worldSnapshot || typeof state.worldSnapshot !== "object") {
+    state.worldSnapshot = {
+      snapshot_meta: {
+        schema_version: 1,
+        sim_core_version: "unknown",
+        saved_tick: 0,
+        snapshot_hash: null
+      },
+      snapshot_base64: null,
+      updated_at: nowIso()
+    };
+  }
+  if (!state.worldSnapshot.snapshot_meta || typeof state.worldSnapshot.snapshot_meta !== "object") {
+    state.worldSnapshot.snapshot_meta = {
+      schema_version: 1,
+      sim_core_version: "unknown",
+      saved_tick: 0,
+      snapshot_hash: null
+    };
+  }
+  if (!Object.prototype.hasOwnProperty.call(state.worldSnapshot, "snapshot_base64")) {
+    state.worldSnapshot.snapshot_base64 = null;
+  }
+  if (!state.worldSnapshot.updated_at) {
+    state.worldSnapshot.updated_at = nowIso();
+  }
   return state;
 }
 
@@ -295,6 +332,7 @@ function persistState(state) {
   writeJson(FILES.users, state.users);
   writeJson(FILES.tokens, state.tokens);
   writeJson(FILES.characters, state.characters);
+  writeJson(FILES.worldSnapshot, state.worldSnapshot);
   writeJson(FILES.presence, state.presence);
   writeJson(FILES.worldClock, state.worldClock);
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
@@ -1173,6 +1211,44 @@ const server = http.createServer(async (req, res) => {
         mode: p.mode || "avatar",
         updated_at_ms: Number(p.updated_at_ms || 0)
       }))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/world/snapshot") {
+    sendJson(res, 200, {
+      snapshot_meta: state.worldSnapshot.snapshot_meta,
+      snapshot_base64: state.worldSnapshot.snapshot_base64,
+      updated_at: state.worldSnapshot.updated_at
+    });
+    return;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/world/snapshot") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const snapshotBase64 = String(body && body.snapshot_base64 || "").trim();
+    if (!snapshotBase64) {
+      sendError(res, 400, "bad_snapshot", "snapshot_base64 is required");
+      return;
+    }
+    state.worldSnapshot.snapshot_base64 = snapshotBase64;
+    state.worldSnapshot.snapshot_meta = {
+      schema_version: Number(body.schema_version) || 1,
+      sim_core_version: String(body.sim_core_version || "unknown"),
+      saved_tick: Number(body.saved_tick) || 0,
+      snapshot_hash: computeSnapshotHash(snapshotBase64)
+    };
+    state.worldSnapshot.updated_at = nowIso();
+    persistState(state);
+    sendJson(res, 200, {
+      snapshot_meta: state.worldSnapshot.snapshot_meta,
+      updated_at: state.worldSnapshot.updated_at
     });
     return;
   }
