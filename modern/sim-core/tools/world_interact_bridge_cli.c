@@ -53,8 +53,8 @@ int main(int argc, char **argv) {
   U6WorldInteractInput in;
   U6WorldInteractResult out;
 
-  if (argc != 6) {
-    fprintf(stderr, "usage: %s <verb> <status_u8> <holder_kind:none|object|npc> <owner_matches:0|1> <has_container:0|1>\n", argv[0]);
+  if (argc != 7) {
+    fprintf(stderr, "usage: %s <verb> <status_u8> <holder_kind:none|object|npc> <owner_matches:0|1> <has_container:0|1> <chain_accessible:0|1>\n", argv[0]);
     return 2;
   }
 
@@ -64,6 +64,7 @@ int main(int argc, char **argv) {
   in.holder_kind = (uint8_t)(parse_holder_kind(argv[3]) & 0xffu);
   in.owner_matches_actor = (uint8_t)((strtoul(argv[4], NULL, 0) != 0) ? 1u : 0u);
   in.has_container = (uint8_t)((strtoul(argv[5], NULL, 0) != 0) ? 1u : 0u);
+  in.chain_accessible = (uint8_t)((strtoul(argv[6], NULL, 0) != 0) ? 1u : 0u);
 
   out.code = U6_WORLD_INTERACT_ERR_BAD_VERB;
   out.status = in.status;

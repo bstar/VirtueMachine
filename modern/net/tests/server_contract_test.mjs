@@ -234,6 +234,54 @@ async function main() {
       assert.equal(coordUseOfStatus(put.body?.target?.status), OBJ_COORD_USE_CONTAINED);
       assert.equal(String(put.body?.target?.holder_kind || ""), "object");
       assert.equal(String(put.body?.target?.holder_key || ""), containerKey);
+      assert.ok(Array.isArray(put.body?.target?.assoc_chain));
+      assert.ok(String(put.body?.target?.root_anchor_key || "").length > 0);
+
+      const takeContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "take",
+          target_key: containerKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(takeContainer.status, 200);
+      assert.equal(coordUseOfStatus(takeContainer.body?.target?.status), OBJ_COORD_USE_INVEN);
+      assert.equal(String(takeContainer.body?.target?.holder_kind || ""), "npc");
+
+      const blockedTakeContained = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "take",
+          target_key: targetKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(blockedTakeContained.status, 409);
+      assert.equal(blockedTakeContained.body?.error?.code, "interaction_container_blocked");
+
+      const dropContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "drop",
+          target_key: containerKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(dropContainer.status, 200);
+      assert.equal(coordUseOfStatus(dropContainer.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
 
       const takeAgain = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
@@ -266,7 +314,7 @@ async function main() {
       assert.equal(drop.status, 200);
       assert.equal(coordUseOfStatus(drop.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
       assert.equal(String(drop.body?.target?.holder_kind || ""), "none");
-      assert.equal(Number(drop.body?.interaction_checkpoint?.seq), 5);
+      assert.equal(Number(drop.body?.interaction_checkpoint?.seq), 7);
       assert.ok(String(drop.body?.interaction_checkpoint?.hash || "").length > 0);
       return {
         seq: Number(drop.body?.interaction_checkpoint?.seq) | 0,

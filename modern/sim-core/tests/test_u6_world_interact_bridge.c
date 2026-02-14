@@ -17,6 +17,7 @@ int main(void) {
   in.holder_kind = 0;
   in.owner_matches_actor = 1;
   in.has_container = 0;
+  in.chain_accessible = 1;
   if (u6_world_interact_apply(&in, &out) != U6_WORLD_INTERACT_OK) {
     return fail("take should succeed");
   }
@@ -56,6 +57,11 @@ int main(void) {
   in.verb = U6_WORLD_INTERACT_TAKE;
   in.status = u6_obj_status_to_contained(0);
   in.holder_kind = 1;
+  in.chain_accessible = 0;
+  if (u6_world_interact_apply(&in, &out) != U6_WORLD_INTERACT_ERR_CONTAINER) {
+    return fail("take from contained should fail when chain inaccessible");
+  }
+  in.chain_accessible = 1;
   if (u6_world_interact_apply(&in, &out) != U6_WORLD_INTERACT_OK) {
     return fail("take from contained should succeed");
   }

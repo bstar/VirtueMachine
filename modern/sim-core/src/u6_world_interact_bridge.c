@@ -23,6 +23,10 @@ int u6_world_interact_apply(const U6WorldInteractInput *in, U6WorldInteractResul
         out->code = U6_WORLD_INTERACT_ERR_BLOCKED;
         return out->code;
       }
+      if (use == U6_OBJ_COORD_USE_CONTAINED && in->chain_accessible == 0) {
+        out->code = U6_WORLD_INTERACT_ERR_CONTAINER;
+        return out->code;
+      }
       out->code = U6_WORLD_INTERACT_OK;
       out->status = u6_obj_status_to_inventory(in->status);
       out->holder_kind = U6_HOLDER_NPC;

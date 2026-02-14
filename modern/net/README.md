@@ -102,7 +102,7 @@ Authenticated (Bearer token):
 - `GET /api/world/critical-items/policy`
 - `PUT /api/world/critical-items/policy`
 - `POST /api/world/critical-items/maintenance`
-- `GET /api/world/objects` (server-authoritative world object query; supports `x,y,z,radius,limit,projection,include_footprint`)
+- `GET /api/world/objects` (server-authoritative world object query; supports `x,y,z,radius,limit,projection,include_footprint`; includes containment diagnostics: `assoc_chain`, `root_anchor_key`, `blocked_by`)
 - `POST /api/world/objects/interact` (authoritative object interaction mutations: `take`, `drop`, `put`, `equip`)
 - `POST /api/world/objects/reset` (reset world object deltas to baseline)
 - `POST /api/world/objects/reload-baseline` (reload immutable baseline from `VM_NET_OBJECT_BASELINE_DIR` and clear deltas)
@@ -116,6 +116,7 @@ World object authority note:
 - deltas are persisted in `modern/net/data/world_object_deltas.json`
 - use `/api/world/objects` for explicit server truth during parity debugging
 - interaction responses include `interaction_checkpoint` (`seq`, `hash`) so repeated command streams can be replay-checked for determinism
+- contained-item `take` operations enforce chain accessibility (cycle/missing-parent/parent-owned blocks reported via `blocked_by`)
  - `projection=anchor` filters by legacy anchor cells
  - `projection=footprint` filters by occupied footprint cells (double-width/height expansion)
 

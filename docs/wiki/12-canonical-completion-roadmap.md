@@ -68,6 +68,7 @@ Player impact:
 ### Highest-Risk Remaining Gaps
 
 - same-cell chain-association semantics under mixed support and inventory object sets
+- nested container-chain accessibility rules (contained-in-contained ownership/root-anchor behavior)
 - sparse edge conditions where obscurity and visibility suppression overlap
 - legacy flow semantics not yet fully encoded outside room rendering
 
@@ -91,6 +92,23 @@ For each canonical change:
 5. update deviation ledger/wiki
 
 No step is optional if the intent is long-term parity confidence.
+
+## Current Closure Status (World Objects Track)
+
+Recently closed:
+
+- canonical coord-use status transition module (`LOCXYZ/CONTAINED/INVEN/EQUIP`) with exhaustive matrix tests
+- server-authoritative interaction mutation endpoint (`take/drop/put/equip`)
+- deterministic interaction checkpoint hashing and replay-equivalence contract test
+- required sim-core compiled interaction decision bridge for net mutation semantics (default required mode)
+
+Next closure target:
+
+- assoc/container-chain semantic closure:
+  - parent-chain traversal with cycle/missing-parent guards (`partially closed` in net authority path)
+  - chain accessibility constraints for `take` from contained stacks (`partially closed` in interaction endpoint + contract tests)
+  - diagnostics surfacing (`assoc_chain`, `root_anchor`, `blocked_by`)
+  - deterministic test fixtures for nested chains (`in progress`)
 
 ## Why This Roadmap Prevents Future Grind
 

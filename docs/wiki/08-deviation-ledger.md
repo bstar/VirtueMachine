@@ -79,6 +79,13 @@ Observed impact archetype:
 - Modern: comparator semantics are now aligned in client composition, `sim-core` objblk render sort, and net-server active object ordering
 - Remaining risk: full assoc-chain resolution (true `GetAssoc` graph) is still not represented end-to-end in modern runtime records
 
+### Interaction Decision Authority
+
+- Status: `faithful` (in-progress closure)
+- Legacy intent: one canonical ruleset decides object status transitions
+- Modern: net world-object mutations now route through required sim-core compiled interaction bridge (`sim_core_world_interact_bridge`)
+- Remaining risk: bridge input currently consumes net-resolved chain accessibility flags; full native assoc traversal in sim-core runtime model is still pending
+
 ## Network Authority Deviations
 
 ### Server-Authoritative World Objects
@@ -91,6 +98,7 @@ Observed impact archetype:
 ## Open Gaps Requiring Deep Legacy Pass
 
 - full chain-association and contained/inventory relationship effects in render ordering edge cases
+- nested container-chain accessibility parity (contained item access when parent containers are moved/owned/invalid) `partially-closed`: server now computes parent-chain diagnostics (`assoc_chain`, `root_anchor_key`, `blocked_by`) and blocks inaccessible contained `take`
 - room-wide exhaustive parity sweeps after canonical provenance correction
 - complete startup/title flow provenance from `u.exe`/intro path integration
 
@@ -99,6 +107,7 @@ Current instrumentation support:
 - server/API object responses now expose assoc-child aggregate metadata (`assoc_child_count`, `assoc_child_0010_count`)
 - client hover reports include local + server assoc aggregate signals to speed parity diagnosis before full assoc-graph ordering is implemented
 - server/API and client object parse paths now compute and expose a deterministic `legacy_order` rank derived from full raw `objblk` record ordering (including non-LOCXYZ assoc records)
+- server interaction responses expose deterministic interaction checkpoints (`seq`, `hash`) so repeated command streams can be compared for authority determinism
 
 ## Deviation Policy
 

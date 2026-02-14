@@ -69,7 +69,7 @@ function parseBridgeOutput(stdout) {
 
 function mapBridgeCode(code) {
   if ((code | 0) === -1) return { http: 400, code: "bad_verb", message: "verb must be one of: take, drop, put, equip" };
-  if ((code | 0) === -3) return { http: 404, code: "container_not_found", message: "container is required for put" };
+  if ((code | 0) === -3) return { http: 409, code: "interaction_container_blocked", message: "container/assoc chain blocked interaction" };
   if ((code | 0) === -2) return { http: 409, code: "interaction_blocked", message: "interaction blocked by canonical rules" };
   return { http: 500, code: "interaction_failed", message: "canonical interaction bridge failed" };
 }
@@ -80,6 +80,7 @@ function invokeSimCoreBridge(input) {
   const actorId = String(input?.actorId || "");
   const ownerMatches = String(target.holder_kind || "") === "npc" && String(target.holder_id || "") === actorId ? 1 : 0;
   const hasContainer = input?.container ? 1 : 0;
+  const chainAccessible = input?.chainAccessible ? 1 : 0;
   if (!BRIDGE_BIN) {
     return { ok: false, code: "interaction_bridge_unavailable", message: "sim-core interaction bridge unavailable", http: 500 };
   }
@@ -91,7 +92,8 @@ function invokeSimCoreBridge(input) {
       String(Number(target.status) & 0xff),
       String(String(target.holder_kind || "none").toLowerCase()),
       String(ownerMatches),
-      String(hasContainer)
+      String(hasContainer),
+      String(chainAccessible)
     ],
     { encoding: "utf8", timeout: 3000 }
   );

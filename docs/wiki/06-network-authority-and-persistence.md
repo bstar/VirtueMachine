@@ -6,6 +6,10 @@ Legacy was local single-process authority. Modern multiplayer needs one source o
 
 Server authority prevents clients from drifting into different realities of the same room.
 
+Current closure step:
+
+- world-object interaction mutations (`take/drop/put/equip`) are now evaluated by a required compiled sim-core bridge, not ad hoc net-only logic.
+
 ## Server Authority Model
 
 `modern/net/server.js` provides host-authoritative world object state via:
@@ -20,6 +24,7 @@ Effective world objects = baseline objects + deltas.
 Delta file:
 
 - `modern/net/data/world_object_deltas.json`
+- interaction checkpoint log: `modern/net/data/world_interaction_log.json`
 
 If visuals do not change after baseline fixes, check whether stale deltas are still overriding cells.
 
@@ -56,6 +61,12 @@ If parity changes seem ignored, use this order:
 ## Contract Intent
 
 The network layer should not invent gameplay semantics. It should transport and persist authoritative state while preserving deterministic core behavior.
+
+Practical contract additions:
+
+- interaction mutation responses include `interaction_checkpoint` (`seq`, `hash`)
+- replaying the same command stream after baseline reset is expected to produce the same checkpoint hash
+- bridge binary requirement is explicit (`VM_SIM_CORE_INTERACT_REQUIRED=on` by default)
 
 ## Player-Visible Impact
 

@@ -59,8 +59,8 @@ This checklist is intentionally mutable.
 - `[x]` Minimal web client scaffolding
 - `[x]` Runtime asset validation + fallback diagnostics
 - `[x]` Playable deterministic walkaround demo
-- `[ ]` Object interaction system parity (container/world/use flows)
-- `[ ]` Inventory/equipment UX and item transfer rules parity
+- `[~]` Object interaction system parity (container/world/use flows)
+- `[~]` Inventory/equipment UX and item transfer rules parity
 - `[ ]` NPC communication/dialogue system
 - `[ ]` Quest mechanics/progression systems
 - `[ ]` Magic/casting systems
@@ -156,7 +156,10 @@ This checklist is intentionally mutable.
 - `[x]` Complete in-engine legacy cursor integration pass
 - `[x]` Resolve blackout wall-render parity and remove Nuvie mode fork
 - `[~]` Add mode-aware legacy keyboard parity matrix + target-cursor flow
-- `[ ]` Add deterministic tests for interaction visual-state transitions (R3)
+- `[~]` Add deterministic interaction/state transition tests:
+  - completed: canonical status transition matrix (`LOCXYZ/CONTAINED/INVEN/EQUIP`)
+  - completed: server interaction lifecycle contract + deterministic checkpoint hash replay
+  - next: nested containment/assoc-chain accessibility fixtures and regression corpus
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
 - `[ ]` Add environmental object collision pass (chairs, beds, tables, furniture)
@@ -181,13 +184,13 @@ This checklist is intentionally mutable.
 
 ## Next Immediate Task
 
-Complete interaction-parity slice before resuming audio:
+Continue canonical interaction-parity closure before resuming audio:
 
-1. Implement environmental collision matrix for furniture-class objects (chairs, beds, tables, shelves, dressers).
-2. Add interaction verbs/states for `sit` and `sleep` with deterministic command/tick handling.
-3. Bind avatar sit/sleep rendering states and collision occupancy rules.
-4. Add NPC sit/sleep state transitions with deterministic scheduling hooks (time-of-day ready boundary, if static for now).
-5. Add replay/hash fixtures covering sit/sleep transitions and occupancy collision.
+1. Implement assoc/container-chain traversal semantics for contained items (cycle/missing-parent guards). (`partially complete` in net authority path)
+2. Enforce chain-access rules in canonical interaction execution (`take/put/drop/equip`) and expose `blocked_by` diagnostics. (`complete` for server endpoint path)
+3. Add deterministic replay/hash fixtures for repeated interaction command streams over nested chains. (`in progress`, lifecycle + reset replay hash checks landed)
+4. Add room-level canonical fixture corpus for interaction hotspots (Virtue room / British study stack cases).
+5. Only after chain semantics closure: proceed to environmental collision + sit/sleep interaction slice.
 
 Then continue R5/R3 closure and M5:
 

@@ -23,6 +23,7 @@ typedef struct U6WorldInteractInput {
   uint8_t holder_kind;
   uint8_t owner_matches_actor;
   uint8_t has_container;
+  uint8_t chain_accessible;
 } U6WorldInteractInput;
 
 typedef struct U6WorldInteractResult {

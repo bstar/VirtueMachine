@@ -7,6 +7,10 @@ const crypto = require("node:crypto");
 const net = require("node:net");
 const tls = require("node:tls");
 const {
+  OBJ_COORD_USE_LOCXYZ,
+  OBJ_COORD_USE_CONTAINED,
+  OBJ_COORD_USE_INVEN,
+  OBJ_COORD_USE_EQUIP,
   coordUseOfStatus,
   applyCanonicalWorldInteractionCommand
 } = require("./world_interaction_bridge");
@@ -622,6 +626,84 @@ function findActiveObjectByKey(state, objectKey) {
     return null;
   }
   return state.worldObjects.active.find((o) => String(o.object_key || "") === key) || null;
+}
+
+function buildActiveObjectIndex(state) {
+  const idx = new Map();
+  for (const obj of state.worldObjects.active) {
+    const key = String(obj.object_key || "");
+    if (key) {
+      idx.set(key, obj);
+    }
+  }
+  return idx;
+}
+
+function analyzeContainmentChain(state, obj, objectIndex) {
+  const index = objectIndex || buildActiveObjectIndex(state);
+  const use = coordUseOfStatus(obj?.status);
+  const chain = [];
+  const seen = new Set();
+  const selfKey = String(obj?.object_key || "");
+  let rootAnchorKey = selfKey;
+  let blockedBy = "";
+  let chainAccessible = false;
+
+  if (!obj || !selfKey) {
+    return { assoc_chain: chain, root_anchor_key: "", blocked_by: "invalid-object", chain_accessible: false };
+  }
+  if (use !== OBJ_COORD_USE_CONTAINED) {
+    chainAccessible = use === OBJ_COORD_USE_LOCXYZ;
+    return {
+      assoc_chain: chain,
+      root_anchor_key: rootAnchorKey,
+      blocked_by: "",
+      chain_accessible: chainAccessible
+    };
+  }
+
+  let current = obj;
+  seen.add(selfKey);
+  for (let depth = 0; depth < 32; depth += 1) {
+    const parentKey = String(current?.holder_key || current?.holder_id || "");
+    if (!parentKey) {
+      blockedBy = "missing-parent-ref";
+      break;
+    }
+    if (seen.has(parentKey)) {
+      blockedBy = `cycle:${parentKey}`;
+      break;
+    }
+    seen.add(parentKey);
+    const parent = index.get(parentKey);
+    if (!parent) {
+      blockedBy = `missing-parent:${parentKey}`;
+      break;
+    }
+    chain.push(String(parent.object_key || ""));
+    rootAnchorKey = String(parent.object_key || rootAnchorKey);
+    const pUse = coordUseOfStatus(parent.status);
+    if (pUse === OBJ_COORD_USE_LOCXYZ) {
+      chainAccessible = true;
+      blockedBy = "";
+      break;
+    }
+    if (pUse === OBJ_COORD_USE_CONTAINED) {
+      current = parent;
+      continue;
+    }
+    blockedBy = `parent-owned:${String(parent.object_key || "")}`;
+    break;
+  }
+  if (!chainAccessible && !blockedBy) {
+    blockedBy = "max-depth";
+  }
+  return {
+    assoc_chain: chain,
+    root_anchor_key: rootAnchorKey,
+    blocked_by: blockedBy,
+    chain_accessible: chainAccessible
+  };
 }
 
 function persistPatchedObject(state, obj) {
@@ -1751,6 +1833,7 @@ const server = http.createServer(async (req, res) => {
       : "anchor";
     const includeFootprint = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
     const withFootprint = includeFootprint === "1" || includeFootprint === "true" || includeFootprint === "on";
+    const objectIndex = buildActiveObjectIndex(state);
     const out = [];
     for (const obj of state.worldObjects.active) {
       if (hasZ && (obj.z | 0) !== (wzRaw | 0)) {
@@ -1780,12 +1863,22 @@ const server = http.createServer(async (req, res) => {
         }
       }
       if (withFootprint) {
+        const chainInfo = analyzeContainmentChain(state, obj, objectIndex);
         out.push({
           ...obj,
-          footprint: objectFootprintCells(obj, state.worldObjects.tileFlags)
+          footprint: objectFootprintCells(obj, state.worldObjects.tileFlags),
+          assoc_chain: chainInfo.assoc_chain,
+          root_anchor_key: chainInfo.root_anchor_key,
+          blocked_by: chainInfo.blocked_by
         });
       } else {
-        out.push(obj);
+        const chainInfo = analyzeContainmentChain(state, obj, objectIndex);
+        out.push({
+          ...obj,
+          assoc_chain: chainInfo.assoc_chain,
+          root_anchor_key: chainInfo.root_anchor_key,
+          blocked_by: chainInfo.blocked_by
+        });
       }
       if (out.length >= limit) {
         break;
@@ -1840,12 +1933,37 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    const objectIndex = buildActiveObjectIndex(state);
+    const targetChain = analyzeContainmentChain(state, target, objectIndex);
+    if (verb === "take" && coordUseOfStatus(target.status) === OBJ_COORD_USE_CONTAINED && !targetChain.chain_accessible) {
+      sendJson(res, 409, {
+        error: {
+          code: "interaction_container_blocked",
+          message: "contained object chain is not accessible",
+          blocked_by: targetChain.blocked_by
+        }
+      });
+      return;
+    }
+    if (verb === "put" && container) {
+      if (String(container.object_key || "") === String(target.object_key || "")) {
+        sendError(res, 409, "interaction_container_cycle", "cannot put object into itself");
+        return;
+      }
+      const containerChain = analyzeContainmentChain(state, container, objectIndex);
+      if ((containerChain.assoc_chain || []).includes(String(target.object_key || ""))) {
+        sendError(res, 409, "interaction_container_cycle", "cannot create containment cycle");
+        return;
+      }
+    }
+
     const applied = applyCanonicalWorldInteractionCommand({
       verb,
       target,
       container,
       actorId,
-      actorPos
+      actorPos,
+      chainAccessible: targetChain.chain_accessible
     });
     if (!applied.ok) {
       sendError(
@@ -1887,7 +2005,10 @@ const server = http.createServer(async (req, res) => {
         holder_key: String(target.holder_key || ""),
         x: target.x | 0,
         y: target.y | 0,
-        z: target.z | 0
+        z: target.z | 0,
+        assoc_chain: targetChain.assoc_chain,
+        root_anchor_key: targetChain.root_anchor_key,
+        blocked_by: targetChain.blocked_by
       },
       interaction_checkpoint: {
         seq: Number(state.worldInteractionLog?.seq || event.seq || 0) >>> 0,
