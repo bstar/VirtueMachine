@@ -1,0 +1,37 @@
+{
+  "map_reference_png": "docs/reference/ultima6_map_level0.png",
+  "description": "Room hotspot regression fixtures anchored to level-0 map coordinates.",
+  "fixtures": [
+    {
+      "id": "virtue_room_book_key_table",
+      "center": { "x": 298, "y": 355, "z": 0 },
+      "radius": 2,
+      "must_include": [
+        { "x": 297, "y": 355, "z": 0, "type": 250, "frame": 0, "label": "book-left-table" },
+        { "x": 298, "y": 355, "z": 0, "type": 250, "frame": 2, "label": "key-right-table" }
+      ],
+      "must_exclude": [
+        { "x": 297, "y": 355, "z": 0, "type": 151, "label": "table-overlay-under-book" }
+      ]
+    },
+    {
+      "id": "british_study_bench_distribution",
+      "center": { "x": 293, "y": 354, "z": 0 },
+      "radius": 3,
+      "must_include": [
+        { "x": 291, "y": 354, "z": 0, "type": 279, "frame": 11, "label": "bench-left-end" },
+        { "x": 292, "y": 354, "z": 0, "type": 279, "frame": 4, "label": "bench-mid-support" },
+        { "x": 293, "y": 354, "z": 0, "type": 122, "frame": 1, "label": "candle-left-shifted" },
+        { "x": 294, "y": 354, "z": 0, "type": 150, "frame": 0, "label": "cup-slot" },
+        { "x": 295, "y": 354, "z": 0, "type": 152, "frame": 0, "label": "bottle-slot" },
+        { "x": 295, "y": 354, "z": 0, "type": 118, "frame": 0, "label": "paper-slot" },
+        { "x": 295, "y": 354, "z": 0, "type": 115, "frame": 0, "label": "scroll-slot" }
+      ],
+      "must_exclude": [
+        { "x": 293, "y": 354, "z": 0, "type": 279, "frame": 4, "label": "stacked-bench-piece-293" },
+        { "x": 294, "y": 354, "z": 0, "type": 279, "frame": 4, "label": "stacked-bench-piece-294" },
+        { "x": 295, "y": 354, "z": 0, "type": 279, "frame": 4, "label": "stacked-bench-piece-295" }
+      ]
+    }
+  ]
+}

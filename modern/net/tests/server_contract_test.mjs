@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 const ROOT = path.resolve(new URL("../../../..", import.meta.url).pathname);
 const SERVER_JS = path.join(ROOT, "modern/net/server.js");
 const SIM_CORE_INTERACT_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_interact_bridge");
+const SIM_CORE_ASSOC_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_bridge");
+const ROOM_HOTSPOT_FIXTURES = path.join(ROOT, "modern", "net", "tests", "fixtures", "room_hotspots.level0.json");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -57,6 +59,26 @@ function findObjectByKey(list, key) {
   return (Array.isArray(list) ? list : []).find((o) => String(o?.object_key || "") === String(key || "")) || null;
 }
 
+function loadRoomHotspotFixtures() {
+  const raw = fs.readFileSync(ROOM_HOTSPOT_FIXTURES, "utf8");
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed?.fixtures) ? parsed.fixtures : [];
+}
+
+function objectMatchesExpectation(obj, exp) {
+  if (!obj || !exp) {
+    return false;
+  }
+  if ((Number(obj.x) | 0) !== (Number(exp.x) | 0)) return false;
+  if ((Number(obj.y) | 0) !== (Number(exp.y) | 0)) return false;
+  if ((Number(obj.z) | 0) !== (Number(exp.z) | 0)) return false;
+  if ((Number(obj.type) | 0) !== (Number(exp.type) | 0)) return false;
+  if (Object.prototype.hasOwnProperty.call(exp, "frame")) {
+    if ((Number(obj.frame) | 0) !== (Number(exp.frame) | 0)) return false;
+  }
+  return true;
+}
+
 function compareLegacyWorldObjectOrder(a, b) {
   const aUse = coordUseOfStatus(a.status);
   const bUse = coordUseOfStatus(b.status);
@@ -93,6 +115,7 @@ async function main() {
       VM_NET_PORT: String(port),
       VM_NET_DATA_DIR: dataDir,
       VM_SIM_CORE_INTERACT_BIN: SIM_CORE_INTERACT_BIN,
+      VM_SIM_CORE_ASSOC_BIN: SIM_CORE_ASSOC_BIN,
       VM_EMAIL_MODE: "log"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -171,6 +194,36 @@ async function main() {
         compareLegacyWorldObjectOrder(prev, cur) <= 0,
         `world object order regression at index ${i - 1}->${i}: ${prev.object_key} then ${cur.object_key}`
       );
+    }
+
+    const roomHotspotFixtures = loadRoomHotspotFixtures();
+    for (const fixture of roomHotspotFixtures) {
+      const cx = Number(fixture?.center?.x) | 0;
+      const cy = Number(fixture?.center?.y) | 0;
+      const cz = Number(fixture?.center?.z) | 0;
+      const radius = Number(fixture?.radius) | 0;
+      const sample = await jsonFetch(baseUrl, `/api/world/objects?x=${cx}&y=${cy}&z=${cz}&radius=${radius}&limit=4096`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` }
+      });
+      assert.equal(sample.status, 200, `fixture ${fixture.id}: sample query failed`);
+      const objects = Array.isArray(sample.body?.objects) ? sample.body.objects : [];
+      for (const req of (fixture.must_include || [])) {
+        const found = objects.some((o) => objectMatchesExpectation(o, req));
+        assert.equal(
+          found,
+          true,
+          `fixture ${fixture.id}: missing required object ${req.label || `${req.type}@${req.x},${req.y},${req.z}`}`
+        );
+      }
+      for (const deny of (fixture.must_exclude || [])) {
+        const found = objects.some((o) => objectMatchesExpectation(o, deny));
+        assert.equal(
+          found,
+          false,
+          `fixture ${fixture.id}: forbidden object present ${deny.label || `${deny.type}@${deny.x},${deny.y},${deny.z}`}`
+        );
+      }
     }
 
     const lifecycleObjects = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
