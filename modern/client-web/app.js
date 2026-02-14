@@ -17,6 +17,7 @@ const NET_PRESENCE_POLL_TICKS = 10;
 const NET_CLOCK_POLL_TICKS = 2;
 const NET_BACKGROUND_FAIL_WINDOW_MS = 12000;
 const NET_BACKGROUND_FAIL_MAX = 6;
+const RUNTIME_OBJECT_PATH = "../assets/runtime/savegame";
 const PRISTINE_OBJECT_PATH = "../assets/pristine/savegame";
 const PRISTINE_BASELINE_VERSION_PATH = "../assets/pristine/.baseline_version";
 const PRISTINE_BASELINE_POLL_TICKS = 20;
@@ -855,11 +856,9 @@ class U6ObjectLayerJS {
       if (status & OBJ_STATUS_INVISIBLE) {
         continue;
       }
-
       const { x, y, z } = this.decodeCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
       const shapeType = dv.getUint16(off + 4, true);
       const type = shapeType & 0x3ff;
-
       const frame = shapeType >>> 10;
       const base = this.baseTiles[type] ?? 0;
       const tileId = (base + frame) & 0xffff;
@@ -5530,7 +5529,7 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
     };
 
     if (typeof state.objectLayer.objectsInWindowLegacyOrder === "function") {
-      const stream = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W, VIEW_H, wz);
+      const stream = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W + 1, VIEW_H + 1, wz);
       for (const o of stream) {
         processObject(o);
       }
@@ -6668,22 +6667,35 @@ async function fetchPristineBaselineVersion() {
   return String(await res.text()).trim();
 }
 
-async function loadPristineObjectBaseline(baseTiles) {
+async function loadObjectBaselineFromPath(baseTiles, objectPath) {
   if (!baseTiles || baseTiles.length < 0x400) {
-    throw new Error("invalid base tile table for pristine object baseline");
+    throw new Error("invalid base tile table for object baseline");
   }
   const objectLayer = new U6ObjectLayerJS(baseTiles);
-  await objectLayer.loadOutdoor((name) => fetch(`${PRISTINE_OBJECT_PATH}/${name}`, { cache: "no-store" }));
-  const objListRes = await fetch(`${PRISTINE_OBJECT_PATH}/objlist`, { cache: "no-store" });
+  await objectLayer.loadOutdoor((name) => fetch(`${objectPath}/${name}`, { cache: "no-store" }));
+  const objListRes = await fetch(`${objectPath}/objlist`, { cache: "no-store" });
   if (objectLayer.filesLoaded < 64 || !objListRes.ok) {
-    throw new Error("missing pristine object baseline (expected modern/assets/pristine/savegame)");
+    throw new Error(`missing object baseline at ${objectPath}`);
   }
   const objListBuf = await objListRes.arrayBuffer();
   const entityLayer = new U6EntityLayerJS(baseTiles);
   if (objListBuf.byteLength >= 0x0900) {
     entityLayer.load(new Uint8Array(objListBuf));
   }
-  return { objectLayer, entityLayer };
+  return { objectLayer, entityLayer, objectPath };
+}
+
+async function loadPristineObjectBaseline(baseTiles) {
+  const baselinePaths = [RUNTIME_OBJECT_PATH, PRISTINE_OBJECT_PATH];
+  let lastErr = null;
+  for (const objectPath of baselinePaths) {
+    try {
+      return await loadObjectBaselineFromPath(baseTiles, objectPath);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw (lastErr || new Error("no valid object baseline path"));
 }
 
 async function refreshPristineBaseline(force = false) {

@@ -112,8 +112,10 @@ export function buildOverlayCellsModel(opts) {
   };
 
   let overlayCount = 0;
+  /* Legacy SearchArea scans one extra source column/row on right/bottom
+     so left/up spill fragments from those anchors can land in-view. */
   const stream = (typeof objectLayer.objectsInWindowLegacyOrder === "function")
-    ? objectLayer.objectsInWindowLegacyOrder(startX, startY, viewW, viewH, wz)
+    ? objectLayer.objectsInWindowLegacyOrder(startX, startY, viewW + 1, viewH + 1, wz)
     : null;
 
   if (Array.isArray(stream)) {

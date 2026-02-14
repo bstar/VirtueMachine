@@ -29,6 +29,15 @@ missing=0
 optional_missing=0
 savegame_copied=0
 world_obj_source=""
+world_objlist_source=""
+tmp_obj_source=""
+
+cleanup_tmp_obj_source() {
+  if [[ -n "$tmp_obj_source" && -d "$tmp_obj_source" ]]; then
+    rm -rf "$tmp_obj_source"
+  fi
+}
+trap cleanup_tmp_obj_source EXIT
 
 copy_from_manifest() {
   local manifest_file="$1"
@@ -64,17 +73,30 @@ copy_from_manifest "$OPTIONAL_MANIFEST" 0
 
 # World object sources:
 # 1) canonical root runtime files (preferred, usually pristine for parity)
-# 2) savegame directory (fallback; may reflect player-modified world state)
-for candidate in "$SRC_DIR" "$SRC_DIR/savegame"; do
-  [[ -d "$candidate" ]] || continue
-  if find "$candidate" -maxdepth 1 -type f -iname "objblk??" -print -quit | grep -q .; then
-    world_obj_source="$candidate"
-    break
+# 2) root lzobjblk expansion (canonical fallback when root objblk?? are not present)
+# 3) savegame directory (last resort; may reflect player-modified world state)
+if find "$SRC_DIR" -maxdepth 1 -type f -iname "objblk??" -print -quit | grep -q .; then
+  world_obj_source="$SRC_DIR"
+  world_objlist_source="$SRC_DIR"
+elif [[ -f "$SRC_DIR/lzobjblk" ]]; then
+  tmp_obj_source="$(mktemp -d "${TMPDIR:-/tmp}/u6m_lzobjblk_XXXXXX")"
+  node "$ROOT_DIR/modern/tools/extract_lzobjblk_savegame.js" "$SRC_DIR/lzobjblk" "$tmp_obj_source"
+  world_obj_source="$tmp_obj_source"
+  if [[ -f "$SRC_DIR/objlist" ]]; then
+    world_objlist_source="$SRC_DIR"
+  elif [[ -f "$SRC_DIR/savegame/objlist" ]]; then
+    world_objlist_source="$SRC_DIR/savegame"
   fi
-done
+elif [[ -d "$SRC_DIR/savegame" ]] && find "$SRC_DIR/savegame" -maxdepth 1 -type f -iname "objblk??" -print -quit | grep -q .; then
+  world_obj_source="$SRC_DIR/savegame"
+  world_objlist_source="$SRC_DIR/savegame"
+fi
 
 if [[ -n "$world_obj_source" ]]; then
-  src_objlist="$(find "$world_obj_source" -maxdepth 1 -type f -iname "objlist" | head -n 1 || true)"
+  if [[ -z "$world_objlist_source" ]]; then
+    world_objlist_source="$world_obj_source"
+  fi
+  src_objlist="$(find "$world_objlist_source" -maxdepth 1 -type f -iname "objlist" | head -n 1 || true)"
   if [[ -n "$src_objlist" ]]; then
     cp -f "$src_objlist" "$DEST_DIR/savegame/objlist"
     cp -f "$src_objlist" "$PRISTINE_DIR/objlist"
