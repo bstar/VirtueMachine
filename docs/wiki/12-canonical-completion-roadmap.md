@@ -105,10 +105,10 @@ Recently closed:
 Next closure target:
 
 - assoc/container-chain semantic closure:
-  - parent-chain traversal with cycle/missing-parent guards (`partially closed` in net authority path)
-  - chain accessibility constraints for `take` from contained stacks (`partially closed` in interaction endpoint + contract tests)
+  - parent-chain traversal with cycle/missing-parent guards (`closed` via sim-core `u6_assoc_chain`)
+  - chain accessibility constraints for `take` from contained stacks (`closed` in interaction endpoint + contract tests)
   - diagnostics surfacing (`assoc_chain`, `root_anchor`, `blocked_by`)
-  - deterministic test fixtures for nested chains (`in progress`)
+  - deterministic test fixtures for nested chains (`in progress`, expanded corpus pending)
 
 ## Why This Roadmap Prevents Future Grind
 

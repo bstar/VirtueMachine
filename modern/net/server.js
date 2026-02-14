@@ -14,6 +14,7 @@ const {
   coordUseOfStatus,
   applyCanonicalWorldInteractionCommand
 } = require("./world_interaction_bridge");
+const { analyzeContainmentChainViaSimCore } = require("./world_assoc_chain_bridge");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -1933,8 +1934,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const objectIndex = buildActiveObjectIndex(state);
-    const targetChain = analyzeContainmentChain(state, target, objectIndex);
+    const targetChainResult = analyzeContainmentChainViaSimCore(state.worldObjects.active, target);
+    if (!targetChainResult.ok) {
+      sendError(res, 500, "assoc_bridge_failed", String(targetChainResult.message || "assoc-chain bridge failed"));
+      return;
+    }
+    const targetChain = targetChainResult.value;
     if (verb === "take" && coordUseOfStatus(target.status) === OBJ_COORD_USE_CONTAINED && !targetChain.chain_accessible) {
       sendJson(res, 409, {
         error: {
@@ -1950,7 +1955,12 @@ const server = http.createServer(async (req, res) => {
         sendError(res, 409, "interaction_container_cycle", "cannot put object into itself");
         return;
       }
-      const containerChain = analyzeContainmentChain(state, container, objectIndex);
+      const containerChainResult = analyzeContainmentChainViaSimCore(state.worldObjects.active, container);
+      if (!containerChainResult.ok) {
+        sendError(res, 500, "assoc_bridge_failed", String(containerChainResult.message || "assoc-chain bridge failed"));
+        return;
+      }
+      const containerChain = containerChainResult.value;
       if ((containerChain.assoc_chain || []).includes(String(target.object_key || ""))) {
         sendError(res, 409, "interaction_container_cycle", "cannot create containment cycle");
         return;

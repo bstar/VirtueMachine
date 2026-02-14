@@ -54,6 +54,8 @@ Environment variables:
 - `VM_EMAIL_RESEND_BASE_URL` (default `https://api.resend.com/emails`)
 - `VM_SIM_CORE_INTERACT_BIN` (path to `sim_core_world_interact_bridge`; required unless `VM_SIM_CORE_INTERACT_REQUIRED=off`)
 - `VM_SIM_CORE_INTERACT_REQUIRED` (`on`/`off`, default `on`; when `on`, server startup fails if bridge binary is unavailable)
+- `VM_SIM_CORE_ASSOC_BIN` (path to `sim_core_assoc_chain_bridge`; required unless `VM_SIM_CORE_ASSOC_REQUIRED=off`)
+- `VM_SIM_CORE_ASSOC_REQUIRED` (`on`/`off`, default `on`; when `on`, server startup fails if assoc-chain bridge binary is unavailable)
 
 Example (Resend):
 
@@ -116,7 +118,7 @@ World object authority note:
 - deltas are persisted in `modern/net/data/world_object_deltas.json`
 - use `/api/world/objects` for explicit server truth during parity debugging
 - interaction responses include `interaction_checkpoint` (`seq`, `hash`) so repeated command streams can be replay-checked for determinism
-- contained-item `take` operations enforce chain accessibility (cycle/missing-parent/parent-owned blocks reported via `blocked_by`)
+- contained-item `take` operations enforce chain accessibility via sim-core assoc-chain traversal (cycle/missing-parent/parent-owned blocks reported via `blocked_by`)
  - `projection=anchor` filters by legacy anchor cells
  - `projection=footprint` filters by occupied footprint cells (double-width/height expansion)
 

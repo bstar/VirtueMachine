@@ -159,7 +159,8 @@ This checklist is intentionally mutable.
 - `[~]` Add deterministic interaction/state transition tests:
   - completed: canonical status transition matrix (`LOCXYZ/CONTAINED/INVEN/EQUIP`)
   - completed: server interaction lifecycle contract + deterministic checkpoint hash replay
-  - next: nested containment/assoc-chain accessibility fixtures and regression corpus
+  - completed: sim-core assoc-chain traversal module + bridge wiring for net authority checks
+  - next: broaden nested containment regression corpus (room hotspot fixtures)
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
 - `[ ]` Add environmental object collision pass (chairs, beds, tables, furniture)
@@ -186,7 +187,7 @@ This checklist is intentionally mutable.
 
 Continue canonical interaction-parity closure before resuming audio:
 
-1. Implement assoc/container-chain traversal semantics for contained items (cycle/missing-parent guards). (`partially complete` in net authority path)
+1. Implement assoc/container-chain traversal semantics for contained items (cycle/missing-parent guards). (`complete`; now sim-core-native + bridged into net interaction authority)
 2. Enforce chain-access rules in canonical interaction execution (`take/put/drop/equip`) and expose `blocked_by` diagnostics. (`complete` for server endpoint path)
 3. Add deterministic replay/hash fixtures for repeated interaction command streams over nested chains. (`in progress`, lifecycle + reset replay hash checks landed)
 4. Add room-level canonical fixture corpus for interaction hotspots (Virtue room / British study stack cases).

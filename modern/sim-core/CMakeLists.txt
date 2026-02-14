@@ -3,6 +3,7 @@ add_library(sim_core STATIC
   src/u6_entities.c
   src/u6_interaction.c
   src/u6_objstatus.c
+  src/u6_assoc_chain.c
   src/u6_world_interact_bridge.c
   src/u6_objblk.c
   src/u6_objlist.c
@@ -70,6 +71,14 @@ target_link_libraries(sim_core_u6_world_interact_bridge_test PRIVATE sim_core)
 
 add_test(NAME sim_core_u6_world_interact_bridge_test COMMAND sim_core_u6_world_interact_bridge_test)
 
+add_executable(sim_core_u6_assoc_chain_test
+  tests/test_u6_assoc_chain.c
+)
+
+target_link_libraries(sim_core_u6_assoc_chain_test PRIVATE sim_core)
+
+add_test(NAME sim_core_u6_assoc_chain_test COMMAND sim_core_u6_assoc_chain_test)
+
 add_executable(sim_core_clock_rollover_test
   tests/test_clock_rollover.c
 )
@@ -123,3 +132,9 @@ add_executable(sim_core_world_interact_bridge
 )
 
 target_link_libraries(sim_core_world_interact_bridge PRIVATE sim_core)
+
+add_executable(sim_core_assoc_chain_bridge
+  tools/assoc_chain_bridge_cli.c
+)
+
+target_link_libraries(sim_core_assoc_chain_bridge PRIVATE sim_core)
