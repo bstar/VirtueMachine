@@ -26,7 +26,6 @@
               <p class="vm-game-time mt-1 text-sm">Net: <span id="topNetIndicator" class="vm-net-indicator" aria-hidden="true"></span> <strong id="topNetStatus" class="font-semibold">idle - Not logged in.</strong></p>
               <p class="vm-game-time mt-1 text-sm">Startup: <strong class="font-semibold">Only Journey Onward is currently playable.</strong></p>
               <p class="vm-game-time mt-1 text-sm">Hover Report: <strong class="font-semibold">Shift+RightClick</strong> (or <strong class="font-semibold">Shift+`</strong>)</p>
-              <p class="vm-game-time mt-1 text-sm">Copy Status: <strong id="topCopyStatus" class="font-semibold">idle</strong></p>
             </div>
             <div class="w-[620px] max-w-[60vw] shrink-0 vm-net-header-compact">
               <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-2 items-end">
@@ -44,6 +43,7 @@
               <div class="mt-1 flex items-center gap-2">
                 <strong id="netQuickStatus" class="vm-muted-text text-xs">Account: Signed out</strong>
               </div>
+              <p class="vm-game-time mt-2 text-sm text-right">Probe/Copy: <strong id="topCopyStatus" class="font-semibold">idle</strong></p>
             </div>
           </header>
           <div class="flex-1 min-h-0 flex items-center justify-center">
@@ -148,7 +148,7 @@
           <p>Journey Onward requires login</p>
           <p>`Ctrl+S` save world snapshot, `Ctrl+R` load world snapshot</p>
           <p>`Ctrl+Z` sound toggle, `Ctrl+H` help toggle, `Ctrl+V` version banner</p>
-          <p>`Shift+Y` save snapshot, `Shift+U` load snapshot, `Shift+N` maintenance</p>
+          <p>`Shift+Y` save snapshot, `Shift+U` load snapshot, `Shift+J` UI probe, `Shift+N` maintenance</p>
           <p>`Shift+O/F/B/M/G/R/V` debug toggles + preset/replay</p>
           <p>`Shift+P` capture viewport, `Shift+Alt+P` capture world+HUD</p>
           <p>`Shift+RightClick` or `Shift+Backquote` copy hover parity report</p>

@@ -29,6 +29,10 @@ if(BASH_PROGRAM AND NODE_PROGRAM)
     COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_client_web_render_composition.sh
   )
   add_test(
+    NAME client_web_ui_probe_test
+    COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_client_web_ui_probe.sh
+  )
+  add_test(
     NAME net_server_contract_test
     COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_net_contracts.sh
   )

@@ -99,6 +99,7 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `Shift+I`: net login using panel credentials
 - `Shift+Y`: save current sim snapshot to net backend
 - `Shift+U`: load current character snapshot from net backend
+- `Shift+J`: capture live UI probe contract to `window.__vmLastUiProbe`
 - `Shift+N`: run critical-item maintenance now
 - `Shift+G`: jump to selected canonical capture preset
 - `Shift+P`: capture viewport PNG

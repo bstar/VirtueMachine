@@ -5,6 +5,7 @@ import {
   topInteractiveOverlayAtModel
 } from "./render_composition.js";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.js";
+import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.js";
 
 const TICK_MS = 100;
 const TILE_SIZE = 64;
@@ -7061,6 +7062,28 @@ function loadWorldSnapshotHotkey() {
   });
 }
 
+function captureUiProbeHotkey() {
+  const probe = buildUiProbeContract({
+    mode: "live",
+    runtime: {
+      sim: state.sim,
+      commandLog: state.commandLog,
+      // Canonical party array bridge is still pending in runtime; use avatar fallback.
+      partyMembers: [1]
+    }
+  });
+  const digest = uiProbeDigest(probe);
+  const filename = `virtuemachine-ui-probe-${state.sim.tick >>> 0}.json`;
+  window.__vmLastUiProbe = probe;
+  window.__vmLastUiProbeDigest = digest;
+  downloadJsonFile(filename, probe);
+  if (topCopyStatus) {
+    topCopyStatus.textContent = `probe ${digest}`;
+  }
+  diagBox.className = "diag ok";
+  diagBox.textContent = `UI probe captured (${digest}) and downloaded as ${filename}.`;
+}
+
 function runLegacyNonTargetAction(k) {
   if (k === "r") {
     diagBox.className = "diag ok";
@@ -7136,6 +7159,10 @@ function runDebugHotkeys(ev) {
   }
   if (k === "u") {
     loadWorldSnapshotHotkey();
+    return true;
+  }
+  if (k === "j") {
+    captureUiProbeHotkey();
     return true;
   }
   if (k === "n") {

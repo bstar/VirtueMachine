@@ -90,11 +90,29 @@ Tooling added in this slice:
 
 - extractor: `modern/tools/extract_legacy_ui_anchors.sh`
 - guard test: `modern/tools/test_legacy_ui_anchors.sh`
+- probe contract module: `modern/client-web/ui_probe_contract.js`
+- probe regression test: `modern/client-web/tests/ui_probe_contract_test.mjs`
 
 Purpose:
 
 - keep canonical anchor discovery reproducible;
 - prevent drift where UI parity work proceeds without legacy-symbol evidence.
+- provide deterministic panel JSON artifacts (sample + live runtime modes).
+
+## Canonical Test Avatar Process
+
+The probe contract now includes a canonical avatar source process:
+
+1. read `world.active` as active party index
+2. resolve avatar object from `Party[active]`
+3. fallback to `Party[0]` when active index is invalid
+
+This is encoded in `createCanonicalTestAvatar(...)` and surfaced in `canonical_ui.avatar_panel`.
+
+In-game verification hook:
+
+- `Shift+J` captures a live UI probe contract
+- output is available as `window.__vmLastUiProbe` and digest in `window.__vmLastUiProbeDigest`
 
 ## U0 Entry Criteria (Now In Progress)
 

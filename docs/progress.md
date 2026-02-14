@@ -189,6 +189,7 @@ Slices:
   - deterministic sample-state loader (inventory, party, paperdoll, messages)
   - one-command probe runner for panel states (screenshot capture optional)
   - legacy-code-first UI anchor matrix documented and test-guarded (`docs/wiki/17-ui-canonical-legacy-matrix.md`, `modern/tools/extract_legacy_ui_anchors.sh`, `modern/tools/test_legacy_ui_anchors.sh`)
+  - canonical avatar probe process added (`Party[active]` with `Party[0]` fallback) in `modern/client-web/ui_probe_contract.js`
 - `[ ]` U1: Inventory Panel Canonical Harness
   - slot layout/hitbox baselines
   - drag/drop/equip target probes
