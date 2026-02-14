@@ -63,6 +63,32 @@ Player impact:
 
 - complete game-feel continuity beyond room visuals
 
+## Milestone 5: UI Parity Harness And Mechanics Gate
+
+Deliverables:
+
+- deterministic UI parity mode with fixed camera/frame and scripted panel state captures
+- panel-specific regression suites for:
+  - inventory
+  - paperdoll/equipment
+  - party management
+  - message log/scrollback
+- canonical-vs-modern UI taxonomy:
+  - `canonical_ui`: game-faithful panels and behavior
+  - `modern_ui`: account/user-management and other non-legacy affordances
+- CI snapshot + interaction-probe checks so mechanics work cannot bypass panel regressions
+- legacy-code-first acceptance criteria for panel slices when canonical screenshots are unavailable
+
+Player impact:
+
+- confidence that newly implemented gameplay systems land on stable, testable UI behavior
+- fewer regressions in high-frequency panel interactions (inventory/equip/party/messaging)
+
+Evidence policy for this milestone:
+
+- primary: legacy decompiled routine/symbol evidence and deterministic probe outputs
+- secondary: screenshot parity packs (optional in early slices, required later when reference captures are available)
+
 ## Risk Register
 
 ### Highest-Risk Remaining Gaps
@@ -71,6 +97,7 @@ Player impact:
 - nested container-chain accessibility rules (contained-in-contained ownership/root-anchor behavior)
 - sparse edge conditions where obscurity and visibility suppression overlap
 - legacy flow semantics not yet fully encoded outside room rendering
+- lack of deterministic visual harness coverage for panel-heavy mechanics before rollout
 
 ### Medium Risks
 
@@ -111,6 +138,13 @@ Next closure target:
   - diagnostics surfacing (`assoc_chain`, `root_anchor`, `blocked_by`) now sourced from sim-core batch bridge in `/api/world/objects`
   - `/api/world/objects` selection/filtering (`projection`, `radius`, `limit`, canonical order) now sourced from sim-core world-query bridge
   - deterministic test fixtures for nested chains (`in progress`, expanded corpus pending)
+
+Parallel ambitious track (mechanics gate):
+
+- UI parity harness rollout (U0-U5):
+  - deterministic parity mode
+  - inventory/paperdoll/party/message-log harnesses
+  - canonical-vs-modern UI tagging and enforcement
 
 ## Why This Roadmap Prevents Future Grind
 

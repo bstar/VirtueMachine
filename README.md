@@ -59,6 +59,7 @@ In progress:
 - `M4` Gameplay Parity Expansion (`in progress`)
   - done: static object layer ingest, animated tile phase control, baseline interaction wiring, blackout/wall/corner parity stabilization
   - pending: deeper gameplay parity coverage and deterministic regression expansion across critical scenarios
+  - gating policy: panel-heavy mechanics are gated behind UI parity harness slices (inventory/paperdoll/party/log)
 
 Next:
 
@@ -66,6 +67,28 @@ Next:
 - `R5` Startup/Menu parity (`next`, implementation landed; screenshot-pair validation pending)
 - `R6` Legacy cursor parity (`next`, implementation landed; mode mapping polish pending)
 - `M5` Multiplayer Prototype (`next`, after rendering parity stabilization)
+
+## Next Ambitious Slices (Digestible)
+
+These slices are intentionally larger than prior micro-fixes, but each remains testable and bounded.
+
+1. `U0` Deterministic UI Parity Mode
+- fixed-frame capture mode + scripted panel states
+- one-command probe workflow (capture+diff optional)
+2. `U1` Inventory + Paperdoll Harness
+- slot/hitbox probes
+- drag/drop/equip regression probes + legacy-code-backed assertions
+3. `U2` Party + Message Log Harness
+- party ordering/selection semantics
+- scrollback/wrapping/event-order checks
+4. `U3` Canonical Target Resolver
+- authoritative object target selection in sim-core for overlap cells
+- client uses server/sim-core target decisions
+5. `U4` Mechanics Rollout On Harness
+- NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons
+- each mechanic must ship with panel and replay regression coverage
+
+Note: when canonical screenshot references are not yet available for a panel, acceptance is based on legacy-code-derived behavior contracts and deterministic probe output first.
 
 For the live, mutable checklist and current slice-by-slice status, see:
 

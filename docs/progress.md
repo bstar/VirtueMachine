@@ -172,6 +172,49 @@ This checklist is intentionally mutable.
   - avatar can sit in chairs and lie/sleep in beds
   - NPCs can enter sit/sleep states with deterministic pose/state transitions
 
+## UI Parity Harness Program (Mechanics Gate)
+
+Before broad gameplay mechanics expansion, panel/UI parity must be measurable and regression-safe.
+
+Status legend for this section:
+
+- `[x]` complete
+- `[~]` in progress
+- `[ ]` not started
+
+Slices:
+
+- `[ ]` U0: Deterministic UI Parity Mode
+  - fixed camera/frame capture mode
+  - deterministic sample-state loader (inventory, party, paperdoll, messages)
+  - one-command probe runner for panel states (screenshot capture optional)
+- `[ ]` U1: Inventory Panel Canonical Harness
+  - slot layout/hitbox baselines
+  - drag/drop/equip target probes
+  - legacy-code-derived structural/layout assertions (pixel snapshots optional)
+- `[ ]` U2: Paperdoll + Equipment Harness
+  - equip-region mapping and overlap rules
+  - canonical slot occupancy semantics
+  - deterministic replay probes for equip/unequip
+- `[ ]` U3: Party Management Harness
+  - party list ordering and selection rules
+  - command affordance coverage
+  - UI state transitions under deterministic replay
+- `[ ]` U4: Message Log / Scrollback Harness
+  - wrap/clip/scroll boundaries
+  - event ordering and feed persistence checks
+  - canonical-vs-modern message formatting boundaries documented
+- `[ ]` U5: Panel Scope Partition (Canonical vs Modern)
+  - classify panels as `canonical_ui` or `modern_ui`
+  - user/account management panel explicitly documented as modern-only
+  - CI checks that prevent untagged panel behavior changes
+
+Reference policy for U0-U5:
+
+- canonical authority: legacy decompiled code + verified runtime data semantics
+- required evidence: symbol/routine anchors, deterministic probe output, contract assertions
+- screenshots are helpful but not required for initial slice completion when source visuals are unavailable
+
 ## Known Blockers / Risks
 
 - `[~]` Full canonical title-menu ownership is split across assets/executable paths not entirely represented in released decompiled C source.
@@ -202,3 +245,5 @@ Then continue R5/R3 closure and M5:
 6. Capture startup/title parity screenshots against legacy references.
 7. Add deterministic interaction visual-state replay fixtures (doors + sit/sleep states).
 8. Continue M5 backend/game-state authority slices.
+
+After these interaction closures, execute UI parity harness slices U0-U5 before major gameplay-system rollout.
