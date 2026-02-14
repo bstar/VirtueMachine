@@ -208,7 +208,9 @@ const LEGACY_FRAME_TILES = Object.freeze({
   right: 0x1b7
 });
 const LEGACY_UI_TILE = Object.freeze({
-  SLOT_EMPTY: 0x19b,
+  SLOT_EMPTY: 0x19a,
+  SLOT_OCCUPIED_BG: 0x19b,
+  SLOT_2HND_MARK: 0x185,
   BUTTON_ATTACK_BASE: 0x190,
   BUTTON_RIGHT: 0x19e,
   SKY_OUTSIDE_BASE: 0x160,
@@ -220,6 +222,14 @@ const LEGACY_UI_TILE = Object.freeze({
   EQUIP_DL: 0x172,
   EQUIP_DR: 0x173
 });
+/* C_2FC1_19C5: sun/moons Y arc used by top strip "vista". */
+const LEGACY_VISTA_ARC_Y = Object.freeze([10, 7, 5, 3, 2, 1, 0, 0, 0, 1, 2, 3, 5, 7, 10]);
+/* seg_0A33:D_036A moon phase pairs by day-of-month (1..28). */
+const LEGACY_MOON_PHASE_BY_DAY = Object.freeze([
+  [0, 0], [7, 0], [7, 7], [6, 6], [6, 5], [5, 4], [5, 3], [4, 2], [3, 1], [3, 0],
+  [2, 0], [2, 7], [1, 6], [1, 5], [0, 4], [7, 3], [7, 2], [6, 1], [6, 0], [5, 0],
+  [5, 7], [4, 6], [3, 5], [3, 4], [2, 3], [2, 2], [1, 1], [1, 0]
+]);
 const LEGACY_POSTURE_ICONS = Object.freeze([0x183, 0x180, 0x181, 0x184, 0x187]);
 const LEGACY_HUD_TEXT_COLOR = "#8b3f24";
 const LEGACY_AVATAR_PORTRAIT_INDEX = 0;
@@ -262,6 +272,33 @@ const LEGACY_TARGET_VERB_LABEL = Object.freeze({
   [LEGACY_TARGET_VERB.MOVE]: "Move",
   [LEGACY_TARGET_VERB.USE]: "Use"
 });
+const LEGACY_VERB_SELECT_RANGE = Object.freeze({
+  [LEGACY_TARGET_VERB.ATTACK]: 7,
+  [LEGACY_TARGET_VERB.CAST]: 7,
+  [LEGACY_TARGET_VERB.TALK]: 7,
+  [LEGACY_TARGET_VERB.LOOK]: 7,
+  [LEGACY_TARGET_VERB.GET]: -1,
+  [LEGACY_TARGET_VERB.DROP]: 7,
+  [LEGACY_TARGET_VERB.MOVE]: -1,
+  [LEGACY_TARGET_VERB.USE]: -1
+});
+const LEGACY_STATUS_DISPLAY = Object.freeze({
+  CMD_90: 0x90, /* character status */
+  CMD_91: 0x91, /* party list / command */
+  CMD_92: 0x92, /* equipment + inventory */
+  CMD_9E: 0x9e  /* inspect / talk panel */
+});
+const LEGACY_LEDGER_MAX_CHARS = 17; /* clip 22..38 */
+const LEGACY_LEDGER_MAX_LINES = 10; /* clip 14..23 */
+const LEGACY_COMBAT_MODE_LABELS = Object.freeze([
+  "COMMAND",
+  "FRONT",
+  "REAR",
+  "FLANK",
+  "BERSERK",
+  "RETREAT",
+  "ASSAULT"
+]);
 const STARTUP_MENU_HITBOX = Object.freeze({
   x0: 56,
   x1: 264,
@@ -342,6 +379,12 @@ const state = {
   interactionProbeTile: null,
   npcOcclusionBlockedMoves: 0,
   showGrid: false,
+  uiProbeMode: "live",
+  legacyHudSelection: null,
+  legacyHudLayerHidden: false,
+  legacyLedgerLines: [],
+  legacyLedgerPrompt: false,
+  legacyStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_92,
   showOverlayDebug: false,
   enablePaletteFx: true,
   movementMode: "ghost",
@@ -371,6 +414,7 @@ const state = {
   accMs: 0,
   replayUrl: null,
   legacyPaperPixmap: null,
+  lookStringEntries: null,
   legacyScaleMode: "4",
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
@@ -419,6 +463,65 @@ const state = {
     statusText: "Not logged in."
   }
 };
+
+function wrapLegacyLedgerLines(text) {
+  const out = [];
+  const src = String(text || "").replace(/\s+/g, " ").trim();
+  if (!src) {
+    return out;
+  }
+  let line = "";
+  for (const word of src.split(" ")) {
+    const token = String(word || "").toUpperCase();
+    if (!token) continue;
+    if (!line) {
+      if (token.length <= LEGACY_LEDGER_MAX_CHARS) {
+        line = token;
+      } else {
+        for (let i = 0; i < token.length; i += LEGACY_LEDGER_MAX_CHARS) {
+          out.push(token.slice(i, i + LEGACY_LEDGER_MAX_CHARS));
+        }
+      }
+      continue;
+    }
+    const merged = `${line} ${token}`;
+    if (merged.length <= LEGACY_LEDGER_MAX_CHARS) {
+      line = merged;
+    } else {
+      out.push(line);
+      if (token.length <= LEGACY_LEDGER_MAX_CHARS) {
+        line = token;
+      } else {
+        line = "";
+        for (let i = 0; i < token.length; i += LEGACY_LEDGER_MAX_CHARS) {
+          out.push(token.slice(i, i + LEGACY_LEDGER_MAX_CHARS));
+        }
+      }
+    }
+  }
+  if (line) {
+    out.push(line);
+  }
+  return out;
+}
+
+function pushLedgerMessage(text) {
+  const wrapped = wrapLegacyLedgerLines(text);
+  if (!wrapped.length) {
+    return;
+  }
+  for (const line of wrapped) {
+    state.legacyLedgerLines.push(line);
+  }
+  const extra = state.legacyLedgerLines.length - LEGACY_LEDGER_MAX_LINES;
+  if (extra > 0) {
+    state.legacyLedgerLines.splice(0, extra);
+  }
+}
+
+function showLegacyLedgerPrompt() {
+  state.legacyLedgerPrompt = true;
+}
 
 function isLegacyScaleMode(mode) {
   return mode === "fit" || mode === "1" || mode === "2" || mode === "3" || mode === "4";
@@ -1352,6 +1455,68 @@ function decodeLegacyPixmap(bytes) {
   };
 }
 
+function decodeLookLzdEntries(bytes) {
+  const decoded = decompressU6Lzw(bytes);
+  if (!decoded || decoded.length < 3) {
+    return [];
+  }
+  const entries = [];
+  let p = 0;
+  const td = new TextDecoder("latin1");
+  while ((p + 2) <= decoded.length) {
+    const tileId = (decoded[p] | (decoded[p + 1] << 8)) & 0xffff;
+    p += 2;
+    let e = p;
+    while (e < decoded.length && decoded[e] !== 0) {
+      e += 1;
+    }
+    const raw = td.decode(decoded.slice(p, e)).trim();
+    if (raw) {
+      entries.push({ tileId, text: raw });
+    }
+    if (e >= decoded.length) {
+      break;
+    }
+    p = e + 1;
+  }
+  return entries;
+}
+
+function legacyLookupTileString(tileId) {
+  const entries = state.lookStringEntries;
+  const n = Array.isArray(entries) ? entries.length : 0;
+  if (n <= 0) {
+    return "nothing";
+  }
+  let i = 0;
+  let si = entries[0].tileId | 0;
+  let out = String(entries[0].text || "nothing");
+  const target = tileId & 0xffff;
+  while (si < target && (i + 1) < n) {
+    i += 1;
+    si = entries[i].tileId | 0;
+    out = String(entries[i].text || out);
+  }
+  return out || "nothing";
+}
+
+function legacyArticleForTile(tileId) {
+  if (!state.tileFlags2) {
+    return "";
+  }
+  const f = state.tileFlags2[tileId & 0x07ff] & 0xc0;
+  if (f === 0x40) return "a ";
+  if (f === 0x80) return "an ";
+  if (f === 0xc0) return "the ";
+  return "";
+}
+
+function canonicalLookSentenceForTile(tileId) {
+  const name = legacyLookupTileString(tileId);
+  const article = legacyArticleForTile(tileId);
+  return `Thou dost see ${article}${name}.`;
+}
+
 function decodeU6ShapeFromBuffer(buf) {
   if (!buf || buf.length < 10) {
     return null;
@@ -1749,6 +1914,9 @@ function renderLegacyHudStubOnBackdrop() {
     g.clearRect(0, 0, w, h);
     g.drawImage(state.legacyBackdropBaseCanvas, 0, 0);
   }
+  if (state.legacyHudLayerHidden) {
+    return;
+  }
 
   const scale = Math.max(1, Math.floor(w / 320));
   const x = (v) => v * scale;
@@ -1765,94 +1933,268 @@ function renderLegacyHudStubOnBackdrop() {
     }
     g.drawImage(tc, x(sx), y(sy), x(16), y(16));
   };
+  const drawTilePx = (tileId, px, py) => {
+    if (!state.tileSet) {
+      return;
+    }
+    const pal = paletteForTile(tileId);
+    const key = paletteKeyForTile(tileId);
+    const tc = state.tileSet.tileCanvas(tileId, pal, key);
+    if (!tc) {
+      return;
+    }
+    g.drawImage(tc, x(px), y(py), x(16), y(16));
+  };
+  const drawLegacyVista = () => {
+    const wz = Number(state?.sim?.world?.map_z) | 0;
+    const hour = Number(state?.sim?.world?.time_h) >>> 0;
+    const dateD = Math.max(1, Number(state?.sim?.world?.date_d) >>> 0);
+    const dateM = Number(state?.sim?.world?.date_m) >>> 0;
+    const isEclipse = dateD === 1 && ((dateM % 3) === 0);
 
-  const drawLegacyNumber = (value, sx, sy, color = LEGACY_HUD_TEXT_COLOR) => {
-    const v = Math.max(0, Math.floor(value));
-    const text = String(v).slice(0, 4);
-    const sx0 = LEGACY_DIGIT_X[text.length - 1] ?? LEGACY_DIGIT_X[3];
-    const baseY = sy + 11;
-    g.fillStyle = color;
-    for (let i = 0; i < text.length; i += 1) {
-      const d = text.charCodeAt(i) - 48;
-      if (d < 0 || d > 9) {
-        continue;
+    /* Base strip first, same as GR_42(TIL_19B, TIL2SCR(si), 4). */
+    for (let i = 0; i < 9; i += 1) {
+      drawTilePx(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, i * 16, 4);
+    }
+
+    if (wz === 0 || wz === 5) {
+      /* Outside strip mountain sky tiles TIL_160..TIL_168. */
+      for (let i = 0; i < 9; i += 1) {
+        drawTilePx(LEGACY_UI_TILE.SKY_OUTSIDE_BASE + i, i * 16, 4);
       }
-      let bits = LEGACY_DIGIT_3X5[d] & 0xffff;
-      const dx = sx + sx0[i];
-      for (let row = 0; row < 5; row += 1) {
-        for (let col = 0; col < 3; col += 1) {
-          if (bits & 0x8000) {
-            g.fillRect(x(dx + col), y(baseY + row), x(1), y(1));
-          }
-          bits = (bits << 1) & 0xffff;
+
+      /* Sun: legacy hours 5..19, with sunrise/sunset and eclipse variants. */
+      if (hour > 4 && hour < 20) {
+        let sunTile = 0x16a;
+        if (isEclipse) {
+          sunTile = 0x16b;
+        } else if (hour === 5 || hour === 19) {
+          sunTile = 0x169;
+        }
+        const sunStep = 19 - (hour | 0);
+        if (sunStep >= 0 && sunStep < LEGACY_VISTA_ARC_Y.length) {
+          drawTilePx(sunTile, sunStep << 3, LEGACY_VISTA_ARC_Y[sunStep]);
         }
       }
+
+      /* Moons: BaseTile[OBJ_049] + phase, x=(phasePos<<3), y=D_2BFA[phasePos]. */
+      if (!isEclipse && state.objectLayer?.baseTiles) {
+        const moonBase = Number(state.objectLayer.baseTiles[0x49]) | 0;
+        if (moonBase > 0) {
+          const phasePair = LEGACY_MOON_PHASE_BY_DAY[(dateD - 1) % LEGACY_MOON_PHASE_BY_DAY.length];
+          const phase1 = phasePair[0] | 0;
+          const phase2 = phasePair[1] | 0;
+          const pos1 = ((phase1 * 3 + 18 - (hour | 0)) % 24 + 24) % 24;
+          const pos2 = ((phase2 * 3 + 20 - (hour | 0)) % 24 + 24) % 24;
+          if (pos1 >= 0 && pos1 <= 14) {
+            drawTilePx(moonBase + phase1, pos1 << 3, LEGACY_VISTA_ARC_Y[pos1]);
+          }
+          if (pos2 >= 0 && pos2 <= 14) {
+            drawTilePx(moonBase + phase2, pos2 << 3, LEGACY_VISTA_ARC_Y[pos2]);
+          }
+        }
+      }
+    } else {
+      /* Cave strip: TIL_174, middle TIL_175, right TIL_176. */
+      drawTilePx(LEGACY_UI_TILE.CAVE_L, 0, 4);
+      for (let i = 1; i < 8; i += 1) {
+        drawTilePx(LEGACY_UI_TILE.CAVE_M, i * 16, 4);
+      }
+      drawTilePx(LEGACY_UI_TILE.CAVE_R, 128, 4);
     }
+
+    /* Canonical C_2FC1_19C5 tail: GR_45(0,4,135,19,176,6). */
+    const srcX = x(0);
+    const srcY = y(4);
+    const srcW = x(136);
+    const srcH = y(16);
+    const dstX = x(176);
+    const dstY = y(6);
+    g.drawImage(
+      legacyBackdropCanvas,
+      srcX, srcY, srcW, srcH,
+      dstX, dstY, srcW, srcH
+    );
   };
 
-  /* Use real UI tiles for strip + panel stub to mimic legacy look. */
-  for (let i = 0; i < 9; i += 1) {
-    drawTile(LEGACY_UI_TILE.SLOT_EMPTY, i * 16, 176);
-  }
-  if (state.sim.world.map_z === 0 || state.sim.world.map_z === 5) {
-    for (let i = 0; i < 9; i += 1) {
-      drawTile(LEGACY_UI_TILE.SKY_OUTSIDE_BASE + i, i * 16, 4);
+  const invFromKey = (key) => {
+    const m = /^0x([0-9a-f]+):([0-9a-f]+)$/i.exec(String(key || "").trim());
+    if (!m || !state.objectLayer || !state.objectLayer.baseTiles) {
+      return null;
     }
-  } else {
-    drawTile(LEGACY_UI_TILE.CAVE_L, 0, 4);
-    for (let i = 1; i < 8; i += 1) {
-      drawTile(LEGACY_UI_TILE.CAVE_M, i * 16, 4);
+    const type = parseInt(m[1], 16) & 0x03ff;
+    const frame = parseInt(m[2], 16) & 0x00ff;
+    const base = state.objectLayer.baseTiles[type] ?? 0;
+    if (!base) {
+      return null;
     }
-    drawTile(LEGACY_UI_TILE.CAVE_R, 128, 4);
+    return (base + frame) & 0xffff;
+  };
+  const statusDisplay = Number(state.legacyStatusDisplay) | 0;
+  const showVista = (
+    statusDisplay === LEGACY_STATUS_DISPLAY.CMD_91
+    || statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E
+  );
+  if (showVista) {
+    drawLegacyVista();
   }
-  drawTile(LEGACY_UI_TILE.EQUIP_UL, 192, 40);
-  drawTile(LEGACY_UI_TILE.EQUIP_UR, 208, 40);
-  drawTile(LEGACY_UI_TILE.EQUIP_DL, 192, 56);
-  drawTile(LEGACY_UI_TILE.EQUIP_DR, 208, 56);
+  const probe = getUiProbeForRender();
 
-  /* Portrait + stats block using legacy main font and posture icons. */
-  for (let ry = 0; ry < 10; ry += 1) {
-    for (let rx = 0; rx < 8; rx += 1) {
-      drawTile(LEGACY_UI_TILE.SLOT_EMPTY, 176 + (rx * 16), 8 + (ry * 16));
+  /* C_155D_028A / C_155D_1065: centered name row only in CMD_90/CMD_92. */
+  if (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_90 || statusDisplay === LEGACY_STATUS_DISPLAY.CMD_92) {
+    const avatarLabel = String(state.net.characterName || "Avatar").toUpperCase();
+    const labelX = 176 + Math.max(0, Math.floor((136 - (avatarLabel.length * 8)) / 2));
+    drawU6MainText(g, avatarLabel, x(labelX), y(8), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  }
+  /* Canonical dynamic payload only: inventory/equipment/portrait cells on top of paper frame. */
+  const avatarTile = avatarRenderTileId();
+  if (avatarTile != null) {
+    drawTile(avatarTile, 272, 16);
+  }
+
+  /* Canonical paperdoll backdrop from C_2FC1_1EAF(192,32): TIL_170..TIL_173. */
+  drawTile(LEGACY_UI_TILE.EQUIP_UL, 192, 32);
+  drawTile(LEGACY_UI_TILE.EQUIP_UR, 208, 32);
+  drawTile(LEGACY_UI_TILE.EQUIP_DL, 192, 48);
+  drawTile(LEGACY_UI_TILE.EQUIP_DR, 208, 48);
+
+  /* Canonical equipment layout from C_155D_08F4/C_155D_130E, with probe-driven payload tiles. */
+  const slotByKey = new Map();
+  for (const s of (probe.canonical_ui?.paperdoll_panel?.slots || [])) {
+    slotByKey.set(String(s.key), s);
+  }
+  const equipSlots = [
+    { key: "head", index: 0, sx: 200, sy: 16 },
+    { key: "neck", index: 1, sx: 176, sy: 24 },
+    { key: "chest", index: 4, sx: 224, sy: 24 },
+    { key: "right_hand", index: 2, sx: 176, sy: 40 },
+    { key: "left_hand", index: 5, sx: 224, sy: 40 },
+    { key: "right_finger", index: 3, sx: 176, sy: 56 },
+    { key: "left_finger", index: 6, sx: 224, sy: 56 },
+    { key: "feet", index: 7, sx: 200, sy: 64 }
+  ];
+  for (const s of equipSlots) {
+    drawTile(LEGACY_UI_TILE.SLOT_EMPTY, s.sx, s.sy);
+    const slot = slotByKey.get(s.key);
+    const tile = parseProbeTileHex(slot?.tile_hex);
+    if (tile != null) {
+      drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, s.sx, s.sy);
+      drawTile(tile, s.sx, s.sy);
     }
   }
-  const portraitName = (state.net.username && state.net.username.trim())
-    ? state.net.username.trim().toUpperCase().slice(0, 12)
-    : "AVATAR";
-  drawU6MainText(g, portraitName, x(184), y(12), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  if (state.avatarPortraitCanvas) {
-    g.drawImage(state.avatarPortraitCanvas, x(184), y(24), x(56), y(64));
-  } else if (state.tileSet) {
-    const avatarTile = avatarRenderTileId();
-    if (avatarTile != null) {
-      const pal = paletteForTile(avatarTile);
-      const key = paletteKeyForTile(avatarTile);
-      const tc = state.tileSet.tileCanvas(avatarTile, pal, key);
-      if (tc) {
-        g.drawImage(tc, x(204), y(40), x(16), y(16));
+
+  /* Canonical inventory grid from C_155D_0CF5/C_155D_1267. */
+  const invEntries = probe.canonical_ui?.inventory_panel?.entries || [];
+  for (let i = 0; i < 12; i += 1) {
+    const col = i & 3;
+    const row = i >> 2;
+    const sx = 248 + (col * 16);
+    const sy = 32 + (row * 16);
+    drawTile(LEGACY_UI_TILE.SLOT_EMPTY, sx, sy);
+    const entry = invEntries[i];
+    if (!entry) {
+      continue;
+    }
+    const tile = invFromKey(entry.key);
+    if (tile != null) {
+      drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, sx, sy);
+      drawTile(tile, sx, sy);
+    }
+  }
+
+  if (state.legacyHudSelection) {
+    g.strokeStyle = "#f59e0b";
+    g.lineWidth = Math.max(1, scale);
+    const sel = state.legacyHudSelection;
+    if (sel.kind === "inventory") {
+      const col = sel.index & 3;
+      const row = sel.index >> 2;
+      g.strokeRect(x(248 + (col * 16)) + 1, y(32 + (row * 16)) + 1, x(16) - 2, y(16) - 2);
+    } else if (sel.kind === "portrait") {
+      g.strokeRect(x(272) + 1, y(16) + 1, x(16) - 2, y(16) - 2);
+    } else if (sel.kind === "equip") {
+      const e = equipSlots.find((it) => (it.index | 0) === (sel.slot | 0));
+      if (e) {
+        g.strokeRect(x(e.sx) + 1, y(e.sy) + 1, x(16) - 2, y(16) - 2);
       }
     }
   }
-  drawU6MainText(g, "HP", x(244), y(26), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(g, String(100), x(268), y(26), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(g, "MP", x(244), y(38), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(g, String(42), x(268), y(38), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(g, "TIME", x(244), y(50), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(
-    g,
-    `${String(state.sim.world.time_h).padStart(2, "0")}:${String(state.sim.world.time_m).padStart(2, "0")}`,
-    x(244),
-    y(62),
-    Math.max(1, scale),
-    LEGACY_HUD_TEXT_COLOR
-  );
-  for (let i = 0; i < LEGACY_POSTURE_ICONS.length; i += 1) {
-    drawTile(LEGACY_POSTURE_ICONS[i], 184 + (i * 16), 88);
-  }
-  drawU6MainText(g, "MODE", x(184), y(108), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(g, state.movementMode === "avatar" ? "BATTLE" : "GHOST", x(184), y(120), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
 
-  /* Verb icons under world view, matching legacy strip placement. */
+  if (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_92) {
+    /* C_155D_0CF5: E:/I: weight lines in clip D_B6B5[1], row 9. */
+    const equipSlotsForWeight = probe.canonical_ui?.paperdoll_panel?.slots || [];
+    const invEntriesForWeight = probe.canonical_ui?.inventory_panel?.entries || [];
+    const equippedCount = equipSlotsForWeight.filter((s) => parseProbeTileHex(s?.tile_hex) != null).length;
+    const invCount = invEntriesForWeight.filter((e) => e && e.key).length;
+    const derivedEquip = Math.max(0, equippedCount);
+    const derivedTotal = Math.max(0, equippedCount + invCount);
+    const equipWeight = Number.isFinite(Number(probe?.canonical_ui?.avatar_panel?.avatar?.equip_weight))
+      ? (Number(probe.canonical_ui.avatar_panel.avatar.equip_weight) | 0)
+      : derivedEquip;
+    const totalWeight = Number.isFinite(Number(probe?.canonical_ui?.avatar_panel?.avatar?.total_weight))
+      ? (Number(probe.canonical_ui.avatar_panel.avatar.total_weight) | 0)
+      : derivedTotal;
+    const strength = Number.isFinite(Number(probe?.canonical_ui?.avatar_panel?.avatar?.strength))
+      ? Math.max(1, Number(probe.canonical_ui.avatar_panel.avatar.strength) | 0)
+      : 10;
+    const eText = `${equipWeight}/${strength}s`;
+    const iText = `${totalWeight}/${Math.max(1, strength * 2)}s`;
+    drawU6MainText(g, "E:", x(176), y(80), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    drawU6MainText(g, eText, x(192), y(80), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    drawU6MainText(g, "I:", x(248), y(80), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    drawU6MainText(g, iText, x(264), y(80), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+
+    /* C_155D_1065: engagement icons row. */
+    const partyMembers = probe.canonical_ui?.party_panel?.members || [];
+    const activePartyIndex = Number(probe?.canonical_ui?.avatar_panel?.avatar?.party_index) | 0;
+    const partyCountRaw = partyMembers.length > 0
+      ? partyMembers.length
+      : Math.max(1, Number(probe?.canonical_ui?.avatar_panel?.avatar?.party_count) | 0);
+    /* Runtime party bridge is pending; avoid dropping the "next member" icon in live mode scaffolding. */
+    const partyCount = (state.uiProbeMode === "live" && partyCountRaw === 1) ? 2 : partyCountRaw;
+    if (activePartyIndex > 0) {
+      drawTile(LEGACY_POSTURE_ICONS[0], 176, 88);
+    }
+    drawTile(LEGACY_POSTURE_ICONS[1], 192, 88);
+    drawTile(LEGACY_POSTURE_ICONS[2], 208, 88);
+    if ((partyCount - 1) > activePartyIndex) {
+      drawTile(LEGACY_POSTURE_ICONS[3], 224, 88);
+    }
+    if (activePartyIndex > 0) {
+      drawTile(LEGACY_POSTURE_ICONS[4], 240, 88);
+    }
+
+    /* C_155D_01BC: combat mode text row in right-lower panel. */
+    const modeLabelRaw = String(state.legacyCombatModeLabel || "ASSAULT").toUpperCase();
+    const modeLabel = LEGACY_COMBAT_MODE_LABELS.includes(modeLabelRaw) ? modeLabelRaw : "ASSAULT";
+    /* STAT_refreshComMode: gotoxy((8-len)/2 + 10, 11) in D_B6B5[1]. */
+    const modeCol = (Math.trunc((8 - modeLabel.length) / 2) + 10) | 0;
+    const modeX = 176 + (modeCol * 8);
+    drawU6MainText(g, modeLabel, x(modeX), y(96), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  }
+
+  /* Legacy ledger clip D_B6B5[3] spans char cells (22..38,14..23) => px 176..304,112..184. */
+  if (state.legacyLedgerLines.length) {
+    for (let i = 0; i < state.legacyLedgerLines.length && i < LEGACY_LEDGER_MAX_LINES; i += 1) {
+      drawU6MainText(
+        g,
+        state.legacyLedgerLines[i],
+        x(176),
+        y(112 + (i * 8)),
+        Math.max(1, scale),
+        LEGACY_HUD_TEXT_COLOR
+      );
+    }
+  }
+  if (state.legacyLedgerPrompt) {
+    const lineIndex = Math.min(LEGACY_LEDGER_MAX_LINES - 1, state.legacyLedgerLines.length | 0);
+    const py = 112 + (lineIndex * 8);
+    drawU6MainText(g, ">", x(176), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    const ankhGlyph = String.fromCharCode(5 + (((animationTick() >> 1) & 3) | 0));
+    drawU6MainText(g, ankhGlyph, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+  }
+
+  /* Canonical verb button strip under world viewport. */
   for (let i = 0; i < 9; i += 1) {
     drawTile(LEGACY_UI_TILE.BUTTON_ATTACK_BASE + i, 8 + (i * 16), 176);
   }
@@ -3817,23 +4159,33 @@ function tryLookAtCell(sim, tx, ty) {
   if (Math.max(dx, dy) > 7) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Look: ${tx},${ty} is out of range.`;
+    pushLedgerMessage("Thou dost see nothing.");
+    showLegacyLedgerPrompt();
     return false;
   }
   const obj = topWorldObjectAtCell(sim, tx, ty, tz);
   if (obj) {
+    const tileId = ((obj.baseTile | 0) + (obj.frame | 0)) & 0xffff;
+    pushLedgerMessage(canonicalLookSentenceForTile(tileId));
+    showLegacyLedgerPrompt();
     diagBox.className = "diag ok";
-    diagBox.textContent = `Look: object type 0x${(obj.type & 0x3ff).toString(16)} frame ${obj.frame | 0} at ${tx},${ty},${tz}.`;
+    diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
     return true;
   }
   const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
   if (actor) {
+    const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
+    pushLedgerMessage(canonicalLookSentenceForTile(tileId));
+    showLegacyLedgerPrompt();
     diagBox.className = "diag ok";
-    diagBox.textContent = `Look: actor 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}.`;
+    diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
     return true;
   }
   const tile = state.mapCtx.tileAt(tx | 0, ty | 0, tz | 0) & 0xffff;
+  pushLedgerMessage(canonicalLookSentenceForTile(tile));
+  showLegacyLedgerPrompt();
   diagBox.className = "diag ok";
-  diagBox.textContent = `Look: tile 0x${tile.toString(16)} at ${tx},${ty},${tz}.`;
+  diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tile)} @ ${tx},${ty},${tz}`;
   return true;
 }
 
@@ -4359,6 +4711,9 @@ function startSessionFromTitle() {
     placeCameraAtPresetId("avatar_start");
   }
   state.sessionStarted = true;
+  state.legacyLedgerLines.length = 0;
+  pushLedgerMessage(`${String(state.net.characterName || "Avatar").toUpperCase()}:`);
+  showLegacyLedgerPrompt();
   const resumed = !!state.net.resumeFromSnapshot;
   state.net.resumeFromSnapshot = false;
   diagBox.className = "diag ok";
@@ -4374,6 +4729,8 @@ function returnToTitleMenu() {
   state.queue.length = 0;
   state.useCursorActive = false;
   state.targetVerb = "";
+  state.legacyLedgerLines.length = 0;
+  state.legacyLedgerPrompt = false;
   state.sessionStarted = false;
   setStartupMenuIndex(0);
   diagBox.className = "diag ok";
@@ -5988,6 +6345,43 @@ function renderCharacterStubPanel() {
   }
 }
 
+function parseProbeTileHex(v) {
+  const s = String(v || "").trim().toLowerCase();
+  const m = /^0x([0-9a-f]+)$/.exec(s);
+  if (!m) {
+    return null;
+  }
+  return parseInt(m[1], 16) & 0xffff;
+}
+
+function uiProbeHitTest(logicalX, logicalY) {
+  const x = logicalX | 0;
+  const y = logicalY | 0;
+  /* C_155D_1267 inventory + portrait hitboxes. */
+  if (x >= 248 && x < 312 && y >= 32 && y < 80) {
+    const col = Math.floor((x - 248) / 16);
+    const row = Math.floor((y - 32) / 16);
+    return { kind: "inventory", index: (row * 4) + col };
+  }
+  if (x >= 272 && x < 288 && y >= 16 && y < 32) {
+    return { kind: "portrait", index: 0 };
+  }
+  /* C_155D_130E equipment hitboxes. */
+  if (x >= 200 && x < 216 && y >= 16 && y < 32) {
+    return { kind: "equip", slot: 0 };
+  }
+  if (x >= 176 && x < 192 && y >= 24 && y < 72) {
+    return { kind: "equip", slot: Math.floor((y - 24) / 16) + 1 };
+  }
+  if (x >= 224 && x < 240 && y >= 24 && y < 72) {
+    return { kind: "equip", slot: Math.floor((y - 24) / 16) + 4 };
+  }
+  if (x >= 200 && x < 216 && y >= 64 && y < 80) {
+    return { kind: "equip", slot: 7 };
+  }
+  return null;
+}
+
 function buildOverlayCells(startX, startY, wz, viewCtx) {
   return buildOverlayCellsModel({
     viewW: VIEW_W,
@@ -6013,6 +6407,27 @@ function topInteractiveOverlayAt(overlayCells, startX, startY, wx, wy) {
 
 function measureActorOcclusionParity(overlayCells, startX, startY, viewCtx, entities) {
   return measureActorOcclusionParityModel(overlayCells, VIEW_W, VIEW_H, startX, startY, viewCtx, entities);
+}
+
+function drawLegacySelectCellMarker(g, px, py, size) {
+  /* Canonical world-target selector in seg_0A33:
+     SelectRange < 0 => TIL_16C (direction), else TIL_16D (select). */
+  const verb = String(state.targetVerb || "");
+  const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
+  const selectorTileId = (range < 0) ? 0x16c : 0x16d;
+  if (state.tileSet && Number.isFinite(selectorTileId)) {
+    const pal = paletteForTile(selectorTileId);
+    const key = paletteKeyForTile(selectorTileId);
+    const marker = state.tileSet.tileCanvas(selectorTileId, pal, key);
+    if (marker) {
+      g.imageSmoothingEnabled = false;
+      g.drawImage(marker, px, py, size, size);
+      return;
+    }
+  }
+  g.strokeStyle = "#f6d365";
+  g.lineWidth = 2;
+  g.strokeRect(px + 2, py + 2, size - 4, size - 4);
 }
 
 function drawTileGrid() {
@@ -6263,12 +6678,11 @@ function drawTileGrid() {
     if (ugx >= 0 && ugy >= 0 && ugx < VIEW_W && ugy < VIEW_H) {
       const upx = ugx * TILE_SIZE;
       const upy = ugy * TILE_SIZE;
-      ctx.strokeStyle = "#f6d365";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(upx + 2, upy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      drawLegacySelectCellMarker(ctx, upx, upy, TILE_SIZE);
     }
   }
 
+  renderLegacyHudStubOnBackdrop();
   renderCharacterStubPanel();
   statTile.textContent = `0x${centerTile.toString(16).padStart(2, "0")}`;
 }
@@ -6706,7 +7120,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes, lookRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -6723,9 +7137,10 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/portrait.a"),
       fetch("../assets/runtime/titles.shp"),
       fetch("../assets/runtime/mainmenu.shp"),
-      fetch("../assets/runtime/u6mcga.ptr")
+      fetch("../assets/runtime/u6mcga.ptr"),
+      fetch("../assets/runtime/look.lzd")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf, lookBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -6742,7 +7157,8 @@ async function loadRuntimeAssets() {
       portraitARes.arrayBuffer(),
       titlesRes.arrayBuffer(),
       mainmenuRes.arrayBuffer(),
-      cursorRes.arrayBuffer()
+      cursorRes.arrayBuffer(),
+      lookRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -6796,6 +7212,11 @@ async function loadRuntimeAssets() {
       state.cursorIndex = 0;
     } else {
       state.cursorPixmaps = null;
+    }
+    if (lookRes.ok && lookBuf.byteLength > 4) {
+      state.lookStringEntries = decodeLookLzdEntries(new Uint8Array(lookBuf));
+    } else {
+      state.lookStringEntries = null;
     }
     if (flagRes.ok && flagBuf.byteLength >= 0x1c00) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
@@ -6901,6 +7322,7 @@ async function loadRuntimeAssets() {
     state.cursorPixmaps = null;
     state.u6MainFont = null;
     state.legacyPaperPixmap = null;
+    state.lookStringEntries = null;
     state.tileFlags = null;
     state.tileFlags2 = null;
     state.terrainType = null;
@@ -6928,6 +7350,22 @@ function clampUseCursorToView() {
   const maxY = startY + VIEW_H - 1;
   state.useCursorX = clampI32(state.useCursorX | 0, startX, maxX);
   state.useCursorY = clampI32(state.useCursorY | 0, startY, maxY);
+  const verb = String(state.targetVerb || "");
+  const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
+  if (Number.isFinite(range) && range >= 0) {
+    const cx = state.sim.world.map_x | 0;
+    const cy = state.sim.world.map_y | 0;
+    const dx = (state.useCursorX | 0) - cx;
+    const dy = (state.useCursorY | 0) - cy;
+    const cheb = Math.max(Math.abs(dx), Math.abs(dy));
+    if (cheb > range) {
+      const s = range / Math.max(1, cheb);
+      const nx = cx + Math.round(dx * s);
+      const ny = cy + Math.round(dy * s);
+      state.useCursorX = clampI32(nx | 0, startX, maxX);
+      state.useCursorY = clampI32(ny | 0, startY, maxY);
+    }
+  }
 }
 
 function beginTargetCursor(verb) {
@@ -6940,19 +7378,34 @@ function beginTargetCursor(verb) {
   }
   const px = state.sim.world.map_x | 0;
   const py = state.sim.world.map_y | 0;
-  const dx = state.avatarFacingDx | 0;
-  const dy = state.avatarFacingDy | 0;
-  state.useCursorX = px + dx;
-  state.useCursorY = py + dy;
+  /* Legacy starts selector centered on avatar tile (AimX/AimY = 5,5). */
+  state.useCursorX = px;
+  state.useCursorY = py;
   state.targetVerb = v;
   state.useCursorActive = true;
   clampUseCursorToView();
   diagBox.className = "diag ok";
-  diagBox.textContent = `${LEGACY_TARGET_VERB_LABEL[v]}: move target with arrows, confirm with Enter/U, cancel with Esc.`;
+  if ((LEGACY_VERB_SELECT_RANGE[v] | 0) < 0) {
+    diagBox.textContent = `${LEGACY_TARGET_VERB_LABEL[v]}: choose direction with arrow keys, cancel with Esc.`;
+  } else {
+    diagBox.textContent = `${LEGACY_TARGET_VERB_LABEL[v]}: move target with arrows, confirm with Enter/U, cancel with Esc.`;
+  }
 }
 
 function moveUseCursor(dx, dy) {
   if (!state.useCursorActive) {
+    return;
+  }
+  const verb = String(state.targetVerb || "");
+  const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
+  if (range === -1) {
+    /* Legacy directional-target commands execute on arrow toward adjacent cell. */
+    const px = state.sim.world.map_x | 0;
+    const py = state.sim.world.map_y | 0;
+    state.useCursorX = (px + (dx | 0)) | 0;
+    state.useCursorY = (py + (dy | 0)) | 0;
+    clampUseCursorToView();
+    commitUseCursorInteract();
     return;
   }
   state.useCursorX = (state.useCursorX + (dx | 0)) | 0;
@@ -7064,7 +7517,7 @@ function loadWorldSnapshotHotkey() {
 
 function captureUiProbeHotkey() {
   const probe = buildUiProbeContract({
-    mode: "live",
+    mode: state.uiProbeMode === "sample" ? "sample" : "live",
     runtime: {
       sim: state.sim,
       commandLog: state.commandLog,
@@ -7082,6 +7535,72 @@ function captureUiProbeHotkey() {
   }
   diagBox.className = "diag ok";
   diagBox.textContent = `UI probe captured (${digest}) and downloaded as ${filename}.`;
+}
+
+function cycleUiProbeMode() {
+  state.uiProbeMode = state.uiProbeMode === "live" ? "sample" : "live";
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Canonical UI probe mode: ${state.uiProbeMode}.`;
+}
+
+function toggleLegacyHudLayer() {
+  state.legacyHudLayerHidden = !state.legacyHudLayerHidden;
+  diagBox.className = "diag ok";
+  diagBox.textContent = state.legacyHudLayerHidden
+    ? "Legacy HUD layer hidden (deviation mode)."
+    : "Legacy HUD layer visible.";
+}
+
+function getUiProbeForRender() {
+  return buildUiProbeContract({
+    mode: state.uiProbeMode === "sample" ? "sample" : "live",
+    runtime: {
+      sim: state.sim,
+      commandLog: state.commandLog,
+      partyMembers: [1]
+    }
+  });
+}
+
+function handleLegacyHudClick(ev, surface) {
+  if (!state.sessionStarted) {
+    return false;
+  }
+  if (document.documentElement.getAttribute("data-legacy-frame-preview") !== "on") {
+    return false;
+  }
+  if (state.legacyHudLayerHidden) {
+    return false;
+  }
+  const s = surface || canvas;
+  const rect = s.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+  const sx = ((ev.clientX - rect.left) * (s.width || 0)) / rect.width;
+  const sy = ((ev.clientY - rect.top) * (s.height || 0)) / rect.height;
+  const logicalW = 320;
+  const logicalH = 200;
+  const lx = Math.floor((sx / Math.max(1, s.width)) * logicalW);
+  const ly = Math.floor((sy / Math.max(1, s.height)) * logicalH);
+  if (lx < 0 || ly < 0 || lx >= logicalW || ly >= logicalH) {
+    return false;
+  }
+  const hit = uiProbeHitTest(lx, ly);
+  if (!hit) {
+    return false;
+  }
+  state.legacyHudSelection = hit;
+  diagBox.className = "diag ok";
+  if (hit.kind === "inventory") {
+    diagBox.textContent = `Legacy HUD: inventory cell ${hit.index} (C_155D_1267).`;
+  } else if (hit.kind === "portrait") {
+    diagBox.textContent = "Legacy HUD: portrait cell (C_155D_1267).";
+  } else {
+    diagBox.textContent = `Legacy HUD: equipment slot ${hit.slot} (C_155D_130E).`;
+  }
+  ev.preventDefault();
+  return true;
 }
 
 function runLegacyNonTargetAction(k) {
@@ -7163,6 +7682,14 @@ function runDebugHotkeys(ev) {
   }
   if (k === "j") {
     captureUiProbeHotkey();
+    return true;
+  }
+  if (k === "k") {
+    toggleLegacyHudLayer();
+    return true;
+  }
+  if (k === "l") {
+    cycleUiProbeMode();
     return true;
   }
   if (k === "n") {
@@ -7672,6 +8199,9 @@ if (legacyBackdropCanvas) {
   legacyBackdropCanvas.addEventListener("click", (ev) => {
     updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
     if (state.sessionStarted) {
+      if (handleLegacyHudClick(ev, legacyBackdropCanvas)) {
+        return;
+      }
       return;
     }
     const idx = startupMenuIndexAtEvent(ev, legacyBackdropCanvas);
