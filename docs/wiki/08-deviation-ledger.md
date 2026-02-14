@@ -52,10 +52,10 @@ Status tags:
 
 ### Same-Cell Tie Ordering
 
-- Status: `known-gap`
+- Status: `intentional-divergence` (bounded)
 - Legacy anchor: `C_1184_29C4` comparator semantics
-- Modern: no forced reverse `sourceIndex` tie-break for exact `x,y,z`
-- Remaining risk: some stack cases may still need deeper chain-association modeling
+- Modern: `C_1184_29C4` primary compare with deterministic tie stabilization (`sourceArea/sourceIndex/order`)
+- Remaining risk: full assoc-chain resolution for non-`LOCXYZ` links is still incomplete in client-side render stream modeling
 
 Observed impact archetype:
 

@@ -28,7 +28,7 @@ Ultima VI Online is a major inspiration here, and the team behind it are the rea
 
 ## Current Status (Short Version)
 
-- Playable single-player vertical slice is in place.
+- Navigation-only single-player slice is in place (world traversal and rendering baseline).
 - Rendering/interaction parity work is active and ongoing.
 - Server-backed persistence and realtime sync foundations are implemented.
 - MMO-direction design exists, but full multiplayer product scope is still evolving.
@@ -47,12 +47,18 @@ Completed:
 
 - `M0` Documentation Foundation (`complete`)
 - `M1` Deterministic Runtime Skeleton (`complete`)
-- `M3` Playable Single-Player Vertical Slice (`complete`)
 
 In progress:
 
 - `M2` World State and Persistence Slice (`in progress`)
+  - done: deterministic world state bootstrap, map/chunk read compatibility, persistence envelope baseline
+  - pending: shared authority-boundary cleanup and migration of remaining client-owned state logic
+- `M3` Playable Single-Player Vertical Slice (`in progress`, navigation-only so far)
+  - done: deterministic walkaround loop, web client shell, runtime asset validation diagnostics
+  - pending: object interaction, inventory/equipment, NPC dialogue, party management, quests, magic, combat, NPC pathing/schedules, day/night cycle, dungeons, boats/vehicles, music, SFX
 - `M4` Gameplay Parity Expansion (`in progress`)
+  - done: static object layer ingest, animated tile phase control, baseline interaction wiring, blackout/wall/corner parity stabilization
+  - pending: deeper gameplay parity coverage and deterministic regression expansion across critical scenarios
 
 Next:
 

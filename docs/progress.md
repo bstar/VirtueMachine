@@ -7,7 +7,7 @@ Last Updated: 2026-02-14
 - `[x]` M0: Documentation Foundation
 - `[x]` M1: Deterministic Runtime Skeleton
 - `[~]` M2: World State and Persistence Slice
-- `[x]` M3: Playable Single-Player Vertical Slice
+- `[~]` M3: Playable Single-Player Vertical Slice (navigation-only)
 - `[~]` M4: Gameplay Parity Expansion
 - `[ ]` M5: Multiplayer Prototype
 
@@ -59,6 +59,24 @@ This checklist is intentionally mutable.
 - `[x]` Minimal web client scaffolding
 - `[x]` Runtime asset validation + fallback diagnostics
 - `[x]` Playable deterministic walkaround demo
+- `[ ]` Object interaction system parity (container/world/use flows)
+- `[ ]` Inventory/equipment UX and item transfer rules parity
+- `[ ]` NPC communication/dialogue system
+- `[ ]` Quest mechanics/progression systems
+- `[ ]` Magic/casting systems
+- `[ ]` Combat systems
+- `[ ]` NPC pathing and schedule behavior
+- `[ ]` Party control semantics and companion command behaviors
+- `[ ]` Character progression/stat effects and status-condition gameplay
+- `[ ]` Sleep/rest interactions and world-time side effects
+- `[ ]` Day/night cycle gameplay effects and presentation parity
+- `[ ]` Music system integration and track-state parity
+- `[ ]` Sound effects/event audio parity
+- `[ ]` Economy/shop interactions and transaction rules
+- `[ ]` Scripted world-state triggers (switches, keyed gates, event flags)
+- `[ ]` Dungeon traversal semantics (ladders/stairs/level transitions/constraints)
+- `[ ]` Boat and other vehicle interaction/navigation behavior
+- `[ ]` Full verb-backend parity beyond movement baseline (`attack/cast/drop/move` completion)
 
 ### M4 Gameplay Parity Expansion
 

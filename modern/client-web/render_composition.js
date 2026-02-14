@@ -1,3 +1,5 @@
+import { compareLegacyObjectOrderStable } from "./legacy_object_order.js";
+
 export function isLegacyPixelTransparent(mask, tileId, palIdx) {
   const zeroIsTransparent = tileId <= 0x01ff;
   if (mask === 10 || mask === 5) {
@@ -64,18 +66,7 @@ export function buildOverlayCellsModel(opts) {
   const visibleAtWorld = viewCtx && typeof viewCtx.visibleAtWorld === "function"
     ? viewCtx.visibleAtWorld.bind(viewCtx)
     : null;
-  const compareLegacySourceOrder = (a, b) => {
-    if ((a.y | 0) !== (b.y | 0)) {
-      return (a.y | 0) - (b.y | 0);
-    }
-    if ((a.x | 0) !== (b.x | 0)) {
-      return (a.x | 0) - (b.x | 0);
-    }
-    if ((a.z | 0) !== (b.z | 0)) {
-      return (b.z | 0) - (a.z | 0);
-    }
-    return 0;
-  };
+  const compareLegacySourceOrder = (a, b) => compareLegacyObjectOrderStable(a, b);
 
   const insertLegacyCellTile = (gx, gy, tileId, bp06, source, debugLabel = "") => {
     if (!inView(gx, gy)) {

@@ -104,9 +104,22 @@ Multiplayer handling policy during this phase:
 
 ## M3: Playable Single-Player Vertical Slice
 
-- movement, interaction, core loop playable in web client
+- navigation/core loop playable in web client (current state)
 - larger viewport active
 - documented parity gaps and accepted deviations
+- not yet complete for full single-player gameplay; still pending:
+  - object interaction/container semantics
+  - inventory/equipment parity
+  - NPC communication/dialogue
+  - party management semantics
+  - quest progression mechanics
+  - magic/casting
+  - combat rules/flow
+  - NPC pathing + schedule routines
+  - day/night cycle effects
+  - dungeon traversal/transition rules
+  - boats/vehicle interaction and navigation
+  - music and SFX integration/parity
 
 ## M4: Gameplay Parity Expansion
 

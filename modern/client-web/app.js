@@ -4,6 +4,7 @@ import {
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
 } from "./render_composition.js";
+import { compareLegacyObjectOrderStable } from "./legacy_object_order.js";
 
 const TICK_MS = 100;
 const TILE_SIZE = 64;
@@ -824,16 +825,7 @@ class U6ObjectLayerJS {
   }
 
   compareLegacyRenderOrder(a, b) {
-    if ((a.y | 0) !== (b.y | 0)) {
-      return (a.y | 0) - (b.y | 0);
-    }
-    if ((a.x | 0) !== (b.x | 0)) {
-      return (a.x | 0) - (b.x | 0);
-    }
-    if ((a.z | 0) !== (b.z | 0)) {
-      return (b.z | 0) - (a.z | 0);
-    }
-    return 0;
+    return compareLegacyObjectOrderStable(a, b);
   }
 
   parseObjBlk(bytes, areaId = 0) {
@@ -867,6 +859,8 @@ class U6ObjectLayerJS {
         x,
         y,
         z,
+        status,
+        coordUse: status & OBJ_COORD_USE_MASK,
         type,
         baseTile: base,
         frame,

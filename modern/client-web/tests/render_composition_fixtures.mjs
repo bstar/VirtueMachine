@@ -5,6 +5,10 @@ import {
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
 } from "../render_composition.js";
+import {
+  compareLegacyObjectOrderStrict,
+  compareLegacyObjectOrderStable
+} from "../legacy_object_order.js";
 
 const VIEW_W = 5;
 const VIEW_H = 5;
@@ -302,6 +306,133 @@ function runFloorInsertionOrderFixture() {
   assert.equal(list[2].tileId, 0x301, "floor entry should be after non-floor chain");
 }
 
+function runRightFringeSpillFixture() {
+  const startX = 300;
+  const startY = 340;
+  const wz = 0;
+  const tileFlags = new Uint8Array(0x800);
+  tileFlags[0x220 & 0x7ff] = 0x80; /* spill-left */
+  const objectLayer = makeObjectLayer([
+    {
+      x: 305, y: 342, z: 0,
+      type: 0x111, renderable: true, order: 10, sourceArea: 0, sourceIndex: 10, tileId: 0x220
+    }
+  ]);
+
+  const out = buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx: { visibleAtWorld() { return true; } },
+    objectLayer,
+    tileFlags,
+    resolveAnimatedObjectTile(o) { return o.tileId; },
+    hasWallTerrain() { return false; }
+  });
+
+  // Source anchor is outside view (x=305), but +1 source-window should still
+  // process it so the left spill (x=304) lands in-view.
+  assert.equal(out.overlayCount, 1, "right fringe source should be processed via +1 window");
+  const inViewSpill = out.overlayCells[((342 - startY) * VIEW_W) + (304 - startX)];
+  assert.equal(inViewSpill.length > 0, true, "right fringe left-spill should land in-view");
+  assert.equal(inViewSpill[0].tileId, 0x21f, "right fringe left-spill tile mismatch");
+  assert.equal(inViewSpill[0].sourceType, "spill-left", "right fringe should record spill-left source type");
+}
+
+function runBottomFringeSpillFixture() {
+  const startX = 300;
+  const startY = 340;
+  const wz = 0;
+  const tileFlags = new Uint8Array(0x800);
+  tileFlags[0x240 & 0x7ff] = 0x40; /* spill-up */
+  const objectLayer = makeObjectLayer([
+    {
+      x: 302, y: 345, z: 0,
+      type: 0x112, renderable: true, order: 11, sourceArea: 0, sourceIndex: 11, tileId: 0x240
+    }
+  ]);
+
+  const out = buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx: { visibleAtWorld() { return true; } },
+    objectLayer,
+    tileFlags,
+    resolveAnimatedObjectTile(o) { return o.tileId; },
+    hasWallTerrain() { return false; }
+  });
+
+  // Source anchor is outside view (y=345), but +1 source-window should still
+  // process it so the up spill (y=344) lands in-view.
+  assert.equal(out.overlayCount, 1, "bottom fringe source should be processed via +1 window");
+  const inViewSpill = out.overlayCells[((344 - startY) * VIEW_W) + (302 - startX)];
+  assert.equal(inViewSpill.length > 0, true, "bottom fringe up-spill should land in-view");
+  assert.equal(inViewSpill[0].tileId, 0x23f, "bottom fringe up-spill tile mismatch");
+  assert.equal(inViewSpill[0].sourceType, "spill-up", "bottom fringe should record spill-up source type");
+}
+
+function runSameCellStreamDeterminismFixture() {
+  const startX = 300;
+  const startY = 340;
+  const wz = 0;
+  const tileFlags = new Uint8Array(0x800);
+  const objectLayer = makeObjectLayer([
+    {
+      x: 301, y: 341, z: 0,
+      type: 0x150, renderable: true, order: 2, sourceArea: 0, sourceIndex: 2, tileId: 0x350
+    },
+    {
+      x: 301, y: 341, z: 0,
+      type: 0x151, renderable: true, order: 3, sourceArea: 1, sourceIndex: 0, tileId: 0x351
+    }
+  ]);
+
+  const out = buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx: { visibleAtWorld() { return true; } },
+    objectLayer,
+    tileFlags,
+    resolveAnimatedObjectTile(o) { return o.tileId; },
+    hasWallTerrain() { return false; }
+  });
+
+  const list = out.overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
+  assert.equal(list.length, 2, "same-cell stream fixture should produce two overlays");
+  // Deterministic expectation with current canonical stream + insertion model:
+  // later stream entries unshift to head, earlier entries remain at tail.
+  assert.equal(list[0].tileId, 0x351, "later stream entry should unshift to head");
+  assert.equal(list[1].tileId, 0x350, "earlier stream entry should remain tail");
+}
+
+function runLegacyComparatorFixture() {
+  const loc = { x: 10, y: 10, z: 0, coordUse: 0, status: 0 };
+  const inv = { x: 10, y: 10, z: 0, coordUse: 0x08, status: 0x08 };
+  assert.equal(
+    compareLegacyObjectOrderStrict(inv, loc) < 0,
+    true,
+    "non-LOCXYZ anchor should sort before LOCXYZ when compared against LOCXYZ object"
+  );
+  assert.equal(
+    compareLegacyObjectOrderStrict(loc, inv) > 0,
+    true,
+    "LOCXYZ should sort after non-LOCXYZ anchor in reverse comparison"
+  );
+
+  const a = { x: 100, y: 100, z: 0, coordUse: 0, status: 0, sourceArea: 0, sourceIndex: 10, order: 10 };
+  const b = { x: 100, y: 100, z: 0, coordUse: 0, status: 0, sourceArea: 0, sourceIndex: 11, order: 11 };
+  assert.equal(compareLegacyObjectOrderStrict(a, b), 0, "strict legacy comparator should tie same-cell LOCXYZ objects");
+  assert.equal(compareLegacyObjectOrderStable(a, b) < 0, true, "stable comparator should break strict ties by source order");
+}
+
 runSpillOrderingFixture();
 runVisibilitySuppressionFixture();
 runActorOcclusionParityFixture();
@@ -309,5 +440,9 @@ runTransparencyFixture();
 runLegacyStreamOrderingFixture();
 runLegacyInjectionHookFixture();
 runFloorInsertionOrderFixture();
+runRightFringeSpillFixture();
+runBottomFringeSpillFixture();
+runSameCellStreamDeterminismFixture();
+runLegacyComparatorFixture();
 
 console.log("render_composition_fixtures: ok");
