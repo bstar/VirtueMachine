@@ -21,29 +21,29 @@ Both projects are valuable, but they optimize for different outcomes:
 
 ## Evidence Anchors (Reference Project)
 
-Representative evidence from `/tmp/ultima-vi-online-ref`:
+Representative evidence from `legacy/ultima-vi-online`:
 
 - Monolithic build toggles:
-  - `/tmp/ultima-vi-online-ref/u6o7.cpp` (`#define CLIENT`, `#define HOST` comments and shared include tree)
+  - `legacy/ultima-vi-online/u6o7.cpp` (`#define CLIENT`, `#define HOST` comments and shared include tree)
 - Message/protocol constants:
-  - `/tmp/ultima-vi-online-ref/define_both.h` (`MSG_*`)
+  - `legacy/ultima-vi-online/define_both.h` (`MSG_*`)
 - Host/client global data partitions:
-  - `/tmp/ultima-vi-online-ref/data_both.h`
-  - `/tmp/ultima-vi-online-ref/data_host.h`
-  - `/tmp/ultima-vi-online-ref/data_client.h`
+  - `legacy/ultima-vi-online/data_both.h`
+  - `legacy/ultima-vi-online/data_host.h`
+  - `legacy/ultima-vi-online/data_client.h`
 - Socket threading and framing:
-  - `/tmp/ultima-vi-online-ref/function_both.cpp` (`sockets_send`, `sockets_receive`, `BITSadd`, `BITSget`)
-  - `/tmp/ultima-vi-online-ref/function_host.h` (`sockets_accept`)
+  - `legacy/ultima-vi-online/function_both.cpp` (`sockets_send`, `sockets_receive`, `BITSadd`, `BITSget`)
+  - `legacy/ultima-vi-online/function_host.h` (`sockets_accept`)
 - Render hot paths and asm:
-  - `/tmp/ultima-vi-online-ref/function_client.h` (`inline_asm/*.asm` includes)
-  - `/tmp/ultima-vi-online-ref/inline_asm/fast.asm`
+  - `legacy/ultima-vi-online/function_client.h` (`inline_asm/*.asm` includes)
+  - `legacy/ultima-vi-online/inline_asm/fast.asm`
 - Platform stack:
-  - `/tmp/ultima-vi-online-ref/u6o7.cpp` (WinSock, WinInet, WinReg, DirectX-era includes)
-  - `/tmp/ultima-vi-online-ref/myddraw.cpp`
-  - `/tmp/ultima-vi-online-ref/dmusic.cpp`
+  - `legacy/ultima-vi-online/u6o7.cpp` (WinSock, WinInet, WinReg, DirectX-era includes)
+  - `legacy/ultima-vi-online/myddraw.cpp`
+  - `legacy/ultima-vi-online/dmusic.cpp`
 - Very large loop-centric gameplay cores:
-  - `/tmp/ultima-vi-online-ref/loop_host.cpp`
-  - `/tmp/ultima-vi-online-ref/loop_client.cpp`
+  - `legacy/ultima-vi-online/loop_host.cpp`
+  - `legacy/ultima-vi-online/loop_client.cpp`
 
 ## Architecture Delta: What It Is Doing Differently
 
@@ -197,4 +197,3 @@ When evaluating future differences:
 5. validate with parity snapshot + hover diagnostics + contract tests.
 
 This keeps inspiration from `ultima-vi-online` while preserving canonical discipline.
-

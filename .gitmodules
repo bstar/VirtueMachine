@@ -2,3 +2,9 @@
 	path = legacy/u6-decompiled
 	url = https://github.com/ergonomy-joe/u6-decompiled.git
 	update = none
+[submodule "legacy/scummvm"]
+	path = legacy/scummvm
+	url = https://github.com/scummvm/scummvm.git
+[submodule "legacy/ultima-vi-online"]
+	path = legacy/ultima-vi-online
+	url = https://github.com/CearDragon/ultima-vi-online.git

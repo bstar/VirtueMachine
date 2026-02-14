@@ -1,16 +1,25 @@
-# Canonical Sources For Nuvie Parity
+# Canonical And Comparative Sources For Parity Work
 
 ## Purpose Boundary
 
 - VirtueMachine does not target Nuvie behavior as the end state.
 - VirtueMachine targets original Ultima VI behavior from decompiled legacy code + original data.
-- Nuvie/ScummVM sources are used to gather clues when legacy logic is hard to interpret.
+- ScummVM/Nuvie and Ultima VI Online sources are used to gather clues when legacy logic is hard to interpret.
 
 ## Rule
 
-- For Nuvie clue-reading, treat ScummVM Nuvie as canonical: `https://github.com/scummvm/scummvm/tree/master/engines/ultima/nuvie`
-- Treat standalone Nuvie as historical/archive context: `https://github.com/nuvie/nuvie`
-- Do not accept a Nuvie-only argument as sufficient for a VirtueMachine behavior change.
+- Canonical proof must come from `legacy/u6-decompiled` plus original data semantics.
+- Treat ScummVM Nuvie as comparative input only: `https://github.com/scummvm/scummvm/tree/master/engines/ultima/nuvie`
+- Treat Ultima VI Online as comparative input only: `https://github.com/CearDragon/ultima-vi-online`
+- Do not accept ScummVM/Nuvie- or U6O-only arguments as sufficient for VirtueMachine behavior changes.
+
+## Local Reference Checkouts (Preferred)
+
+- `legacy/scummvm/engines/ultima/nuvie` (comparative)
+- `legacy/ultima-vi-online` (comparative)
+
+If these submodules are initialized, prefer local grep/trace workflows over remote browsing for speed and reproducibility.
+Default policy: do not use internet fetches for ScummVM/U6O source inspection when local submodule copies exist.
 
 ## Freshness Checks
 
@@ -25,6 +34,7 @@ As of February 13, 2026:
 
 - ScummVM Nuvie path latest commit date: `2026-02-11`
 - Standalone Nuvie latest commit date: `2025-03-12` (README update noting move to ScummVM)
+- Ultima VI Online latest commit date: verify with `curl -L "https://api.github.com/repos/CearDragon/ultima-vi-online/commits?per_page=1"`
 
 ## Critical Upstream Files
 
@@ -46,6 +56,12 @@ Standalone Nuvie historical URLs:
 - `https://raw.githubusercontent.com/nuvie/nuvie/master/MapWindow.cpp`
 - `https://raw.githubusercontent.com/nuvie/nuvie/master/ObjManager.cpp`
 - `https://raw.githubusercontent.com/nuvie/nuvie/master/TileManager.cpp`
+
+Ultima VI Online comparative URLs:
+
+- `https://raw.githubusercontent.com/CearDragon/ultima-vi-online/master/u6o7.cpp`
+- `https://raw.githubusercontent.com/CearDragon/ultima-vi-online/master/define_both.h`
+- `https://raw.githubusercontent.com/CearDragon/ultima-vi-online/master/loop_host.cpp`
 
 ## Local VirtueMachine Files To Compare
 

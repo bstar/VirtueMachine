@@ -1,25 +1,26 @@
 ---
 name: nuvie-parity-docs
-description: Use this skill when validating VirtueMachine rendering or interaction parity against Ultima VI Nuvie/ScummVM behavior, including provenance checks, coordinate-level evidence, and compatibility documentation updates.
+description: Use this skill when validating VirtueMachine rendering or interaction parity with legacy Ultima VI canonical behavior, while using Nuvie/ScummVM and Ultima VI Online as comparative reference inputs only.
 ---
 
 # Nuvie Parity Docs
 
-Use this workflow for parity investigations where behavior looks wrong but should be verified against legacy/Nuvie evidence before changing runtime code.
+Use this workflow for parity investigations where behavior looks wrong and must be verified against legacy canonical evidence before changing runtime code.
 
 ## Fidelity Hierarchy (Must Follow)
 
 - Primary target: original Ultima VI behavior from decompiled legacy code and original data.
-- Secondary aid: ScummVM/Nuvie may be consulted only to generate clues when legacy intent is unclear.
-- Do not treat Nuvie/ScummVM as the implementation target for VirtueMachine systems.
-- Any Nuvie-derived decision must map back to legacy evidence before code changes.
+- Secondary aid: ScummVM/Nuvie and Ultima VI Online may be consulted only to generate clues when legacy intent is unclear.
+- Do not treat ScummVM/Nuvie or Ultima VI Online as implementation targets for VirtueMachine systems.
+- Any comparative-reference-derived decision must map back to legacy evidence before code changes.
 
 ## Canonical Source Policy
 
-- Canonical upstream for Nuvie clue-reading is `scummvm/scummvm` under `engines/ultima/nuvie`.
-- Standalone `nuvie/nuvie` is historical context only and must not override ScummVM parity evidence.
-- Always verify source freshness before deep parity work (latest commit date for ScummVM Nuvie path).
-- Critical references live in `references/canonical-sources.md`.
+- Canonical source of truth remains `legacy/u6-decompiled` + original game data.
+- ScummVM/Nuvie (`legacy/scummvm/engines/ultima/nuvie`) is comparative reference only.
+- Ultima VI Online (`legacy/ultima-vi-online`) is comparative reference only.
+- Critical reference policy lives in `references/canonical-sources.md`.
+- When local submodules are present, use local files for analysis; do not fetch remote copies for routine parity/comparison work.
 
 ## Scope
 
@@ -31,7 +32,7 @@ Use this workflow for parity investigations where behavior looks wrong but shoul
 
 1. Confirm current runtime asset provenance.
 2. Capture coordinate-level evidence in VirtueMachine.
-3. Compare against legacy code first; use Nuvie/ScummVM only for clue generation.
+3. Compare against legacy code first; use ScummVM/Nuvie and U6O only for clue generation.
 4. Classify issue source.
 5. Update parity docs with evidence and decision.
 
@@ -49,13 +50,13 @@ Use this workflow for parity investigations where behavior looks wrong but shoul
   - object `type`, `frame`, `tile`, `status`
 - Confirm whether mismatch exists in source records or only at render composition.
 
-## Step 3: Legacy/Nuvie Evidence
+## Step 3: Legacy and Comparative Evidence
 
 - Validate coordinate decoding and status semantics against:
   - `legacy/u6-decompiled/SRC/u6.h`
   - relevant segment logic (`seg_0A33.c`, `seg_1184.c`, `seg_2FC1.c`, etc.)
 - Use ScummVM Nuvie references only after legacy review, to gather hypotheses.
-- Use standalone Nuvie only when ScummVM lacks the relevant routine and document that exception.
+- Use Ultima VI Online references only to evaluate MMO-era implementation patterns; never as canonical behavior proof.
 - Before implementing a fix, cite the legacy routine/data evidence that justifies it.
 
 ## Step 4: Classification
