@@ -289,6 +289,29 @@ const LEGACY_STATUS_DISPLAY = Object.freeze({
   CMD_92: 0x92, /* equipment + inventory */
   CMD_9E: 0x9e  /* inspect / talk panel */
 });
+const LEGACY_COMMAND_TYPE = Object.freeze({
+  MOVE_AVATAR: 1,
+  USE_FACING: 2,
+  USE_AT_CELL: 3,
+  LOOK_AT_CELL: 4,
+  TALK_AT_CELL: 5,
+  GET_AT_CELL: 6,
+  ATTACK_AT_CELL: 7,
+  CAST_AT_CELL: 8,
+  DROP_AT_CELL: 9,
+  MOVE_AT_CELL: 10,
+  USE_VERB_AT_CELL: 11
+});
+const LEGACY_VERB_COMMAND_TYPE = Object.freeze({
+  [LEGACY_TARGET_VERB.ATTACK]: LEGACY_COMMAND_TYPE.ATTACK_AT_CELL,
+  [LEGACY_TARGET_VERB.CAST]: LEGACY_COMMAND_TYPE.CAST_AT_CELL,
+  [LEGACY_TARGET_VERB.TALK]: LEGACY_COMMAND_TYPE.TALK_AT_CELL,
+  [LEGACY_TARGET_VERB.LOOK]: LEGACY_COMMAND_TYPE.LOOK_AT_CELL,
+  [LEGACY_TARGET_VERB.GET]: LEGACY_COMMAND_TYPE.GET_AT_CELL,
+  [LEGACY_TARGET_VERB.DROP]: LEGACY_COMMAND_TYPE.DROP_AT_CELL,
+  [LEGACY_TARGET_VERB.MOVE]: LEGACY_COMMAND_TYPE.MOVE_AT_CELL,
+  [LEGACY_TARGET_VERB.USE]: LEGACY_COMMAND_TYPE.USE_VERB_AT_CELL
+});
 const LEGACY_LEDGER_MAX_CHARS = 17; /* clip 22..38 */
 const LEGACY_LEDGER_MAX_LINES = 10; /* clip 14..23 */
 const LEGACY_COMBAT_MODE_LABELS = Object.freeze([
@@ -393,6 +416,11 @@ const state = {
   movementMode: "ghost",
   useCursorActive: false,
   targetVerb: "",
+  legacyConversationActive: false,
+  legacyConversationInput: "",
+  legacyConversationTargetName: "",
+  legacyConversationPortraitTile: null,
+  legacyConversationPrevStatus: LEGACY_STATUS_DISPLAY.CMD_92,
   useCursorX: 0,
   useCursorY: 0,
   avatarFacingDx: 0,
@@ -1524,6 +1552,127 @@ function canonicalLookSentenceForTile(tileId) {
   return `Thou dost see ${article}${name}.`;
 }
 
+function canonicalTalkSpeakerForTile(tileId) {
+  const raw = String(legacyLookupTileString(tileId) || "Unknown");
+  const article = String(legacyArticleForTile(tileId) || "").trim().toLowerCase();
+  if (!article) {
+    return raw;
+  }
+  const prefix = `${article} `;
+  if (raw.toLowerCase().startsWith(prefix)) {
+    return raw.slice(prefix.length).trim() || raw;
+  }
+  return raw;
+}
+
+function endLegacyConversation() {
+  state.legacyConversationActive = false;
+  state.legacyConversationInput = "";
+  state.legacyConversationTargetName = "";
+  state.legacyConversationPortraitTile = null;
+  state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
+}
+
+function pushLegacyConversationPrompt() {
+  pushLedgerMessage("you say:");
+  showLegacyLedgerPrompt();
+}
+
+function legacyConversationReply(targetName, typed) {
+  const t = String(typed || "").trim().toLowerCase();
+  const who = String(targetName || "").trim().toLowerCase();
+  const first = t.split(/\s+/)[0] || "";
+  const isLordBritish = who.includes("lord british") || who === "british";
+
+  if (t === "hello" || t === "hi" || first === "greet") {
+    return isLordBritish ? "Welcome, Avatar." : "Greetings.";
+  }
+  if (t === "name" || first === "name") {
+    return isLordBritish ? "I am Lord British, ruler of Britannia." : `I am ${targetName}.`;
+  }
+  if (t === "job" || first === "job") {
+    return isLordBritish ? "I rule this realm and guide those who seek virtue." : "I serve as I am able.";
+  }
+  if (t === "look" || first === "look") {
+    return `You see ${targetName || "someone"}.`;
+  }
+  if (isLordBritish && (t === "castle" || first === "castle")) {
+    return "This is Castle Britannia, my home.";
+  }
+  if (isLordBritish && (t === "britannia" || first === "britannia")) {
+    return "Britannia thrives when virtue is upheld.";
+  }
+  if (isLordBritish && (t === "virtue" || first === "virtue")) {
+    return "Seek and live the eight virtues.";
+  }
+  if (isLordBritish && (t === "quest" || first === "quest")) {
+    return "Your destiny lies in proving thyself through virtue.";
+  }
+  if (isLordBritish && (t === "help" || first === "help")) {
+    return "Speak of virtue, britannia, or quest.";
+  }
+  return "I cannot help thee with that.";
+}
+
+function submitLegacyConversationInput() {
+  const typed = String(state.legacyConversationInput || "").trim();
+  state.legacyConversationInput = "";
+  state.legacyLedgerPrompt = false;
+  if (!typed) {
+    pushLegacyConversationPrompt();
+    return;
+  }
+  pushLedgerMessage(typed);
+  const cmd = typed.toLowerCase();
+  if (cmd === "bye" || cmd === "farewell") {
+    pushLedgerMessage("Fare thee well.");
+    showLegacyLedgerPrompt();
+    endLegacyConversation();
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Conversation ended.";
+    return;
+  }
+  if (cmd === "look") {
+    pushLedgerMessage(`You see ${state.legacyConversationTargetName || "someone"}.`);
+    pushLegacyConversationPrompt();
+    return;
+  }
+  /* CANONICAL STUB: talkdr keyword scripts are pending; this is interim keyword routing. */
+  pushLedgerMessage(legacyConversationReply(state.legacyConversationTargetName, typed));
+  pushLegacyConversationPrompt();
+}
+
+function handleLegacyConversationKeydown(ev) {
+  const k = String(ev.key || "");
+  if (k === "Escape") {
+    endLegacyConversation();
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Conversation cancelled.";
+    return true;
+  }
+  if (k === "Enter") {
+    submitLegacyConversationInput();
+    return true;
+  }
+  if (k === "Backspace") {
+    if (state.legacyConversationInput.length > 0) {
+      state.legacyConversationInput = state.legacyConversationInput.slice(0, -1);
+    }
+    return true;
+  }
+  if (k === "Tab") {
+    return true;
+  }
+  if (k.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    /* Legacy CON_gets route: keep keyboard focus in talk prompt and accept printable chars. */
+    if (state.legacyConversationInput.length < LEGACY_LEDGER_MAX_CHARS) {
+      state.legacyConversationInput += k;
+    }
+    return true;
+  }
+  return false;
+}
+
 function decodeU6ShapeFromBuffer(buf) {
   if (!buf || buf.length < 10) {
     return null;
@@ -2243,6 +2392,10 @@ function renderLegacyHudStubOnBackdrop() {
     drawU6MainText(g, ">", x(176), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
     const ankhGlyph = String.fromCharCode(5 + ((state.legacyPromptAnimPhase | 0) & 3));
     drawU6MainText(g, ankhGlyph, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    if (state.legacyConversationActive) {
+      const input = String(state.legacyConversationInput || "").slice(0, LEGACY_LEDGER_MAX_CHARS);
+      drawU6MainText(g, input, x(192), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    }
   }
 
   /* Canonical verb button strip under world viewport. */
@@ -2516,6 +2669,8 @@ function createInitialSimState() {
     removedObjectAtTick: {},
     removedObjectCount: 0,
     inventory: {},
+    spawnedWorldObjects: [],
+    spawnedWorldSeq: 0,
     avatarPose: "stand",
     avatarPoseAnchor: null,
     world: { ...INITIAL_WORLD }
@@ -3016,6 +3171,18 @@ function normalizeLoadedSimState(candidate) {
   const normalizedRemovedCount = removedObjectCount > 0
     ? removedObjectCount
     : Object.keys(normalizedRemoved).length;
+  const normalizedSpawned = Array.isArray(candidate.spawnedWorldObjects)
+    ? candidate.spawnedWorldObjects.map((o) => ({
+      x: Number(o?.x) | 0,
+      y: Number(o?.y) | 0,
+      z: Number(o?.z) | 0,
+      type: Number(o?.type) & 0x03ff,
+      frame: Number(o?.frame) & 0x3f,
+      order: Number(o?.order) | 0,
+      renderable: !!o?.renderable,
+      sourceKind: String(o?.sourceKind || "runtime")
+    }))
+    : [];
   return {
     tick: Number(candidate.tick) >>> 0,
     rngState: Number(candidate.rngState) >>> 0,
@@ -3026,6 +3193,8 @@ function normalizeLoadedSimState(candidate) {
     removedObjectAtTick: normalizedRemovedAtTick,
     removedObjectCount: normalizedRemovedCount >>> 0,
     inventory: normalizedInventory,
+    spawnedWorldObjects: normalizedSpawned,
+    spawnedWorldSeq: Number(candidate.spawnedWorldSeq) >>> 0,
     avatarPose: (candidate.avatarPose === "sit" || candidate.avatarPose === "sleep")
       ? candidate.avatarPose
       : "stand",
@@ -4247,16 +4416,32 @@ function tryTalkAtCell(sim, tx, ty) {
   if (Math.max(dx, dy) > 1) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: target must be adjacent (${tx},${ty}).`;
+    pushLedgerMessage("No one responds.");
+    showLegacyLedgerPrompt();
     return false;
   }
   const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
   if (!actor) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: nobody there at ${tx},${ty},${tz}.`;
+    pushLedgerMessage("No one responds.");
+    showLegacyLedgerPrompt();
     return false;
   }
+  const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
+  const speaker = canonicalTalkSpeakerForTile(tileId);
+  /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
+  state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
+  state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
+  state.legacyConversationActive = true;
+  state.legacyConversationInput = "";
+  state.legacyConversationTargetName = speaker;
+  state.legacyConversationPortraitTile = tileId;
+  pushLedgerMessage("You see");
+  pushLedgerMessage(`${speaker}.`);
+  pushLegacyConversationPrompt();
   diagBox.className = "diag ok";
-  diagBox.textContent = `Talk: actor 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (dialogue system pending).`;
+  diagBox.textContent = `Talk: ${speaker} at ${tx},${ty},${tz}.`;
   return true;
 }
 
@@ -4281,6 +4466,86 @@ function tryGetAtCell(sim, tx, ty) {
   const count = Number(sim.inventory[invKey]) >>> 0;
   diagBox.className = "diag ok";
   diagBox.textContent = `Get: picked 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${invKey}=${count}).`;
+  return true;
+}
+
+function firstInventoryKey(sim) {
+  const inv = sim && sim.inventory ? sim.inventory : null;
+  if (!inv) {
+    return "";
+  }
+  for (const [key, countRaw] of Object.entries(inv)) {
+    const count = Number(countRaw) >>> 0;
+    if (!key || count <= 0) {
+      continue;
+    }
+    return String(key);
+  }
+  return "";
+}
+
+function decrementInventoryKey(sim, key) {
+  if (!sim || !sim.inventory || !key) {
+    return 0;
+  }
+  const prev = Number(sim.inventory[key]) >>> 0;
+  if (prev <= 1) {
+    delete sim.inventory[key];
+    return 0;
+  }
+  const next = (prev - 1) >>> 0;
+  sim.inventory[key] = next;
+  return next;
+}
+
+function tryAttackAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
+  if (actor) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Attack: target 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (combat resolution pending).`;
+    return true;
+  }
+  diagBox.className = "diag warn";
+  diagBox.textContent = `Attack: no valid target at ${tx},${ty},${tz}.`;
+  return false;
+}
+
+function tryCastAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  /* CANONICAL STUB: legacy spellbook/reagent/mana flow is not wired yet; keep keyboard contract live. */
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Cast: target ${tx},${ty},${tz} accepted (spell system pending).`;
+  return true;
+}
+
+function tryDropAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
+  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
+  if (Math.max(dx, dy) > 1) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Drop: target must be adjacent (${tx},${ty}).`;
+    return false;
+  }
+  const key = firstInventoryKey(sim);
+  if (!key) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = "Drop: inventory is empty.";
+    return false;
+  }
+  const remaining = decrementInventoryKey(sim, key);
+  /* CANONICAL STUB: world drop object spawn/stack semantics still pending in sim core. */
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Drop: ${key} at ${tx},${ty},${tz} (remaining ${remaining}).`;
+  return true;
+}
+
+function tryMoveVerbAtCell(sim, tx, ty) {
+  const tz = sim.world.map_z | 0;
+  /* CANONICAL STUB: push/pull/move-object semantics not finalized; keep verb pipeline canonical. */
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Move: target ${tx},${ty},${tz} accepted (object move semantics pending).`;
   return true;
 }
 
@@ -4762,6 +5027,7 @@ function startSessionFromTitle() {
     placeCameraAtPresetId("avatar_start");
   }
   state.sessionStarted = true;
+  endLegacyConversation();
   state.legacyLedgerLines.length = 0;
   pushLedgerMessage(`${String(state.net.characterName || "Avatar").toUpperCase()}:`);
   showLegacyLedgerPrompt();
@@ -4780,6 +5046,7 @@ function returnToTitleMenu() {
   state.queue.length = 0;
   state.useCursorActive = false;
   state.targetVerb = "";
+  endLegacyConversation();
   state.legacyLedgerLines.length = 0;
   state.legacyLedgerPrompt = false;
   state.sessionStarted = false;
@@ -5145,6 +5412,10 @@ function cloneSimState(sim) {
     removedObjectAtTick: { ...(sim.removedObjectAtTick ?? {}) },
     removedObjectCount: Number(sim.removedObjectCount) >>> 0,
     inventory: { ...(sim.inventory ?? {}) },
+    spawnedWorldObjects: Array.isArray(sim.spawnedWorldObjects)
+      ? sim.spawnedWorldObjects.map((o) => ({ ...o }))
+      : [],
+    spawnedWorldSeq: Number(sim.spawnedWorldSeq) >>> 0,
     avatarPose: String(sim.avatarPose || "stand"),
     avatarPoseAnchor: sim.avatarPoseAnchor ? { ...sim.avatarPoseAnchor } : null,
     world: { ...sim.world }
@@ -5212,7 +5483,7 @@ function expireRemovedWorldProps(sim, tickNow) {
 }
 
 function applyCommand(sim, cmd) {
-  if (cmd.type === 1) {
+  if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
     if (sim.avatarPose !== "stand") {
       clearAvatarPose(sim);
     }
@@ -5231,11 +5502,11 @@ function applyCommand(sim, cmd) {
       sim.world.map_x = nx;
       sim.world.map_y = ny;
     }
-  } else if (cmd.type === 2) {
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_FACING) {
     if (state.movementMode === "avatar") {
       tryInteractFacing(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
-  } else if (cmd.type === 3) {
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_AT_CELL) {
     if (state.movementMode === "avatar") {
       const tx = cmd.arg0 | 0;
       const ty = cmd.arg1 | 0;
@@ -5247,17 +5518,37 @@ function applyCommand(sim, cmd) {
       }
       tryInteractAtCell(sim, tx, ty);
     }
-  } else if (cmd.type === 4) {
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.LOOK_AT_CELL) {
     if (state.movementMode === "avatar") {
       tryLookAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
-  } else if (cmd.type === 5) {
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.TALK_AT_CELL) {
     if (state.movementMode === "avatar") {
       tryTalkAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
-  } else if (cmd.type === 6) {
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.GET_AT_CELL) {
     if (state.movementMode === "avatar") {
       tryGetAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.ATTACK_AT_CELL) {
+    if (state.movementMode === "avatar") {
+      tryAttackAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.CAST_AT_CELL) {
+    if (state.movementMode === "avatar") {
+      tryCastAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.DROP_AT_CELL) {
+    if (state.movementMode === "avatar") {
+      tryDropAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AT_CELL) {
+    if (state.movementMode === "avatar") {
+      tryMoveVerbAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+    }
+  } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_VERB_AT_CELL) {
+    if (state.movementMode === "avatar") {
+      tryInteractAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
     }
   }
   sim.commandsApplied += 1;
@@ -5357,6 +5648,17 @@ function simStateHash(sim) {
     }
     h = hashMixU32(h, Number(sim.inventory[k]) >>> 0);
   }
+  const spawned = Array.isArray(sim.spawnedWorldObjects) ? sim.spawnedWorldObjects : [];
+  h = hashMixU32(h, spawned.length);
+  for (const o of spawned) {
+    h = hashMixU32(h, asU32Signed(o?.x));
+    h = hashMixU32(h, asU32Signed(o?.y));
+    h = hashMixU32(h, asU32Signed(o?.z));
+    h = hashMixU32(h, asU32Signed(o?.type));
+    h = hashMixU32(h, asU32Signed(o?.frame));
+    h = hashMixU32(h, asU32Signed(o?.order));
+  }
+  h = hashMixU32(h, Number(sim.spawnedWorldSeq) >>> 0);
   return h;
 }
 
@@ -5403,6 +5705,9 @@ function appendCommandLog(cmd) {
 }
 
 function queueMove(dx, dy) {
+  if (state.legacyConversationActive) {
+    return;
+  }
   dx |= 0;
   dy |= 0;
   const nowMs = performance.now();
@@ -5416,19 +5721,19 @@ function queueMove(dx, dy) {
   state.avatarFacingDx = dx;
   state.avatarFacingDy = dy;
   const targetTick = (state.sim.tick + 1) >>> 0;
-  const bytes = packCommand(targetTick, 1, dx, dy);
+  const bytes = packCommand(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy);
   const cmd = unpackCommand(bytes);
 
   // Keep exactly one pending move command so repeated key events cannot stack.
   for (let i = state.queue.length - 1; i >= 0; i -= 1) {
-    if (state.queue[i].type === 1 && state.queue[i].tick === targetTick) {
+    if (state.queue[i].type === LEGACY_COMMAND_TYPE.MOVE_AVATAR && state.queue[i].tick === targetTick) {
       if (state.queue[i].arg0 === dx && state.queue[i].arg1 === dy) {
         return;
       }
       state.queue[i] = cmd;
       for (let j = state.commandLog.length - 1; j >= 0; j -= 1) {
         const prev = state.commandLog[j];
-        if (prev.type === 1 && prev.tick === targetTick) {
+        if (prev.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR && prev.tick === targetTick) {
           state.commandLog.splice(j, 1);
           break;
         }
@@ -5439,7 +5744,7 @@ function queueMove(dx, dy) {
   }
 
   for (let i = state.queue.length - 1; i >= 0; i -= 1) {
-    if (state.queue[i].type === 1) {
+    if (state.queue[i].type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
       state.queue.splice(i, 1);
     }
   }
@@ -5452,7 +5757,7 @@ function queueInteractDoor() {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const bytes = packCommand(state.sim.tick + 1, 2, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
+  const bytes = packCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_FACING, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
   const cmd = unpackCommand(bytes);
   state.queue.push(cmd);
   appendCommandLog(cmd);
@@ -5464,7 +5769,7 @@ function queueInteractAtCell(wx, wy) {
   }
   const tx = wx | 0;
   const ty = wy | 0;
-  const bytes = packCommand(state.sim.tick + 1, 3, tx, ty);
+  const bytes = packCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty);
   const cmd = unpackCommand(bytes);
   state.queue.push(cmd);
   appendCommandLog(cmd);
@@ -5475,10 +5780,7 @@ function queueLegacyTargetVerb(verb, wx, wy) {
     return;
   }
   const v = String(verb || "").toLowerCase();
-  let type = 0;
-  if (v === LEGACY_TARGET_VERB.LOOK) type = 4;
-  else if (v === LEGACY_TARGET_VERB.TALK) type = 5;
-  else if (v === LEGACY_TARGET_VERB.GET) type = 6;
+  const type = LEGACY_VERB_COMMAND_TYPE[v] | 0;
   if (!type) {
     return;
   }
@@ -6966,6 +7268,7 @@ function resetRun() {
   state.interactionProbeTile = null;
   state.useCursorActive = false;
   state.targetVerb = "";
+  endLegacyConversation();
   state.avatarLastMoveTick = -1;
   state.lastMoveQueueAtMs = -1;
   state.lastMoveInputDx = 0;
@@ -7479,14 +7782,10 @@ function commitUseCursorInteract() {
   const tx = state.useCursorX | 0;
   const ty = state.useCursorY | 0;
   const verb = String(state.targetVerb || "");
-  if (!verb || verb === LEGACY_TARGET_VERB.USE) {
-    queueInteractAtCell(tx, ty);
-  } else if (verb === LEGACY_TARGET_VERB.LOOK || verb === LEGACY_TARGET_VERB.TALK || verb === LEGACY_TARGET_VERB.GET) {
+  if (verb) {
     queueLegacyTargetVerb(verb, tx, ty);
   } else {
-    const label = LEGACY_TARGET_VERB_LABEL[verb] || "Action";
-    diagBox.className = "diag warn";
-    diagBox.textContent = `${label} target at ${tx},${ty}: legacy key mapped, action system not implemented yet.`;
+    queueInteractAtCell(tx, ty);
   }
   state.useCursorActive = false;
   state.targetVerb = "";
@@ -7505,10 +7804,11 @@ function cancelTargetCursor() {
 function moveDeltaFromKey(ev, allowDiagonal) {
   const k = String(ev.key || "").toLowerCase();
   const code = String(ev.code || "");
-  if (k === "arrowup" || k === "w" || code === "Numpad8") return [0, -1];
-  if (k === "arrowdown" || k === "s" || code === "Numpad2") return [0, 1];
-  if (k === "arrowleft" || k === "a" || code === "Numpad4") return [-1, 0];
-  if (k === "arrowright" || k === "d" || code === "Numpad6") return [1, 0];
+  /* Canonical keyboard verbs use A/C/T/L/G/D/M/U; movement stays on arrows/numpad only. */
+  if (k === "arrowup" || code === "Numpad8") return [0, -1];
+  if (k === "arrowdown" || code === "Numpad2") return [0, 1];
+  if (k === "arrowleft" || code === "Numpad4") return [-1, 0];
+  if (k === "arrowright" || code === "Numpad6") return [1, 0];
   if (!allowDiagonal) {
     return null;
   }
@@ -7663,6 +7963,20 @@ function handleLegacyHudClick(ev, surface) {
 }
 
 function runLegacyNonTargetAction(k) {
+  if (k === "i") {
+    /* Canonical keyboard-first panel selection: inventory/equipment (CMD_92). */
+    state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_92;
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Status: inventory/equipment.";
+    return true;
+  }
+  if (k === "p") {
+    /* Canonical keyboard-first panel selection: party/command list (CMD_91). */
+    state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_91;
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Status: party/command.";
+    return true;
+  }
   if (k === "r") {
     diagBox.className = "diag ok";
     diagBox.textContent = "Rest: legacy key mapped; rest system integration pending.";
@@ -7674,15 +7988,13 @@ function runLegacyNonTargetAction(k) {
     diagBox.textContent = state.sim.world.in_combat ? "Combat mode: ON" : "Combat mode: OFF";
     return true;
   }
-  if (k === "i") {
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Inventory: legacy key mapped; inventory UI integration pending.";
-    return true;
-  }
   return false;
 }
 
 function runLegacyCommandKey(k) {
+  if (state.legacyConversationActive) {
+    return false;
+  }
   if (k === "a") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.ATTACK);
   if (k === "c") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.CAST);
   if (k === "t") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.TALK);
@@ -7877,6 +8189,17 @@ window.addEventListener("keydown", (ev) => {
     }
     void copyHoverReportToClipboard();
     ev.preventDefault();
+    return;
+  }
+
+  if (state.legacyConversationActive) {
+    if (handleLegacyConversationKeydown(ev)) {
+      ev.preventDefault();
+      return;
+    }
+    if (runDebugHotkeys(ev)) {
+      ev.preventDefault();
+    }
     return;
   }
 
