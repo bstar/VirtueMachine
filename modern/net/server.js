@@ -312,13 +312,10 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
   if (count > maxCount) {
     count = maxCount;
   }
-  const out = [];
+  const decoded = [];
   for (let i = 0; i < count; i += 1) {
     const off = 2 + (i * 8);
     const status = bytes[off + 0] >>> 0;
-    if ((status & 0x18) !== 0) {
-      continue;
-    }
     const pos = decodePackedCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
     const shapeType = parseU16LE(bytes, off + 4);
     const type = shapeType & 0x03ff;
@@ -326,7 +323,12 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
     const amount = parseU16LE(bytes, off + 6);
     const baseTile = baseTileMap[type] ?? 0;
     const tileId = (baseTile + frame) & 0xffff;
-    out.push({
+    const coordUse = status & 0x18;
+    const assocIndex = ((bytes[off + 1] | (bytes[off + 2] << 8)) & 0xffff) >>> 0;
+    decoded.push({
+      index: i >>> 0,
+      coord_use: coordUse >>> 0,
+      assoc_index: assocIndex >>> 0,
       object_key: `a${areaId.toString(16).padStart(2, "0")}i${i.toString(16).padStart(3, "0")}`,
       source_area: areaId >>> 0,
       source_index: i >>> 0,
@@ -339,6 +341,32 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
       x: pos.x & 0x3ff,
       y: pos.y & 0x3ff,
       z: pos.z & 0x0f
+    });
+  }
+  const childCounts = new Uint16Array(count);
+  const child0010Counts = new Uint16Array(count);
+  for (const row of decoded) {
+    if ((row.coord_use | 0) === 0) {
+      continue;
+    }
+    const ai = row.assoc_index | 0;
+    if (ai < 0 || ai >= count) {
+      continue;
+    }
+    childCounts[ai] = (childCounts[ai] + 1) & 0xffff;
+    if ((row.status & 0x10) !== 0) {
+      child0010Counts[ai] = (child0010Counts[ai] + 1) & 0xffff;
+    }
+  }
+  const out = [];
+  for (const row of decoded) {
+    if ((row.coord_use | 0) !== 0) {
+      continue;
+    }
+    out.push({
+      ...row,
+      assoc_child_count: Number(childCounts[row.index] || 0) >>> 0,
+      assoc_child_0010_count: Number(child0010Counts[row.index] || 0) >>> 0
     });
   }
   return out;

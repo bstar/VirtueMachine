@@ -139,6 +139,11 @@ async function main() {
     assert.ok(worldObjects.body?.meta);
     assert.ok(Array.isArray(worldObjects.body?.objects));
     assert.ok(Number.isInteger(worldObjects.body?.meta?.active_count));
+    if (worldObjects.body.objects.length > 0) {
+      const first = worldObjects.body.objects[0];
+      assert.ok(Number.isInteger(Number(first.assoc_child_count)));
+      assert.ok(Number.isInteger(Number(first.assoc_child_0010_count)));
+    }
 
     const worldObjectsSweep = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096&projection=footprint&include_footprint=1", {
       method: "GET",

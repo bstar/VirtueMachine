@@ -94,6 +94,11 @@ Observed impact archetype:
 - room-wide exhaustive parity sweeps after canonical provenance correction
 - complete startup/title flow provenance from `u.exe`/intro path integration
 
+Current instrumentation support:
+
+- server/API object responses now expose assoc-child aggregate metadata (`assoc_child_count`, `assoc_child_0010_count`)
+- client hover reports include local + server assoc aggregate signals to speed parity diagnosis before full assoc-graph ordering is implemented
+
 ## Deviation Policy
 
 When adding a new deviation entry, include:

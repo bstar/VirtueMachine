@@ -839,28 +839,27 @@ class U6ObjectLayerJS {
       count = maxCount;
     }
 
-    const entries = [];
+    const decoded = [];
     for (let i = 0; i < count; i += 1) {
       const off = 2 + (i * 8);
       const status = bytes[off + 0];
-      if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
-        continue;
-      }
-      if (status & OBJ_STATUS_INVISIBLE) {
-        continue;
-      }
       const { x, y, z } = this.decodeCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
       const shapeType = dv.getUint16(off + 4, true);
       const type = shapeType & 0x3ff;
       const frame = shapeType >>> 10;
       const base = this.baseTiles[type] ?? 0;
       const tileId = (base + frame) & 0xffff;
-      entries.push({
+      const coordUse = status & OBJ_COORD_USE_MASK;
+      const assocIndex = (bytes[off + 1] | (bytes[off + 2] << 8)) & 0xffff;
+      decoded.push({
+        index: i,
+        coordUse,
+        assocIndex,
         x,
         y,
         z,
         status,
-        coordUse: status & OBJ_COORD_USE_MASK,
+        coordUse,
         type,
         baseTile: base,
         frame,
@@ -869,6 +868,35 @@ class U6ObjectLayerJS {
         sourceArea: areaId & 0x3f,
         sourceIndex: i,
         renderable: isRenderableWorldObjectType(type)
+      });
+    }
+    const childCounts = new Uint16Array(count);
+    const child0010Counts = new Uint16Array(count);
+    for (const row of decoded) {
+      if ((row.coordUse | 0) === OBJ_COORD_USE_LOCXYZ) {
+        continue;
+      }
+      const ai = row.assocIndex | 0;
+      if (ai < 0 || ai >= count) {
+        continue;
+      }
+      childCounts[ai] = (childCounts[ai] + 1) & 0xffff;
+      if ((row.status & 0x10) !== 0) {
+        child0010Counts[ai] = (child0010Counts[ai] + 1) & 0xffff;
+      }
+    }
+    const entries = [];
+    for (const row of decoded) {
+      if ((row.coordUse | 0) !== OBJ_COORD_USE_LOCXYZ) {
+        continue;
+      }
+      if (row.status & OBJ_STATUS_INVISIBLE) {
+        continue;
+      }
+      entries.push({
+        ...row,
+        assocChildCount: Number(childCounts[row.index] || 0),
+        assocChild0010Count: Number(child0010Counts[row.index] || 0)
       });
     }
     return entries;
@@ -7491,7 +7519,7 @@ function buildHoverReportText() {
   const objLines = objects.map((o, idx) => {
     const tileId = resolveDoorTileId(state.sim, o) & 0xffff;
     const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
-    return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0}`;
+    return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0} achild=${Number(o.assocChildCount || 0) | 0} a0010=${Number(o.assocChild0010Count || 0) | 0}`;
   });
 
   const lines = [
@@ -7539,7 +7567,7 @@ async function copyHoverReportToClipboard(options = {}) {
                 ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
                 : "";
               rows.push(
-                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0}${fp ? ` fp=${fp}` : ""}`
+                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
               );
             }
           }
