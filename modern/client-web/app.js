@@ -8,6 +8,7 @@ import { compareLegacyObjectOrderStable } from "./legacy_object_order.js";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.js";
 
 const TICK_MS = 100;
+const LEGACY_PROMPT_FRAME_MS = 120;
 const TILE_SIZE = 64;
 const VIEW_W = 11;
 const VIEW_H = 11;
@@ -384,6 +385,8 @@ const state = {
   legacyHudLayerHidden: false,
   legacyLedgerLines: [],
   legacyLedgerPrompt: false,
+  legacyPromptAnimMs: 0,
+  legacyPromptAnimPhase: 0,
   legacyStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_92,
   showOverlayDebug: false,
   enablePaletteFx: true,
@@ -520,6 +523,10 @@ function pushLedgerMessage(text) {
 }
 
 function showLegacyLedgerPrompt() {
+  if (!state.legacyLedgerPrompt) {
+    state.legacyPromptAnimMs = 0;
+    state.legacyPromptAnimPhase = 0;
+  }
   state.legacyLedgerPrompt = true;
 }
 
@@ -2018,7 +2025,12 @@ function renderLegacyHudStubOnBackdrop() {
   };
 
   const invFromKey = (key) => {
-    const m = /^0x([0-9a-f]+):([0-9a-f]+)$/i.exec(String(key || "").trim());
+    const src = String(key || "").trim();
+    let m = /^0x([0-9a-f]+):0x?([0-9a-f]+)$/i.exec(src);
+    if (!m) {
+      /* Back-compat for pre-fix local runtime keys. */
+      m = /^obj_([0-9a-f]+)_([0-9a-f]+)$/i.exec(src);
+    }
     if (!m || !state.objectLayer || !state.objectLayer.baseTiles) {
       return null;
     }
@@ -2029,6 +2041,45 @@ function renderLegacyHudStubOnBackdrop() {
       return null;
     }
     return (base + frame) & 0xffff;
+  };
+  const invTileFromEntry = (entry) => {
+    const direct = parseProbeTileHex(entry?.tile_hex);
+    if (direct != null) {
+      return direct;
+    }
+    return invFromKey(entry?.key);
+  };
+  const buildDisplayInventoryEntries = () => {
+    const out = [];
+    const seen = new Set();
+    const inv = state.sim && state.sim.inventory ? state.sim.inventory : null;
+    if (inv) {
+      /* Prefer local runtime state so Get/Drop feedback is immediately visible. */
+      for (const [k, v] of Object.entries(inv)) {
+        const key = String(k || "");
+        const count = Number(v) >>> 0;
+        if (!key || count <= 0 || seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        out.push({ key, count });
+        if (out.length >= 12) {
+          return out;
+        }
+      }
+    }
+    const baseEntries = probe.canonical_ui?.inventory_panel?.entries || [];
+    for (const e of baseEntries) {
+      if (!e || !e.key) continue;
+      const key = String(e.key);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ key, count: Number(e.count) | 0, tile_hex: e.tile_hex });
+      if (out.length >= 12) {
+        break;
+      }
+    }
+    return out;
   };
   const statusDisplay = Number(state.legacyStatusDisplay) | 0;
   const showVista = (
@@ -2084,7 +2135,7 @@ function renderLegacyHudStubOnBackdrop() {
   }
 
   /* Canonical inventory grid from C_155D_0CF5/C_155D_1267. */
-  const invEntries = probe.canonical_ui?.inventory_panel?.entries || [];
+  const invEntries = buildDisplayInventoryEntries();
   for (let i = 0; i < 12; i += 1) {
     const col = i & 3;
     const row = i >> 2;
@@ -2095,7 +2146,7 @@ function renderLegacyHudStubOnBackdrop() {
     if (!entry) {
       continue;
     }
-    const tile = invFromKey(entry.key);
+    const tile = invTileFromEntry(entry);
     if (tile != null) {
       drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, sx, sy);
       drawTile(tile, sx, sy);
@@ -2123,7 +2174,7 @@ function renderLegacyHudStubOnBackdrop() {
   if (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_92) {
     /* C_155D_0CF5: E:/I: weight lines in clip D_B6B5[1], row 9. */
     const equipSlotsForWeight = probe.canonical_ui?.paperdoll_panel?.slots || [];
-    const invEntriesForWeight = probe.canonical_ui?.inventory_panel?.entries || [];
+    const invEntriesForWeight = invEntries;
     const equippedCount = equipSlotsForWeight.filter((s) => parseProbeTileHex(s?.tile_hex) != null).length;
     const invCount = invEntriesForWeight.filter((e) => e && e.key).length;
     const derivedEquip = Math.max(0, equippedCount);
@@ -2190,7 +2241,7 @@ function renderLegacyHudStubOnBackdrop() {
     const lineIndex = Math.min(LEGACY_LEDGER_MAX_LINES - 1, state.legacyLedgerLines.length | 0);
     const py = 112 + (lineIndex * 8);
     drawU6MainText(g, ">", x(176), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-    const ankhGlyph = String.fromCharCode(5 + (((animationTick() >> 1) & 3) | 0));
+    const ankhGlyph = String.fromCharCode(5 + ((state.legacyPromptAnimPhase | 0) & 3));
     drawU6MainText(g, ankhGlyph, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   }
 
@@ -4094,7 +4145,7 @@ function markObjectRemoved(sim, obj) {
 function inventoryKeyForObject(obj) {
   const typeHex = (obj.type & 0x3ff).toString(16).padStart(3, "0");
   const frameHex = (obj.frame & 0x3f).toString(16).padStart(2, "0");
-  return `obj_${typeHex}_${frameHex}`;
+  return `0x${typeHex}:0x${frameHex}`;
 }
 
 function addObjectToInventory(sim, obj) {
@@ -6930,8 +6981,16 @@ function resetRun() {
 }
 
 function tickLoop(ts) {
-  state.accMs += ts - state.lastTs;
+  const dtMs = Math.max(0, ts - state.lastTs);
+  state.accMs += dtMs;
   state.lastTs = ts;
+  if (state.legacyLedgerPrompt) {
+    state.legacyPromptAnimMs += dtMs;
+    while (state.legacyPromptAnimMs >= LEGACY_PROMPT_FRAME_MS) {
+      state.legacyPromptAnimMs -= LEGACY_PROMPT_FRAME_MS;
+      state.legacyPromptAnimPhase = ((state.legacyPromptAnimPhase + 1) & 3) | 0;
+    }
+  }
   const useCustomCursor = !!(state.cursorPixmaps && state.cursorPixmaps.length > 0);
   canvas.style.cursor = useCustomCursor ? "none" : "default";
   if (legacyBackdropCanvas) {
