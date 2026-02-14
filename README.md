@@ -1,6 +1,36 @@
 # VirtueMachine
 
-VirtueMachine is a modern browser-port workspace for Ultima VI, with legacy provenance preserved via read-only submodule.
+VirtueMachine is a canonical-fidelity Ultima VI engine project with a modern web runtime.
+
+At a high level, this project is trying to do two things at once:
+
+- preserve original Ultima VI gameplay semantics (rendering, interaction, world behavior),
+- modernize architecture so the game is deterministic, inspectable, and eventually MMO-capable.
+
+This is not a “quick remake” and not a generic UI modernization pass.  
+The core direction is fidelity-first engineering with explicit documentation for every material behavior decision.
+
+## What This Project Is
+
+- A source-driven implementation that anchors behavior to decompiled legacy code plus original game data.
+- A tooling-heavy parity program with hover reports, replay checks, and diagnostics to avoid guesswork.
+- A modern codebase (`sim-core`, `client-web`, `net`) designed for testing, persistence, and future multiplayer.
+- A project that intentionally keeps the smaller framed classic visual presentation instead of replacing it with a modern HUD.
+
+## What This Project Is Not
+
+- Not a visual “close enough” port.
+- Not a finished MMO today.
+- Not a replacement for projects that prioritize broader interface modernization.
+
+If you want a more modernized presentation layer today, projects like Nuvie/ScummVM and U6O-style experiences are often better immediate fits.
+
+## Current Status (Short Version)
+
+- Playable single-player vertical slice is in place.
+- Rendering/interaction parity work is active and ongoing.
+- Server-backed persistence and realtime sync foundations are implemented.
+- MMO-direction design exists, but full multiplayer product scope is still evolving.
 
 ## Layout
 
