@@ -55,7 +55,7 @@ This is one of the highest-leverage fixes in the project because it corrects an 
 
 ## Verification Playbook
 
-- run `./modern/tools/sync_assets.sh /home/bstar/projects/ULTIMA6/ultima6`
+- run `./modern/tools/sync_assets.sh ~/projects/ULTIMA6/ultima6`
 - confirm reported world object source
 - inspect target cells via hover report
 - if parity still off, compare decoded `objblk??` records before changing renderer logic

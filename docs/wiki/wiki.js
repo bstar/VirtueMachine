@@ -57,6 +57,9 @@
     if (!h) {
       return false;
     }
+    if (h.includes("*") || h.includes("?")) {
+      return false;
+    }
     if (!h.includes("/")) {
       return false;
     }

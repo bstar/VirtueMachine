@@ -1,4 +1,4 @@
-# AGENTS.md instructions for /home/bstar/projects/ULTIMA6/ultima6-modern
+# AGENTS.md instructions for ~/projects/ULTIMA6/ultima6-modern
 
 ## Sandbox and Escalation
 

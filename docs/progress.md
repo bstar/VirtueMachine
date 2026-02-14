@@ -1,6 +1,6 @@
 # Project Progress Checklist
 
-Last Updated: 2026-02-13
+Last Updated: 2026-02-14
 
 ## Milestone Status
 
@@ -37,6 +37,10 @@ This checklist is intentionally mutable.
 - `[x]` Added live project checklist/status board (`875be3a`)
 - `[x]` Added legacy `objlist` compatibility boundary + tests (`2af67ea`)
 - `[x]` Added one-command test runner + CI build/test workflow (`4919a2b`)
+- `[x]` Built markdown-powered architecture wiki web UI with reference atlas, theme sync, and code-overlay links (`8e0e031`)
+- `[x]` Added API/UI realtime synchronization architecture chapter with generated topology/sequence diagrams (`7244757`)
+- `[x]` Added dedicated render pipeline flow diagram in rendering deep-dive docs (`7244757`)
+- `[x]` Added OpenAPI-style human-readable endpoint reference for the net server (`7244757`)
 
 ## 90-Day Plan (Status-Reconciled)
 

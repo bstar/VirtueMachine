@@ -34,6 +34,21 @@ For the live, mutable checklist and current slice-by-slice status, see:
 
 - `docs/progress.md`
 
+## Architecture Wiki (Current)
+
+The technical wiki now includes deeper architecture coverage, interactive references, and diagram-backed deep dives:
+
+- Wiki app: `docs/wiki/index.html`
+- Wiki home/TOC: `docs/wiki/README.md`
+- Render pipeline deep dive + flow diagram: `docs/wiki/03-rendering-pipeline-deep-dive.md`
+- API/UI realtime sync deep dive + topology/sequence diagrams: `docs/wiki/14-api-ui-realtime-sync.md`
+- OpenAPI-style endpoint reference (human-readable): `docs/wiki/15-api-endpoint-reference.md`
+
+UI integration:
+
+- In the web client header, `Wiki` is linked next to `VIRTUE MACHINE`.
+- Wiki theme follows the debug-panel theme selection.
+
 ## Legacy Source Provenance
 
 The legacy submodule tracks the original decompiled project:
@@ -113,6 +128,15 @@ Recently landed:
 - R5 startup/title in-engine flow using decoded legacy assets (`titles.shp`, `mainmenu.shp`) with palette-highlight menu behavior.
 - Journey-only startup action with direct throne-room entry and `Q` return-to-title path.
 - R6 legacy cursor integration (`u6mcga.ptr`) rendered in-engine across title/game views with layer-aware placement.
+- Expanded architecture wiki with:
+  - API/UI realtime sync flow documentation and generated diagrams
+  - render-pipeline diagram embedded in the render deep dive
+  - full endpoint reference page documenting live net API semantics
+
+Latest screenshot:
+
+![Latest VirtueMachine screenshot](docs/images/latest-screenshot-2026-02-14-00-40-16.png)
+
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
 - `docs/policies/sandbox-escalation-policy.md`
@@ -124,7 +148,7 @@ Original game assets are not committed. Keep them outside the repo (or under ign
 Sync required files into the local runtime assets folder:
 
 ```bash
-./modern/tools/sync_assets.sh /home/bstar/projects/ULTIMA6/ultima6
+./modern/tools/sync_assets.sh ~/projects/ULTIMA6/ultima6
 ```
 
 Defaults:
