@@ -267,11 +267,47 @@ function runLegacyInjectionHookFixture() {
   assert.equal(list[0].tileId, 0x1ba, "injected tile mismatch");
 }
 
+function runFloorInsertionOrderFixture() {
+  const startX = 300;
+  const startY = 340;
+  const wz = 0;
+  const tileFlags = new Uint8Array(0x800);
+  tileFlags[0x300 & 0x7ff] = 0x00; /* non-floor */
+  tileFlags[0x301 & 0x7ff] = 0x10; /* floor */
+  tileFlags[0x302 & 0x7ff] = 0x00; /* non-floor */
+  const objectLayer = makeObjectLayer([
+    { x: 301, y: 341, z: 0, type: 0x100, renderable: true, order: 1, sourceArea: 0, sourceIndex: 1, tileId: 0x300 },
+    { x: 301, y: 341, z: 0, type: 0x101, renderable: true, order: 2, sourceArea: 0, sourceIndex: 2, tileId: 0x301 },
+    { x: 301, y: 341, z: 0, type: 0x102, renderable: true, order: 3, sourceArea: 0, sourceIndex: 3, tileId: 0x302 }
+  ]);
+
+  const out = buildOverlayCellsModel({
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    startX,
+    startY,
+    wz,
+    viewCtx: { visibleAtWorld() { return true; } },
+    objectLayer,
+    tileFlags,
+    resolveAnimatedObjectTile(o) { return o.tileId; },
+    hasWallTerrain() { return false; }
+  });
+
+  const list = out.overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
+  assert.equal(list.length, 3, "expected three entries");
+  // Legacy: floor entry is inserted after non-floor chain, not before it.
+  assert.equal(list[0].tileId, 0x302, "newest non-floor should be at head");
+  assert.equal(list[1].tileId, 0x300, "older non-floor should remain before floor");
+  assert.equal(list[2].tileId, 0x301, "floor entry should be after non-floor chain");
+}
+
 runSpillOrderingFixture();
 runVisibilitySuppressionFixture();
 runActorOcclusionParityFixture();
 runTransparencyFixture();
 runLegacyStreamOrderingFixture();
 runLegacyInjectionHookFixture();
+runFloorInsertionOrderFixture();
 
 console.log("render_composition_fixtures: ok");

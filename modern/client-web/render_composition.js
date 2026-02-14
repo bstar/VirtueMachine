@@ -37,7 +37,8 @@ export function buildOverlayCellsModel(opts) {
     resolveAnimatedObjectTile,
     resolveFootprintTile,
     hasWallTerrain,
-    injectLegacyOverlays
+    injectLegacyOverlays,
+    isBackgroundObjectTile
   } = opts;
 
   if (!objectLayer || typeof objectLayer.objectsAt !== "function") {
@@ -73,14 +74,7 @@ export function buildOverlayCellsModel(opts) {
     if ((a.z | 0) !== (b.z | 0)) {
       return (b.z | 0) - (a.z | 0);
     }
-    const aArea = (a.sourceArea ?? 0) | 0;
-    const bArea = (b.sourceArea ?? 0) | 0;
-    if (aArea !== bArea) {
-      return aArea - bArea;
-    }
-    const aIndex = (a.sourceIndex ?? a.order ?? 0) | 0;
-    const bIndex = (b.sourceIndex ?? b.order ?? 0) | 0;
-    return aIndex - bIndex;
+    return 0;
   };
 
   const insertLegacyCellTile = (gx, gy, tileId, bp06, source, debugLabel = "") => {
@@ -105,7 +99,8 @@ export function buildOverlayCellsModel(opts) {
         list.push(entry);
         return;
       }
-      const idx = list.findIndex((e) => !e.floor);
+      // Legacy ShowObject inserts floor/bp06==2 entries after non-floor chain.
+      const idx = list.findIndex((e) => e.floor);
       if (idx === -1) {
         list.push(entry);
       } else {
@@ -143,6 +138,9 @@ export function buildOverlayCellsModel(opts) {
       const gy = wy - startY;
       const animObjTile = resolveAnimatedObjectTile(o);
       if (animObjTile < 0) {
+        continue;
+      }
+      if (typeof isBackgroundObjectTile === "function" && isBackgroundObjectTile(animObjTile, o)) {
         continue;
       }
       const footprintTile = resolveFootprintTile ? resolveFootprintTile(o) : animObjTile;
@@ -190,6 +188,9 @@ export function buildOverlayCellsModel(opts) {
           prev = o;
           const animObjTile = resolveAnimatedObjectTile(o);
           if (animObjTile < 0) {
+            continue;
+          }
+          if (typeof isBackgroundObjectTile === "function" && isBackgroundObjectTile(animObjTile, o)) {
             continue;
           }
           const footprintTile = resolveFootprintTile ? resolveFootprintTile(o) : animObjTile;

@@ -357,6 +357,7 @@ const state = {
   palette: null,
   basePalette: null,
   tileFlags: null,
+  tileFlags2: null,
   terrainType: null,
   paletteFrameTick: -1,
   paletteFrame: null,
@@ -830,10 +831,7 @@ class U6ObjectLayerJS {
     if ((a.z | 0) !== (b.z | 0)) {
       return (b.z | 0) - (a.z | 0);
     }
-    if ((a.sourceArea | 0) !== (b.sourceArea | 0)) {
-      return (a.sourceArea | 0) - (b.sourceArea | 0);
-    }
-    return (a.sourceIndex | 0) - (b.sourceIndex | 0);
+    return 0;
   }
 
   parseObjBlk(bytes, areaId = 0) {
@@ -967,12 +965,7 @@ class U6ObjectLayerJS {
     }
     this.entries.sort((a, b) => this.compareLegacyRenderOrder(a, b));
     for (const list of this.byCoord.values()) {
-      list.sort((a, b) => {
-        if ((a.sourceArea | 0) !== (b.sourceArea | 0)) {
-          return (a.sourceArea | 0) - (b.sourceArea | 0);
-        }
-        return (a.sourceIndex | 0) - (b.sourceIndex | 0);
-      });
+      list.sort((a, b) => this.compareLegacyRenderOrder(a, b));
     }
   }
 
@@ -3907,6 +3900,10 @@ function resolveDoorTileId(sim, obj) {
   return (base + resolvedDoorFrame(sim, obj)) & 0xffff;
 }
 
+function resolveLegacyFootprintTile(sim, obj) {
+  return resolveDoorTileId(sim, obj);
+}
+
 function resolveDoorTileIdForVisibility(sim, obj) {
   return resolveDoorTileId(sim, obj);
 }
@@ -4587,9 +4584,10 @@ async function captureParitySnapshotJson() {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
-    resolveFootprintTile: (obj) => resolveDoorTileId(state.sim, obj),
+    resolveFootprintTile: (obj) => resolveLegacyFootprintTile(state.sim, obj),
     hasWallTerrain,
-    injectLegacyOverlays: injectLegacyOverlaySpecials
+    injectLegacyOverlays: injectLegacyOverlaySpecials,
+    isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
   });
   const overlayCells = overlayBuild.overlayCells || [];
   const cells = [];
@@ -5088,6 +5086,13 @@ function hasWallTerrain(tileId) {
   return (terrainOf(tileId) & 0x04) !== 0;
 }
 
+function isTileBackground(tileId) {
+  if (!state.tileFlags2) {
+    return false;
+  }
+  return (state.tileFlags2[tileId & 0x07ff] & 0x20) !== 0;
+}
+
 function buildLegacyViewContext(startX, startY, wz) {
   if (!state.mapCtx) {
     return null;
@@ -5176,8 +5181,7 @@ function buildLegacyViewContext(startX, startY, wz) {
     } else if (isTileOpa(tileId)) {
       markFlag(gx, gy, FLAG_OPA);
     } else {
-      const isBa = false;
-      if (isBa) {
+      if (isTileBackground(tileId)) {
         markFlag(gx, gy, FLAG_BA);
       }
     }
@@ -5476,6 +5480,74 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
       displayTiles[idx] = displayTile & 0xffff;
     }
   }
+
+  if (state.objectLayer && state.tileFlags2) {
+    const visibleAtWorld = viewCtx && typeof viewCtx.visibleAtWorld === "function"
+      ? viewCtx.visibleAtWorld.bind(viewCtx)
+      : null;
+    const applyBg = (wx, wy, tileId, sourceX, sourceY) => {
+      const gx = (wx | 0) - startX;
+      const gy = (wy | 0) - startY;
+      if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+        return;
+      }
+      if (visibleAtWorld && !visibleAtWorld(sourceX | 0, sourceY | 0)) {
+        return;
+      }
+      if (!isTileBackground(tileId)) {
+        return;
+      }
+      const idx = cellIndex(gx, gy);
+      rawTiles[idx] = tileId & 0xffff;
+      displayTiles[idx] = tileId & 0xffff;
+    };
+
+    const processObject = (o) => {
+      if (!o || !o.renderable) {
+        return;
+      }
+      const wx = o.x | 0;
+      const wy = o.y | 0;
+      if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
+        return;
+      }
+      const animObjTile = resolveAnimatedObjectTile(o);
+      if (animObjTile < 0) {
+        return;
+      }
+      const footprintTile = resolveLegacyFootprintTile(state.sim, o) & 0xffff;
+      applyBg(wx, wy, animObjTile, wx, wy);
+      const tf = state.tileFlags ? (state.tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
+      if (tf & 0x80) {
+        applyBg(wx - 1, wy, footprintTile - 1, wx, wy);
+        if (tf & 0x40) {
+          applyBg(wx, wy - 1, footprintTile - 2, wx, wy);
+          applyBg(wx - 1, wy - 1, footprintTile - 3, wx, wy);
+        }
+      } else if (tf & 0x40) {
+        applyBg(wx, wy - 1, footprintTile - 1, wx, wy);
+      }
+    };
+
+    if (typeof state.objectLayer.objectsInWindowLegacyOrder === "function") {
+      const stream = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W, VIEW_H, wz);
+      for (const o of stream) {
+        processObject(o);
+      }
+    } else {
+      for (let gy = 0; gy < VIEW_H; gy += 1) {
+        for (let gx = 0; gx < VIEW_W; gx += 1) {
+          const wx = startX + gx;
+          const wy = startY + gy;
+          const overlays = state.objectLayer.objectsAt(wx, wy, wz);
+          for (const o of overlays) {
+            processObject(o);
+          }
+        }
+      }
+    }
+  }
+
   return { rawTiles, displayTiles };
 }
 
@@ -5967,9 +6039,10 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
-    resolveFootprintTile: (obj) => resolveDoorTileId(state.sim, obj),
+    resolveFootprintTile: (obj) => resolveLegacyFootprintTile(state.sim, obj),
     hasWallTerrain,
-    injectLegacyOverlays: injectLegacyOverlaySpecials
+    injectLegacyOverlays: injectLegacyOverlaySpecials,
+    isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
   });
 }
 
@@ -6750,14 +6823,26 @@ async function loadRuntimeAssets() {
     } else {
       state.cursorPixmaps = null;
     }
-    if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
+    if (flagRes.ok && flagBuf.byteLength >= 0x1c00) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
+      /* Legacy tileflag layout: terrain(0x800), flag1(0x800), typeWeight(0x400), flag2/D_B3EF(0x800). */
+      state.tileFlags2 = new Uint8Array(flagBuf.slice(0x1400, 0x1c00));
+    } else if (flagRes.ok && flagBuf.byteLength >= 0x1800) {
+      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
+      state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
+      state.tileFlags2 = new Uint8Array(flagBuf.slice(0x1000, 0x1800));
+    } else if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
+      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
+      state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
+      state.tileFlags2 = null;
     } else if (flagRes.ok && flagBuf.byteLength >= 0x800) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0, 0x800));
+      state.tileFlags2 = null;
     } else {
       state.tileFlags = null;
+      state.tileFlags2 = null;
       state.terrainType = null;
     }
 
@@ -6843,6 +6928,7 @@ async function loadRuntimeAssets() {
     state.u6MainFont = null;
     state.legacyPaperPixmap = null;
     state.tileFlags = null;
+    state.tileFlags2 = null;
     state.terrainType = null;
     state.pristineBaselineVersion = "";
     state.pristineBaselineLastPollTick = -1;
