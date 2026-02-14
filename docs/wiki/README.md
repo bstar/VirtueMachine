@@ -29,6 +29,8 @@ Think of every chapter as answering three questions:
 - [docs/wiki/02-modern-runtime-anatomy.md](02-modern-runtime-anatomy.md)
 - [docs/wiki/08-deviation-ledger.md](08-deviation-ledger.md)
 - [docs/wiki/13-reference-atlas.md](13-reference-atlas.md)
+- [docs/wiki/14-api-ui-realtime-sync.md](14-api-ui-realtime-sync.md)
+- [docs/wiki/15-api-endpoint-reference.md](15-api-endpoint-reference.md)
 
 ## Reading Tracks
 
@@ -45,7 +47,9 @@ If you are new to this codebase, pick one track and follow it in order.
 
 1. [docs/wiki/05-determinism-and-replay.md](05-determinism-and-replay.md)
 2. [docs/wiki/06-network-authority-and-persistence.md](06-network-authority-and-persistence.md)
-3. [docs/wiki/02-modern-runtime-anatomy.md](02-modern-runtime-anatomy.md)
+3. [docs/wiki/14-api-ui-realtime-sync.md](14-api-ui-realtime-sync.md)
+4. [docs/wiki/02-modern-runtime-anatomy.md](02-modern-runtime-anatomy.md)
+5. [docs/wiki/15-api-endpoint-reference.md](15-api-endpoint-reference.md)
 
 ### Track C: "I need to make a faithful engine change"
 
@@ -69,6 +73,8 @@ If you are new to this codebase, pick one track and follow it in order.
 11. [docs/wiki/11-parity-case-studies.md](11-parity-case-studies.md)
 12. [docs/wiki/12-canonical-completion-roadmap.md](12-canonical-completion-roadmap.md)
 13. [docs/wiki/13-reference-atlas.md](13-reference-atlas.md)
+14. [docs/wiki/14-api-ui-realtime-sync.md](14-api-ui-realtime-sync.md)
+15. [docs/wiki/15-api-endpoint-reference.md](15-api-endpoint-reference.md)
 
 ## Operating Principles
 

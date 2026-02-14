@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="920" viewBox="0 0 1400 920" role="img" aria-labelledby="title desc">
+  <title id="title">VirtueMachine render pipeline flow</title>
+  <desc id="desc">Flow from map and object sources through base and overlay composition into final viewport and diagnostics.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#8fbcd8"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .box { fill: #1d273a; stroke: #55617b; stroke-width: 2; rx: 12; }
+      .box2 { fill: #222d42; stroke: #657491; stroke-width: 2; rx: 12; }
+      .title { fill: #e2e8f0; font: 700 28px 'Segoe UI', sans-serif; }
+      .h { fill: #d4deea; font: 700 16px 'Segoe UI', sans-serif; }
+      .t { fill: #c6d2e2; font: 13px 'Segoe UI', sans-serif; }
+      .n { fill: #9fb0c8; font: 12px 'Segoe UI', sans-serif; }
+      .flow { stroke: #8fbcd8; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .flow2 { stroke: #9fcf9f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .flow3 { stroke: #d8b68f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1400" height="920"/>
+  <text class="title" x="46" y="58">Render Pipeline: Canonical Flow and Ordering</text>
+
+  <rect class="box" x="44" y="96" width="300" height="208"/>
+  <text class="h" x="64" y="128">Inputs</text>
+  <text class="t" x="64" y="154">• mapCtx (`raw`, `anim`, tile flags)</text>
+  <text class="t" x="64" y="178">• objectLayer + entityLayer</text>
+  <text class="t" x="64" y="202">• basetile / tileflag data</text>
+  <text class="t" x="64" y="226">• viewport center + bounds</text>
+  <text class="n" x="64" y="260">Source provenance decides what can be rendered.</text>
+
+  <rect class="box2" x="394" y="96" width="320" height="208"/>
+  <text class="h" x="414" y="128">1) Base Tile Build</text>
+  <text class="t" x="414" y="154">`buildBaseTileBuffersCurrent(...)`</text>
+  <text class="t" x="414" y="178">• blackout/corner/wall handling</text>
+  <text class="t" x="414" y="202">• BA/background substitutions</text>
+  <text class="t" x="414" y="226">• animated tile selection</text>
+
+  <rect class="box2" x="764" y="96" width="320" height="208"/>
+  <text class="h" x="784" y="128">2) Legacy Ordered Sources</text>
+  <text class="t" x="784" y="154">`objectsInWindowLegacyOrder(...)`</text>
+  <text class="t" x="784" y="178">• canonical scan ordering</text>
+  <text class="t" x="784" y="202">• includes `viewW+1`, `viewH+1` fringe</text>
+  <text class="t" x="784" y="226">• preserves source rank ties</text>
+
+  <rect class="box2" x="1134" y="96" width="220" height="208"/>
+  <text class="h" x="1154" y="128">3) Overlay Model</text>
+  <text class="t" x="1154" y="154">`buildOverlayCellsModel(...)`</text>
+  <text class="t" x="1154" y="178">• `insertLegacyCellTile(...)`</text>
+  <text class="t" x="1154" y="202">• same-cell precedence</text>
+  <text class="t" x="1154" y="226">• hidden suppression</text>
+
+  <rect class="box" x="394" y="372" width="320" height="230"/>
+  <text class="h" x="414" y="404">Spill Decomposition</text>
+  <text class="t" x="414" y="430">From tile flags:</text>
+  <text class="t" x="414" y="454">• `0x80` horizontal spill to left</text>
+  <text class="t" x="414" y="478">• `0x40` vertical spill upward</text>
+  <text class="t" x="414" y="502">• `0xC0` corner spill up-left</text>
+  <text class="t" x="414" y="526">• frame deltas (`tile-1/-2/-3`)</text>
+  <text class="n" x="414" y="560">Legacy anchor: `C_1184_35EA`.</text>
+
+  <rect class="box" x="764" y="372" width="320" height="230"/>
+  <text class="h" x="784" y="404">Layer Composition</text>
+  <text class="t" x="784" y="430">Order in final scene:</text>
+  <text class="t" x="784" y="454">1. base map</text>
+  <text class="t" x="784" y="478">2. background object contributions</text>
+  <text class="t" x="784" y="502">3. overlays (main + spill)</text>
+  <text class="t" x="784" y="526">4. actors/entities</text>
+  <text class="t" x="784" y="550">5. floor/post overlays</text>
+
+  <rect class="box2" x="1134" y="372" width="220" height="230"/>
+  <text class="h" x="1154" y="404">Output</text>
+  <text class="t" x="1154" y="430">Viewport canvas</text>
+  <text class="t" x="1154" y="454">Legacy frame preview</text>
+  <text class="t" x="1154" y="478">HUD composition</text>
+  <text class="t" x="1154" y="502">Theme-adjusted display</text>
+
+  <rect class="box" x="44" y="672" width="1310" height="190"/>
+  <text class="h" x="64" y="704">Failure Signatures (What breaks when a stage is wrong)</text>
+  <text class="t" x="64" y="730">• Wrong source ordering: table/bench props shift right, end-of-surface stacking.</text>
+  <text class="t" x="64" y="754">• Wrong spill logic: wall/bed/door fragments tear or vanish at edges.</text>
+  <text class="t" x="64" y="778">• Wrong insertion precedence: support sprite appears above carried/moveable items.</text>
+  <text class="t" x="64" y="802">• Missing fringe sources (`+1` scan): off-edge anchors fail to contribute visible spill fragments.</text>
+  <text class="n" x="64" y="834">Use hover/parity reports to trace `overlay[]` source cell + sourceType before changing code.</text>
+
+  <path class="flow" d="M344,196 C369,196 369,196 394,196"/>
+  <path class="flow" d="M714,196 C739,196 739,196 764,196"/>
+  <path class="flow" d="M1084,196 C1109,196 1109,196 1134,196"/>
+  <path class="flow2" d="M554,304 C554,338 554,338 554,372"/>
+  <path class="flow2" d="M924,304 C924,338 924,338 924,372"/>
+  <path class="flow3" d="M1084,488 C1109,488 1109,488 1134,488"/>
+</svg>

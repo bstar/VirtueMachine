@@ -16,7 +16,10 @@
         <div class="vm-main-shell h-full rounded p-4 flex flex-col">
           <header class="vm-header mb-3 pb-3 flex items-start justify-between gap-4">
             <div>
-              <h1 class="vm-game-title text-2xl font-bold tracking-tight">VIRTUE MACHINE</h1>
+              <div class="vm-title-row">
+                <h1 class="vm-game-title text-2xl font-bold tracking-tight">VIRTUE MACHINE</h1>
+                <a id="wikiLink" class="vm-title-link" href="/docs/wiki/">Wiki</a>
+              </div>
               <p class="vm-game-subtitle mt-1 text-sm">Web Debug View</p>
               <p class="vm-game-time mt-2 text-sm">Time of Day: <strong id="topTimeOfDay" class="font-semibold">Midnight (00:00)</strong></p>
               <p class="vm-game-time mt-1 text-sm">Input Mode: <strong id="topInputMode" class="font-semibold">Title Menu</strong></p>
@@ -40,7 +43,6 @@
               </div>
               <div class="mt-1 flex items-center gap-2">
                 <strong id="netQuickStatus" class="vm-muted-text text-xs">Account: Signed out</strong>
-                <a id="wikiLink" class="control-btn text-xs px-3" href="/docs/wiki/">Wiki</a>
               </div>
             </div>
           </header>

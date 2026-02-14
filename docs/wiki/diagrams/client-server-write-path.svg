@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1080" viewBox="0 0 1280 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Client to server write path</title>
+  <desc id="desc">Sequence-style flow for login, snapshot save, presence heartbeat, and maintenance calls.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#8ab4cf"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .lane { fill: #1b2436; stroke: #49566f; stroke-width: 2; rx: 10; }
+      .title { fill: #e2e8f0; font: 700 24px 'Segoe UI', sans-serif; }
+      .head { fill: #d6deea; font: 700 15px 'Segoe UI', sans-serif; }
+      .txt { fill: #d6deea; font: 13px 'Segoe UI', sans-serif; }
+      .note { fill: #9fb0c8; font: 12px 'Segoe UI', sans-serif; }
+      .call { stroke: #8ab4cf; stroke-width: 3; marker-end: url(#arrow); }
+      .ret { stroke: #9ccf9d; stroke-width: 2.5; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+      .tick { stroke: #4b5b73; stroke-width: 2; stroke-dasharray: 5 6; }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1280" height="1080"/>
+  <text class="title" x="44" y="52">Client → Server Write Flow (Command, Sync, and Persistence)</text>
+
+  <rect class="lane" x="70" y="90" width="260" height="940"/>
+  <rect class="lane" x="380" y="90" width="260" height="940"/>
+  <rect class="lane" x="690" y="90" width="260" height="940"/>
+  <rect class="lane" x="1000" y="90" width="220" height="940"/>
+
+  <text class="head" x="96" y="124">UI / Input</text>
+  <text class="head" x="402" y="124">Client Net Layer</text>
+  <text class="head" x="716" y="124">Net API Server</text>
+  <text class="head" x="1022" y="124">Data Store</text>
+
+  <line class="tick" x1="200" y1="140" x2="200" y2="1010"/>
+  <line class="tick" x1="510" y1="140" x2="510" y2="1010"/>
+  <line class="tick" x1="820" y1="140" x2="820" y2="1010"/>
+  <line class="tick" x1="1110" y1="140" x2="1110" y2="1010"/>
+
+  <text class="txt" x="94" y="188">1) Player presses Net Login</text>
+  <line class="call" x1="210" y1="204" x2="500" y2="204"/>
+  <text class="txt" x="258" y="196">`netLogin()`</text>
+  <line class="call" x1="520" y1="228" x2="810" y2="228"/>
+  <text class="txt" x="562" y="220">POST /api/auth/login</text>
+  <line class="ret" x1="810" y1="252" x2="520" y2="252"/>
+
+  <line class="call" x1="520" y1="286" x2="810" y2="286"/>
+  <text class="txt" x="552" y="278">GET/POST /api/characters</text>
+  <line class="ret" x1="810" y1="310" x2="520" y2="310"/>
+
+  <line class="call" x1="520" y1="344" x2="810" y2="344"/>
+  <text class="txt" x="552" y="336">GET /api/world/snapshot</text>
+  <line class="ret" x1="810" y1="368" x2="520" y2="368"/>
+
+  <text class="txt" x="94" y="424">2) Player presses Save Remote</text>
+  <line class="call" x1="210" y1="440" x2="500" y2="440"/>
+  <text class="txt" x="266" y="432">`netSaveSnapshot()`</text>
+  <line class="call" x1="520" y1="466" x2="810" y2="466"/>
+  <text class="txt" x="546" y="458">PUT /api/world/snapshot</text>
+  <line class="call" x1="830" y1="492" x2="1100" y2="492"/>
+  <text class="txt" x="882" y="484">write `world_snapshot.json`</text>
+  <line class="ret" x1="1100" y1="516" x2="830" y2="516"/>
+  <line class="ret" x1="810" y1="538" x2="520" y2="538"/>
+
+  <text class="txt" x="94" y="598">3) Tick loop emits presence heartbeat</text>
+  <line class="call" x1="520" y1="618" x2="810" y2="618"/>
+  <text class="txt" x="532" y="610">POST /api/world/presence/heartbeat</text>
+  <line class="call" x1="830" y1="642" x2="1100" y2="642"/>
+  <text class="txt" x="878" y="634">write `presence.json`</text>
+  <line class="ret" x1="1100" y1="666" x2="830" y2="666"/>
+  <line class="ret" x1="810" y1="688" x2="520" y2="688"/>
+
+  <text class="txt" x="94" y="748">4) Auto/Manual maintenance</text>
+  <line class="call" x1="520" y1="770" x2="810" y2="770"/>
+  <text class="txt" x="536" y="762">POST /api/world/critical-items/maintenance</text>
+  <line class="call" x1="830" y1="794" x2="1100" y2="794"/>
+  <text class="txt" x="862" y="786">policy + recovery log updates</text>
+  <line class="ret" x1="1100" y1="818" x2="830" y2="818"/>
+  <line class="ret" x1="810" y1="840" x2="520" y2="840"/>
+
+  <text class="note" x="90" y="928">Write-side semantics: user intent or tick scheduler -> authenticated API -> persisted JSON state.</text>
+  <text class="note" x="90" y="952">No websocket required; deterministic tick cadence controls background writes.</text>
+</svg>

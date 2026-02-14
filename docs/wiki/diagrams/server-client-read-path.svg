@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1080" viewBox="0 0 1280 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Server to client read path</title>
+  <desc id="desc">How clock and presence updates flow from server persistence into UI state on login and during runtime.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#8bc6a0"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1b2436; stroke: #4d5d76; stroke-width: 2; rx: 10; }
+      .title { fill: #e2e8f0; font: 700 24px 'Segoe UI', sans-serif; }
+      .head { fill: #d6deea; font: 700 15px 'Segoe UI', sans-serif; }
+      .txt { fill: #d6deea; font: 13px 'Segoe UI', sans-serif; }
+      .note { fill: #9fb0c8; font: 12px 'Segoe UI', sans-serif; }
+      .flow { stroke: #8bc6a0; stroke-width: 3; marker-end: url(#arrow); }
+      .flow2 { stroke: #8ab4cf; stroke-width: 3; marker-end: url(#arrow); }
+      .tick { stroke: #4b5b73; stroke-width: 2; stroke-dasharray: 5 6; }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1280" height="1080"/>
+  <text class="title" x="44" y="52">Server → Client Read Flow (Authoritative Pull and UI Projection)</text>
+
+  <rect class="panel" x="60" y="90" width="220" height="940"/>
+  <rect class="panel" x="320" y="90" width="280" height="940"/>
+  <rect class="panel" x="640" y="90" width="280" height="940"/>
+  <rect class="panel" x="960" y="90" width="260" height="940"/>
+
+  <text class="head" x="80" y="124">Data Files</text>
+  <text class="head" x="340" y="124">Net Server</text>
+  <text class="head" x="660" y="124">Client Net Layer</text>
+  <text class="head" x="980" y="124">UI + Renderer</text>
+
+  <line class="tick" x1="170" y1="140" x2="170" y2="1010"/>
+  <line class="tick" x1="460" y1="140" x2="460" y2="1010"/>
+  <line class="tick" x1="780" y1="140" x2="780" y2="1010"/>
+  <line class="tick" x1="1090" y1="140" x2="1090" y2="1010"/>
+
+  <text class="txt" x="78" y="186">Login bootstrap</text>
+  <line class="flow" x1="470" y1="206" x2="770" y2="206"/>
+  <text class="txt" x="522" y="198">GET /api/world/snapshot</text>
+  <line class="flow2" x1="180" y1="230" x2="450" y2="230"/>
+  <text class="txt" x="90" y="222">read snapshot JSON</text>
+  <line class="flow" x1="470" y1="254" x2="770" y2="254"/>
+  <text class="txt" x="516" y="246">response with `snapshot_base64`</text>
+  <line class="flow" x1="790" y1="278" x2="1080" y2="278"/>
+  <text class="txt" x="848" y="270">decode + hydrate local sim</text>
+
+  <line class="flow" x1="470" y1="336" x2="770" y2="336"/>
+  <text class="txt" x="536" y="328">GET /api/world/clock</text>
+  <line class="flow2" x1="180" y1="360" x2="450" y2="360"/>
+  <text class="txt" x="84" y="352">read/update clock JSON</text>
+  <line class="flow" x1="470" y1="384" x2="770" y2="384"/>
+  <text class="txt" x="520" y="376">response tick/date/time</text>
+  <line class="flow" x1="790" y1="408" x2="1080" y2="408"/>
+  <text class="txt" x="818" y="400">applyAuthoritativeWorldClock()</text>
+
+  <line class="flow" x1="470" y1="466" x2="770" y2="466"/>
+  <text class="txt" x="526" y="458">GET /api/world/presence</text>
+  <line class="flow2" x1="180" y1="490" x2="450" y2="490"/>
+  <text class="txt" x="82" y="482">read/prune presence JSON</text>
+  <line class="flow" x1="470" y1="514" x2="770" y2="514"/>
+  <text class="txt" x="540" y="506">response player rows</text>
+  <line class="flow" x1="790" y1="538" x2="1080" y2="538"/>
+  <text class="txt" x="830" y="530">update remotePlayers overlay</text>
+
+  <text class="txt" x="78" y="622">Runtime tick-scheduled polling loop</text>
+  <line class="flow" x1="470" y1="646" x2="770" y2="646"/>
+  <text class="txt" x="540" y="638">clock poll interval</text>
+  <line class="flow" x1="470" y1="690" x2="770" y2="690"/>
+  <text class="txt" x="528" y="682">presence poll interval</text>
+  <line class="flow" x1="790" y1="668" x2="1080" y2="668"/>
+  <text class="txt" x="802" y="660">UI status + world overlays refresh</text>
+
+  <text class="note" x="78" y="930">Read-side semantics: server authoritative fields are polled and merged; UI reflects merged state each render pass.</text>
+  <text class="note" x="78" y="954">Realtime here means frequent, deterministic polling; not server push sockets.</text>
+</svg>

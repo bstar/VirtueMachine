@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-labelledby="title desc">
+  <title id="title">VirtueMachine API UI topology</title>
+  <desc id="desc">Client, server, persistence, and realtime flows with authority labels.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#7aa6c2"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #1e293b; stroke: #4b5563; stroke-width: 2; rx: 14; }
+      .panel2 { fill: #172033; stroke: #55657f; stroke-width: 2; rx: 14; }
+      .title { fill: #e2e8f0; font: 700 24px 'Segoe UI', sans-serif; }
+      .h2 { fill: #cbd5e1; font: 700 18px 'Segoe UI', sans-serif; }
+      .txt { fill: #cbd5e1; font: 14px 'Segoe UI', sans-serif; }
+      .small { fill: #94a3b8; font: 12px 'Segoe UI', sans-serif; }
+      .line { stroke: #7aa6c2; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .line2 { stroke: #9ec98a; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .line3 { stroke: #d7a56f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1280" height="820"/>
+  <text class="title" x="44" y="52">VirtueMachine Runtime Topology: API ↔ UI ↔ Persistence</text>
+
+  <rect class="panel" x="44" y="90" width="530" height="320"/>
+  <text class="h2" x="68" y="126">Client Web Runtime (`modern/client-web/app.js`)</text>
+  <text class="txt" x="68" y="160">• Local tick loop (`tickLoop`) drives simulation and render cadence</text>
+  <text class="txt" x="68" y="186">• Net orchestration (`netLogin`, `netRequest`, poll + heartbeat functions)</text>
+  <text class="txt" x="68" y="212">• UI controls trigger explicit writes (save/load/maintenance/account)</text>
+  <text class="txt" x="68" y="238">• Remote players + authoritative clock merged into UI state</text>
+  <text class="small" x="68" y="276">Authority here: immediate local responsiveness + render composition</text>
+
+  <rect class="panel" x="706" y="90" width="530" height="320"/>
+  <text class="h2" x="730" y="126">Net Server (`modern/net/server.js`)</text>
+  <text class="txt" x="730" y="160">• Auth, character records, snapshot storage, presence registry</text>
+  <text class="txt" x="730" y="186">• Authoritative world clock (`/api/world/clock`)</text>
+  <text class="txt" x="730" y="212">• Presence heartbeat + TTL pruning (`/api/world/presence/*`)</text>
+  <text class="txt" x="730" y="238">• Critical item maintenance policy and recovery events</text>
+  <text class="small" x="730" y="276">Authority here: shared-time + shared-session state + persistence writes</text>
+
+  <rect class="panel2" x="706" y="464" width="530" height="300"/>
+  <text class="h2" x="730" y="500">Persistent Data (`modern/net/data/*.json`)</text>
+  <text class="txt" x="730" y="534">• `world_snapshot.json`</text>
+  <text class="txt" x="730" y="560">• `world_clock.json`</text>
+  <text class="txt" x="730" y="586">• `presence.json`</text>
+  <text class="txt" x="730" y="612">• `users.json`, `tokens.json`, `characters.json`</text>
+  <text class="txt" x="730" y="638">• critical-item policies and recovery logs</text>
+
+  <rect class="panel2" x="44" y="464" width="530" height="300"/>
+  <text class="h2" x="68" y="500">UI Surface (Debug Panel + World View)</text>
+  <text class="txt" x="68" y="534">• Status indicators (session, net state, replay, clock)</text>
+  <text class="txt" x="68" y="560">• Login/account actions and remote persistence controls</text>
+  <text class="txt" x="68" y="586">• Remote players rendered from `state.net.remotePlayers`</text>
+  <text class="txt" x="68" y="612">• Hover/parity tooling validates visual correctness</text>
+
+  <path class="line" d="M574,210 C640,210 640,210 706,210"/>
+  <text class="small" x="583" y="196">HTTP API (fetch)</text>
+
+  <path class="line2" d="M706,330 C640,330 640,330 574,330"/>
+  <text class="small" x="586" y="346">clock + presence + snapshot pulls</text>
+
+  <path class="line3" d="M971,410 C971,438 971,438 971,464"/>
+  <text class="small" x="983" y="444">persist / load JSON</text>
+
+  <path class="line2" d="M280,464 C280,438 280,438 280,410"/>
+  <text class="small" x="146" y="446">UI action triggers network writes</text>
+</svg>

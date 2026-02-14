@@ -13,7 +13,9 @@
     { file: "10-glossary.md", title: "Glossary" },
     { file: "11-parity-case-studies.md", title: "Parity Case Studies" },
     { file: "12-canonical-completion-roadmap.md", title: "Canonical Completion Roadmap" },
-    { file: "13-reference-atlas.md", title: "Reference Atlas Guide" }
+    { file: "13-reference-atlas.md", title: "Reference Atlas Guide" },
+    { file: "14-api-ui-realtime-sync.md", title: "API/UI Realtime Sync and Flow" },
+    { file: "15-api-endpoint-reference.md", title: "API Endpoint Reference" }
   ];
 
   const pageListEl = document.getElementById("page-list");
@@ -138,6 +140,15 @@
 
   function inlineMarkdown(text) {
     let out = escapeHtml(text);
+    out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, rawUrl) => {
+      const url = String(rawUrl || "").trim();
+      if (!url) {
+        return "";
+      }
+      const safeUrl = escapeHtml(url);
+      const safeAlt = escapeHtml(String(alt || "").trim());
+      return `<img class="doc-image" src="${safeUrl}" alt="${safeAlt}" loading="lazy" />`;
+    });
     out = out.replace(/\[\[term:([^\]]+)\]\]/gi, (_m, rawTerm) => {
       const term = String(rawTerm).trim();
       const href = `#page=${encodeURIComponent(state.currentPage)}&term=${encodeURIComponent(term)}`;

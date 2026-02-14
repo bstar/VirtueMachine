@@ -238,6 +238,24 @@ body {
   color: #efe1bf;
 }
 
+.vm-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.vm-title-link {
+  color: var(--vm-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.vm-title-link:hover {
+  filter: brightness(1.1);
+}
+
 .vm-game-subtitle {
   color: #b7b0a0;
 }

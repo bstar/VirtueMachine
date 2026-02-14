@@ -1,5 +1,7 @@
 # Rendering Pipeline Deep Dive
 
+![VirtueMachine render pipeline flow](./diagrams/render-pipeline-flow.svg)
+
 ## Why The Pipeline Is This Strict
 
 Ultima VI visuals are a layered illusion with hard ordering dependencies.

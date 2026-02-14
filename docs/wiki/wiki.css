@@ -153,6 +153,16 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
   border-radius: 4px;
 }
 .doc hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
+.doc-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 14px 0 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 88%, black 12%);
+}
 .doc a.term-link {
   display: inline-block;
   padding: 1px 6px;
