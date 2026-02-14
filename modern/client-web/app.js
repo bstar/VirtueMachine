@@ -825,6 +825,11 @@ class U6ObjectLayerJS {
   }
 
   compareLegacyRenderOrder(a, b) {
+    const ao = Number(a?.legacyOrder);
+    const bo = Number(b?.legacyOrder);
+    if (Number.isFinite(ao) && Number.isFinite(bo) && ao !== bo) {
+      return ao - bo;
+    }
     return compareLegacyObjectOrderStable(a, b);
   }
 
@@ -870,6 +875,12 @@ class U6ObjectLayerJS {
         renderable: isRenderableWorldObjectType(type)
       });
     }
+    for (const row of decoded) {
+      const ai = row.assocIndex | 0;
+      if (ai >= 0 && ai < decoded.length) {
+        row.assocObj = decoded[ai];
+      }
+    }
     const childCounts = new Uint16Array(count);
     const child0010Counts = new Uint16Array(count);
     for (const row of decoded) {
@@ -885,6 +896,21 @@ class U6ObjectLayerJS {
         child0010Counts[ai] = (child0010Counts[ai] + 1) & 0xffff;
       }
     }
+    const ordered = decoded.slice().sort((a, b) => {
+      const cmp = compareLegacyObjectOrderStable(a, b);
+      if (cmp !== 0) {
+        return cmp;
+      }
+      return (a.index | 0) - (b.index | 0);
+    });
+    const legacyOrderByIndex = new Int32Array(count);
+    legacyOrderByIndex.fill(-1);
+    for (let i = 0; i < ordered.length; i += 1) {
+      const idx = ordered[i].index | 0;
+      if (idx >= 0 && idx < count) {
+        legacyOrderByIndex[idx] = i;
+      }
+    }
     const entries = [];
     for (const row of decoded) {
       if ((row.coordUse | 0) !== OBJ_COORD_USE_LOCXYZ) {
@@ -895,6 +921,7 @@ class U6ObjectLayerJS {
       }
       entries.push({
         ...row,
+        legacyOrder: legacyOrderByIndex[row.index] | 0,
         assocChildCount: Number(childCounts[row.index] || 0),
         assocChild0010Count: Number(child0010Counts[row.index] || 0)
       });
@@ -7519,7 +7546,7 @@ function buildHoverReportText() {
   const objLines = objects.map((o, idx) => {
     const tileId = resolveDoorTileId(state.sim, o) & 0xffff;
     const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
-    return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0} achild=${Number(o.assocChildCount || 0) | 0} a0010=${Number(o.assocChild0010Count || 0) | 0}`;
+    return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0} lord=${Number(o.legacyOrder || 0) | 0} achild=${Number(o.assocChildCount || 0) | 0} a0010=${Number(o.assocChild0010Count || 0) | 0}`;
   });
 
   const lines = [
@@ -7567,7 +7594,7 @@ async function copyHoverReportToClipboard(options = {}) {
                 ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
                 : "";
               rows.push(
-                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
+                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} lord=${Number(o.legacy_order || 0) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
               );
             }
           }

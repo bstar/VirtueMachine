@@ -98,6 +98,7 @@ Current instrumentation support:
 
 - server/API object responses now expose assoc-child aggregate metadata (`assoc_child_count`, `assoc_child_0010_count`)
 - client hover reports include local + server assoc aggregate signals to speed parity diagnosis before full assoc-graph ordering is implemented
+- server/API and client object parse paths now compute and expose a deterministic `legacy_order` rank derived from full raw `objblk` record ordering (including non-LOCXYZ assoc records)
 
 ## Deviation Policy
 

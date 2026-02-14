@@ -141,6 +141,7 @@ async function main() {
     assert.ok(Number.isInteger(worldObjects.body?.meta?.active_count));
     if (worldObjects.body.objects.length > 0) {
       const first = worldObjects.body.objects[0];
+      assert.ok(Number.isInteger(Number(first.legacy_order)));
       assert.ok(Number.isInteger(Number(first.assoc_child_count)));
       assert.ok(Number.isInteger(Number(first.assoc_child_0010_count)));
     }

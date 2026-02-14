@@ -343,6 +343,12 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
       z: pos.z & 0x0f
     });
   }
+  for (const row of decoded) {
+    const ai = row.assoc_index | 0;
+    if (ai >= 0 && ai < decoded.length) {
+      row.assoc_obj = decoded[ai];
+    }
+  }
   const childCounts = new Uint16Array(count);
   const child0010Counts = new Uint16Array(count);
   for (const row of decoded) {
@@ -359,12 +365,36 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
     }
   }
   const out = [];
+  const ordered = decoded.slice().sort((a, b) => {
+    const aUse = (a.status & 0x18) >>> 0;
+    const bUse = (b.status & 0x18) >>> 0;
+    if (aUse !== 0 && bUse === 0) return -1;
+    if (bUse !== 0 && aUse === 0) return 1;
+    if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
+    if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
+    if ((a.z | 0) !== (b.z | 0)) return (b.z | 0) - (a.z | 0);
+    if (((a.status & 0x10) !== 0) !== ((b.status & 0x10) !== 0)) {
+      return (a.status & 0x10) !== 0 ? -1 : 1;
+    }
+    if ((a.source_area | 0) !== (b.source_area | 0)) return (a.source_area | 0) - (b.source_area | 0);
+    if ((a.source_index | 0) !== (b.source_index | 0)) return (a.source_index | 0) - (b.source_index | 0);
+    return (a.index | 0) - (b.index | 0);
+  });
+  const legacyOrderByIndex = new Int32Array(count);
+  legacyOrderByIndex.fill(-1);
+  for (let i = 0; i < ordered.length; i += 1) {
+    const idx = ordered[i].index | 0;
+    if (idx >= 0 && idx < count) {
+      legacyOrderByIndex[idx] = i;
+    }
+  }
   for (const row of decoded) {
     if ((row.coord_use | 0) !== 0) {
       continue;
     }
     out.push({
       ...row,
+      legacy_order: legacyOrderByIndex[row.index] | 0,
       assoc_child_count: Number(childCounts[row.index] || 0) >>> 0,
       assoc_child_0010_count: Number(child0010Counts[row.index] || 0) >>> 0
     });
@@ -490,6 +520,9 @@ function isStatus0010(status) {
 }
 
 function compareLegacyWorldObjectOrder(a, b) {
+  if ((a.legacy_order | 0) !== (b.legacy_order | 0)) {
+    return (a.legacy_order | 0) - (b.legacy_order | 0);
+  }
   const aUse = coordUseOfStatus(a.status);
   const bUse = coordUseOfStatus(b.status);
   if (aUse !== 0 && bUse === 0) {
