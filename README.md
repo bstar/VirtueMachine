@@ -196,7 +196,7 @@ Recently landed:
 
 Latest screenshot:
 
-![Latest VirtueMachine screenshot](docs/images/latest-screenshot-2026-02-14-00-40-16.png)
+![Latest VirtueMachine screenshot](docs/images/latest-screenshot-2026-02-14-15-42-36.png)
 
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
