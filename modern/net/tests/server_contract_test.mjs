@@ -9,6 +9,7 @@ const SERVER_JS = path.join(ROOT, "modern/net/server.js");
 const SIM_CORE_INTERACT_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_interact_bridge");
 const SIM_CORE_ASSOC_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_bridge");
 const SIM_CORE_ASSOC_BATCH_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_batch_bridge");
+const SIM_CORE_WORLD_QUERY_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_objects_query_bridge");
 const ROOM_HOTSPOT_FIXTURES = path.join(ROOT, "modern", "net", "tests", "fixtures", "room_hotspots.level0.json");
 
 function sleep(ms) {
@@ -118,6 +119,7 @@ async function main() {
       VM_SIM_CORE_INTERACT_BIN: SIM_CORE_INTERACT_BIN,
       VM_SIM_CORE_ASSOC_BIN: SIM_CORE_ASSOC_BIN,
       VM_SIM_CORE_ASSOC_BATCH_BIN: SIM_CORE_ASSOC_BATCH_BIN,
+      VM_SIM_CORE_WORLD_QUERY_BIN: SIM_CORE_WORLD_QUERY_BIN,
       VM_EMAIL_MODE: "log"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -227,6 +229,35 @@ async function main() {
         );
       }
     }
+
+    const anchorSample = await jsonFetch(baseUrl, "/api/world/objects?x=298&y=355&z=0&radius=0&limit=64&projection=anchor", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    const footprintSample = await jsonFetch(baseUrl, "/api/world/objects?x=298&y=355&z=0&radius=0&limit=64&projection=footprint", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(anchorSample.status, 200);
+    assert.equal(footprintSample.status, 200);
+    assert.ok(
+      (footprintSample.body?.objects || []).length >= (anchorSample.body?.objects || []).length,
+      "footprint projection should include at least anchor projection results at same cell/radius"
+    );
+
+    const limitRunA = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=5&projection=anchor", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    const limitRunB = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=5&projection=anchor", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(limitRunA.status, 200);
+    assert.equal(limitRunB.status, 200);
+    const keysA = (limitRunA.body?.objects || []).map((o) => String(o.object_key || ""));
+    const keysB = (limitRunB.body?.objects || []).map((o) => String(o.object_key || ""));
+    assert.deepEqual(keysA, keysB, "limited world object query must be deterministic across repeated calls");
 
     const lifecycleObjects = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
       method: "GET",

@@ -109,6 +109,7 @@ Next closure target:
   - chain accessibility constraints for `take` from contained stacks (`closed` in interaction endpoint + contract tests)
   - interaction precondition decisions moved into sim-core bridge (`closed`; container block + container cycle policy no longer decided in net JS)
   - diagnostics surfacing (`assoc_chain`, `root_anchor`, `blocked_by`) now sourced from sim-core batch bridge in `/api/world/objects`
+  - `/api/world/objects` selection/filtering (`projection`, `radius`, `limit`, canonical order) now sourced from sim-core world-query bridge
   - deterministic test fixtures for nested chains (`in progress`, expanded corpus pending)
 
 ## Why This Roadmap Prevents Future Grind

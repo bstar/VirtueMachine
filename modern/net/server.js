@@ -15,6 +15,7 @@ const {
   applyCanonicalWorldInteractionCommand
 } = require("./world_interaction_bridge");
 const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge");
+const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -1756,39 +1757,29 @@ const server = http.createServer(async (req, res) => {
       : "anchor";
     const includeFootprint = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
     const withFootprint = includeFootprint === "1" || includeFootprint === "true" || includeFootprint === "on";
-    const selected = [];
-    for (const obj of state.worldObjects.active) {
-      if (hasZ && (obj.z | 0) !== (wzRaw | 0)) {
-        continue;
-      }
-      if (hasX && hasY) {
-        if (projection === "footprint") {
-          const cells = objectFootprintCells(obj, state.worldObjects.tileFlags);
-          let hit = false;
-          for (const c of cells) {
-            const dx = Math.abs((c.x | 0) - (wx | 0));
-            const dy = Math.abs((c.y | 0) - (wy | 0));
-            if (dx <= radius && dy <= radius) {
-              hit = true;
-              break;
-            }
-          }
-          if (!hit) {
-            continue;
-          }
-        } else {
-          const dx = Math.abs((obj.x | 0) - (wx | 0));
-          const dy = Math.abs((obj.y | 0) - (wy | 0));
-          if (dx > radius || dy > radius) {
-            continue;
-          }
-        }
-      }
-      selected.push(obj);
-      if (selected.length >= limit) {
-        break;
-      }
+    const selection = selectWorldObjectsViaSimCore({
+      objects: state.worldObjects.active,
+      tileFlags: state.worldObjects.tileFlags,
+      hasX,
+      x: wx,
+      hasY,
+      y: wy,
+      hasZ,
+      z: wzRaw,
+      radius,
+      projection,
+      limit
+    });
+    if (!selection.ok) {
+      sendError(res, 500, "world_query_bridge_failed", String(selection.message || "world query bridge failed"));
+      return;
     }
+    const byKey = new Map();
+    for (const obj of state.worldObjects.active) {
+      const key = String(obj.object_key || "");
+      if (key) byKey.set(key, obj);
+    }
+    const selected = selection.keys.map((k) => byKey.get(String(k))).filter(Boolean);
     const diagResult = analyzeContainmentChainsBatchViaSimCore(state.worldObjects.active, selected);
     if (!diagResult.ok) {
       sendError(res, 500, "assoc_batch_bridge_failed", String(diagResult.message || "assoc-chain batch bridge failed"));
