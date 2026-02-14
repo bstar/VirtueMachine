@@ -16,6 +16,10 @@ if(BASH_PROGRAM)
     NAME tools_compare_checkpoints_test
     COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_compare_checkpoints.sh
   )
+  add_test(
+    NAME tools_legacy_ui_anchors_test
+    COMMAND ${BASH_PROGRAM} ${CMAKE_SOURCE_DIR}/modern/tools/test_legacy_ui_anchors.sh
+  )
 endif()
 
 find_program(NODE_PROGRAM node)

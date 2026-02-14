@@ -184,10 +184,11 @@ Status legend for this section:
 
 Slices:
 
-- `[ ]` U0: Deterministic UI Parity Mode
+- `[~]` U0: Deterministic UI Parity Mode
   - fixed camera/frame capture mode
   - deterministic sample-state loader (inventory, party, paperdoll, messages)
   - one-command probe runner for panel states (screenshot capture optional)
+  - legacy-code-first UI anchor matrix documented and test-guarded (`docs/wiki/17-ui-canonical-legacy-matrix.md`, `modern/tools/extract_legacy_ui_anchors.sh`, `modern/tools/test_legacy_ui_anchors.sh`)
 - `[ ]` U1: Inventory Panel Canonical Harness
   - slot layout/hitbox baselines
   - drag/drop/equip target probes

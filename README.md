@@ -103,6 +103,7 @@ The technical wiki now includes deeper architecture coverage, interactive refere
 - Render pipeline deep dive + flow diagram: `docs/wiki/03-rendering-pipeline-deep-dive.md`
 - API/UI realtime sync deep dive + topology/sequence diagrams: `docs/wiki/14-api-ui-realtime-sync.md`
 - OpenAPI-style endpoint reference (human-readable): `docs/wiki/15-api-endpoint-reference.md`
+- UI canonical legacy matrix for panel-parity work: `docs/wiki/17-ui-canonical-legacy-matrix.md`
 
 UI integration:
 

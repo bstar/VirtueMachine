@@ -145,6 +145,7 @@ Parallel ambitious track (mechanics gate):
   - deterministic parity mode
   - inventory/paperdoll/party/message-log harnesses
   - canonical-vs-modern UI tagging and enforcement
+  - started: legacy-code UI canonical anchor matrix + extractor/test guard
 
 ## Why This Roadmap Prevents Future Grind
 
