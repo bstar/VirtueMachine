@@ -164,6 +164,10 @@ Recently landed:
   - render-pipeline diagram embedded in the render deep dive
   - full endpoint reference page documenting live net API semantics
 
+Latest screenshot:
+
+![Latest VirtueMachine screenshot](docs/images/latest-screenshot-2026-02-14-00-40-16.png)
+
 If commands fail due to sandbox restrictions in assistant-driven sessions, follow:
 
 - `docs/policies/sandbox-escalation-policy.md`
