@@ -5093,7 +5093,7 @@ function buildLegacyViewContext(startX, startY, wz) {
     return null;
   }
 
-  const PAD = 1;
+  const PAD = 4;
   const W = VIEW_W + (PAD * 2);
   const H = VIEW_H + (PAD * 2);
   const C_X = PAD + (VIEW_W >> 1);
@@ -5108,6 +5108,17 @@ function buildLegacyViewContext(startX, startY, wz) {
   const baseTiles = Array.from({ length: H }, () => new Uint16Array(W));
   const flags = Array.from({ length: H }, () => new Uint8Array(W));
   const open = Array.from({ length: H }, () => new Uint8Array(W));
+  const areaLight = Array.from({ length: H }, () => new Uint8Array(W));
+  const LEGACY_LIGHT_FALLOFF = [
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [1, 1, 2, 3, 4, 5, 6, 7],
+    [2, 2, 3, 4, 5, 6, 6, 7],
+    [3, 3, 4, 4, 5, 6, 7, 8],
+    [4, 4, 5, 5, 6, 7, 7, 8],
+    [5, 5, 6, 6, 7, 7, 8, 9],
+    [6, 6, 6, 7, 7, 8, 8, 9],
+    [7, 7, 7, 8, 8, 9, 9, 10]
+  ];
 
   const tileFlagsFor = (tileId) => {
     if (!state.tileFlags) {
@@ -5116,6 +5127,35 @@ function buildLegacyViewContext(startX, startY, wz) {
     return state.tileFlags[tileId & 0x7ff] ?? 0;
   };
   const inBounds = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const clampToLegacyLightRange = (n) => {
+    const v = n | 0;
+    if (v < 0) return 0;
+    if (v > 4) return 4;
+    return v;
+  };
+  const ambientLightLevel = () => {
+    const world = state?.sim?.world || {};
+    const hour = Number(world.time_h) >>> 0;
+    const minute = Number(world.time_m) >>> 0;
+    const dateD = Number(world.date_d) >>> 0;
+    const dateM = Number(world.date_m) >>> 0;
+    const isEclipse = (dateD === 1) && ((dateM % 3) === 0);
+    if (isEclipse || !(hour >= 5 && hour <= 19) || (wz > 0 && wz < 5)) {
+      return 0;
+    }
+    if (hour === 5) {
+      return clampToLegacyLightRange(Math.floor(minute / 10) + 1);
+    }
+    if (hour === 19) {
+      return clampToLegacyLightRange(Math.floor((59 - minute) / 10) + 1);
+    }
+    return 7;
+  };
+  const legacyLightDistance = (dx, dy) => {
+    const ax = Math.min(7, Math.abs(dx | 0));
+    const ay = Math.min(7, Math.abs(dy | 0));
+    return LEGACY_LIGHT_FALLOFF[ax][ay] | 0;
+  };
   const markFlag = (x, y, bit) => {
     if (inBounds(x, y)) {
       flags[y][x] |= bit;
@@ -5156,6 +5196,13 @@ function buildLegacyViewContext(startX, startY, wz) {
       }
       if (isTileDoubleH(tileId)) {
         markFlag(gx - 1, gy, FLAG_WALL);
+      }
+    }
+    const sourceLight = tileFlagsFor(tileId) & 0x03;
+    if (sourceLight > 0 && inBounds(gx, gy)) {
+      const prior = flags[gy][gx] & 0x03;
+      if (prior < sourceLight) {
+        flags[gy][gx] = (flags[gy][gx] & ~0x03) | sourceLight;
       }
     }
   };
@@ -5243,6 +5290,41 @@ function buildLegacyViewContext(startX, startY, wz) {
     }
   }
 
+  const ambient = ambientLightLevel();
+  for (let gy = 0; gy < H; gy += 1) {
+    for (let gx = 0; gx < W; gx += 1) {
+      if ((flags[gy][gx] & FLAG_VISIBLE) === 0) {
+        continue;
+      }
+      const base = clampToLegacyLightRange(4 - legacyLightDistance(gx - C_X, gy - C_Y) + ambient);
+      areaLight[gy][gx] = (areaLight[gy][gx] + base) & 0xff;
+    }
+  }
+  if (ambient < 7) {
+    for (let sy = 0; sy < H; sy += 1) {
+      for (let sx = 0; sx < W; sx += 1) {
+        if ((flags[sy][sx] & FLAG_VISIBLE) === 0) {
+          continue;
+        }
+        const source = flags[sy][sx] & 0x03;
+        if (source <= 0) {
+          continue;
+        }
+        for (let gy = Math.max(0, sy - 3); gy <= Math.min(H - 1, sy + 3); gy += 1) {
+          for (let gx = Math.max(0, sx - 3); gx <= Math.min(W - 1, sx + 3); gx += 1) {
+            if ((flags[gy][gx] & FLAG_VISIBLE) === 0) {
+              continue;
+            }
+            const add = clampToLegacyLightRange(source - legacyLightDistance(gx - sx, gy - sy));
+            if (add > 0) {
+              areaLight[gy][gx] = (areaLight[gy][gx] + add) & 0xff;
+            }
+          }
+        }
+      }
+    }
+  }
+
   const visibleAtWorld = (wx, wy) => {
     const gx = wx - startX + PAD;
     const gy = wy - startY + PAD;
@@ -5267,8 +5349,16 @@ function buildLegacyViewContext(startX, startY, wz) {
     }
     return open[gy][gx] !== 0;
   };
+  const areaLightAtWorld = (wx, wy) => {
+    const gx = wx - startX + PAD;
+    const gy = wy - startY + PAD;
+    if (!inBounds(gx, gy)) {
+      return 0;
+    }
+    return areaLight[gy][gx] | 0;
+  };
 
-  return { visibleAtWorld, wallAtWorld, openAtWorld };
+  return { visibleAtWorld, wallAtWorld, openAtWorld, areaLightAtWorld };
 }
 
 function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
@@ -5786,10 +5876,11 @@ function legacyLensSpecForObject(obj) {
   return null;
 }
 
-function legacyAreaLightAtWorld(_wx, _wy, _wz) {
-  /* AreaLight parity hook: runtime does not yet expose canonical AreaLight[][].
-     Keep disabled until that data source is available. */
-  return 0;
+function legacyAreaLightAtWorld(viewCtx, wx, wy, _wz) {
+  if (!viewCtx || typeof viewCtx.areaLightAtWorld !== "function") {
+    return 0;
+  }
+  return viewCtx.areaLightAtWorld(wx, wy) | 0;
 }
 
 function injectLegacyOverlaySpecials(ctx) {
@@ -5848,7 +5939,7 @@ function injectLegacyOverlaySpecials(ctx) {
     for (let gx = 0; gx < viewW; gx += 1) {
       const wx = startX + gx;
       const wy = startY + gy;
-      const light = legacyAreaLightAtWorld(wx, wy, wz) | 0;
+      const light = legacyAreaLightAtWorld(viewCtx, wx, wy, wz) | 0;
       if (light > 0 && light < 4) {
         const tileId = (0x1bc + light) & 0xffff;
         insertWorldTile(wx, wy, tileId, 3, {
