@@ -52,6 +52,8 @@ Environment variables:
 - `VM_EMAIL_SMTP_REJECT_UNAUTHORIZED` (`on`/`off`, default `on`)
 - `VM_EMAIL_RESEND_API_KEY` (required for `resend` mode)
 - `VM_EMAIL_RESEND_BASE_URL` (default `https://api.resend.com/emails`)
+- `VM_SIM_CORE_INTERACT_BIN` (path to `sim_core_world_interact_bridge`; required unless `VM_SIM_CORE_INTERACT_REQUIRED=off`)
+- `VM_SIM_CORE_INTERACT_REQUIRED` (`on`/`off`, default `on`; when `on`, server startup fails if bridge binary is unavailable)
 
 Example (Resend):
 
@@ -101,6 +103,7 @@ Authenticated (Bearer token):
 - `PUT /api/world/critical-items/policy`
 - `POST /api/world/critical-items/maintenance`
 - `GET /api/world/objects` (server-authoritative world object query; supports `x,y,z,radius,limit,projection,include_footprint`)
+- `POST /api/world/objects/interact` (authoritative object interaction mutations: `take`, `drop`, `put`, `equip`)
 - `POST /api/world/objects/reset` (reset world object deltas to baseline)
 - `POST /api/world/objects/reload-baseline` (reload immutable baseline from `VM_NET_OBJECT_BASELINE_DIR` and clear deltas)
 
@@ -112,6 +115,7 @@ World object authority note:
 - server loads baseline world objects from `VM_NET_OBJECT_BASELINE_DIR` (`objblk??` + `objlist`) and uses runtime `basetile` for tile mapping
 - deltas are persisted in `modern/net/data/world_object_deltas.json`
 - use `/api/world/objects` for explicit server truth during parity debugging
+- interaction responses include `interaction_checkpoint` (`seq`, `hash`) so repeated command streams can be replay-checked for determinism
  - `projection=anchor` filters by legacy anchor cells
  - `projection=footprint` filters by occupied footprint cells (double-width/height expansion)
 

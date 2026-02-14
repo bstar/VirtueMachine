@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 
 const ROOT = path.resolve(new URL("../../../..", import.meta.url).pathname);
 const SERVER_JS = path.join(ROOT, "modern/net/server.js");
+const SIM_CORE_INTERACT_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_interact_bridge");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,8 +44,17 @@ function coordUseOfStatus(status) {
   return (Number(status) & 0x18) >>> 0;
 }
 
+const OBJ_COORD_USE_LOCXYZ = 0x00;
+const OBJ_COORD_USE_CONTAINED = 0x08;
+const OBJ_COORD_USE_INVEN = 0x10;
+const OBJ_COORD_USE_EQUIP = 0x18;
+
 function isStatus0010(status) {
   return (Number(status) & 0x10) !== 0;
+}
+
+function findObjectByKey(list, key) {
+  return (Array.isArray(list) ? list : []).find((o) => String(o?.object_key || "") === String(key || "")) || null;
 }
 
 function compareLegacyWorldObjectOrder(a, b) {
@@ -82,6 +92,7 @@ async function main() {
       VM_NET_HOST: host,
       VM_NET_PORT: String(port),
       VM_NET_DATA_DIR: dataDir,
+      VM_SIM_CORE_INTERACT_BIN: SIM_CORE_INTERACT_BIN,
       VM_EMAIL_MODE: "log"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -162,6 +173,119 @@ async function main() {
       );
     }
 
+    const lifecycleObjects = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(lifecycleObjects.status, 200);
+    assert.ok(Array.isArray(lifecycleObjects.body?.objects));
+    const targets = lifecycleObjects.body.objects.filter((o) => coordUseOfStatus(o.status) === OBJ_COORD_USE_LOCXYZ);
+    assert.ok(targets.length >= 2, "need at least two LOCXYZ objects for interaction lifecycle contract test");
+    const targetKey = String(targets[0].object_key || "");
+    const containerKey = String(targets[1].object_key || "");
+    assert.ok(targetKey && containerKey && targetKey !== containerKey, "target/container keys must be distinct");
+    const actorX = Number(targets[0].x) | 0;
+    const actorY = Number(targets[0].y) | 0;
+    const actorZ = Number(targets[0].z) | 0;
+
+    async function runInteractionLifecycle() {
+      const take = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "take",
+          target_key: targetKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(take.status, 200);
+      assert.equal(coordUseOfStatus(take.body?.target?.status), OBJ_COORD_USE_INVEN);
+      assert.equal(String(take.body?.target?.holder_kind || ""), "npc");
+      assert.equal(String(take.body?.target?.holder_id || ""), "contract-avatar");
+      assert.ok(Number(take.body?.interaction_checkpoint?.seq) >= 1);
+      assert.ok(String(take.body?.interaction_checkpoint?.hash || "").length > 0);
+
+      const equip = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "equip",
+          target_key: targetKey,
+          actor_id: "contract-avatar"
+        })
+      });
+      assert.equal(equip.status, 200);
+      assert.equal(coordUseOfStatus(equip.body?.target?.status), OBJ_COORD_USE_EQUIP);
+
+      const put = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "put",
+          target_key: targetKey,
+          container_key: containerKey,
+          actor_id: "contract-avatar"
+        })
+      });
+      assert.equal(put.status, 200);
+      assert.equal(coordUseOfStatus(put.body?.target?.status), OBJ_COORD_USE_CONTAINED);
+      assert.equal(String(put.body?.target?.holder_kind || ""), "object");
+      assert.equal(String(put.body?.target?.holder_key || ""), containerKey);
+
+      const takeAgain = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "take",
+          target_key: targetKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(takeAgain.status, 200);
+      assert.equal(coordUseOfStatus(takeAgain.body?.target?.status), OBJ_COORD_USE_INVEN);
+      assert.equal(String(takeAgain.body?.target?.holder_kind || ""), "npc");
+
+      const drop = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "drop",
+          target_key: targetKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(drop.status, 200);
+      assert.equal(coordUseOfStatus(drop.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
+      assert.equal(String(drop.body?.target?.holder_kind || ""), "none");
+      assert.equal(Number(drop.body?.interaction_checkpoint?.seq), 5);
+      assert.ok(String(drop.body?.interaction_checkpoint?.hash || "").length > 0);
+      return {
+        seq: Number(drop.body?.interaction_checkpoint?.seq) | 0,
+        hash: String(drop.body?.interaction_checkpoint?.hash || "")
+      };
+    }
+
+    const lifecycleRun1 = await runInteractionLifecycle();
+
+    const worldObjectsAfterLifecycle = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(worldObjectsAfterLifecycle.status, 200);
+    const targetAfter = findObjectByKey(worldObjectsAfterLifecycle.body?.objects, targetKey);
+    assert.ok(targetAfter, "target object must remain addressable by object_key after lifecycle");
+    assert.equal(coordUseOfStatus(targetAfter.status), OBJ_COORD_USE_LOCXYZ);
+    assert.equal(String(targetAfter.holder_kind || ""), "none");
+
     const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", {
       method: "POST",
       headers: authHeaders,
@@ -169,6 +293,19 @@ async function main() {
     });
     assert.equal(worldObjectsReset.status, 200);
     assert.equal(worldObjectsReset.body?.ok, true);
+    assert.equal(Number(worldObjectsReset.body?.interaction_checkpoint?.seq), 0);
+
+    const lifecycleRun2 = await runInteractionLifecycle();
+    assert.equal(lifecycleRun2.seq, lifecycleRun1.seq);
+    assert.equal(lifecycleRun2.hash, lifecycleRun1.hash, "interaction checkpoint hash should be deterministic across reset+replay");
+
+    const worldObjectsResetAfterReplay = await jsonFetch(baseUrl, "/api/world/objects/reset", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({})
+    });
+    assert.equal(worldObjectsResetAfterReplay.status, 200);
+    assert.equal(worldObjectsResetAfterReplay.body?.ok, true);
 
     const sendVerify = await jsonFetch(baseUrl, "/api/auth/send-email-verification", {
       method: "POST",

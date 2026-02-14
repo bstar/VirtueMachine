@@ -5,14 +5,18 @@ Authoritative simulation prototype with deterministic tick stepping.
 ## Files
 
 - `include/sim_core.h`: API and simulation data types.
-- `include/u6_entities.h`: typed object/NPC subset containers and persistence helpers.
-- `include/u6_interaction.h`: deterministic interaction request/result boundary for talk/use/open flows.
+- `include/u6_entities.h`: typed object/NPC subset containers and persistence helpers (including object coord-use status + holder links).
+- `include/u6_interaction.h`: deterministic interaction request/result boundary for talk/use/open/take/drop/put/equip flows.
 - `include/u6_objlist.h`: legacy `savegame/objlist` compatibility constants and helpers.
+- `include/u6_objstatus.h`: canonical object status decode/transition API (`LOCXYZ`, `CONTAINED`, `INVEN`, `EQUIP`).
+- `include/u6_world_interact_bridge.h`: canonical world-object interaction transition contract shared with net bridge.
 - `include/u6_objblk.h`: legacy `savegame/objblk??` read-only parse/load helpers for static world objects.
 - `include/u6_map.h`: legacy `map`/`chunks` read-only compatibility API.
 - `src/sim_core.c`: deterministic tick loop, command application, state hash.
 - `src/u6_entities.c`: typed entity state helpers, deterministic patrol stepping, subset serialization.
-- `src/u6_interaction.c`: deterministic interaction flow handlers and result codes.
+- `src/u6_interaction.c`: deterministic interaction flow handlers and result codes, including canonical status transitions for inventory/equip/contained/world moves.
+- `src/u6_objstatus.c`: canonical coord-use status transitions and predicates shared by loaders/interactions.
+- `src/u6_world_interact_bridge.c`: canonical status/holder transition engine for `take/drop/equip/put`.
 - `src/u6_objlist.c`: extract/patch helpers for the legacy `objlist` tail block.
 - `src/u6_objblk.c`: read-only object-block parser/loader and deterministic render-order sort helper.
 - `src/u6_map.c`: read-only map window loading, chunk index decode, chunk/tile reads.
@@ -20,13 +24,16 @@ Authoritative simulation prototype with deterministic tick stepping.
 - `tests/test_world_state_io.c`: world state serialization/deserialization + hash invariants.
 - `tests/test_objlist_compat.c`: legacy `objlist` compatibility and malformed-input checks.
 - `tests/test_u6_objblk.c`: `objblk` parse/load and deterministic ordering fixture tests.
+- `tests/test_u6_objstatus.c`: exhaustive object status transition matrix tests.
+- `tests/test_u6_world_interact_bridge.c`: canonical world-interaction transition table tests.
+- `tools/world_interact_bridge_cli.c`: CLI wrapper used by net server bridge for canonical mutation decisions.
 - `tests/test_u6_map.c`: synthetic fixture validation for map/chunk compatibility.
 - `tests/test_clock_rollover.c`: deterministic minute/hour/day/month/year rollover regression tests.
 - `tests/test_snapshot_persistence.c`: versioned snapshot roundtrip + corruption/error-path tests.
 - `tests/test_command_envelope.c`: command wire envelope serialize/deserialize tests.
 - `tests/test_replay_checkpoints.c`: deterministic replay checkpoint log generation tests.
 - `tests/test_entities.c`: typed object/NPC placement/update and subset save/load roundtrip tests.
-- `tests/test_interaction.c`: deterministic talk/use/open flow fixtures (success and failure paths).
+- `tests/test_interaction.c`: deterministic interaction fixtures for talk/use/open plus take/equip/put/drop sequences and failure guards.
 
 ## Intent
 

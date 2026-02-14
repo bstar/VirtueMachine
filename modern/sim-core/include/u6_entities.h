@@ -8,9 +8,9 @@ enum {
   U6M_MAX_OBJECTS = 256,
   U6M_MAX_NPCS = 64,
   U6M_ENTITY_MAGIC = 0x4e453655u, /* U6EN */
-  U6M_ENTITY_VERSION = 1,
+  U6M_ENTITY_VERSION = 2,
   U6M_ENTITY_HEADER_SIZE = 12,
-  U6M_ENTITY_OBJECT_SIZE = 12,
+  U6M_ENTITY_OBJECT_SIZE = 16,
   U6M_ENTITY_NPC_SIZE = 13
 };
 
@@ -24,7 +24,14 @@ enum {
   U6_OBJECT_FLAG_USABLE = 1u << 0,
   U6_OBJECT_FLAG_OPENABLE = 1u << 1,
   U6_OBJECT_FLAG_OPEN = 1u << 2,
-  U6_OBJECT_FLAG_LOCKED = 1u << 3
+  U6_OBJECT_FLAG_LOCKED = 1u << 3,
+  U6_OBJECT_FLAG_EQUIPPABLE = 1u << 4
+};
+
+enum {
+  U6_OBJECT_HOLDER_NONE = 0,
+  U6_OBJECT_HOLDER_OBJECT = 1,
+  U6_OBJECT_HOLDER_NPC = 2
 };
 
 typedef struct U6ObjectState {
@@ -35,6 +42,9 @@ typedef struct U6ObjectState {
   int16_t map_z;
   uint8_t quantity;
   uint8_t flags;
+  uint8_t status;
+  uint8_t holder_kind;
+  uint16_t holder_id;
 } U6ObjectState;
 
 enum {

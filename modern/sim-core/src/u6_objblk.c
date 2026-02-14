@@ -1,11 +1,10 @@
 #include "u6_objblk.h"
+#include "u6_objstatus.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define U6_COORD_USE_MASK 0x18u
-#define U6_COORD_USE_LOCXYZ 0x00u
 #define U6_OBJ_STATUS_0010 0x10u
 
 static uint16_t read_u16_le(const uint8_t *p) {
@@ -19,11 +18,11 @@ static void decode_coord(const uint8_t *p, uint16_t *out_x, uint16_t *out_y, uin
 }
 
 int u6_objblk_is_locxyz(uint8_t status) {
-  return (status & U6_COORD_USE_MASK) == 0;
+  return u6_obj_status_is_locxyz(status);
 }
 
 static uint8_t coord_use(uint8_t status) {
-  return (uint8_t)(status & U6_COORD_USE_MASK);
+  return u6_obj_status_coord_use(status);
 }
 
 static int is_status_0010(uint8_t status) {
@@ -210,10 +209,10 @@ static int compare_render_order(const void *lhs, const void *rhs) {
    * Legacy comparator relation (C_1184_29C4): non-LOCXYZ chains compare
    * ahead of LOCXYZ roots in mixed comparisons.
    */
-  if (a_use != U6_COORD_USE_LOCXYZ && b_use == U6_COORD_USE_LOCXYZ) {
+  if (a_use != U6_OBJ_COORD_USE_LOCXYZ && b_use == U6_OBJ_COORD_USE_LOCXYZ) {
     return -1;
   }
-  if (b_use != U6_COORD_USE_LOCXYZ && a_use == U6_COORD_USE_LOCXYZ) {
+  if (b_use != U6_OBJ_COORD_USE_LOCXYZ && a_use == U6_OBJ_COORD_USE_LOCXYZ) {
     return 1;
   }
   if (a->y != b->y) {

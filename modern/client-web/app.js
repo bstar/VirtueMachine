@@ -7594,7 +7594,7 @@ async function copyHoverReportToClipboard(options = {}) {
                 ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
                 : "";
               rows.push(
-                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} lord=${Number(o.legacy_order || 0) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
+                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} hk=${String(o.holder_kind || "none")} hid=${String(o.holder_id || "")} hkey=${String(o.holder_key || "")} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} lord=${Number(o.legacy_order || 0) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
               );
             }
           }

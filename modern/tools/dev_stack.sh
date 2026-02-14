@@ -18,6 +18,8 @@ VM_NET_PORT="${VM_NET_PORT:-8081}"
 VM_NET_DATA_DIR="${VM_NET_DATA_DIR:-$ROOT_DIR/modern/net/data}"
 VM_NET_RUNTIME_DIR="${VM_NET_RUNTIME_DIR:-}"
 VM_NET_OBJECT_BASELINE_DIR="${VM_NET_OBJECT_BASELINE_DIR:-$ROOT_DIR/modern/assets/pristine/savegame}"
+VM_SIM_CORE_INTERACT_BIN="${VM_SIM_CORE_INTERACT_BIN:-$ROOT_DIR/build/modern/sim-core/sim_core_world_interact_bridge}"
+VM_SIM_CORE_INTERACT_REQUIRED="${VM_SIM_CORE_INTERACT_REQUIRED:-on}"
 VM_EMAIL_MODE="${VM_EMAIL_MODE:-resend}"
 VM_EMAIL_FROM="${VM_EMAIL_FROM:-no-reply@virtuemachine.local}"
 VM_EMAIL_SMTP_HOST="${VM_EMAIL_SMTP_HOST:-127.0.0.1}"
@@ -57,6 +59,11 @@ trap cleanup INT TERM EXIT
 
 cd "$ROOT_DIR"
 
+if [[ ! -x "$VM_SIM_CORE_INTERACT_BIN" ]]; then
+  cmake -S "$ROOT_DIR" -B "${U6M_BUILD_DIR:-$ROOT_DIR/build}" -G Ninja >/dev/null
+  cmake --build "${U6M_BUILD_DIR:-$ROOT_DIR/build}" --target sim_core_world_interact_bridge >/dev/null
+fi
+
 python3 "$ROOT_DIR/modern/tools/secure_web_server.py" \
   --root "$ROOT_DIR" \
   --bind "$DEV_WEB_BIND" \
@@ -65,6 +72,7 @@ python3 "$ROOT_DIR/modern/tools/secure_web_server.py" \
 WEB_PID=$!
 
 VM_NET_HOST="$VM_NET_HOST" VM_NET_PORT="$VM_NET_PORT" VM_NET_DATA_DIR="$VM_NET_DATA_DIR" VM_NET_RUNTIME_DIR="$VM_NET_RUNTIME_DIR" VM_NET_OBJECT_BASELINE_DIR="$VM_NET_OBJECT_BASELINE_DIR" \
+VM_SIM_CORE_INTERACT_BIN="$VM_SIM_CORE_INTERACT_BIN" VM_SIM_CORE_INTERACT_REQUIRED="$VM_SIM_CORE_INTERACT_REQUIRED" \
 VM_EMAIL_MODE="$VM_EMAIL_MODE" VM_EMAIL_FROM="$VM_EMAIL_FROM" \
 VM_EMAIL_SMTP_HOST="$VM_EMAIL_SMTP_HOST" VM_EMAIL_SMTP_PORT="$VM_EMAIL_SMTP_PORT" VM_EMAIL_SMTP_SECURE="$VM_EMAIL_SMTP_SECURE" \
 VM_EMAIL_SMTP_USER="$VM_EMAIL_SMTP_USER" VM_EMAIL_SMTP_PASS="$VM_EMAIL_SMTP_PASS" \
@@ -91,6 +99,7 @@ Web client: http://${DEV_WEB_BIND}:${DEV_WEB_PORT}/modern/client-web/
 Net API:    http://${VM_NET_HOST}:${VM_NET_PORT}/health
 Runtime:    ${VM_NET_RUNTIME_DIR}
 Baseline:   ${VM_NET_OBJECT_BASELINE_DIR}
+Interact:   ${VM_SIM_CORE_INTERACT_BIN} (required=${VM_SIM_CORE_INTERACT_REQUIRED})
 Email:      mode=${VM_EMAIL_MODE} smtp=${VM_EMAIL_SMTP_HOST}:${VM_EMAIL_SMTP_PORT} secure=${VM_EMAIL_SMTP_SECURE}
             resend=${VM_EMAIL_RESEND_BASE_URL} key=$([[ -n "${VM_EMAIL_RESEND_API_KEY}" ]] && echo set || echo missing)
 Logs:

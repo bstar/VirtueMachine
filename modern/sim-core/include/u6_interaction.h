@@ -8,7 +8,11 @@
 typedef enum U6InteractionVerb {
   U6_INTERACT_TALK = 1,
   U6_INTERACT_USE = 2,
-  U6_INTERACT_OPEN = 3
+  U6_INTERACT_OPEN = 3,
+  U6_INTERACT_TAKE = 4,
+  U6_INTERACT_DROP = 5,
+  U6_INTERACT_PUT = 6,
+  U6_INTERACT_EQUIP = 7
 } U6InteractionVerb;
 
 typedef enum U6InteractionResultCode {
@@ -25,13 +29,18 @@ typedef enum U6InteractionEvent {
   U6_EVENT_TALKED = 1,
   U6_EVENT_USED = 2,
   U6_EVENT_OPENED = 3,
-  U6_EVENT_ALREADY_OPEN = 4
+  U6_EVENT_ALREADY_OPEN = 4,
+  U6_EVENT_TOOK = 5,
+  U6_EVENT_DROPPED = 6,
+  U6_EVENT_PUT = 7,
+  U6_EVENT_EQUIPPED = 8
 } U6InteractionEvent;
 
 typedef struct U6InteractionRequest {
   U6InteractionVerb verb;
   uint16_t actor_npc_id;
   uint16_t target_id;
+  uint16_t aux_target_id;
 } U6InteractionRequest;
 
 typedef struct U6InteractionResult {

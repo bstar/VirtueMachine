@@ -6,6 +6,10 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const net = require("node:net");
 const tls = require("node:tls");
+const {
+  coordUseOfStatus,
+  applyCanonicalWorldInteractionCommand
+} = require("./world_interaction_bridge");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -42,7 +46,8 @@ const FILES = {
   worldClock: path.join(DATA_DIR, "world_clock.json"),
   criticalPolicy: path.join(DATA_DIR, "critical_item_policy.json"),
   recoveriesLog: path.join(DATA_DIR, "critical_item_recoveries.log"),
-  worldObjectDeltas: path.join(DATA_DIR, "world_object_deltas.json")
+  worldObjectDeltas: path.join(DATA_DIR, "world_object_deltas.json"),
+  worldInteractionLog: path.join(DATA_DIR, "world_interaction_log.json")
 };
 
 function nowIso() {
@@ -340,7 +345,10 @@ function parseObjBlkRecords(bytes, areaId, baseTileMap) {
       tile_id: tileId & 0xffff,
       x: pos.x & 0x3ff,
       y: pos.y & 0x3ff,
-      z: pos.z & 0x0f
+      z: pos.z & 0x0f,
+      holder_kind: "none",
+      holder_id: "",
+      holder_key: ""
     });
   }
   for (const row of decoded) {
@@ -466,7 +474,11 @@ function normalizeWorldObjectDeltas(raw) {
       out.moved[String(k)] = {
         x: Number(v.x) | 0,
         y: Number(v.y) | 0,
-        z: Number(v.z) | 0
+        z: Number(v.z) | 0,
+        status: Number.isFinite(Number(v.status)) ? (Number(v.status) & 0xff) : null,
+        holder_kind: String(v.holder_kind || "none"),
+        holder_id: String(v.holder_id || ""),
+        holder_key: String(v.holder_key || "")
       };
     }
   }
@@ -485,7 +497,10 @@ function normalizeWorldObjectDeltas(raw) {
         tile_id: Number(v.tile_id) & 0xffff,
         x: Number(v.x) | 0,
         y: Number(v.y) | 0,
-        z: Number(v.z) | 0
+        z: Number(v.z) | 0,
+        holder_kind: String(v.holder_kind || "none"),
+        holder_id: String(v.holder_id || ""),
+        holder_key: String(v.holder_key || "")
       }));
   }
   return out;
@@ -509,10 +524,6 @@ function objectFootprintCells(obj, tileFlags) {
     out.push({ x: x - 1, y: y - 1, z });
   }
   return out;
-}
-
-function coordUseOfStatus(status) {
-  return (Number(status) & 0x18) >>> 0;
 }
 
 function isStatus0010(status) {
@@ -568,6 +579,10 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
         x: moved.x | 0,
         y: moved.y | 0,
         z: moved.z | 0,
+        status: Number.isFinite(Number(moved.status)) ? (Number(moved.status) & 0xff) : (Number(b.status) & 0xff),
+        holder_kind: String(moved.holder_kind || b.holder_kind || "none"),
+        holder_id: String(moved.holder_id || b.holder_id || ""),
+        holder_key: String(moved.holder_key || b.holder_key || ""),
         source_kind: "baseline_moved"
       });
     } else {
@@ -601,9 +616,133 @@ function worldObjectMeta(state) {
   };
 }
 
+function findActiveObjectByKey(state, objectKey) {
+  const key = String(objectKey || "");
+  if (!key) {
+    return null;
+  }
+  return state.worldObjects.active.find((o) => String(o.object_key || "") === key) || null;
+}
+
+function persistPatchedObject(state, obj) {
+  if (!obj || !obj.object_key) {
+    return;
+  }
+  if (String(obj.source_kind || "").startsWith("spawned")) {
+    const si = state.worldObjects.deltas.spawned.findIndex((s) => String(s.object_key || "") === String(obj.object_key));
+    if (si >= 0) {
+      state.worldObjects.deltas.spawned[si] = {
+        ...state.worldObjects.deltas.spawned[si],
+        x: obj.x | 0,
+        y: obj.y | 0,
+        z: obj.z | 0,
+        status: Number(obj.status) & 0xff,
+        holder_kind: String(obj.holder_kind || "none"),
+        holder_id: String(obj.holder_id || ""),
+        holder_key: String(obj.holder_key || "")
+      };
+    }
+    return;
+  }
+  state.worldObjects.deltas.moved[String(obj.object_key)] = {
+    x: obj.x | 0,
+    y: obj.y | 0,
+    z: obj.z | 0,
+    status: Number(obj.status) & 0xff,
+    holder_kind: String(obj.holder_kind || "none"),
+    holder_id: String(obj.holder_id || ""),
+    holder_key: String(obj.holder_key || "")
+  };
+}
+
+function defaultWorldInteractionLog() {
+  return {
+    schema_version: 1,
+    seq: 0,
+    checkpoint_hash: "",
+    events: []
+  };
+}
+
+function normalizeWorldInteractionLog(raw) {
+  const base = defaultWorldInteractionLog();
+  if (!raw || typeof raw !== "object") {
+    return base;
+  }
+  base.schema_version = Number(raw.schema_version) === 1 ? 1 : 1;
+  base.seq = Math.max(0, Number(raw.seq) | 0);
+  base.checkpoint_hash = String(raw.checkpoint_hash || "");
+  if (Array.isArray(raw.events)) {
+    base.events = raw.events.slice(-512).map((e) => ({
+      seq: Number(e?.seq) | 0,
+      verb: String(e?.verb || ""),
+      actor_id: String(e?.actor_id || ""),
+      target_key: String(e?.target_key || ""),
+      container_key: String(e?.container_key || ""),
+      status: Number(e?.status) & 0xff,
+      x: Number(e?.x) | 0,
+      y: Number(e?.y) | 0,
+      z: Number(e?.z) | 0,
+      holder_kind: String(e?.holder_kind || "none"),
+      holder_id: String(e?.holder_id || ""),
+      holder_key: String(e?.holder_key || "")
+    }));
+  }
+  return base;
+}
+
+function hashInteractionEvent(prevHash, event) {
+  const stable = [
+    String(prevHash || ""),
+    String(event.seq | 0),
+    String(event.verb || ""),
+    String(event.actor_id || ""),
+    String(event.target_key || ""),
+    String(event.container_key || ""),
+    String(Number(event.status) & 0xff),
+    String(Number(event.x) | 0),
+    String(Number(event.y) | 0),
+    String(Number(event.z) | 0),
+    String(event.holder_kind || "none"),
+    String(event.holder_id || ""),
+    String(event.holder_key || "")
+  ].join("|");
+  return crypto.createHash("sha256").update(stable, "utf8").digest("hex");
+}
+
+function recordWorldInteractionEvent(state, event) {
+  const log = state.worldInteractionLog || defaultWorldInteractionLog();
+  const nextSeq = (Number(log.seq) | 0) + 1;
+  const row = {
+    seq: nextSeq | 0,
+    verb: String(event?.verb || ""),
+    actor_id: String(event?.actor_id || ""),
+    target_key: String(event?.target_key || ""),
+    container_key: String(event?.container_key || ""),
+    status: Number(event?.status) & 0xff,
+    x: Number(event?.x) | 0,
+    y: Number(event?.y) | 0,
+    z: Number(event?.z) | 0,
+    holder_kind: String(event?.holder_kind || "none"),
+    holder_id: String(event?.holder_id || ""),
+    holder_key: String(event?.holder_key || "")
+  };
+  log.checkpoint_hash = hashInteractionEvent(log.checkpoint_hash, row);
+  log.seq = nextSeq | 0;
+  log.events = Array.isArray(log.events) ? log.events : [];
+  log.events.push(row);
+  if (log.events.length > 512) {
+    log.events = log.events.slice(log.events.length - 512);
+  }
+  state.worldInteractionLog = log;
+  return row;
+}
+
 function reloadWorldObjectBaseline(state) {
   state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
   writeJson(FILES.worldObjectDeltas, []);
+  state.worldInteractionLog = defaultWorldInteractionLog();
+  writeJson(FILES.worldInteractionLog, state.worldInteractionLog);
 }
 
 function advanceWorldClockMinute(clock) {
@@ -667,7 +806,8 @@ function loadState() {
     presence: readJson(FILES.presence, []),
     worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
-    worldObjects
+    worldObjects,
+    worldInteractionLog: normalizeWorldInteractionLog(readJson(FILES.worldInteractionLog, defaultWorldInteractionLog()))
   };
   if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
     state.criticalPolicy = defaultCriticalPolicy();
@@ -716,6 +856,7 @@ function persistState(state) {
   writeJson(FILES.worldClock, state.worldClock);
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
   writeJson(FILES.worldObjectDeltas, state.worldObjects.deltas);
+  writeJson(FILES.worldInteractionLog, state.worldInteractionLog || defaultWorldInteractionLog());
 }
 
 function prunePresence(state, nowMs = Date.now()) {
@@ -1666,12 +1807,107 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/world/objects/interact") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const verb = String(body && body.verb || "").trim().toLowerCase();
+    const targetKey = String(body && body.target_key || "").trim();
+    const containerKey = String(body && body.container_key || "").trim();
+    const actorId = String(body && body.actor_id || user.user_id || "").trim();
+    const actorX = Number.isFinite(Number(body && body.actor_x)) ? (Number(body.actor_x) | 0) : null;
+    const actorY = Number.isFinite(Number(body && body.actor_y)) ? (Number(body.actor_y) | 0) : null;
+    const actorZ = Number.isFinite(Number(body && body.actor_z)) ? (Number(body.actor_z) | 0) : null;
+    const target = findActiveObjectByKey(state, targetKey);
+    if (!target) {
+      sendError(res, 404, "object_not_found", "target_key not found");
+      return;
+    }
+
+    const actorPos = {
+      x: actorX === null ? (target.x | 0) : actorX,
+      y: actorY === null ? (target.y | 0) : actorY,
+      z: actorZ === null ? (target.z | 0) : actorZ
+    };
+
+    const container = containerKey ? findActiveObjectByKey(state, containerKey) : null;
+    if (verb === "put" && !container) {
+      sendError(res, 404, "container_not_found", "container_key not found");
+      return;
+    }
+
+    const applied = applyCanonicalWorldInteractionCommand({
+      verb,
+      target,
+      container,
+      actorId,
+      actorPos
+    });
+    if (!applied.ok) {
+      sendError(
+        res,
+        applied.code === "bad_verb" ? 400 : (applied.code === "container_not_found" ? 404 : 409),
+        applied.code,
+        String(applied.message || "interaction failed")
+      );
+      return;
+    }
+
+    Object.assign(target, applied.patch || {});
+    persistPatchedObject(state, target);
+    const event = recordWorldInteractionEvent(state, {
+      verb,
+      actor_id: actorId,
+      target_key: String(target.object_key || ""),
+      container_key: String(container?.object_key || ""),
+      status: Number(target.status) & 0xff,
+      x: target.x | 0,
+      y: target.y | 0,
+      z: target.z | 0,
+      holder_kind: String(target.holder_kind || "none"),
+      holder_id: String(target.holder_id || ""),
+      holder_key: String(target.holder_key || "")
+    });
+
+    state.worldObjects.active.sort(compareLegacyWorldObjectOrder);
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      verb,
+      target: {
+        object_key: String(target.object_key || ""),
+        status: Number(target.status) & 0xff,
+        coord_use: coordUseOfStatus(target.status),
+        holder_kind: String(target.holder_kind || "none"),
+        holder_id: String(target.holder_id || ""),
+        holder_key: String(target.holder_key || ""),
+        x: target.x | 0,
+        y: target.y | 0,
+        z: target.z | 0
+      },
+      interaction_checkpoint: {
+        seq: Number(state.worldInteractionLog?.seq || event.seq || 0) >>> 0,
+        hash: String(state.worldInteractionLog?.checkpoint_hash || "")
+      },
+      meta: worldObjectMeta(state)
+    });
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/world/objects/reset") {
     reloadWorldObjectBaseline(state);
     persistState(state);
     sendJson(res, 200, {
       ok: true,
       reset_at: nowIso(),
+      interaction_checkpoint: {
+        seq: Number(state.worldInteractionLog?.seq || 0) >>> 0,
+        hash: String(state.worldInteractionLog?.checkpoint_hash || "")
+      },
       meta: worldObjectMeta(state)
     });
     return;
@@ -1683,6 +1919,10 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 200, {
       ok: true,
       reloaded_at: nowIso(),
+      interaction_checkpoint: {
+        seq: Number(state.worldInteractionLog?.seq || 0) >>> 0,
+        hash: String(state.worldInteractionLog?.checkpoint_hash || "")
+      },
       meta: worldObjectMeta(state)
     });
     return;

@@ -2,6 +2,8 @@ add_library(sim_core STATIC
   src/sim_core.c
   src/u6_entities.c
   src/u6_interaction.c
+  src/u6_objstatus.c
+  src/u6_world_interact_bridge.c
   src/u6_objblk.c
   src/u6_objlist.c
   src/u6_map.c
@@ -52,6 +54,22 @@ target_link_libraries(sim_core_u6_objblk_test PRIVATE sim_core)
 
 add_test(NAME sim_core_u6_objblk_test COMMAND sim_core_u6_objblk_test)
 
+add_executable(sim_core_u6_objstatus_test
+  tests/test_u6_objstatus.c
+)
+
+target_link_libraries(sim_core_u6_objstatus_test PRIVATE sim_core)
+
+add_test(NAME sim_core_u6_objstatus_test COMMAND sim_core_u6_objstatus_test)
+
+add_executable(sim_core_u6_world_interact_bridge_test
+  tests/test_u6_world_interact_bridge.c
+)
+
+target_link_libraries(sim_core_u6_world_interact_bridge_test PRIVATE sim_core)
+
+add_test(NAME sim_core_u6_world_interact_bridge_test COMMAND sim_core_u6_world_interact_bridge_test)
+
 add_executable(sim_core_clock_rollover_test
   tests/test_clock_rollover.c
 )
@@ -99,3 +117,9 @@ add_executable(sim_core_interaction_test
 target_link_libraries(sim_core_interaction_test PRIVATE sim_core)
 
 add_test(NAME sim_core_interaction_test COMMAND sim_core_interaction_test)
+
+add_executable(sim_core_world_interact_bridge
+  tools/world_interact_bridge_cli.c
+)
+
+target_link_libraries(sim_core_world_interact_bridge PRIVATE sim_core)

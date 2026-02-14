@@ -1,4 +1,5 @@
 #include "u6_entities.h"
+#include "u6_objstatus.h"
 
 #include <string.h>
 
@@ -66,6 +67,11 @@ int u6_entities_add_object(U6EntityState *state, const U6ObjectState *object_sta
     return -2;
   }
   state->objects[state->object_count] = *object_state;
+  if (state->objects[state->object_count].status == 0u
+      && state->objects[state->object_count].holder_kind == U6_OBJECT_HOLDER_NONE
+      && state->objects[state->object_count].holder_id == 0u) {
+    state->objects[state->object_count].status = u6_obj_status_to_locxyz(0u);
+  }
   state->object_count++;
   return 0;
 }
@@ -202,6 +208,9 @@ int u6_entities_serialize(const U6EntityState *state,
     write_i16_le(out + off + 8, obj->map_z);
     out[off + 10] = obj->quantity;
     out[off + 11] = obj->flags;
+    out[off + 12] = obj->status;
+    out[off + 13] = obj->holder_kind;
+    write_u16_le(out + off + 14, obj->holder_id);
     off += U6M_ENTITY_OBJECT_SIZE;
   }
 
@@ -269,6 +278,9 @@ int u6_entities_deserialize(U6EntityState *state, const uint8_t *in, size_t in_s
     obj->map_z = read_i16_le(in + off + 8);
     obj->quantity = in[off + 10];
     obj->flags = in[off + 11];
+    obj->status = in[off + 12];
+    obj->holder_kind = in[off + 13];
+    obj->holder_id = read_u16_le(in + off + 14);
     off += U6M_ENTITY_OBJECT_SIZE;
   }
 
