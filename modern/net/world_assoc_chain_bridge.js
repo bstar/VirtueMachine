@@ -18,6 +18,13 @@ function assocBinPath() {
   return path.join(__dirname, "..", "..", "build", "modern", "sim-core", "sim_core_assoc_chain_bridge");
 }
 
+function assocBatchBinPath() {
+  if (process.env.VM_SIM_CORE_ASSOC_BATCH_BIN) {
+    return String(process.env.VM_SIM_CORE_ASSOC_BATCH_BIN);
+  }
+  return path.join(__dirname, "..", "..", "build", "modern", "sim-core", "sim_core_assoc_chain_batch_bridge");
+}
+
 const ASSOC_REQUIRED = String(process.env.VM_SIM_CORE_ASSOC_REQUIRED || "on").trim().toLowerCase() !== "off";
 
 function assertAssocBridgeReady() {
@@ -37,6 +44,21 @@ function assertAssocBridgeReady() {
 }
 
 const ASSOC_BIN = assertAssocBridgeReady();
+const ASSOC_BATCH_BIN = (() => {
+  const bin = assocBatchBinPath();
+  try {
+    fs.accessSync(bin, fs.constants.X_OK);
+    return bin;
+  } catch (_err) {
+    if (ASSOC_REQUIRED) {
+      throw new Error(
+        `sim-core assoc-chain batch bridge binary is required but missing/unexecutable: ${bin}. `
+        + "Build target `sim_core_assoc_chain_batch_bridge` or set VM_SIM_CORE_ASSOC_BATCH_BIN."
+      );
+    }
+    return null;
+  }
+})();
 
 function holderKindName(v) {
   const k = String(v || "").toLowerCase();
@@ -96,6 +118,56 @@ function blockedByLabel(parsed) {
   return "max-depth";
 }
 
+function parseBatchBridgeOutput(stdout) {
+  const lines = String(stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const byTarget = new Map();
+  const re = /^target=(-?\d+)\s+code=(-?\d+)\s+root_anchor_key=(-?\d+)\s+blocked_by_key=(-?\d+)\s+chain_accessible=(\d+)\s+cycle_detected=(\d+)\s+missing_parent=(\d+)\s+parent_owned=(\d+)\s+chain=(.*)$/i;
+  for (const line of lines) {
+    const m = re.exec(line);
+    if (!m) {
+      return null;
+    }
+    const target = Number(m[1]) | 0;
+    const rawChain = String(m[9] || "").trim();
+    const chain = rawChain
+      ? rawChain.split(";").map((v) => String(Number.parseInt(v, 10))).filter((v) => v !== "NaN" && v !== "0")
+      : [];
+    byTarget.set(String(target), {
+      code: Number(m[2]) | 0,
+      root_anchor_key: Number(m[3]) | 0,
+      blocked_by_key: Number(m[4]) | 0,
+      chain_accessible: Number(m[5]) !== 0,
+      cycle_detected: Number(m[6]) !== 0,
+      missing_parent: Number(m[7]) !== 0,
+      parent_owned: Number(m[8]) !== 0,
+      assoc_chain: chain
+    });
+  }
+  return byTarget;
+}
+
+function diagnosticsFromParsed(targetObject, parsed) {
+  if (!parsed || (parsed.code | 0) !== 0) {
+    return {
+      assoc_chain: [],
+      root_anchor_key: "",
+      blocked_by: "invalid-object",
+      chain_accessible: false
+    };
+  }
+  let chainAccessible = parsed.chain_accessible;
+  const use = coordUseOfStatus(targetObject.status);
+  if (use !== OBJ_COORD_USE_CONTAINED) {
+    chainAccessible = use === OBJ_COORD_USE_LOCXYZ;
+  }
+  return {
+    assoc_chain: parsed.assoc_chain,
+    root_anchor_key: parsed.root_anchor_key ? String(parsed.root_anchor_key) : String(targetObject.object_key || ""),
+    blocked_by: blockedByLabel(parsed),
+    chain_accessible: chainAccessible
+  };
+}
+
 function analyzeContainmentChainViaSimCore(objects, targetObject) {
   const targetKey = Number.parseInt(String(targetObject?.object_key || "0"), 10) | 0;
   if (!targetObject || targetKey === 0) {
@@ -118,34 +190,46 @@ function analyzeContainmentChainViaSimCore(objects, targetObject) {
     return { ok: false, code: "assoc_bridge_parse_failed", message: "sim-core assoc-chain bridge emitted invalid output" };
   }
   if ((parsed.code | 0) !== 0) {
-    return {
-      ok: true,
-      value: {
-        assoc_chain: [],
-        root_anchor_key: "",
-        blocked_by: "invalid-object",
-        chain_accessible: false
-      }
-    };
+    return { ok: true, value: diagnosticsFromParsed(targetObject, parsed) };
   }
+  return { ok: true, value: diagnosticsFromParsed(targetObject, parsed) };
+}
 
-  let chainAccessible = parsed.chain_accessible;
-  const use = coordUseOfStatus(targetObject.status);
-  if (use !== OBJ_COORD_USE_CONTAINED) {
-    chainAccessible = use === OBJ_COORD_USE_LOCXYZ;
+function analyzeContainmentChainsBatchViaSimCore(objects, targetObjects) {
+  if (!Array.isArray(objects) || objects.length === 0) {
+    return { ok: false, code: "empty-world-objects", message: "no world objects provided for assoc-chain analysis" };
   }
-
-  return {
-    ok: true,
-    value: {
-      assoc_chain: parsed.assoc_chain,
-      root_anchor_key: parsed.root_anchor_key ? String(parsed.root_anchor_key) : String(targetObject.object_key || ""),
-      blocked_by: blockedByLabel(parsed),
-      chain_accessible: chainAccessible
-    }
-  };
+  if (!Array.isArray(targetObjects) || targetObjects.length === 0) {
+    return { ok: true, byKey: new Map() };
+  }
+  if (!ASSOC_BATCH_BIN) {
+    return { ok: false, code: "assoc_batch_bridge_unavailable", message: "sim-core assoc-chain batch bridge unavailable" };
+  }
+  const targetKeys = targetObjects
+    .map((o) => Number.parseInt(String(o?.object_key || "0"), 10) | 0)
+    .filter((k) => k !== 0);
+  if (targetKeys.length === 0) {
+    return { ok: false, code: "invalid-targets", message: "no valid target keys" };
+  }
+  const args = [targetKeys.join(","), ...objects.map((obj) => objectNodeArg(obj))];
+  const proc = spawnSync(ASSOC_BATCH_BIN, args, { encoding: "utf8", timeout: 8000, maxBuffer: 16 * 1024 * 1024 });
+  if (proc.error || (proc.status | 0) !== 0) {
+    return { ok: false, code: "assoc_batch_bridge_failed", message: "sim-core assoc-chain batch bridge execution failed" };
+  }
+  const parsedMap = parseBatchBridgeOutput(proc.stdout);
+  if (!parsedMap) {
+    return { ok: false, code: "assoc_batch_bridge_parse_failed", message: "sim-core assoc-chain batch bridge emitted invalid output" };
+  }
+  const byKey = new Map();
+  for (const obj of targetObjects) {
+    const key = String(obj?.object_key || "");
+    if (!key) continue;
+    byKey.set(key, diagnosticsFromParsed(obj, parsedMap.get(key)));
+  }
+  return { ok: true, byKey };
 }
 
 module.exports = {
-  analyzeContainmentChainViaSimCore
+  analyzeContainmentChainViaSimCore,
+  analyzeContainmentChainsBatchViaSimCore
 };

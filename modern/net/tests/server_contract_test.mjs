@@ -8,6 +8,7 @@ const ROOT = path.resolve(new URL("../../../..", import.meta.url).pathname);
 const SERVER_JS = path.join(ROOT, "modern/net/server.js");
 const SIM_CORE_INTERACT_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_interact_bridge");
 const SIM_CORE_ASSOC_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_bridge");
+const SIM_CORE_ASSOC_BATCH_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_batch_bridge");
 const ROOM_HOTSPOT_FIXTURES = path.join(ROOT, "modern", "net", "tests", "fixtures", "room_hotspots.level0.json");
 
 function sleep(ms) {
@@ -116,6 +117,7 @@ async function main() {
       VM_NET_DATA_DIR: dataDir,
       VM_SIM_CORE_INTERACT_BIN: SIM_CORE_INTERACT_BIN,
       VM_SIM_CORE_ASSOC_BIN: SIM_CORE_ASSOC_BIN,
+      VM_SIM_CORE_ASSOC_BATCH_BIN: SIM_CORE_ASSOC_BATCH_BIN,
       VM_EMAIL_MODE: "log"
     },
     stdio: ["ignore", "pipe", "pipe"]

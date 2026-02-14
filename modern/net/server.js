@@ -14,7 +14,7 @@ const {
   coordUseOfStatus,
   applyCanonicalWorldInteractionCommand
 } = require("./world_interaction_bridge");
-const { analyzeContainmentChainViaSimCore } = require("./world_assoc_chain_bridge");
+const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -627,84 +627,6 @@ function findActiveObjectByKey(state, objectKey) {
     return null;
   }
   return state.worldObjects.active.find((o) => String(o.object_key || "") === key) || null;
-}
-
-function buildActiveObjectIndex(state) {
-  const idx = new Map();
-  for (const obj of state.worldObjects.active) {
-    const key = String(obj.object_key || "");
-    if (key) {
-      idx.set(key, obj);
-    }
-  }
-  return idx;
-}
-
-function analyzeContainmentChain(state, obj, objectIndex) {
-  const index = objectIndex || buildActiveObjectIndex(state);
-  const use = coordUseOfStatus(obj?.status);
-  const chain = [];
-  const seen = new Set();
-  const selfKey = String(obj?.object_key || "");
-  let rootAnchorKey = selfKey;
-  let blockedBy = "";
-  let chainAccessible = false;
-
-  if (!obj || !selfKey) {
-    return { assoc_chain: chain, root_anchor_key: "", blocked_by: "invalid-object", chain_accessible: false };
-  }
-  if (use !== OBJ_COORD_USE_CONTAINED) {
-    chainAccessible = use === OBJ_COORD_USE_LOCXYZ;
-    return {
-      assoc_chain: chain,
-      root_anchor_key: rootAnchorKey,
-      blocked_by: "",
-      chain_accessible: chainAccessible
-    };
-  }
-
-  let current = obj;
-  seen.add(selfKey);
-  for (let depth = 0; depth < 32; depth += 1) {
-    const parentKey = String(current?.holder_key || current?.holder_id || "");
-    if (!parentKey) {
-      blockedBy = "missing-parent-ref";
-      break;
-    }
-    if (seen.has(parentKey)) {
-      blockedBy = `cycle:${parentKey}`;
-      break;
-    }
-    seen.add(parentKey);
-    const parent = index.get(parentKey);
-    if (!parent) {
-      blockedBy = `missing-parent:${parentKey}`;
-      break;
-    }
-    chain.push(String(parent.object_key || ""));
-    rootAnchorKey = String(parent.object_key || rootAnchorKey);
-    const pUse = coordUseOfStatus(parent.status);
-    if (pUse === OBJ_COORD_USE_LOCXYZ) {
-      chainAccessible = true;
-      blockedBy = "";
-      break;
-    }
-    if (pUse === OBJ_COORD_USE_CONTAINED) {
-      current = parent;
-      continue;
-    }
-    blockedBy = `parent-owned:${String(parent.object_key || "")}`;
-    break;
-  }
-  if (!chainAccessible && !blockedBy) {
-    blockedBy = "max-depth";
-  }
-  return {
-    assoc_chain: chain,
-    root_anchor_key: rootAnchorKey,
-    blocked_by: blockedBy,
-    chain_accessible: chainAccessible
-  };
 }
 
 function persistPatchedObject(state, obj) {
@@ -1834,8 +1756,7 @@ const server = http.createServer(async (req, res) => {
       : "anchor";
     const includeFootprint = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
     const withFootprint = includeFootprint === "1" || includeFootprint === "true" || includeFootprint === "on";
-    const objectIndex = buildActiveObjectIndex(state);
-    const out = [];
+    const selected = [];
     for (const obj of state.worldObjects.active) {
       if (hasZ && (obj.z | 0) !== (wzRaw | 0)) {
         continue;
@@ -1863,28 +1784,38 @@ const server = http.createServer(async (req, res) => {
           }
         }
       }
-      if (withFootprint) {
-        const chainInfo = analyzeContainmentChain(state, obj, objectIndex);
-        out.push({
-          ...obj,
-          footprint: objectFootprintCells(obj, state.worldObjects.tileFlags),
-          assoc_chain: chainInfo.assoc_chain,
-          root_anchor_key: chainInfo.root_anchor_key,
-          blocked_by: chainInfo.blocked_by
-        });
-      } else {
-        const chainInfo = analyzeContainmentChain(state, obj, objectIndex);
-        out.push({
-          ...obj,
-          assoc_chain: chainInfo.assoc_chain,
-          root_anchor_key: chainInfo.root_anchor_key,
-          blocked_by: chainInfo.blocked_by
-        });
-      }
-      if (out.length >= limit) {
+      selected.push(obj);
+      if (selected.length >= limit) {
         break;
       }
     }
+    const diagResult = analyzeContainmentChainsBatchViaSimCore(state.worldObjects.active, selected);
+    if (!diagResult.ok) {
+      sendError(res, 500, "assoc_batch_bridge_failed", String(diagResult.message || "assoc-chain batch bridge failed"));
+      return;
+    }
+    const out = selected.map((obj) => {
+      const diag = diagResult.byKey.get(String(obj.object_key || "")) || {
+        assoc_chain: [],
+        root_anchor_key: "",
+        blocked_by: "invalid-object"
+      };
+      if (withFootprint) {
+        return {
+          ...obj,
+          footprint: objectFootprintCells(obj, state.worldObjects.tileFlags),
+          assoc_chain: diag.assoc_chain,
+          root_anchor_key: diag.root_anchor_key,
+          blocked_by: diag.blocked_by
+        };
+      }
+      return {
+        ...obj,
+        assoc_chain: diag.assoc_chain,
+        root_anchor_key: diag.root_anchor_key,
+        blocked_by: diag.blocked_by
+      };
+    });
     sendJson(res, 200, {
       meta: worldObjectMeta(state),
       query: {

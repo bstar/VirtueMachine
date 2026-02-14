@@ -138,3 +138,9 @@ add_executable(sim_core_assoc_chain_bridge
 )
 
 target_link_libraries(sim_core_assoc_chain_bridge PRIVATE sim_core)
+
+add_executable(sim_core_assoc_chain_batch_bridge
+  tools/assoc_chain_batch_bridge_cli.c
+)
+
+target_link_libraries(sim_core_assoc_chain_batch_bridge PRIVATE sim_core)

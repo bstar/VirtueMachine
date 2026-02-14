@@ -161,6 +161,7 @@ This checklist is intentionally mutable.
   - completed: server interaction lifecycle contract + deterministic checkpoint hash replay
   - completed: sim-core assoc-chain traversal module + bridge wiring for net authority checks
   - completed: sim-core interaction precondition authority for container-block and container-cycle decisions (net now transport-only for these rules)
+  - completed: sim-core batch containment diagnostics for `/api/world/objects` (`assoc_chain`, `root_anchor_key`, `blocked_by`) replacing net-side JS chain walker
   - in progress: room hotspot regression corpus anchored to level-0 reference map (`modern/net/tests/fixtures/room_hotspots.level0.json`)
   - next: broaden nested containment fixtures beyond current Virtue room/British study hotspot set
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
