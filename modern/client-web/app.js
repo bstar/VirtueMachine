@@ -60,8 +60,6 @@ const OBJECT_TYPES_SOLID_ENV = new Set([
   0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
   0x147
 ]);
-const LEGACY_LENS_BRITANNIA = { type: 0x18a, x: 0x39e, y: 0x358, z: 0, rightTile: 0x1ba, leftTile: 0x1bb };
-const LEGACY_LENS_GARGOYLE = { type: 0x18c, x: 0x3a2, y: 0x358, z: 0, rightTile: 0x1b8, leftTile: 0x1b9 };
 function isRenderableWorldObjectType(type) {
   const t = type & 0x03ff;
   if (t >= ENTITY_TYPE_ACTOR_MIN && t <= ENTITY_TYPE_ACTOR_MAX) {
@@ -4638,7 +4636,7 @@ async function captureParitySnapshotJson() {
     resolveAnimatedObjectTile,
     resolveFootprintTile: (obj) => resolveLegacyFootprintTile(state.sim, obj),
     hasWallTerrain,
-    injectLegacyOverlays: injectLegacyOverlaySpecials,
+    injectLegacyOverlays: null,
     isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
   });
   const overlayCells = overlayBuild.overlayCells || [];
@@ -5989,97 +5987,6 @@ function renderCharacterStubPanel() {
   }
 }
 
-function legacyLensSpecForObject(obj) {
-  const t = obj ? (obj.type & 0x03ff) : -1;
-  if (t === LEGACY_LENS_BRITANNIA.type) {
-    return LEGACY_LENS_BRITANNIA;
-  }
-  if (t === LEGACY_LENS_GARGOYLE.type) {
-    return LEGACY_LENS_GARGOYLE;
-  }
-  return null;
-}
-
-function legacyAreaLightAtWorld(viewCtx, wx, wy, _wz) {
-  if (!viewCtx || typeof viewCtx.areaLightAtWorld !== "function") {
-    return 0;
-  }
-  return viewCtx.areaLightAtWorld(wx, wy) | 0;
-}
-
-function injectLegacyOverlaySpecials(ctx) {
-  const {
-    startX,
-    startY,
-    viewW,
-    viewH,
-    wz,
-    viewCtx,
-    stream,
-    insertWorldTile
-  } = ctx;
-  let injected = 0;
-  const list = Array.isArray(stream) ? stream : [];
-  for (const o of list) {
-    if (!o || !o.renderable) {
-      continue;
-    }
-    const wx = o.x | 0;
-    const wy = o.y | 0;
-    if (viewCtx && !viewCtx.visibleAtWorld(wx, wy)) {
-      continue;
-    }
-    const lens = legacyLensSpecForObject(o);
-    if (
-      lens
-      && (wx | 0) === (lens.x | 0)
-      && (wy | 0) === (lens.y | 0)
-      && ((o.z | 0) === (lens.z | 0))
-      && ((wz | 0) === (lens.z | 0))
-    ) {
-      const gx = wx - startX;
-      if (gx !== 0) {
-        insertWorldTile(wx + 1, wy, lens.rightTile, 1, {
-          x: wx,
-          y: wy,
-          type: "legacy-lens-right",
-          objType: o.type
-        }, `0x${lens.rightTile.toString(16)}`);
-        injected += 1;
-      }
-      if (gx < (viewW - 1)) {
-        insertWorldTile(wx - 1, wy, lens.leftTile, 1, {
-          x: wx,
-          y: wy,
-          type: "legacy-lens-left",
-          objType: o.type
-        }, `0x${lens.leftTile.toString(16)}`);
-        injected += 1;
-      }
-    }
-  }
-
-  for (let gy = 0; gy < viewH; gy += 1) {
-    for (let gx = 0; gx < viewW; gx += 1) {
-      const wx = startX + gx;
-      const wy = startY + gy;
-      const light = legacyAreaLightAtWorld(viewCtx, wx, wy, wz) | 0;
-      if (light > 0 && light < 4) {
-        const tileId = (0x1bc + light) & 0xffff;
-        insertWorldTile(wx, wy, tileId, 3, {
-          x: wx,
-          y: wy,
-          type: "legacy-obscurity",
-          objType: 0
-        }, `0x${tileId.toString(16)}`);
-        injected += 1;
-      }
-    }
-  }
-
-  return injected;
-}
-
 function buildOverlayCells(startX, startY, wz, viewCtx) {
   return buildOverlayCellsModel({
     viewW: VIEW_W,
@@ -6093,7 +6000,8 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
     resolveAnimatedObjectTile,
     resolveFootprintTile: (obj) => resolveLegacyFootprintTile(state.sim, obj),
     hasWallTerrain,
-    injectLegacyOverlays: injectLegacyOverlaySpecials,
+    // Canonical-only path: no client-side synthetic overlay injection.
+    injectLegacyOverlays: null,
     isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
   });
 }
