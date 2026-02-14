@@ -243,7 +243,7 @@ VirtueMachine is expected to grow into an MMO-capable Ultima VI experience, whil
 
 ### Design Intent So Far
 
-- Inspired in part by Ultima VI Online-style operational ideas.
+- Inspired in part by Ultima VI Online operational ideas.
 - Players should still be able to:
   - run quests,
   - level up,
@@ -254,7 +254,7 @@ VirtueMachine is expected to grow into an MMO-capable Ultima VI experience, whil
 
 - VirtueMachine intends to keep the smaller legacy view, frame, and original-style UI presentation.
 - This is a deliberate stylistic choice to stay visually closer to classic Ultima VI.
-- If a player wants broader modernized interface presentation, U6O and Nuvie/ScummVM remain better options.
+- If a player wants broader modernized interface presentation, Ultima VI Online and Nuvie/ScummVM remain better options.
 
 ### Project Openness
 

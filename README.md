@@ -23,7 +23,8 @@ The core direction is fidelity-first engineering with explicit documentation for
 - Not a finished MMO today.
 - Not a replacement for projects that prioritize broader interface modernization.
 
-If you want a more modernized presentation layer today, projects like Nuvie/ScummVM and U6O-style experiences are often better immediate fits.
+If you want a more modernized presentation layer today, projects like Nuvie/ScummVM and **Ultima VI Online** are often better immediate fits.  
+Ultima VI Online is a major inspiration here, and the team behind it are the real heroes for achieving a similar feat decades earlier.
 
 ## Current Status (Short Version)
 
@@ -173,7 +174,30 @@ If commands fail due to sandbox restrictions in assistant-driven sessions, follo
 
 ## Assets (Untracked)
 
-Original game assets are not committed. Keep them outside the repo (or under ignored `local/`).
+This repository does **not** include Ultima VI game data/assets.
+
+No copyrighted Origin/EA game files, art, audio, or binaries are distributed here.
+The repo includes only:
+
+- engine/source code,
+- docs/tooling,
+- asset manifests and import scripts.
+
+To run VirtueMachine, you must provide your own legal copy of the game files from an external source directory.
+
+Keep those files outside git (or under ignored local paths). Do not commit proprietary assets.
+
+### Required vs Optional Asset Sets
+
+Required runtime list:
+
+- `modern/assets/manifest.required.txt`
+
+Optional enhancements list:
+
+- `modern/assets/manifest.optional.txt`
+
+`sync_assets.sh` enforces required assets and warns on optional ones.
 
 Sync required files into the local runtime assets folder:
 
@@ -188,6 +212,20 @@ Defaults:
 - Savegame object files (`savegame/objblk??`, `savegame/objlist`) are copied to:
   - `modern/assets/runtime/savegame` (runtime compatibility)
   - `modern/assets/pristine/savegame` (immutable baseline for render/net parity)
+
+World-object baseline source behavior:
+
+- Preferred: canonical root `objblk??` + `objlist` in your asset source.
+- Fallback: `lzobjblk` extraction path.
+- Last resort: `savegame/objblk??` + `savegame/objlist` (can reflect altered world state).
+
+If savegame-derived object blocks are used, parity results may differ from pristine baseline expectations.
+
+### Copyright and Distribution Policy
+
+- This repo intentionally avoids shipping copyrighted game assets.
+- You are responsible for supplying and using game data in accordance with applicable rights/law.
+- Pull requests/issues should not attach proprietary asset blobs.
 
 Baseline tooling:
 
