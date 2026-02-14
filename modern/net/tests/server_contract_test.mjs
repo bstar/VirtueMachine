@@ -39,6 +39,34 @@ async function jsonFetch(baseUrl, route, init = {}) {
   return { status: res.status, body };
 }
 
+function coordUseOfStatus(status) {
+  return (Number(status) & 0x18) >>> 0;
+}
+
+function isStatus0010(status) {
+  return (Number(status) & 0x10) !== 0;
+}
+
+function compareLegacyWorldObjectOrder(a, b) {
+  const aUse = coordUseOfStatus(a.status);
+  const bUse = coordUseOfStatus(b.status);
+  if (aUse !== 0 && bUse === 0) return -1;
+  if (bUse !== 0 && aUse === 0) return 1;
+  if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
+  if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
+  if ((a.z | 0) !== (b.z | 0)) return (b.z | 0) - (a.z | 0);
+  if (isStatus0010(a.status) !== isStatus0010(b.status)) {
+    return isStatus0010(a.status) ? -1 : 1;
+  }
+  if ((a.source_area | 0) !== (b.source_area | 0)) {
+    return (a.source_area | 0) - (b.source_area | 0);
+  }
+  if ((a.source_index | 0) !== (b.source_index | 0)) {
+    return (a.source_index | 0) - (b.source_index | 0);
+  }
+  return String(a.object_key || "").localeCompare(String(b.object_key || ""));
+}
+
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "vm-net-test-"));
   const dataDir = path.join(tmp, "data");
@@ -111,6 +139,22 @@ async function main() {
     assert.ok(worldObjects.body?.meta);
     assert.ok(Array.isArray(worldObjects.body?.objects));
     assert.ok(Number.isInteger(worldObjects.body?.meta?.active_count));
+
+    const worldObjectsSweep = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096&projection=footprint&include_footprint=1", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(worldObjectsSweep.status, 200);
+    assert.ok(Array.isArray(worldObjectsSweep.body?.objects));
+    const sweep = worldObjectsSweep.body.objects;
+    for (let i = 1; i < sweep.length; i += 1) {
+      const prev = sweep[i - 1];
+      const cur = sweep[i];
+      assert.ok(
+        compareLegacyWorldObjectOrder(prev, cur) <= 0,
+        `world object order regression at index ${i - 1}->${i}: ${prev.object_key} then ${cur.object_key}`
+      );
+    }
 
     const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", {
       method: "POST",
