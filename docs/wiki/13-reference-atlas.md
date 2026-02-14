@@ -68,6 +68,11 @@ How to use it:
 - [[term:Hover Report]]
 - [[term:Parity Snapshot]]
 
+## External Comparative References
+
+- [CearDragon/ultima-vi-online](https://github.com/CearDragon/ultima-vi-online)
+- [Ultima VI Online Comparative Analysis](16-ultima-vi-online-comparative-analysis.md)
+
 ## Why This Matters
 
 This atlas is intentionally player-outcome focused.  

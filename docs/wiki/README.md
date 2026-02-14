@@ -109,6 +109,7 @@ The result is a project that can now explain *why* a fix works, not just that it
 - [docs/wiki/13-reference-atlas.md](13-reference-atlas.md)
 - [docs/wiki/14-api-ui-realtime-sync.md](14-api-ui-realtime-sync.md)
 - [docs/wiki/15-api-endpoint-reference.md](15-api-endpoint-reference.md)
+- [docs/wiki/16-ultima-vi-online-comparative-analysis.md](16-ultima-vi-online-comparative-analysis.md)
 
 ## Human + AI Development Model
 
@@ -179,6 +180,7 @@ If you are new to this codebase, pick one track and follow it in order.
 13. [docs/wiki/13-reference-atlas.md](13-reference-atlas.md)
 14. [docs/wiki/14-api-ui-realtime-sync.md](14-api-ui-realtime-sync.md)
 15. [docs/wiki/15-api-endpoint-reference.md](15-api-endpoint-reference.md)
+16. [docs/wiki/16-ultima-vi-online-comparative-analysis.md](16-ultima-vi-online-comparative-analysis.md)
 
 ## Operating Principles
 

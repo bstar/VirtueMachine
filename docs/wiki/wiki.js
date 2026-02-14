@@ -15,7 +15,8 @@
     { file: "12-canonical-completion-roadmap.md", title: "Canonical Completion Roadmap" },
     { file: "13-reference-atlas.md", title: "Reference Atlas Guide" },
     { file: "14-api-ui-realtime-sync.md", title: "API/UI Realtime Sync and Flow" },
-    { file: "15-api-endpoint-reference.md", title: "API Endpoint Reference" }
+    { file: "15-api-endpoint-reference.md", title: "API Endpoint Reference" },
+    { file: "16-ultima-vi-online-comparative-analysis.md", title: "Ultima VI Online Comparative Analysis" }
   ];
 
   const pageListEl = document.getElementById("page-list");
