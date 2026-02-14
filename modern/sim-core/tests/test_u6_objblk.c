@@ -168,45 +168,75 @@ static int test_load_outdoor(void) {
 }
 
 static int test_render_sort(void) {
-  U6ObjBlkRecord recs[4];
+  U6ObjBlkRecord recs[6];
 
   memset(recs, 0, sizeof(recs));
+  /* LOCXYZ */
   recs[0].x = 20;
   recs[0].y = 40;
   recs[0].z = 0;
+  recs[0].status = 0x00;
   recs[0].source_area = 1;
   recs[0].source_index = 5;
 
+  /* LOCXYZ */
   recs[1].x = 10;
   recs[1].y = 40;
   recs[1].z = 0;
+  recs[1].status = 0x00;
   recs[1].source_area = 0;
   recs[1].source_index = 1;
 
+  /* LOCXYZ */
   recs[2].x = 10;
   recs[2].y = 39;
   recs[2].z = 0;
+  recs[2].status = 0x00;
   recs[2].source_area = 0;
   recs[2].source_index = 0;
 
+  /* LOCXYZ higher z first */
   recs[3].x = 10;
   recs[3].y = 40;
   recs[3].z = 1;
+  recs[3].status = 0x00;
   recs[3].source_area = 0;
   recs[3].source_index = 2;
 
-  u6_objblk_sort_for_render(recs, 4);
+  /*
+   * Mixed non-LOCXYZ records: these should compare ahead of LOCXYZ roots
+   * in mixed sort order, consistent with legacy comparator relation.
+   */
+  recs[4].x = 10;
+  recs[4].y = 40;
+  recs[4].z = 0;
+  recs[4].status = 0x08; /* CONTAINED */
+  recs[4].source_area = 0;
+  recs[4].source_index = 9;
 
-  if (recs[0].y != 39 || recs[0].x != 10) {
+  recs[5].x = 10;
+  recs[5].y = 40;
+  recs[5].z = 0;
+  recs[5].status = 0x10; /* INVEN / Is_0010 */
+  recs[5].source_area = 0;
+  recs[5].source_index = 10;
+
+  u6_objblk_sort_for_render(recs, 6);
+
+  if (u6_objblk_is_locxyz(recs[0].status) || u6_objblk_is_locxyz(recs[1].status)) {
+    return fail("non-LOCXYZ precedence mismatch");
+  }
+
+  if (recs[2].y != 39 || recs[2].x != 10) {
     return fail("sort y/x order mismatch");
   }
-  if (!(recs[1].x == 10 && recs[1].y == 40 && recs[1].z == 1)) {
+  if (!(recs[3].x == 10 && recs[3].y == 40 && recs[3].z == 1)) {
     return fail("sort z order mismatch");
   }
-  if (!(recs[2].x == 10 && recs[2].y == 40 && recs[2].z == 0)) {
+  if (!(recs[4].x == 10 && recs[4].y == 40 && recs[4].z == 0)) {
     return fail("sort second tie order mismatch");
   }
-  if (!(recs[3].x == 20 && recs[3].y == 40)) {
+  if (!(recs[5].x == 20 && recs[5].y == 40)) {
     return fail("sort final position mismatch");
   }
 

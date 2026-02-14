@@ -72,6 +72,13 @@ Observed impact archetype:
 - Modern policy: root `objblk??` -> `lzobjblk` extraction -> `savegame` fallback
 - Notes: this closed major one-cell object parity failures in British’s study / bedroom paths
 
+### Cross-Layer Object Ordering
+
+- Status: `intentional-divergence` (bounded)
+- Legacy anchor: `C_1184_29C4` relation semantics
+- Modern: comparator semantics are now aligned in client composition, `sim-core` objblk render sort, and net-server active object ordering
+- Remaining risk: full assoc-chain resolution (true `GetAssoc` graph) is still not represented end-to-end in modern runtime records
+
 ## Network Authority Deviations
 
 ### Server-Authoritative World Objects

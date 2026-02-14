@@ -5,6 +5,8 @@
 #include <string.h>
 
 #define U6_COORD_USE_MASK 0x18u
+#define U6_COORD_USE_LOCXYZ 0x00u
+#define U6_OBJ_STATUS_0010 0x10u
 
 static uint16_t read_u16_le(const uint8_t *p) {
   return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
@@ -18,6 +20,14 @@ static void decode_coord(const uint8_t *p, uint16_t *out_x, uint16_t *out_y, uin
 
 int u6_objblk_is_locxyz(uint8_t status) {
   return (status & U6_COORD_USE_MASK) == 0;
+}
+
+static uint8_t coord_use(uint8_t status) {
+  return (uint8_t)(status & U6_COORD_USE_MASK);
+}
+
+static int is_status_0010(uint8_t status) {
+  return (status & U6_OBJ_STATUS_0010) != 0;
 }
 
 uint16_t u6_objblk_shape_type_get_type(uint16_t shape_type) {
@@ -193,7 +203,19 @@ int u6_objblk_load_outdoor_savegame(const char *savegame_dir,
 static int compare_render_order(const void *lhs, const void *rhs) {
   const U6ObjBlkRecord *a = (const U6ObjBlkRecord *)lhs;
   const U6ObjBlkRecord *b = (const U6ObjBlkRecord *)rhs;
+  uint8_t a_use = coord_use(a->status);
+  uint8_t b_use = coord_use(b->status);
 
+  /*
+   * Legacy comparator relation (C_1184_29C4): non-LOCXYZ chains compare
+   * ahead of LOCXYZ roots in mixed comparisons.
+   */
+  if (a_use != U6_COORD_USE_LOCXYZ && b_use == U6_COORD_USE_LOCXYZ) {
+    return -1;
+  }
+  if (b_use != U6_COORD_USE_LOCXYZ && a_use == U6_COORD_USE_LOCXYZ) {
+    return 1;
+  }
   if (a->y != b->y) {
     return (a->y < b->y) ? -1 : 1;
   }
@@ -202,6 +224,13 @@ static int compare_render_order(const void *lhs, const void *rhs) {
   }
   if (a->z != b->z) {
     return (a->z > b->z) ? -1 : 1;
+  }
+  /*
+   * Assoc-chain detail (Is_0010/GetAssoc) is not represented in this flat
+   * record shape yet; preserve deterministic ordering for exact ties.
+   */
+  if (is_status_0010(a->status) != is_status_0010(b->status)) {
+    return is_status_0010(a->status) ? -1 : 1;
   }
   if (a->source_area != b->source_area) {
     return (a->source_area < b->source_area) ? -1 : 1;

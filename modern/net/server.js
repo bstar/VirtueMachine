@@ -453,6 +453,44 @@ function objectFootprintCells(obj, tileFlags) {
   return out;
 }
 
+function coordUseOfStatus(status) {
+  return (Number(status) & 0x18) >>> 0;
+}
+
+function isStatus0010(status) {
+  return (Number(status) & 0x10) !== 0;
+}
+
+function compareLegacyWorldObjectOrder(a, b) {
+  const aUse = coordUseOfStatus(a.status);
+  const bUse = coordUseOfStatus(b.status);
+  if (aUse !== 0 && bUse === 0) {
+    return -1;
+  }
+  if (bUse !== 0 && aUse === 0) {
+    return 1;
+  }
+  if ((a.y | 0) !== (b.y | 0)) {
+    return (a.y | 0) - (b.y | 0);
+  }
+  if ((a.x | 0) !== (b.x | 0)) {
+    return (a.x | 0) - (b.x | 0);
+  }
+  if ((a.z | 0) !== (b.z | 0)) {
+    return (b.z | 0) - (a.z | 0);
+  }
+  if (isStatus0010(a.status) !== isStatus0010(b.status)) {
+    return isStatus0010(a.status) ? -1 : 1;
+  }
+  if ((a.source_area | 0) !== (b.source_area | 0)) {
+    return (a.source_area | 0) - (b.source_area | 0);
+  }
+  if ((a.source_index | 0) !== (b.source_index | 0)) {
+    return (a.source_index | 0) - (b.source_index | 0);
+  }
+  return String(a.object_key || "").localeCompare(String(b.object_key || ""));
+}
+
 function buildWorldObjectState(runtimeDir, rawDeltas) {
   const baseline = loadWorldObjectBaseline(runtimeDir);
   const tileFlags = loadTileFlagMap(runtimeDir);
@@ -478,6 +516,7 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
   for (const s of deltas.spawned) {
     active.push({ ...s, source_kind: "spawned" });
   }
+  active.sort(compareLegacyWorldObjectOrder);
   return {
     baseline,
     tileFlags,
