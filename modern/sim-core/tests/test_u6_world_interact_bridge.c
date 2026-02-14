@@ -2,6 +2,7 @@
 #include "u6_objstatus.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static int fail(const char *msg) {
   fprintf(stderr, "%s\n", msg);
@@ -12,6 +13,7 @@ int main(void) {
   U6WorldInteractInput in;
   U6WorldInteractResult out;
 
+  memset(&in, 0, sizeof(in));
   in.verb = U6_WORLD_INTERACT_TAKE;
   in.status = u6_obj_status_to_locxyz(0);
   in.holder_kind = 0;
@@ -39,6 +41,7 @@ int main(void) {
   in.status = out.status;
   in.holder_kind = out.holder_kind;
   in.has_container = 1;
+  in.container_cycle = 0;
   if (u6_world_interact_apply(&in, &out) != U6_WORLD_INTERACT_OK) {
     return fail("put should succeed");
   }
@@ -68,6 +71,18 @@ int main(void) {
   if (!u6_obj_status_is_inventory(out.status) || out.holder_kind != 2) {
     return fail("take contained output mismatch");
   }
+
+  in.verb = U6_WORLD_INTERACT_PUT;
+  in.status = out.status;
+  in.holder_kind = out.holder_kind;
+  in.owner_matches_actor = 1;
+  in.has_container = 1;
+  in.chain_accessible = 1;
+  in.container_cycle = 1;
+  if (u6_world_interact_apply(&in, &out) != U6_WORLD_INTERACT_ERR_CONTAINER_CYCLE) {
+    return fail("put should fail for container cycle");
+  }
+  in.container_cycle = 0;
 
   in.verb = U6_WORLD_INTERACT_DROP;
   in.status = out.status;

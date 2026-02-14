@@ -220,6 +220,19 @@ async function main() {
       assert.equal(equip.status, 200);
       assert.equal(coordUseOfStatus(equip.body?.target?.status), OBJ_COORD_USE_EQUIP);
 
+      const putCycle = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "put",
+          target_key: targetKey,
+          container_key: targetKey,
+          actor_id: "contract-avatar"
+        })
+      });
+      assert.equal(putCycle.status, 409);
+      assert.equal(String(putCycle.body?.error?.code || ""), "interaction_container_cycle");
+
       const put = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,

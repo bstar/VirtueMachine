@@ -61,6 +61,10 @@ int u6_world_interact_apply(const U6WorldInteractInput *in, U6WorldInteractResul
         out->code = U6_WORLD_INTERACT_ERR_CONTAINER;
         return out->code;
       }
+      if (in->container_cycle != 0) {
+        out->code = U6_WORLD_INTERACT_ERR_CONTAINER_CYCLE;
+        return out->code;
+      }
       if ((use != U6_OBJ_COORD_USE_INVEN && use != U6_OBJ_COORD_USE_EQUIP)
           || in->holder_kind != U6_HOLDER_NPC
           || in->owner_matches_actor == 0) {

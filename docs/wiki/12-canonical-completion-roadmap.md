@@ -107,6 +107,7 @@ Next closure target:
 - assoc/container-chain semantic closure:
   - parent-chain traversal with cycle/missing-parent guards (`closed` via sim-core `u6_assoc_chain`)
   - chain accessibility constraints for `take` from contained stacks (`closed` in interaction endpoint + contract tests)
+  - interaction precondition decisions moved into sim-core bridge (`closed`; container block + container cycle policy no longer decided in net JS)
   - diagnostics surfacing (`assoc_chain`, `root_anchor`, `blocked_by`)
   - deterministic test fixtures for nested chains (`in progress`, expanded corpus pending)
 

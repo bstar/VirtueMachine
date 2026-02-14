@@ -1940,31 +1940,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const targetChain = targetChainResult.value;
-    if (verb === "take" && coordUseOfStatus(target.status) === OBJ_COORD_USE_CONTAINED && !targetChain.chain_accessible) {
-      sendJson(res, 409, {
-        error: {
-          code: "interaction_container_blocked",
-          message: "contained object chain is not accessible",
-          blocked_by: targetChain.blocked_by
-        }
-      });
-      return;
-    }
+    let containerCycle = false;
+    let containerChain = null;
     if (verb === "put" && container) {
-      if (String(container.object_key || "") === String(target.object_key || "")) {
-        sendError(res, 409, "interaction_container_cycle", "cannot put object into itself");
-        return;
-      }
       const containerChainResult = analyzeContainmentChainViaSimCore(state.worldObjects.active, container);
       if (!containerChainResult.ok) {
         sendError(res, 500, "assoc_bridge_failed", String(containerChainResult.message || "assoc-chain bridge failed"));
         return;
       }
-      const containerChain = containerChainResult.value;
-      if ((containerChain.assoc_chain || []).includes(String(target.object_key || ""))) {
-        sendError(res, 409, "interaction_container_cycle", "cannot create containment cycle");
-        return;
-      }
+      containerChain = containerChainResult.value;
+      containerCycle = String(container.object_key || "") === String(target.object_key || "")
+        || (containerChain.assoc_chain || []).includes(String(target.object_key || ""));
     }
 
     const applied = applyCanonicalWorldInteractionCommand({
@@ -1973,15 +1959,31 @@ const server = http.createServer(async (req, res) => {
       container,
       actorId,
       actorPos,
-      chainAccessible: targetChain.chain_accessible
+      chainAccessible: targetChain.chain_accessible,
+      containerCycle
     });
     if (!applied.ok) {
-      sendError(
-        res,
-        applied.code === "bad_verb" ? 400 : (applied.code === "container_not_found" ? 404 : 409),
-        applied.code,
-        String(applied.message || "interaction failed")
-      );
+      if (applied.code === "interaction_container_blocked") {
+        sendJson(res, 409, {
+          error: {
+            code: "interaction_container_blocked",
+            message: String(applied.message || "contained object chain is not accessible"),
+            blocked_by: String(targetChain.blocked_by || "")
+          }
+        });
+        return;
+      }
+      if (applied.code === "interaction_container_cycle") {
+        sendJson(res, 409, {
+          error: {
+            code: "interaction_container_cycle",
+            message: String(applied.message || "cannot create containment cycle"),
+            blocked_by: String(containerChain?.blocked_by || "")
+          }
+        });
+        return;
+      }
+      sendError(res, Number(applied.http) || 409, applied.code, String(applied.message || "interaction failed"));
       return;
     }
 

@@ -160,6 +160,7 @@ This checklist is intentionally mutable.
   - completed: canonical status transition matrix (`LOCXYZ/CONTAINED/INVEN/EQUIP`)
   - completed: server interaction lifecycle contract + deterministic checkpoint hash replay
   - completed: sim-core assoc-chain traversal module + bridge wiring for net authority checks
+  - completed: sim-core interaction precondition authority for container-block and container-cycle decisions (net now transport-only for these rules)
   - next: broaden nested containment regression corpus (room hotspot fixtures)
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)

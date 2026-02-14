@@ -14,7 +14,8 @@ typedef enum U6WorldInteractCode {
   U6_WORLD_INTERACT_OK = 0,
   U6_WORLD_INTERACT_ERR_BAD_VERB = -1,
   U6_WORLD_INTERACT_ERR_BLOCKED = -2,
-  U6_WORLD_INTERACT_ERR_CONTAINER = -3
+  U6_WORLD_INTERACT_ERR_CONTAINER = -3,
+  U6_WORLD_INTERACT_ERR_CONTAINER_CYCLE = -4
 } U6WorldInteractCode;
 
 typedef struct U6WorldInteractInput {
@@ -24,6 +25,7 @@ typedef struct U6WorldInteractInput {
   uint8_t owner_matches_actor;
   uint8_t has_container;
   uint8_t chain_accessible;
+  uint8_t container_cycle;
 } U6WorldInteractInput;
 
 typedef struct U6WorldInteractResult {
