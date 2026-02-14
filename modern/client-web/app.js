@@ -141,6 +141,7 @@ const netAccountCloseButton = document.getElementById("netAccountCloseButton");
 const diagBox = document.getElementById("diagBox");
 const replayDownload = document.getElementById("replayDownload");
 const themeSelect = document.getElementById("themeSelect");
+const wikiLink = document.getElementById("wikiLink");
 const fontSelect = document.getElementById("fontSelect");
 const gridToggle = document.getElementById("gridToggle");
 const debugOverlayToggle = document.getElementById("debugOverlayToggle");
@@ -2085,6 +2086,9 @@ function setTheme(themeName) {
   document.documentElement.setAttribute("data-theme", theme);
   if (themeSelect) {
     themeSelect.value = theme;
+  }
+  if (wikiLink) {
+    wikiLink.href = `/docs/wiki/?theme=${encodeURIComponent(theme)}`;
   }
   try {
     localStorage.setItem(THEME_KEY, theme);

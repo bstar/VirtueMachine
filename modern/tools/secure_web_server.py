@@ -66,8 +66,11 @@ class SecureU6Handler(BaseHTTPRequestHandler):
             "/modern/client-web/",
             "/modern/assets/runtime/",
             "/modern/assets/pristine/",
+            "/modern/",
+            "/docs/wiki/",
+            "/legacy/u6-decompiled/SRC/",
         )
-        if req_path not in ("/modern/client-web", "/modern/assets/runtime", "/modern/assets/pristine"):
+        if req_path not in ("/modern/client-web", "/modern/assets/runtime", "/modern/assets/pristine", "/docs/wiki", "/modern", "/legacy/u6-decompiled/SRC"):
             if not any(req_path.startswith(p) for p in allowed_prefixes):
                 return None
 

@@ -1,0 +1,809 @@
+{
+  "terms": [
+    {
+      "term": "Canonical",
+      "aliases": ["source of truth", "legacy truth"],
+      "category": "Methodology",
+      "definition": "Authoritative behavior and data reference rooted in legacy code and original game formats.",
+      "how_it_looks": "Consistent placement and behavior that matches known legacy outcomes.",
+      "gameplay_effect": "Prevents subjective fixes from drifting core gameplay semantics.",
+      "visual_signatures": [
+        "Cross-room consistency in props and support objects",
+        "Stable behavior after restart or profile reload"
+      ],
+      "common_failures": [
+        "Room-specific offsets that only fix one screenshot",
+        "Competing assumptions from non-authoritative sources"
+      ],
+      "debug_checks": [
+        "Verify legacy function anchor before patching",
+        "Verify baseline provenance before render changes"
+      ]
+    },
+    {
+      "term": "Parity",
+      "aliases": ["faithfulness", "legacy fidelity"],
+      "category": "Methodology",
+      "definition": "Degree to which modern behavior matches validated legacy semantics and data.",
+      "how_it_looks": "The world reads and behaves like classic Ultima VI without local hacks.",
+      "gameplay_effect": "Supports trust that visual and interaction behavior are historically correct.",
+      "visual_signatures": [
+        "Items rest where expected on benches and tables",
+        "Doors, walls, and overlays remain coherent during movement"
+      ],
+      "common_failures": [
+        "Fixing one room breaks another",
+        "Looks-close rendering but wrong interaction semantics"
+      ],
+      "debug_checks": [
+        "Coordinate-level hover report comparison",
+        "Legacy comparator and insertion path verification"
+      ]
+    },
+    {
+      "term": "Baseline",
+      "aliases": ["world baseline", "immutable baseline"],
+      "category": "Data",
+      "definition": "Initial authoritative world object dataset before runtime changes are applied.",
+      "how_it_looks": "Static world decor appears correctly before player/session mutations.",
+      "gameplay_effect": "Defines default world state and prevents long-term drift.",
+      "visual_signatures": [
+        "Initial room object layout matches legacy install",
+        "Fresh reload starts from expected object placement"
+      ],
+      "common_failures": [
+        "Wrong install source selected",
+        "Decoded object blocks mapped to wrong area ids"
+      ],
+      "debug_checks": [
+        "Run sync_assets and confirm selected source path",
+        "Diff objblk records against known-good baseline"
+      ]
+    },
+    {
+      "term": "Delta",
+      "aliases": ["world delta", "runtime overrides"],
+      "category": "Data",
+      "definition": "Runtime mutations layered on top of baseline objects, such as moved or removed items.",
+      "how_it_looks": "A corrected baseline may appear unchanged if stale delta entries still override it.",
+      "gameplay_effect": "Allows persistent world changes but can mask baseline fixes if unmanaged.",
+      "visual_signatures": [
+        "Scene differs between fresh and long-running sessions",
+        "Fix appears only after clearing world state"
+      ],
+      "common_failures": [
+        "Uncleared stale deltas after baseline updates",
+        "Assuming render bug when delta override is active"
+      ],
+      "debug_checks": [
+        "Inspect world_object_deltas.json",
+        "Reload baseline and verify active delta revision"
+      ]
+    },
+    {
+      "term": "objblk",
+      "aliases": ["objblk??", "object blocks"],
+      "category": "Data Format",
+      "definition": "Outdoor area object block files containing static world object records.",
+      "how_it_looks": "Incorrect block source causes broad one-cell shifts and stack anomalies.",
+      "gameplay_effect": "Primary determinant of static object placement across outdoor/room areas.",
+      "visual_signatures": [
+        "Multiple unrelated room objects shifted similarly",
+        "Correct tile ids but wrong area placements"
+      ],
+      "common_failures": [
+        "Using mutated savegame blocks as canonical baseline",
+        "Area-id mapping errors during extraction"
+      ],
+      "debug_checks": [
+        "Compare object records for affected area id",
+        "Confirm filename-to-area mapping is canonical"
+      ]
+    },
+    {
+      "term": "objlist",
+      "aliases": ["object list tail", "world tail"],
+      "category": "Data Format",
+      "definition": "Legacy object aggregate file with world-tail data used by compatibility boundaries.",
+      "how_it_looks": "Mismatch against object blocks can produce hybrid world behavior.",
+      "gameplay_effect": "Influences consistency between object placement and broader world state.",
+      "visual_signatures": [
+        "State behaves inconsistently across load boundaries",
+        "Object status interpretation differs after sync"
+      ],
+      "common_failures": [
+        "Mixing objlist from one source epoch with objblk from another"
+      ],
+      "debug_checks": [
+        "Audit sync source for objblk and objlist as one pair",
+        "Verify tail fields are from same canonical profile"
+      ]
+    },
+    {
+      "term": "lzobjblk",
+      "aliases": ["compressed object stream"],
+      "category": "Data Format",
+      "definition": "Compressed canonical outdoor object-block stream requiring decode and area mapping.",
+      "how_it_looks": "If decoded but mis-mapped, rooms look plausible yet systematically wrong.",
+      "gameplay_effect": "High leverage source for restoring canonical object placement.",
+      "visual_signatures": [
+        "Widespread object misalignment despite valid records",
+        "Install-to-install divergence without code changes"
+      ],
+      "common_failures": [
+        "Assuming naive aa..hh mapping order",
+        "Ignoring embedded coordinate evidence for area inference"
+      ],
+      "debug_checks": [
+        "Validate extractor output mapping against coordinate distribution",
+        "Run compare_objblk_sets against known-good baseline"
+      ]
+    },
+    {
+      "term": "Spill",
+      "aliases": ["spill-left", "spill-up", "corner spill"],
+      "category": "Rendering",
+      "definition": "Adjacent-cell tile fragments produced for wide or tall objects from tile flags.",
+      "how_it_looks": "Objects appear to extend naturally into neighboring cells.",
+      "gameplay_effect": "Preserves the intended silhouette of multi-cell art.",
+      "visual_signatures": [
+        "Left/up fragments visible near anchor tiles",
+        "Corner fragment for combined vertical+horizontal flags"
+      ],
+      "common_failures": [
+        "Fragments missing at viewport edges",
+        "Fragments drawn in wrong adjacent cell"
+      ],
+      "debug_checks": [
+        "Inspect tile flags 0x40 and 0x80",
+        "Verify +1 source window includes off-edge anchors"
+      ]
+    },
+    {
+      "term": "Overlay",
+      "aliases": ["overlay cell", "composition layer"],
+      "category": "Rendering",
+      "definition": "Per-cell staged object tiles applied over base map tiles during composition.",
+      "how_it_looks": "Props and furniture appear above floor/background map art.",
+      "gameplay_effect": "Directly controls object readability and interaction expectations.",
+      "visual_signatures": [
+        "Ordered overlay entries in hover report",
+        "Source metadata showing main/spill origin"
+      ],
+      "common_failures": [
+        "Missing support overlays causes objects to look buried",
+        "Wrong ordering causes stack collapse or inversion"
+      ],
+      "debug_checks": [
+        "Capture overlay[] and sourceType for neighboring cells",
+        "Compare insertion order with legacy expectations"
+      ]
+    },
+    {
+      "term": "Occluder",
+      "aliases": ["occlusion flag", "occ"],
+      "category": "Rendering",
+      "definition": "Composition metadata controlling whether an overlay tile should obstruct lower layers.",
+      "how_it_looks": "Foreground/support objects hide underlying visual fragments correctly.",
+      "gameplay_effect": "Prevents visual noise and preserves depth cues.",
+      "visual_signatures": [
+        "Occ=1 entries in hover overlay output",
+        "Stable depth layering for large furniture"
+      ],
+      "common_failures": [
+        "Background floor peeking through table/bench supports",
+        "Unexpected art reversal under placed items"
+      ],
+      "debug_checks": [
+        "Inspect occluder assignment in insertion path",
+        "Compare focused cell with neighbor spill entries"
+      ]
+    },
+    {
+      "term": "Floor Tile",
+      "aliases": ["floor overlay", "floor flag"],
+      "category": "Rendering",
+      "definition": "Tile treated as floor-support context in composition and depth rules.",
+      "how_it_looks": "Support surfaces keep expected depth relationship with small props.",
+      "gameplay_effect": "Affects whether items appear on top of or beneath support art.",
+      "visual_signatures": [
+        "floor=1 markers in overlay records",
+        "Correct table/bench support continuity"
+      ],
+      "common_failures": [
+        "Support art flips when adding small objects",
+        "Book/key appears under support layer"
+      ],
+      "debug_checks": [
+        "Track floor flag through insertLegacyCellTile",
+        "Cross-check same-cell tie ordering"
+      ]
+    },
+    {
+      "term": "Hidden-Source Suppression",
+      "aliases": ["hidden suppression", "visibility suppression"],
+      "category": "Rendering",
+      "definition": "Rule preventing overlays sourced from hidden cells from leaking into visible space.",
+      "how_it_looks": "No decor bleed from hidden rooms into currently visible area.",
+      "gameplay_effect": "Maintains room secrecy and visual coherence in occluded areas.",
+      "visual_signatures": [
+        "hiddenSuppressedCount in parity snapshots",
+        "No phantom decor crossing room visibility boundaries"
+      ],
+      "common_failures": [
+        "Hidden-room objects appear in visible hallway",
+        "Over-aggressive suppression removes legitimate edge spill"
+      ],
+      "debug_checks": [
+        "Compare visible/open flags for source and destination cells",
+        "Validate behavior against legacy open-area semantics"
+      ]
+    },
+    {
+      "term": "Legacy Obscurity",
+      "aliases": ["legacy-obscurity sourceType"],
+      "category": "Rendering",
+      "definition": "Compatibility overlay source class used to emulate legacy obscurity/presentation behavior.",
+      "how_it_looks": "Supplemental support/background tile appears in overlay stream.",
+      "gameplay_effect": "Can stabilize or destabilize support item stacks depending on ordering.",
+      "visual_signatures": [
+        "sourceType=legacy-obscurity in hover reports",
+        "Extra support tile overlays in sensitive bench/table cells"
+      ],
+      "common_failures": [
+        "Extra support tile stacks where not expected",
+        "Local fixes that break door/wall composition elsewhere"
+      ],
+      "debug_checks": [
+        "Audit obscurity insertion policy versus baseline support tiles",
+        "Verify no global behavior hack was introduced"
+      ]
+    },
+    {
+      "term": "Same-Cell Tie Ordering",
+      "aliases": ["tie-break", "same-cell stack ordering"],
+      "category": "Rendering",
+      "definition": "Resolution behavior for multiple objects anchored to identical coordinates.",
+      "how_it_looks": "Deterministic top/bottom stack relationship across ticks and rooms.",
+      "gameplay_effect": "Controls whether props appear naturally layered on shared support cells.",
+      "visual_signatures": [
+        "Repeatable object order in hover report obj[]",
+        "No endpoint pileup during room traversal"
+      ],
+      "common_failures": [
+        "Items bunch at right side of bench",
+        "One item disappears when another is present"
+      ],
+      "debug_checks": [
+        "Inspect legacy comparator plus insertion chain behavior",
+        "Validate with same-cell high-density fixture tests"
+      ]
+    },
+    {
+      "term": "Source Window",
+      "aliases": ["viewW+1", "viewH+1", "search area"],
+      "category": "Rendering",
+      "definition": "Object scan bounds used to collect anchors that may spill into current viewport.",
+      "how_it_looks": "Edge objects render complete silhouettes at viewport boundaries.",
+      "gameplay_effect": "Prevents edge clipping that can hide relevant object fragments.",
+      "visual_signatures": [
+        "Spill from off-edge anchors appears in-view",
+        "No right/bottom edge dropouts"
+      ],
+      "common_failures": [
+        "Missing left/up spill near viewport edge",
+        "Object appears only after stepping closer"
+      ],
+      "debug_checks": [
+        "Confirm source scan includes +1 row/column",
+        "Probe edge cells with parity snapshot"
+      ]
+    },
+    {
+      "term": "LOCXYZ",
+      "aliases": ["location status"],
+      "category": "Legacy Semantics",
+      "definition": "Object status mode indicating world-space coordinate ownership.",
+      "how_it_looks": "Object is rendered/processed as a world-placed entity.",
+      "gameplay_effect": "Determines eligibility for world composition and interactions.",
+      "visual_signatures": [
+        "Object appears as map-anchored item",
+        "Not treated as contained/inventory-only object"
+      ],
+      "common_failures": [
+        "Contained object incorrectly rendered in world",
+        "World object skipped due to status misinterpretation"
+      ],
+      "debug_checks": [
+        "Audit ObjStatus decoding path",
+        "Cross-check status semantics with legacy macros"
+      ]
+    },
+    {
+      "term": "CONTAINED",
+      "aliases": ["contained status"],
+      "category": "Legacy Semantics",
+      "definition": "Object status mode indicating containment in another object/container.",
+      "how_it_looks": "Typically absent from direct world placement unless container behavior exposes it.",
+      "gameplay_effect": "Prevents false world rendering and preserves container semantics.",
+      "visual_signatures": [
+        "Object not visible until container context applies",
+        "Container interactions control visibility"
+      ],
+      "common_failures": [
+        "Contained items leaking into world overlay",
+        "Incorrect stack membership for support objects"
+      ],
+      "debug_checks": [
+        "Inspect container association fields",
+        "Verify render eligibility rules by status class"
+      ]
+    },
+    {
+      "term": "INVEN",
+      "aliases": ["inventory status"],
+      "category": "Legacy Semantics",
+      "definition": "Object status mode indicating inventory ownership.",
+      "how_it_looks": "Item appears in inventory context instead of world context.",
+      "gameplay_effect": "Separates inventory objects from map composition logic.",
+      "visual_signatures": [
+        "No world placement unless dropped/spawned",
+        "Inventory interactions drive visibility"
+      ],
+      "common_failures": [
+        "Inventory-capable props incorrectly treated as fixed world decor"
+      ],
+      "debug_checks": [
+        "Trace status transitions during pickup/drop flow",
+        "Validate filtering in object stream generation"
+      ]
+    },
+    {
+      "term": "EQUIP",
+      "aliases": ["equipped status"],
+      "category": "Legacy Semantics",
+      "definition": "Object status mode indicating equipped ownership by actor.",
+      "how_it_looks": "Not rendered as free world prop under normal conditions.",
+      "gameplay_effect": "Prevents equipment items from polluting room overlays.",
+      "visual_signatures": [
+        "Equipment remains attached to actor context",
+        "No duplicate world copy unless explicitly dropped"
+      ],
+      "common_failures": [
+        "Equipped objects drawn in room unexpectedly"
+      ],
+      "debug_checks": [
+        "Audit status + owner relationship before render staging"
+      ]
+    },
+    {
+      "term": "Determinism",
+      "aliases": ["deterministic stepping", "stable replay"],
+      "category": "Simulation",
+      "definition": "Property that identical input streams produce identical state progression.",
+      "how_it_looks": "Replays and checksums match exactly for same command stream.",
+      "gameplay_effect": "Critical for multiplayer consistency and reliable debugging.",
+      "visual_signatures": [
+        "Repeatable state hash across replay runs",
+        "Consistent visual state after deterministic re-sim"
+      ],
+      "common_failures": [
+        "State diverges run-to-run with same inputs",
+        "Visual bug cannot be reproduced from recorded commands"
+      ],
+      "debug_checks": [
+        "Run replay and compare checkpoint hashes",
+        "Locate first divergence tick before patching"
+      ]
+    },
+    {
+      "term": "Replay",
+      "aliases": ["checkpoint replay", "command playback"],
+      "category": "Simulation",
+      "definition": "Re-execution of recorded commands to validate deterministic behavior and triage regressions.",
+      "how_it_looks": "Known bug path is reproducible without manual timing variance.",
+      "gameplay_effect": "Converts anecdotal bug reports into testable evidence.",
+      "visual_signatures": [
+        "Matching event sequence and output frames",
+        "Repeatable mismatch location if bug persists"
+      ],
+      "common_failures": [
+        "No replay artifact captured before fix attempts"
+      ],
+      "debug_checks": [
+        "Capture replay before changing logic",
+        "Use checkpoints to bisect regression introduction"
+      ]
+    },
+    {
+      "term": "State Hash",
+      "aliases": ["checkpoint hash", "state fingerprint"],
+      "category": "Simulation",
+      "definition": "Digest representing authoritative state at a point in simulation time.",
+      "how_it_looks": "Hash stability indicates deterministic integrity.",
+      "gameplay_effect": "Early warning for desync and hidden state drift.",
+      "visual_signatures": [
+        "Stable hash sequence under same input stream",
+        "Divergence pinpoints first broken tick"
+      ],
+      "common_failures": [
+        "Hash drift blamed on rendering-only changes"
+      ],
+      "debug_checks": [
+        "Compare expected and actual hash checkpoints",
+        "Confirm divergence precedes visible artifact"
+      ]
+    },
+    {
+      "term": "Authority",
+      "aliases": ["server authority", "single source truth"],
+      "category": "Network",
+      "definition": "Network model where server resolves and distributes authoritative world state.",
+      "how_it_looks": "Clients converge to one shared room state.",
+      "gameplay_effect": "Prevents multiplayer world forks and ghost updates.",
+      "visual_signatures": [
+        "Consistent object placement across clients",
+        "Predictable state after reconnect"
+      ],
+      "common_failures": [
+        "Client-local assumptions overriding server truth",
+        "Apparent non-deterministic room state across sessions"
+      ],
+      "debug_checks": [
+        "Inspect authority snapshot endpoint and deltas",
+        "Confirm client is reading post-reload state"
+      ]
+    },
+    {
+      "term": "Baseline Reload",
+      "aliases": ["net baseline reload", "authoritative refresh"],
+      "category": "Network",
+      "definition": "Operational step that reloads server baseline data after asset or provenance updates.",
+      "how_it_looks": "Recent baseline fixes become visible without stale cache artifacts.",
+      "gameplay_effect": "Ensures runtime state reflects corrected canonical data.",
+      "visual_signatures": [
+        "Room updates appear after reload",
+        "Stale placement disappears after controlled refresh"
+      ],
+      "common_failures": [
+        "Expecting code/data fix to appear without server reload"
+      ],
+      "debug_checks": [
+        "Run reload_net_baseline.js",
+        "Confirm delta overlay does not reintroduce old state"
+      ]
+    },
+    {
+      "term": "Hover Report",
+      "aliases": ["VirtueMachine Hover Report", "cell probe"],
+      "category": "Diagnostics",
+      "definition": "Coordinate-level diagnostic readout of map, overlay, and object composition state.",
+      "how_it_looks": "Lists map tile, visibility, overlays, source metadata, and object order.",
+      "gameplay_effect": "Primary evidence artifact for parity triage.",
+      "visual_signatures": [
+        "overlay[] with sourceX/sourceY/sourceType",
+        "obj[] with type/frame/tile/order"
+      ],
+      "common_failures": [
+        "Debugging from screenshots without hover evidence"
+      ],
+      "debug_checks": [
+        "Capture neighboring cells, not only one target cell",
+        "Track changes before and after each patch"
+      ]
+    },
+    {
+      "term": "Parity Snapshot",
+      "aliases": ["parity report", "overlay parity snapshot"],
+      "category": "Diagnostics",
+      "definition": "Structured report for a radius around center cell including overlay counts and suppression metrics.",
+      "how_it_looks": "Shows aggregate parity conditions plus per-cell details in one capture.",
+      "gameplay_effect": "Supports room-wide diagnosis instead of single-cell guesswork.",
+      "visual_signatures": [
+        "overlayCount and hiddenSuppressedCount values",
+        "Cell-by-cell object and overlay breakdown"
+      ],
+      "common_failures": [
+        "Local fixes applied without room-wide parity review"
+      ],
+      "debug_checks": [
+        "Compare snapshots before/after canonical source changes",
+        "Monitor suppression and spill out-of-bounds metrics"
+      ]
+    },
+    {
+      "term": "Support Object",
+      "aliases": ["support sprite", "furniture support"],
+      "category": "Rendering",
+      "definition": "Underlying visual object that provides expected surface/depth context for props.",
+      "how_it_looks": "Bench/table art remains coherent while items are added or removed.",
+      "gameplay_effect": "Improves readability of interactable props on furniture.",
+      "visual_signatures": [
+        "Stable lower support segment under stacked items",
+        "No support inversion when small prop appears"
+      ],
+      "common_failures": [
+        "Support segment flips when placing book/key",
+        "Floor art appears under props unexpectedly"
+      ],
+      "debug_checks": [
+        "Inspect floor/occluder values in same cell",
+        "Verify ordering between support and movable props"
+      ]
+    },
+    {
+      "term": "Stack Endpoint",
+      "aliases": ["right-edge pileup", "endpoint stacking"],
+      "category": "Failure Pattern",
+      "definition": "Failure mode where multiple items collapse at one edge of a support row.",
+      "how_it_looks": "Rightmost bench/table cell accumulates objects that should be distributed.",
+      "gameplay_effect": "Breaks scene readability and can hide intended interactables.",
+      "visual_signatures": [
+        "Multiple objects sharing one endpoint cell",
+        "Intermediate cells missing expected props"
+      ],
+      "common_failures": [
+        "Wrong same-cell tie behavior",
+        "Wrong provenance combined with support semantics"
+      ],
+      "debug_checks": [
+        "Compare contiguous support row cells in hover reports",
+        "Audit object source coordinates versus displayed destination"
+      ]
+    },
+    {
+      "term": "SourceType",
+      "aliases": ["main", "spill-left", "spill-up", "legacy-obscurity"],
+      "category": "Diagnostics",
+      "definition": "Overlay provenance marker indicating how a tile reached the destination cell.",
+      "how_it_looks": "Explains whether tile is anchor or derived spill artifact.",
+      "gameplay_effect": "Critical for identifying wrong source-window and spill behavior.",
+      "visual_signatures": [
+        "sourceType appears per overlay entry in hover report"
+      ],
+      "common_failures": [
+        "Misreading spill artifact as misplaced main anchor"
+      ],
+      "debug_checks": [
+        "Track sourceX/sourceY with sourceType simultaneously",
+        "Validate off-edge anchor contribution at viewport borders"
+      ]
+    },
+    {
+      "term": "Open Flag",
+      "aliases": ["cell open", "visibility open"],
+      "category": "Visibility",
+      "definition": "Cell openness state used with visibility logic and suppression behavior.",
+      "how_it_looks": "Affects whether certain overlays should be considered for display.",
+      "gameplay_effect": "Prevents visual leaks and preserves hidden area semantics.",
+      "visual_signatures": [
+        "open=0/1 in hover report visibility block"
+      ],
+      "common_failures": [
+        "Assuming visible implies open or vice versa"
+      ],
+      "debug_checks": [
+        "Compare visible and open flags for source and destination cells"
+      ]
+    },
+    {
+      "term": "Visible Flag",
+      "aliases": ["cell visible", "visibility visible"],
+      "category": "Visibility",
+      "definition": "Cell visibility state indicating whether current view considers the cell visible.",
+      "how_it_looks": "Controls whether objects and overlays are expected to appear to player.",
+      "gameplay_effect": "Defines immediate sightline representation in room rendering.",
+      "visual_signatures": [
+        "visible=0/1 in hover report"
+      ],
+      "common_failures": [
+        "Treating visibility as purely render-side without legacy semantics"
+      ],
+      "debug_checks": [
+        "Check suppression logic for hidden-source overlays"
+      ]
+    },
+    {
+      "term": "Legacy Comparator",
+      "aliases": ["C_1184_29C4", "object comparator"],
+      "category": "Legacy Semantics",
+      "definition": "Legacy ordering routine used in object sort/composition behavior.",
+      "how_it_looks": "Predictable ordering of overlapping or same-region object streams.",
+      "gameplay_effect": "Influences stack ordering and compositional stability.",
+      "visual_signatures": [
+        "Consistent obj order across repeated runs"
+      ],
+      "common_failures": [
+        "Modern ordering shortcuts causing endpoint clustering"
+      ],
+      "debug_checks": [
+        "Cross-reference modern order stream with legacy comparator intent"
+      ]
+    },
+    {
+      "term": "Chain Insertion",
+      "aliases": ["cell chain", "insert legacy tile"],
+      "category": "Rendering",
+      "definition": "Per-cell insertion strategy that combines floor/occluder/source semantics for final overlay order.",
+      "how_it_looks": "Stable layering where support and props coexist correctly.",
+      "gameplay_effect": "Determines final visual truth more than sorting alone in edge cases.",
+      "visual_signatures": [
+        "Expected top-to-bottom overlay order in hover output"
+      ],
+      "common_failures": [
+        "Book disappears when support art inserted",
+        "Floor tile appears above expected object"
+      ],
+      "debug_checks": [
+        "Trace insertion branch decisions with floor/occluder flags",
+        "Validate against same-cell fixture cases"
+      ]
+    },
+    {
+      "term": "Visual Hack",
+      "aliases": ["ad hoc patch", "room-specific nudge"],
+      "category": "Methodology",
+      "definition": "Local patch that changes appearance without resolving source semantics.",
+      "how_it_looks": "One room improves, another regresses or becomes unstable later.",
+      "gameplay_effect": "Creates long-term parity debt and unpredictable side effects.",
+      "visual_signatures": [
+        "Frequent flip-flop between neighboring fixes",
+        "Repeated rework on same room cluster"
+      ],
+      "common_failures": [
+        "Manual item offset adjustments",
+        "Global render behavior changes for one local issue"
+      ],
+      "debug_checks": [
+        "Classify issue type before coding",
+        "Prove provenance and authority state first"
+      ]
+    },
+    {
+      "term": "Evidence Bundle",
+      "aliases": ["parity evidence pack"],
+      "category": "Methodology",
+      "definition": "Minimum structured evidence set required before accepting parity-related changes.",
+      "how_it_looks": "Fix discussions cite cell coordinates, reports, source selection, and legacy anchors.",
+      "gameplay_effect": "Reduces regressions and speeds code review decisions.",
+      "visual_signatures": [
+        "Before/after parity artifacts attached to patch",
+        "Clear statement of faithful vs intentional divergence"
+      ],
+      "common_failures": [
+        "Merging without reproducible evidence",
+        "Arguments based on single screenshot only"
+      ],
+      "debug_checks": [
+        "Verify all evidence checklist items are present",
+        "Confirm tests/probes updated with change"
+      ]
+    },
+    {
+      "term": "Reference Atlas",
+      "aliases": ["terms atlas", "side reference panel"],
+      "category": "Documentation",
+      "definition": "Structured term guide linking architecture vocabulary to visual outcomes and debugging workflow.",
+      "how_it_looks": "Term link click focuses detailed card while full term library remains available.",
+      "gameplay_effect": "Shortens triage loop by aligning shared language across team.",
+      "visual_signatures": [
+        "Focused term card with definitions and failure archetypes",
+        "Global term search across aliases and symptoms"
+      ],
+      "common_failures": [
+        "Team uses same word with different meanings"
+      ],
+      "debug_checks": [
+        "Confirm term links route to side panel focus",
+        "Keep glossary and atlas entries synchronized"
+      ]
+    },
+    {
+      "term": "buildOverlayCellsModel",
+      "aliases": ["overlay composition model", "render_composition model pass"],
+      "category": "Rendering Function",
+      "definition": "Core composition routine in client-web that builds per-cell object overlays with legacy-like behavior.",
+      "how_it_looks": "Determines whether stacks, spill artifacts, and support layering appear in correct order.",
+      "gameplay_effect": "Directly affects room object readability and parity for support surfaces.",
+      "visual_signatures": [
+        "Correctly ordered overlay[] entries in hover reports",
+        "Stable bench/table object distributions"
+      ],
+      "common_failures": [
+        "Endpoint stack pileups when tie behavior drifts",
+        "Support/floor inversion under small props"
+      ],
+      "debug_checks": [
+        "Inspect insertion behavior for same-cell ties",
+        "Validate sourceType and spill routing against legacy anchors"
+      ]
+    },
+    {
+      "term": "buildBaseTileBuffersCurrent",
+      "aliases": ["base tile staging", "base layer builder"],
+      "category": "Rendering Function",
+      "definition": "Base-map staging routine that prepares map/background tile buffers before overlay composition.",
+      "how_it_looks": "Provides stable ground/support context beneath overlays.",
+      "gameplay_effect": "Prevents apparent object misplacement caused by wrong background/support state.",
+      "visual_signatures": [
+        "Base tiles align with expected room geometry",
+        "Background substitutions match intended support context"
+      ],
+      "common_failures": [
+        "Floor/background mismatch that makes props seem offset"
+      ],
+      "debug_checks": [
+        "Compare base buffer output against hover map values",
+        "Verify BA-class/background substitution rules"
+      ]
+    },
+    {
+      "term": "ShowObjects",
+      "aliases": ["C_1184_36C2"],
+      "category": "Legacy Function",
+      "definition": "Legacy routine that scans source area and stages object overlays for rendering.",
+      "how_it_looks": "Defines legacy object stream entering per-cell composition.",
+      "gameplay_effect": "Incorrect emulation causes broad room-level object parity drift.",
+      "visual_signatures": [
+        "Consistent object intake for visible window plus spill-relevant fringe"
+      ],
+      "common_failures": [
+        "Missing or shifted overlays at viewport edges"
+      ],
+      "debug_checks": [
+        "Confirm modern source scan bounds match legacy behavior"
+      ]
+    },
+    {
+      "term": "ShowObject",
+      "aliases": ["C_1184_347C"],
+      "category": "Legacy Function",
+      "definition": "Legacy insertion path for a single object tile into cell composition chains.",
+      "how_it_looks": "Determines stack depth and support ordering for each inserted object.",
+      "gameplay_effect": "Affects object-on-surface readability and stack stability.",
+      "visual_signatures": [
+        "Expected top/bottom relationships for same-cell props"
+      ],
+      "common_failures": [
+        "Object appears under support art or disappears in mixed stacks"
+      ],
+      "debug_checks": [
+        "Compare modern insertion policy against legacy chain semantics"
+      ]
+    },
+    {
+      "term": "C_1184_35EA",
+      "aliases": ["legacy spill routine"],
+      "category": "Legacy Function",
+      "definition": "Legacy spill routine applying left/up/up-left fragments for multi-cell tiles.",
+      "how_it_looks": "Large objects appear with complete silhouettes across adjacent cells.",
+      "gameplay_effect": "Critical for preventing clipped or detached-looking object art.",
+      "visual_signatures": [
+        "Consistent spill-left and spill-up overlays at expected neighbors"
+      ],
+      "common_failures": [
+        "Partial object silhouettes near viewport boundaries"
+      ],
+      "debug_checks": [
+        "Audit flag-driven spill path against 0x40/0x80 behavior"
+      ]
+    },
+    {
+      "term": "SearchArea",
+      "aliases": ["MapX-5..MapX+6 window", "legacy source scan"],
+      "category": "Legacy Function",
+      "definition": "Legacy source scan bounds including extra right/bottom fringe for spill correctness.",
+      "how_it_looks": "Off-edge anchors still contribute visible spill fragments in viewport.",
+      "gameplay_effect": "Prevents edge artifact dropouts and traversal pop-in.",
+      "visual_signatures": [
+        "Edge-adjacent spill artifacts appear consistently while moving"
+      ],
+      "common_failures": [
+        "Right/bottom fringe omission causing intermittent object fragments"
+      ],
+      "debug_checks": [
+        "Confirm viewW+1/viewH+1 source scan behavior"
+      ]
+    }
+  ]
+}
