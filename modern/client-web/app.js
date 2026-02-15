@@ -80,6 +80,7 @@ import {
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
+import { performNetLoginFlow } from "./net/auth_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4230,60 +4231,60 @@ async function netEnsureCharacter() {
 }
 
 async function netLogin() {
-  setNetStatus("connecting", "Authenticating...");
-  state.net.backgroundSyncPaused = false;
-  state.net.apiBase = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
-  const username = String(netUsernameInput?.value || "").trim().toLowerCase();
-  const password = String(netPasswordInput?.value || "");
-  if (!username || !password) {
-    throw new Error("Username and password are required");
-  }
-  const login = await netRequest("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password })
-  }, false);
-  applyNetLoginState(state.net, login, username);
-  await netEnsureCharacter();
-  let resumedFromSnapshot = false;
-  try {
-    const out = await netRequest("/api/world/snapshot", { method: "GET" }, true);
-    if (out?.snapshot_base64) {
-      const loaded = decodeSimSnapshotBase64(out.snapshot_base64);
-      if (loaded) {
-        state.sim = loaded;
-        state.queue = [];
-        state.commandLog = [];
-        state.accMs = 0;
-        state.lastMoveQueueAtMs = -1;
-        state.avatarLastMoveTick = -1;
-        state.interactionProbeTile = null;
-        resumedFromSnapshot = true;
+  return performNetLoginFlow({
+    apiBaseInput: String(netApiBaseInput?.value || ""),
+    usernameInput: String(netUsernameInput?.value || ""),
+    passwordInput: String(netPasswordInput?.value || "")
+  }, {
+    setStatus: setNetStatus,
+    setBackgroundSyncPaused: (paused) => {
+      state.net.backgroundSyncPaused = !!paused;
+    },
+    setApiBase: (apiBase) => {
+      state.net.apiBase = String(apiBase || "");
+    },
+    request: netRequest,
+    applyLogin: (login, username) => {
+      applyNetLoginState(state.net, login, username);
+    },
+    ensureCharacter: netEnsureCharacter,
+    decodeSnapshot: decodeSimSnapshotBase64,
+    applyLoadedSim: (loaded) => {
+      state.sim = loaded;
+      state.queue = [];
+      state.commandLog = [];
+      state.accMs = 0;
+      state.lastMoveQueueAtMs = -1;
+      state.avatarLastMoveTick = -1;
+      state.interactionProbeTile = null;
+    },
+    pollWorldClock: netPollWorldClock,
+    pollPresence: netPollPresence,
+    setResumeFromSnapshot: (resumed) => {
+      state.net.resumeFromSnapshot = !!resumed;
+    },
+    resetBackgroundFailures: resetBackgroundNetFailures,
+    updateSessionStat: updateNetSessionStat,
+    getUsername: () => String(state.net.username || ""),
+    getCharacterName: () => String(state.net.characterName || ""),
+    getEmail: () => String(state.net.email || ""),
+    syncEmailInput: () => {
+      if (netEmailInput && state.net.email) {
+        netEmailInput.value = state.net.email;
       }
-    }
-  } catch (_err) {
-    // No prior snapshot for this character is a valid first-login state.
-  }
-  await netPollWorldClock();
-  await netPollPresence();
-  state.net.resumeFromSnapshot = resumedFromSnapshot;
-  resetBackgroundNetFailures();
-  updateNetSessionStat();
-  setNetStatus("online", resumedFromSnapshot
-    ? `${state.net.username}/${state.net.characterName} (resumed)`
-    : `${state.net.username}/${state.net.characterName}`);
-  if (netEmailInput && state.net.email) {
-    netEmailInput.value = state.net.email;
-  }
-  try {
-    localStorage.setItem(NET_API_BASE_KEY, state.net.apiBase);
-    localStorage.setItem(NET_USERNAME_KEY, state.net.username);
-    localStorage.setItem(NET_CHARACTER_NAME_KEY, state.net.characterName);
-    localStorage.setItem(NET_EMAIL_KEY, state.net.email || "");
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-  upsertNetProfileFromInputs();
+    },
+    persistLoginSettings: ({ apiBase, username, characterName, email }) => {
+      try {
+        localStorage.setItem(NET_API_BASE_KEY, String(apiBase || ""));
+        localStorage.setItem(NET_USERNAME_KEY, String(username || ""));
+        localStorage.setItem(NET_CHARACTER_NAME_KEY, String(characterName || ""));
+        localStorage.setItem(NET_EMAIL_KEY, String(email || ""));
+      } catch (_err) {
+        // ignore storage failures in restrictive browser contexts
+      }
+    },
+    onProfileUpdated: upsertNetProfileFromInputs
+  });
 }
 
 async function netSetEmail() {
