@@ -112,6 +112,16 @@ Authenticated (Bearer token):
 - `POST /api/world/objects/reset` (reset world object deltas to baseline)
 - `POST /api/world/objects/reload-baseline` (reload immutable baseline from `VM_NET_OBJECT_BASELINE_DIR` and clear deltas)
 
+Runtime contract headers (optional, forward-compatibility):
+
+- `x-vm-runtime-profile`: `canonical_strict` or `canonical_plus`
+- `x-vm-runtime-extensions`: comma-separated extension ids, or `none`
+
+Current behavior:
+
+- If omitted/invalid, server defaults to `canonical_strict` with no extensions.
+- `GET /api/world/clock`, `GET /api/world/objects`, and `POST /api/world/objects/interact` echo normalized runtime metadata as `runtime_contract`.
+
 Clock note:
 - `/api/world/clock` is authoritative server time/tick.
 - connected clients are expected to sync local world time/date from this endpoint.

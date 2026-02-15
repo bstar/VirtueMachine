@@ -191,6 +191,14 @@ async function main() {
       assert.ok(Number.isInteger(Number(first.assoc_child_0010_count)));
     }
 
+    const worldObjectsDefaultContract = await jsonFetch(baseUrl, "/api/world/objects?x=307&y=347&z=0&radius=0&limit=8", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(worldObjectsDefaultContract.status, 200);
+    assert.equal(worldObjectsDefaultContract.body?.runtime_contract?.profile, "canonical_strict");
+    assert.deepEqual(worldObjectsDefaultContract.body?.runtime_contract?.extensions, []);
+
     const worldObjectsSweep = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096&projection=footprint&include_footprint=1", {
       method: "GET",
       headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
@@ -632,6 +640,14 @@ async function main() {
     });
     assert.equal(clock2.status, 200);
     assert.ok(clock2.body.tick >= clock1.body.tick);
+
+    const clockDefaultContract = await jsonFetch(baseUrl, "/api/world/clock", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(clockDefaultContract.status, 200);
+    assert.equal(clockDefaultContract.body?.runtime_contract?.profile, "canonical_strict");
+    assert.deepEqual(clockDefaultContract.body?.runtime_contract?.extensions, []);
 
     const policy = await jsonFetch(baseUrl, "/api/world/critical-items/policy", {
       method: "GET",
