@@ -59,6 +59,13 @@ import {
 import { netJsonRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 import { performNetLoadSnapshot, performNetSaveSnapshot } from "./net/snapshot_runtime.ts";
+import {
+  performNetChangePassword,
+  performNetRecoverPassword,
+  performNetSendEmailVerification,
+  performNetSetEmail,
+  performNetVerifyEmail
+} from "./net/account_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4273,123 +4280,94 @@ async function netLogin() {
 }
 
 async function netSetEmail() {
-  if (!state.net.token) {
-    await netLogin();
-  }
-  const email = String(netEmailInput?.value || "").trim().toLowerCase();
-  if (!email) {
-    throw new Error("Recovery email is required");
-  }
-  setNetStatus("sync", "Saving recovery email...");
-  const out = await netRequest("/api/auth/set-email", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email })
-  }, true);
-  state.net.email = String(out?.user?.email || email);
-  state.net.emailVerified = !!out?.user?.email_verified;
-  try {
-    localStorage.setItem(NET_EMAIL_KEY, state.net.email);
-  } catch (_err) {
-    // ignore storage failures
-  }
-  upsertNetProfileFromInputs();
-  setNetStatus("online", state.net.emailVerified ? "Email verified" : "Email set (verification required)");
-  return out;
+  return performNetSetEmail(String(netEmailInput?.value || ""), {
+    ensureAuth: netLogin,
+    isAuthenticated: () => !!state.net.token,
+    request: netRequest,
+    setStatus: setNetStatus,
+    applyEmail: (email, verified) => {
+      state.net.email = String(email || "");
+      state.net.emailVerified = !!verified;
+    },
+    persistEmail: (email) => {
+      try {
+        localStorage.setItem(NET_EMAIL_KEY, String(email || ""));
+      } catch (_err) {
+        // ignore storage failures
+      }
+    },
+    onProfileUpdated: upsertNetProfileFromInputs
+  });
 }
 
 async function netSendEmailVerification() {
-  if (!state.net.token) {
-    await netLogin();
-  }
-  setNetStatus("sync", "Sending verification email...");
-  const out = await netRequest("/api/auth/send-email-verification", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({})
-  }, true);
-  setNetStatus("online", "Verification code sent to recovery email");
-  return out;
+  return performNetSendEmailVerification({
+    ensureAuth: netLogin,
+    isAuthenticated: () => !!state.net.token,
+    request: netRequest,
+    setStatus: setNetStatus
+  });
 }
 
 async function netVerifyEmail() {
-  if (!state.net.token) {
-    await netLogin();
-  }
-  const code = String(netEmailCodeInput?.value || "").trim();
-  if (!code) {
-    throw new Error("Verification code is required");
-  }
-  setNetStatus("sync", "Verifying recovery email...");
-  const out = await netRequest("/api/auth/verify-email", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code })
-  }, true);
-  state.net.email = String(out?.user?.email || state.net.email || "");
-  state.net.emailVerified = !!out?.user?.email_verified;
-  if (netEmailInput && state.net.email) {
-    netEmailInput.value = state.net.email;
-  }
-  setNetStatus("online", "Recovery email verified");
-  return out;
+  return performNetVerifyEmail(String(netEmailCodeInput?.value || ""), {
+    ensureAuth: netLogin,
+    isAuthenticated: () => !!state.net.token,
+    request: netRequest,
+    setStatus: setNetStatus,
+    currentEmail: () => String(state.net.email || ""),
+    applyEmail: (email, verified) => {
+      state.net.email = String(email || "");
+      state.net.emailVerified = !!verified;
+    },
+    onVerified: (email) => {
+      if (netEmailInput && email) {
+        netEmailInput.value = email;
+      }
+    }
+  });
 }
 
 async function netRecoverPassword() {
-  const base = String(netApiBaseInput?.value || "").trim() || "http://127.0.0.1:8081";
-  const username = String(netUsernameInput?.value || "").trim().toLowerCase();
-  const email = String(netEmailInput?.value || "").trim().toLowerCase();
-  if (!username) {
-    throw new Error("Username is required");
-  }
-  if (!email) {
-    throw new Error("Recovery email is required");
-  }
-  state.net.apiBase = base;
-  setNetStatus("connecting", "Sending password recovery email...");
-  const out = await netRequest(`/api/auth/recover-password?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}`, { method: "GET" }, false);
-  setNetStatus("online", `Recovery email sent for ${out?.user?.username || username}`);
-  return out;
+  return performNetRecoverPassword(
+    String(netApiBaseInput?.value || ""),
+    String(netUsernameInput?.value || ""),
+    String(netEmailInput?.value || ""),
+    {
+      request: netRequest,
+      setApiBase: (base) => { state.net.apiBase = String(base || ""); },
+      setStatus: setNetStatus
+    }
+  );
 }
 
 async function netChangePassword() {
-  if (!state.net.token) {
-    await netLogin();
-  }
-  const oldPassword = String(netPasswordInput?.value || "");
-  const newPassword = String(netNewPasswordInput?.value || "");
-  if (!oldPassword) {
-    throw new Error("Current password is required");
-  }
-  if (!newPassword) {
-    throw new Error("New password is required");
-  }
-  if (newPassword === oldPassword) {
-    throw new Error("New password must be different");
-  }
-  setNetStatus("sync", "Updating account password...");
-  const out = await netRequest("/api/auth/change-password", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      old_password: oldPassword,
-      new_password: newPassword
-    })
-  }, true);
-  if (netPasswordInput) {
-    netPasswordInput.value = newPassword;
-  }
-  if (netNewPasswordInput) {
-    netNewPasswordInput.value = "";
-  }
-  try {
-    localStorage.setItem(NET_PASSWORD_KEY, newPassword);
-  } catch (_err) {
-    // ignore storage failures
-  }
-  upsertNetProfileFromInputs();
-  setNetStatus("online", "Password updated");
-  return out;
+  return performNetChangePassword(
+    String(netPasswordInput?.value || ""),
+    String(netNewPasswordInput?.value || ""),
+    {
+      ensureAuth: netLogin,
+      isAuthenticated: () => !!state.net.token,
+      request: netRequest,
+      setStatus: setNetStatus,
+      onPasswordChanged: (nextPassword) => {
+        if (netPasswordInput) {
+          netPasswordInput.value = nextPassword;
+        }
+        if (netNewPasswordInput) {
+          netNewPasswordInput.value = "";
+        }
+      },
+      persistPassword: (nextPassword) => {
+        try {
+          localStorage.setItem(NET_PASSWORD_KEY, nextPassword);
+        } catch (_err) {
+          // ignore storage failures
+        }
+      },
+      onProfileUpdated: upsertNetProfileFromInputs
+    }
+  );
 }
 
 function netLogout() {
