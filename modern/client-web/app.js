@@ -79,6 +79,7 @@ import {
   requestWorldObjectsAtCell
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
+import { performNetLogoutSequence } from "./net/logout_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4381,20 +4382,11 @@ function netLogout() {
 }
 
 async function netLogoutAndPersist() {
-  let saveErr = null;
-  let leaveErr = null;
-  if (state.net.token && state.net.userId) {
-    try {
-      await netSaveSnapshot();
-    } catch (err) {
-      saveErr = err;
-    }
-    try {
-      await netLeavePresence();
-    } catch (err) {
-      leaveErr = err;
-    }
-  }
+  const { saveErr, leaveErr } = await performNetLogoutSequence({
+    hasSession: () => !!(state.net.token && state.net.userId),
+    saveSnapshot: netSaveSnapshot,
+    leavePresence: netLeavePresence
+  });
   clearNetSessionState(state.net);
   if (state.sessionStarted) {
     returnToTitleMenu();
