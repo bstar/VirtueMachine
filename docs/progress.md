@@ -10,6 +10,7 @@ Last Updated: 2026-02-14
 - `[~]` M3: Playable Single-Player Vertical Slice (navigation-only)
 - `[~]` M4: Gameplay Parity Expansion
 - `[ ]` M5: Multiplayer Prototype
+- `[ ]` M6: Hosting Readiness and Public Login
 
 Legend:
 
@@ -101,6 +102,15 @@ This checklist is intentionally mutable.
 - `[~]` Critical quest-item recovery/respawn policy defined for server authority (DEC-0003)
 - `[ ]` Live synchronized multiplayer prototype
 
+### M6 Hosting Readiness
+
+- `[ ]` Security hardening checklist complete (auth/rate limit/secrets)
+- `[ ]` Backup + restore drill complete for world/player persistence
+- `[ ]` Health checks + structured logging + alerting in place
+- `[ ]` C/WASM sim-core authority contract active on backend-critical paths
+- `[ ]` Pre-deploy deterministic and canonical regression gates enforced
+- `[ ]` Staged rollout plan documented (alpha -> invite -> public)
+
 ## Rendering Parity Track
 
 ### R1: Static Layer Content
@@ -155,6 +165,10 @@ This checklist is intentionally mutable.
 - `[x]` Complete startup/menu art parity implementation pass
 - `[x]` Complete in-engine legacy cursor integration pass
 - `[x]` Resolve blackout wall-render parity and remove Nuvie mode fork
+- `[ ]` Lock and document C/WASM sim-core authority contract gate before major stack cleanup:
+  - define backend authority boundary for simulation-critical state transitions
+  - ensure JS net/client remain transport/projection, not gameplay-rule authority
+  - require this contract before large TS/Vite/Bun migration slices and multi-server startup orchestration changes
 - `[~]` Add mode-aware legacy keyboard parity matrix + target-cursor flow
 - `[~]` Add deterministic interaction/state transition tests:
   - completed: canonical status transition matrix (`LOCXYZ/CONTAINED/INVEN/EQUIP`)
@@ -242,6 +256,7 @@ Continue canonical interaction-parity closure before resuming audio:
 4. Add room-level canonical fixture corpus for interaction hotspots (Virtue room / British study stack cases).
 5. Only after chain semantics closure: proceed to environmental collision + sit/sleep interaction slice.
 6. Add dev-slice spec for LB early-story intro gate (battle-script dependent) but keep it deferred until combat/script compatibility is complete.
+6.5. Finalize C/WASM sim-core backend authority contract and make it a prerequisite gate for major architecture cleanup/migration slices.
 
 Then continue R5/R3 closure and M5:
 

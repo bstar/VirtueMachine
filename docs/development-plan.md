@@ -18,6 +18,7 @@ Note: legacy source references such as `SRC/...` are relative to `legacy/u6-deco
 3. Behavior parity over code parity: preserve outcomes/timing/order where it matters.
 4. Explicit provenance: no undocumented renames or inferred mechanics.
 5. Phase gates: each milestone requires tests and documentation updates.
+6. Authority contract before stack cleanup: do not expand client/server architecture (TS/Vite/Bun consolidation, orchestration refactors, broad module moves) beyond local slices until a documented C/WASM sim-core authority contract is locked and adopted.
 
 ## Workstreams
 
@@ -38,6 +39,10 @@ Primary outputs:
 - Extract gameplay systems into platform-agnostic runtime.
 - Replace DOS-era APIs with shims/interfaces.
 - Normalize integer/time/RNG behavior for deterministic stepping.
+- Define and freeze backend authority boundary for C/WASM execution:
+  - backend simulation state transitions must be sourced from sim-core contract surfaces
+  - JS net/client layers are transport/projection layers, not rule-authority layers
+  - all new gameplay mechanics must target contract APIs first, not ad hoc JS state paths
 
 Primary outputs:
 
@@ -125,6 +130,7 @@ Multiplayer handling policy during this phase:
 
 - combat/dialogue/NPC schedule systems integrated
 - regression suite expanded to critical scenarios
+- C/WASM authority contract adopted for backend simulation-critical paths
 
 ## M5: Multiplayer Prototype
 
@@ -145,6 +151,37 @@ Use:
 
 - `docs/research/legacy-findings.md` for discovery notes
 - `docs/architecture/legacy/symbol-catalog.md` for naming/meaning evolution
+
+## Hosting Readiness (Best-Practice Gate)
+
+Before opening public login/hosting, require the following:
+
+1. Security baseline
+- secrets and API keys stored outside repo/runtime config files
+- authenticated routes validated and rate-limited
+- password reset/email flows verified in production-like config
+- basic abuse controls (request throttling + account lockout/backoff policy)
+
+2. Data safety baseline
+- automated snapshot/database backups with restore drill
+- explicit retention policy for player snapshots and logs
+- migration/versioning plan for persisted world/player data
+
+3. Operations baseline
+- health endpoint + startup readiness checks
+- structured logs with request/session correlation ids
+- error reporting and alerting for auth/snapshot failures
+- deploy/runbook with rollback procedure
+
+4. Gameplay authority baseline
+- C/WASM sim-core authority contract active for simulation-critical transitions
+- deterministic replay/hash checks run in CI and pre-deploy gate
+- canonical conversation/interaction regression suite passing
+
+5. Rollout policy
+- staged rollout (private alpha -> limited invite -> wider access)
+- clear bug-report channels and incident response owner
+- explicit “world reset” and maintenance communication policy
 
 ## Risk Register (Initial)
 
