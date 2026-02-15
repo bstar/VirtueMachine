@@ -73,3 +73,26 @@ export function getSelectedProfileKeyFromStorage(storageKey: string): string {
     return "";
   }
 }
+
+export function upsertProfileList(
+  profiles: NetProfile[],
+  profile: NetProfile,
+  maxEntries = 12
+): NetProfile[] {
+  const key = profileKey(profile);
+  const next = (Array.isArray(profiles) ? profiles : []).filter((row) => profileKey(row) !== key);
+  next.unshift(profile);
+  while (next.length > maxEntries) {
+    next.pop();
+  }
+  return next;
+}
+
+export function buildProfileSelectOptions(
+  profiles: NetProfile[]
+): Array<{ value: string; label: string }> {
+  return (Array.isArray(profiles) ? profiles : []).map((p) => ({
+    value: profileKey(p),
+    label: `${p.username} @ ${p.apiBase}`
+  }));
+}

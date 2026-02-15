@@ -83,12 +83,14 @@ import { performNetLogoutSequence } from "./net/logout_runtime.ts";
 import { performNetLoginFlow } from "./net/auth_runtime.ts";
 import { handleBackgroundFailure, resetBackgroundFailureState } from "./net/failure_runtime.ts";
 import {
+  buildProfileSelectOptions,
   getSelectedProfileKeyFromStorage,
   loadNetProfilesFromStorage,
   profileKey as profileKeyRuntime,
   setSelectedProfileKeyInStorage,
   sanitizeProfile as sanitizeProfileRuntime,
-  saveNetProfilesToStorage
+  saveNetProfilesToStorage,
+  upsertProfileList
 } from "./net/profile_runtime.ts";
 import {
   decodeSimSnapshotBase64Runtime,
@@ -3960,10 +3962,10 @@ function populateNetAccountSelect() {
   placeholder.value = "";
   placeholder.textContent = profiles.length ? "Select saved account..." : "No saved accounts yet";
   netAccountSelect.appendChild(placeholder);
-  for (const p of profiles) {
+  for (const option of buildProfileSelectOptions(profiles)) {
     const opt = document.createElement("option");
-    opt.value = profileKey(p);
-    opt.textContent = `${p.username} @ ${p.apiBase}`;
+    opt.value = option.value;
+    opt.textContent = option.label;
     if (opt.value === selected) {
       opt.selected = true;
     }
@@ -3998,11 +4000,7 @@ function upsertNetProfileFromInputs() {
     return;
   }
   const key = profileKey(p);
-  const profiles = loadNetProfiles().filter((row) => profileKey(row) !== key);
-  profiles.unshift(p);
-  while (profiles.length > 12) {
-    profiles.pop();
-  }
+  const profiles = upsertProfileList(loadNetProfiles(), p, 12);
   saveNetProfiles(profiles);
   setSelectedProfileKey(key);
   populateNetAccountSelect();
