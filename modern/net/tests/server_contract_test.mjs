@@ -141,9 +141,14 @@ async function main() {
     assert.equal(login.status, 200);
     assert.ok(login.body?.token);
     const token = login.body.token;
+    const runtimeHeaders = {
+      "x-vm-runtime-profile": "canonical_plus",
+      "x-vm-runtime-extensions": "quest_system,housing"
+    };
     const authHeaders = {
       "content-type": "application/json",
-      authorization: `Bearer ${token}`
+      authorization: `Bearer ${token}`,
+      ...runtimeHeaders
     };
 
     const badLogin = await jsonFetch(baseUrl, "/api/auth/login", {
@@ -171,10 +176,12 @@ async function main() {
 
     const worldObjects = await jsonFetch(baseUrl, "/api/world/objects?x=307&y=347&z=0&radius=0&limit=32", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(worldObjects.status, 200);
     assert.ok(worldObjects.body?.meta);
+    assert.equal(worldObjects.body?.runtime_contract?.profile, "canonical_plus");
+    assert.deepEqual(worldObjects.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
     assert.ok(Array.isArray(worldObjects.body?.objects));
     assert.ok(Number.isInteger(worldObjects.body?.meta?.active_count));
     if (worldObjects.body.objects.length > 0) {
@@ -186,7 +193,7 @@ async function main() {
 
     const worldObjectsSweep = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096&projection=footprint&include_footprint=1", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(worldObjectsSweep.status, 200);
     assert.ok(Array.isArray(worldObjectsSweep.body?.objects));
@@ -208,7 +215,7 @@ async function main() {
       const radius = Number(fixture?.radius) | 0;
       const sample = await jsonFetch(baseUrl, `/api/world/objects?x=${cx}&y=${cy}&z=${cz}&radius=${radius}&limit=4096`, {
         method: "GET",
-        headers: { authorization: `Bearer ${token}` }
+        headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
       });
       assert.equal(sample.status, 200, `fixture ${fixture.id}: sample query failed`);
       const objects = Array.isArray(sample.body?.objects) ? sample.body.objects : [];
@@ -232,11 +239,11 @@ async function main() {
 
     const anchorSample = await jsonFetch(baseUrl, "/api/world/objects?x=298&y=355&z=0&radius=0&limit=64&projection=anchor", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     const footprintSample = await jsonFetch(baseUrl, "/api/world/objects?x=298&y=355&z=0&radius=0&limit=64&projection=footprint", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(anchorSample.status, 200);
     assert.equal(footprintSample.status, 200);
@@ -261,7 +268,7 @@ async function main() {
 
     const lifecycleObjects = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(lifecycleObjects.status, 200);
     assert.ok(Array.isArray(lifecycleObjects.body?.objects));
@@ -293,6 +300,8 @@ async function main() {
       assert.equal(String(take.body?.target?.holder_id || ""), "contract-avatar");
       assert.ok(Number(take.body?.interaction_checkpoint?.seq) >= 1);
       assert.ok(String(take.body?.interaction_checkpoint?.hash || "").length > 0);
+      assert.equal(take.body?.runtime_contract?.profile, "canonical_plus");
+      assert.deepEqual(take.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
 
       const equip = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
@@ -608,16 +617,18 @@ async function main() {
 
     const clock1 = await jsonFetch(baseUrl, "/api/world/clock", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(clock1.status, 200);
     assert.ok(Number.isInteger(clock1.body?.tick));
     assert.ok(Number.isInteger(clock1.body?.time_h));
     assert.ok(Number.isInteger(clock1.body?.time_m));
+    assert.equal(clock1.body?.runtime_contract?.profile, "canonical_plus");
+    assert.deepEqual(clock1.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
     await sleep(220);
     const clock2 = await jsonFetch(baseUrl, "/api/world/clock", {
       method: "GET",
-      headers: { authorization: `Bearer ${token}` }
+      headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(clock2.status, 200);
     assert.ok(clock2.body.tick >= clock1.body.tick);

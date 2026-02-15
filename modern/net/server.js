@@ -149,6 +149,47 @@ function parseAuth(req) {
   return header.slice("Bearer ".length).trim();
 }
 
+const RUNTIME_PROFILE_CANONICAL_STRICT = "canonical_strict";
+const RUNTIME_PROFILE_CANONICAL_PLUS = "canonical_plus";
+const ALLOWED_RUNTIME_PROFILES = new Set([
+  RUNTIME_PROFILE_CANONICAL_STRICT,
+  RUNTIME_PROFILE_CANONICAL_PLUS
+]);
+
+function normalizeRuntimeProfileHeader(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  if (ALLOWED_RUNTIME_PROFILES.has(v)) {
+    return v;
+  }
+  return RUNTIME_PROFILE_CANONICAL_STRICT;
+}
+
+function parseRuntimeExtensionsHeader(raw) {
+  const src = String(raw || "").trim().toLowerCase();
+  if (!src || src === "none" || src === "off") {
+    return [];
+  }
+  const out = [];
+  const seen = new Set();
+  for (const token of src.split(",")) {
+    const key = String(token || "").trim();
+    if (!key) continue;
+    if (!/^[a-z0-9_]+$/.test(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  out.sort();
+  return out;
+}
+
+function runtimeContractFromHeaders(req) {
+  return {
+    profile: normalizeRuntimeProfileHeader(req?.headers?.["x-vm-runtime-profile"]),
+    extensions: parseRuntimeExtensionsHeader(req?.headers?.["x-vm-runtime-extensions"])
+  };
+}
+
 function sendJson(res, status, value) {
   const body = `${JSON.stringify(value)}\n`;
   res.writeHead(status, {
@@ -156,7 +197,7 @@ function sendJson(res, status, value) {
     "cache-control": "no-store",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization"
+    "access-control-allow-headers": "content-type,authorization,x-vm-runtime-profile,x-vm-runtime-extensions"
   });
   res.end(body);
 }
@@ -691,7 +732,13 @@ function normalizeWorldInteractionLog(raw) {
       z: Number(e?.z) | 0,
       holder_kind: String(e?.holder_kind || "none"),
       holder_id: String(e?.holder_id || ""),
-      holder_key: String(e?.holder_key || "")
+      holder_key: String(e?.holder_key || ""),
+      runtime_profile: normalizeRuntimeProfileHeader(e?.runtime_profile),
+      runtime_extensions: parseRuntimeExtensionsHeader(
+        Array.isArray(e?.runtime_extensions)
+          ? e.runtime_extensions.join(",")
+          : e?.runtime_extensions
+      )
     }));
   }
   return base;
@@ -731,7 +778,13 @@ function recordWorldInteractionEvent(state, event) {
     z: Number(event?.z) | 0,
     holder_kind: String(event?.holder_kind || "none"),
     holder_id: String(event?.holder_id || ""),
-    holder_key: String(event?.holder_key || "")
+    holder_key: String(event?.holder_key || ""),
+    runtime_profile: normalizeRuntimeProfileHeader(event?.runtime_profile),
+    runtime_extensions: parseRuntimeExtensionsHeader(
+      Array.isArray(event?.runtime_extensions)
+        ? event.runtime_extensions.join(",")
+        : event?.runtime_extensions
+    )
   };
   log.checkpoint_hash = hashInteractionEvent(log.checkpoint_hash, row);
   log.seq = nextSeq | 0;
@@ -1275,7 +1328,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
-      "access-control-allow-headers": "content-type,authorization",
+      "access-control-allow-headers": "content-type,authorization,x-vm-runtime-profile,x-vm-runtime-extensions",
       "access-control-max-age": "86400"
     });
     res.end();
@@ -1708,6 +1761,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/clock") {
+    const runtimeContract = runtimeContractFromHeaders(req);
     const clock = updateAuthoritativeClock(state);
     persistState(state);
     sendJson(res, 200, {
@@ -1716,7 +1770,8 @@ const server = http.createServer(async (req, res) => {
       time_h: clock.time_h >>> 0,
       date_d: clock.date_d >>> 0,
       date_m: clock.date_m >>> 0,
-      date_y: clock.date_y >>> 0
+      date_y: clock.date_y >>> 0,
+      runtime_contract: runtimeContract
     });
     return;
   }
@@ -1744,6 +1799,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/objects") {
+    const runtimeContract = runtimeContractFromHeaders(req);
     const hasX = url.searchParams.has("x");
     const hasY = url.searchParams.has("y");
     const wx = queryIntOr(url, "x", 0);
@@ -1818,12 +1874,14 @@ const server = http.createServer(async (req, res) => {
         projection,
         include_footprint: withFootprint
       },
+      runtime_contract: runtimeContract,
       objects: out
     });
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/objects/interact") {
+    const runtimeContract = runtimeContractFromHeaders(req);
     let body;
     try {
       body = await readBody(req);
@@ -1922,7 +1980,9 @@ const server = http.createServer(async (req, res) => {
       z: target.z | 0,
       holder_kind: String(target.holder_kind || "none"),
       holder_id: String(target.holder_id || ""),
-      holder_key: String(target.holder_key || "")
+      holder_key: String(target.holder_key || ""),
+      runtime_profile: runtimeContract.profile,
+      runtime_extensions: runtimeContract.extensions
     });
 
     state.worldObjects.active.sort(compareLegacyWorldObjectOrder);
@@ -1948,6 +2008,7 @@ const server = http.createServer(async (req, res) => {
         seq: Number(state.worldInteractionLog?.seq || event.seq || 0) >>> 0,
         hash: String(state.worldInteractionLog?.checkpoint_hash || "")
       },
+      runtime_contract: runtimeContract,
       meta: worldObjectMeta(state)
     });
     return;
