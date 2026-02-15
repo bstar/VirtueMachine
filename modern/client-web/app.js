@@ -447,6 +447,7 @@ const state = {
   legacyConversationPaging: false,
   legacyConversationPages: [],
   legacyConversationKnownNames: {},
+  legacyConversationVmContext: null,
   legacyConversationNpcKey: "",
   legacyConversationPendingPrompt: "",
   legacyConversationTopicState: {
@@ -489,6 +490,8 @@ const state = {
   legacyConversationScript: null,
   legacyConversationDescText: "",
   legacyConversationRules: [],
+  legacyConversationPc: -1,
+  legacyConversationInputOpcode: 0,
   legacyScaleMode: "4",
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
@@ -678,7 +681,7 @@ function paginateLedgerMessages(lines, maxLines = LEGACY_LEDGER_MAX_LINES - 1) {
   const pages = [];
   let cur = [];
   for (const item of src) {
-    const wrapped = wrapLegacyLedgerLines(item);
+    const wrapped = (item === "") ? [""] : wrapLegacyLedgerLines(item);
     if (!wrapped.length) {
       continue;
     }
@@ -1959,6 +1962,13 @@ function endLegacyConversation() {
   state.legacyConversationScript = null;
   state.legacyConversationDescText = "";
   state.legacyConversationRules = [];
+  state.legacyConversationPc = -1;
+  state.legacyConversationInputOpcode = 0;
+  state.legacyConversationVmContext = null;
+  /* Canonical talk exit clears inline prompt/ankh from non-talk HUD panels. */
+  state.legacyLedgerPrompt = false;
+  state.legacyPromptAnimMs = 0;
+  state.legacyPromptAnimPhase = 0;
   state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
 }
 
@@ -1976,6 +1986,79 @@ const CONV_OP_DESC = 0xf1;
 const CONV_OP_MAIN = 0xf2;
 const CONV_OP_END = 0xff;
 const CONV_OP_JOIN = 0xca;
+const CONV_OP_ASKTOP = 0xf7;
+const CONV_OP_GET = 0xf8;
+const CONV_OP_GETSTR = 0xf9;
+const CONV_OP_GETCHR = 0xfa;
+const CONV_OP_GETINT = 0xfb;
+const CONV_OP_GETDIGIT = 0xfc;
+const CONV_OP_GOTO = 0xb0;
+const CONV_OP_CALL = 0xb1;
+const CONV_OP_VARINT = 0xb2;
+const CONV_OP_VARSTR = 0xb3;
+const CONV_OP_PRINTSTR = 0xb5;
+const CONV_OP_IF = 0xa1;
+const CONV_OP_ENDIF = 0xa2;
+const CONV_OP_ELSE = 0xa3;
+const CONV_OP_LET = 0xa6;
+const CONV_OP_END_OF_FACTOR = 0xa7;
+const CONV_OP_LET_VALUE = 0xa8;
+const CONV_OP_TST = 0xab;
+const CONV_OP_ADDRESS = 0xd2;
+const CONV_OP_BYTE = 0xd3;
+const CONV_OP_WORD = 0xd4;
+const CONV_OP_EQU = 0x86;
+const CONV_OP_DIF = 0x85;
+const CONV_OP_SUP = 0x81;
+const CONV_OP_SUPE = 0x82;
+const CONV_OP_INF = 0x83;
+const CONV_OP_INFE = 0x84;
+const CONV_OP_ADD = 0x90;
+const CONV_OP_SUB = 0x91;
+const CONV_OP_MUL = 0x92;
+const CONV_OP_DIV = 0x93;
+const CONV_OP_OR = 0x94;
+const CONV_OP_AND = 0x95;
+const CONV_OP_NPC = 0xeb;
+
+function conversationMacroSymbolToIndex(sym) {
+  const ch = String(sym || "").toUpperCase();
+  if (!ch) return -1;
+  if (ch >= "0" && ch <= "9") {
+    return ch.charCodeAt(0) - 0x30;
+  }
+  if (ch >= "A" && ch <= "Z") {
+    return ch.charCodeAt(0) - 0x37;
+  }
+  return -1;
+}
+
+function conversationVmContextForSession(overrides = null) {
+  const ov = (overrides && typeof overrides === "object") ? overrides : {};
+  const varStr = new Array(64).fill("");
+  const varInt = new Array(64).fill(0);
+  const talkFlags = Object.create(null);
+  const hour = Number(state.world?.clock_hour) | 0;
+  const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "afternoon" : "evening");
+  const player = String(state.net?.characterName || "Avatar").trim() || "Avatar";
+  const target = String(ov.targetName || state.legacyConversationTargetName || "").trim();
+  const greeting = String(ov.greeting || "milady").trim() || "milady";
+  /* Canonical #/$ init (seg_16E1) + preserved $0-$9 compatibility defaults. */
+  varStr[conversationMacroSymbolToIndex("G")] = greeting;
+  varStr[conversationMacroSymbolToIndex("N")] = target;
+  varStr[conversationMacroSymbolToIndex("P")] = player;
+  varStr[conversationMacroSymbolToIndex("T")] = timeWord;
+  varStr[4] = "Avatar";
+  varInt[conversationMacroSymbolToIndex("H")] = hour;
+  varInt[conversationMacroSymbolToIndex("G")] = (greeting.toLowerCase() === "milady") ? 1 : 0;
+  varInt[conversationMacroSymbolToIndex("N")] = Math.max(0, (Number(state.sim?.partySize) | 0) - 1);
+  return {
+    varStr,
+    varInt,
+    talkFlags,
+    objNum: Number(ov.objNum) | 0
+  };
+}
 
 function decodeU6LzwWithKnownLength(srcBytes, outLen) {
   const src = (srcBytes instanceof Uint8Array) ? srcBytes : new Uint8Array(srcBytes || 0);
@@ -2327,7 +2410,7 @@ function splitConversationInputWords(input) {
 function conversationWordMatchesPattern(pattern, word) {
   const p = String(pattern || "").toLowerCase();
   const w = String(word || "").toLowerCase();
-  if (!p || p.length !== w.length) {
+  if (!p || w.length < p.length) {
     return false;
   }
   for (let i = 0; i < p.length; i += 1) {
@@ -2435,6 +2518,21 @@ function appendConversationChar(ch, linesRef) {
   arr[idx] = String(arr[idx] || "") + ch;
 }
 
+function flushConversationLine(linesRef) {
+  const arr = linesRef;
+  if (!Array.isArray(arr) || arr.length <= 0) {
+    return;
+  }
+  const idx = arr.length - 1;
+  const text = String(arr[idx] || "").replace(/\s+/g, " ").trim();
+  if (text) {
+    arr[idx] = text;
+    arr.push("");
+    return;
+  }
+  arr[idx] = "";
+}
+
 function pushConversationLineBreak(linesRef) {
   const arr = linesRef;
   if (!Array.isArray(arr) || arr.length <= 0) {
@@ -2464,13 +2562,242 @@ function readConversationCString(scriptBytes, startPc) {
   return out.join("").replace(/\s+/g, " ").trim();
 }
 
+function readConversationU32(scriptBytes, pc) {
+  if ((pc + 4) > scriptBytes.length) {
+    return { value: 0, nextPc: scriptBytes.length };
+  }
+  const value = (
+    (scriptBytes[pc] & 0xff)
+    | ((scriptBytes[pc + 1] & 0xff) << 8)
+    | ((scriptBytes[pc + 2] & 0xff) << 16)
+    | ((scriptBytes[pc + 3] & 0xff) << 24)
+  ) >>> 0;
+  return { value, nextPc: pc + 4 };
+}
+
+function conversationVmReadVarInt(vmContext, idx) {
+  const i = Number(idx) | 0;
+  const src = Array.isArray(vmContext?.varInt) ? vmContext.varInt : null;
+  if (!src || i < 0 || i >= src.length) return 0;
+  return Number(src[i]) | 0;
+}
+
+function conversationVmReadVarStr(vmContext, idx) {
+  const i = Number(idx) | 0;
+  const src = Array.isArray(vmContext?.varStr) ? vmContext.varStr : null;
+  if (!src || i < 0 || i >= src.length) return "";
+  return String(src[i] || "");
+}
+
+function conversationVmWriteVarInt(vmContext, idx, value) {
+  const i = Number(idx) | 0;
+  const dst = Array.isArray(vmContext?.varInt) ? vmContext.varInt : null;
+  if (!dst || i < 0 || i >= dst.length) return;
+  dst[i] = Number(value) | 0;
+}
+
+function conversationVmWriteVarStr(vmContext, idx, value) {
+  const i = Number(idx) | 0;
+  const dst = Array.isArray(vmContext?.varStr) ? vmContext.varStr : null;
+  if (!dst || i < 0 || i >= dst.length) return;
+  dst[i] = String(value || "");
+}
+
+function conversationVmEvalFactor(scriptBytes, startPc, vmContext, endPc) {
+  let pc = Math.max(0, Number(startPc) | 0);
+  const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
+  const stack = [];
+  const pop = () => ((stack.length > 0) ? stack.pop() : 0);
+  const asNum = (v) => {
+    if (typeof v === "string") {
+      const n = Number(v);
+      return Number.isFinite(n) ? (n | 0) : 0;
+    }
+    return Number(v) | 0;
+  };
+  const asStr = (v) => String(v == null ? "" : v);
+  while (pc < end) {
+    const opcode = scriptBytes[pc] & 0xff;
+    pc += 1;
+    if (opcode === CONV_OP_END_OF_FACTOR || opcode === CONV_OP_LET_VALUE) {
+      break;
+    }
+    let token = opcode;
+    if (opcode === CONV_OP_ADDRESS) {
+      const out = readConversationU32(scriptBytes, pc);
+      token = out.value;
+      pc = out.nextPc;
+      stack.push(token);
+      continue;
+    }
+    if (opcode === CONV_OP_BYTE) {
+      token = (pc < end) ? (scriptBytes[pc] & 0xff) : 0;
+      pc += 1;
+      stack.push(token);
+      continue;
+    }
+    if (opcode === CONV_OP_WORD) {
+      token = (pc + 1 < end)
+        ? ((scriptBytes[pc] & 0xff) | ((scriptBytes[pc + 1] & 0xff) << 8))
+        : 0;
+      pc += 2;
+      stack.push(token);
+      continue;
+    }
+    switch (token) {
+      case CONV_OP_VARINT: {
+        const idx = pop();
+        stack.push(conversationVmReadVarInt(vmContext, idx));
+      } break;
+      case CONV_OP_VARSTR: {
+        const idx = pop();
+        stack.push(conversationVmReadVarStr(vmContext, idx));
+      } break;
+      case CONV_OP_TST: {
+        const bit = asNum(pop()) & 0x1f;
+        const objNumRaw = asNum(pop());
+        const objNum = (objNumRaw === CONV_OP_NPC) ? (Number(vmContext?.objNum) | 0) : objNumRaw;
+        const flags = Number(vmContext?.talkFlags?.[objNum]) | 0;
+        stack.push((flags >> bit) & 1);
+      } break;
+      case CONV_OP_EQU: {
+        const b = pop();
+        const a = pop();
+        if (typeof a === "string" || typeof b === "string") {
+          stack.push(asStr(a).toLowerCase() === asStr(b).toLowerCase() ? 1 : 0);
+        } else {
+          stack.push(asNum(a) === asNum(b) ? 1 : 0);
+        }
+      } break;
+      case CONV_OP_DIF: {
+        const b = pop();
+        const a = pop();
+        if (typeof a === "string" || typeof b === "string") {
+          stack.push(asStr(a).toLowerCase() !== asStr(b).toLowerCase() ? 1 : 0);
+        } else {
+          stack.push(asNum(a) !== asNum(b) ? 1 : 0);
+        }
+      } break;
+      case CONV_OP_SUP: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push(a > b ? 1 : 0);
+      } break;
+      case CONV_OP_SUPE: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push(a >= b ? 1 : 0);
+      } break;
+      case CONV_OP_INF: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push(a < b ? 1 : 0);
+      } break;
+      case CONV_OP_INFE: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push(a <= b ? 1 : 0);
+      } break;
+      case CONV_OP_ADD: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push((a + b) | 0);
+      } break;
+      case CONV_OP_SUB: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push((a - b) | 0);
+      } break;
+      case CONV_OP_MUL: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push((a * b) | 0);
+      } break;
+      case CONV_OP_DIV: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push(b ? ((a / b) | 0) : 0);
+      } break;
+      case CONV_OP_AND: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push((a && b) ? 1 : 0);
+      } break;
+      case CONV_OP_OR: {
+        const b = asNum(pop());
+        const a = asNum(pop());
+        stack.push((a || b) ? 1 : 0);
+      } break;
+      default:
+        stack.push(token);
+    }
+  }
+  const value = (stack.length > 0) ? stack[stack.length - 1] : 0;
+  return { value: Number(value) | 0, nextPc: pc };
+}
+
+function conversationVmSkipToElseOrEndIf(scriptBytes, startPc, endPc) {
+  let pc = Math.max(0, Number(startPc) | 0);
+  const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
+  while (pc < end) {
+    const opcode = scriptBytes[pc] & 0xff;
+    pc += 1;
+    if (opcode === CONV_OP_ELSE || opcode === CONV_OP_ENDIF) {
+      return pc;
+    }
+    if (opcode === CONV_OP_GOTO || opcode === CONV_OP_CALL || opcode === CONV_OP_ADDRESS) {
+      pc += 4;
+      continue;
+    }
+    if (opcode === CONV_OP_BYTE) {
+      pc += 1;
+      continue;
+    }
+    if (opcode === CONV_OP_WORD) {
+      pc += 2;
+      continue;
+    }
+  }
+  return pc;
+}
+
+function conversationVmSkipToEndIf(scriptBytes, startPc, endPc) {
+  let pc = Math.max(0, Number(startPc) | 0);
+  const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
+  while (pc < end) {
+    const opcode = scriptBytes[pc] & 0xff;
+    pc += 1;
+    if (opcode === CONV_OP_ENDIF) {
+      return pc;
+    }
+    if (opcode === CONV_OP_GOTO || opcode === CONV_OP_CALL || opcode === CONV_OP_ADDRESS) {
+      pc += 4;
+      continue;
+    }
+    if (opcode === CONV_OP_BYTE) {
+      pc += 1;
+      continue;
+    }
+    if (opcode === CONV_OP_WORD) {
+      pc += 2;
+      continue;
+    }
+  }
+  return pc;
+}
+
 function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
   const options = (opts && typeof opts === "object") ? opts : {};
   const stopOnGoto = options.stopOnGoto !== false;
   const followGoto = !!options.followGoto;
+  const vmContext = (options.vmContext && typeof options.vmContext === "object")
+    ? options.vmContext
+    : conversationVmContextForSession();
+  const stopOnInput = options.stopOnInput !== false;
   const lines = [""];
   let sawJoin = false;
-  let quoted = false;
+  let stopOpcode = 0;
+  let stopPc = -1;
   let pc = Math.max(0, Number(startPc) | 0);
   const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
   const maxSteps = Math.max(1024, Math.min(65536, scriptBytes.length * 4));
@@ -2483,14 +2810,10 @@ function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts
     }
     const op = scriptBytes[pc] & 0xff;
     pc += 1;
-    if (op === 0x22) { /* '"' */
-      quoted = !quoted;
-      continue;
-    }
     if (op < 0x80) {
       if (op === 10 || op === 13) {
         pushConversationLineBreak(lines);
-      } else if (op >= 0x20 && op < 0x7f && op !== 0x22) {
+      } else if (op >= 0x20 && op < 0x7f) {
         appendConversationChar(String.fromCharCode(op), lines);
       }
       continue;
@@ -2500,23 +2823,41 @@ function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts
       continue;
     }
     if (op === CONV_OP_ENDRES || op === CONV_OP_END) {
+      stopOpcode = op;
+      stopPc = pc - 1;
       break;
     }
     if (op === CONV_OP_KEY) {
       /* Encountering a key block means we have reached the next prompt branch. */
+      stopOpcode = op;
+      stopPc = pc - 1;
       break;
     }
-    if (op === 0xb0) {
-      if ((pc + 4) > scriptBytes.length) {
+    if (
+      stopOnInput
+      && (op === CONV_OP_ASKTOP
+        || op === CONV_OP_GET
+        || op === CONV_OP_GETSTR
+        || op === CONV_OP_GETCHR
+        || op === CONV_OP_GETINT
+        || op === CONV_OP_GETDIGIT)
+    ) {
+      stopOpcode = op;
+      stopPc = pc - 1;
+      break;
+    }
+    if (op >= 0xf0 || op === 0x00) {
+      stopOpcode = op;
+      stopPc = pc - 1;
+      break;
+    }
+    if (op === CONV_OP_GOTO) {
+      const out = readConversationU32(scriptBytes, pc);
+      const target = out.value >>> 0;
+      pc = out.nextPc;
+      if (pc > scriptBytes.length) {
         break;
       }
-      const target = (
-        (scriptBytes[pc] & 0xff)
-        | ((scriptBytes[pc + 1] & 0xff) << 8)
-        | ((scriptBytes[pc + 2] & 0xff) << 16)
-        | ((scriptBytes[pc + 3] & 0xff) << 24)
-      ) >>> 0;
-      pc += 4;
       if (stopOnGoto) {
         break;
       }
@@ -2530,7 +2871,7 @@ function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts
       }
       continue;
     }
-    if (op === 0xb1 || op === 0xd2) {
+    if (op === CONV_OP_CALL || op === CONV_OP_ADDRESS) {
       /* GOTO/CALL/ADDRESS carry 32-bit offsets in script stream. */
       pc += 4;
       continue;
@@ -2543,39 +2884,105 @@ function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts
       pc += 2;
       continue;
     }
-    if (op === 0xb5) {
-      /* OP_PRINTSTR: common constant-string form is OP_ADDRESS + cstring. */
-      if (pc < end && (scriptBytes[pc] & 0xff) === 0xd2 && (pc + 4) < end) {
-        pc += 1;
-        const target = (
-          (scriptBytes[pc] & 0xff)
-          | ((scriptBytes[pc + 1] & 0xff) << 8)
-          | ((scriptBytes[pc + 2] & 0xff) << 16)
-          | ((scriptBytes[pc + 3] & 0xff) << 24)
-        ) >>> 0;
-        pc += 4;
-        const text = readConversationCString(scriptBytes, target);
-        if (text) {
-          if (String(lines[lines.length - 1] || "").trim()) {
-            appendConversationChar(" ", lines);
-          }
-          appendConversationChar(text, lines);
-        }
-      } else {
-        /* Skip light-weight var form: idx + OP_VARSTR. */
-        if (pc < end) pc += 1;
-        if (pc < end && (scriptBytes[pc] & 0xff) === 0xb3) pc += 1;
+    if (op === CONV_OP_IF) {
+      const evalOut = conversationVmEvalFactor(scriptBytes, pc, vmContext, end);
+      pc = evalOut.nextPc;
+      if ((Number(evalOut.value) | 0) === 0) {
+        pc = conversationVmSkipToElseOrEndIf(scriptBytes, pc, end);
       }
       continue;
     }
+    if (op === CONV_OP_ELSE) {
+      pc = conversationVmSkipToEndIf(scriptBytes, pc, end);
+      continue;
+    }
+    if (op === CONV_OP_ENDIF) {
+      continue;
+    }
+    if (op === CONV_OP_LET) {
+      if (pc >= end) {
+        break;
+      }
+      const dstIndex = scriptBytes[pc] & 0xff;
+      pc += 1;
+      if (pc >= end) {
+        break;
+      }
+      const dstType = scriptBytes[pc] & 0xff;
+      pc += 1;
+      if (pc >= end || (scriptBytes[pc] & 0xff) !== CONV_OP_LET_VALUE) {
+        continue;
+      }
+      pc += 1;
+      if (dstType === CONV_OP_VARINT) {
+        const evalOut = conversationVmEvalFactor(scriptBytes, pc, vmContext, end);
+        pc = evalOut.nextPc;
+        conversationVmWriteVarInt(vmContext, dstIndex, evalOut.value);
+      } else if (dstType === CONV_OP_VARSTR) {
+        if (pc < end && (scriptBytes[pc] & 0xff) === CONV_OP_ADDRESS) {
+          pc += 1;
+          const out = readConversationU32(scriptBytes, pc);
+          pc = out.nextPc;
+          conversationVmWriteVarStr(vmContext, dstIndex, readConversationCString(scriptBytes, out.value));
+        } else if ((pc + 1) < end) {
+          const srcIndex = scriptBytes[pc] & 0xff;
+          const srcType = scriptBytes[pc + 1] & 0xff;
+          pc += 2;
+          if (srcType === CONV_OP_VARSTR) {
+            conversationVmWriteVarStr(vmContext, dstIndex, conversationVmReadVarStr(vmContext, srcIndex));
+          }
+        }
+      } else {
+        const evalOut = conversationVmEvalFactor(scriptBytes, pc, vmContext, end);
+        pc = evalOut.nextPc;
+      }
+      continue;
+    }
+    if (op === CONV_OP_PRINTSTR) {
+      /* OP_PRINTSTR: common constant-string form is OP_ADDRESS + cstring. */
+      if (pc < end && (scriptBytes[pc] & 0xff) === CONV_OP_ADDRESS && (pc + 4) < end) {
+        pc += 1;
+        const out = readConversationU32(scriptBytes, pc);
+        const target = out.value >>> 0;
+        pc = out.nextPc;
+        const text = readConversationCString(scriptBytes, target);
+        if (text) {
+          appendConversationChar(text, lines);
+        }
+      } else {
+        /* Var-str form: idx + OP_VARSTR */
+        if ((pc + 1) < end) {
+          const idx = scriptBytes[pc] & 0xff;
+          const opType = scriptBytes[pc + 1] & 0xff;
+          pc += 2;
+          if (opType === CONV_OP_VARSTR) {
+            appendConversationChar(conversationVmReadVarStr(vmContext, idx), lines);
+          }
+        } else {
+          pc = end;
+        }
+      }
+      continue;
+    }
+    if (op === CONV_OP_BYTE) {
+      pc += 1;
+      continue;
+    }
+    if (op === CONV_OP_WORD) {
+      pc += 2;
+      continue;
+    }
   }
-  const out = lines.map((s) => String(s || "").replace(/\s+/g, " ").trim()).filter(Boolean);
-  return { lines: out, sawJoin };
+  const out = lines.map((s) => String(s || "").replace(/\s+/g, " ").trim()).filter((v, idx, arr) => {
+    if (v) return true;
+    return idx > 0 && idx < (arr.length - 1);
+  });
+  return { lines: out, sawJoin, stopOpcode, stopPc, nextPc: pc };
 }
 
-function decodeConversationResponseBytes(responseBytes, scriptBytes = null, startPc = -1, endPc = -1) {
+function decodeConversationResponseBytes(responseBytes, scriptBytes = null, startPc = -1, endPc = -1, vmContext = null) {
   if (scriptBytes instanceof Uint8Array && startPc >= 0 && endPc > startPc) {
-    return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc);
+    return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, { vmContext });
   }
   const lines = [];
   let cur = "";
@@ -2609,7 +3016,7 @@ function decodeConversationResponseBytes(responseBytes, scriptBytes = null, star
   }
   if (quoted) flush();
   if (!sawQuotedText && !lines.length && scriptBytes instanceof Uint8Array && startPc >= 0 && endPc > startPc) {
-    return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc);
+    return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, { vmContext });
   }
   if (!sawQuotedText && !lines.length) {
     /* Fallback for non-quoted responses: keep conservative ASCII words only. */
@@ -2630,7 +3037,7 @@ function decodeConversationResponseBytes(responseBytes, scriptBytes = null, star
   return { lines, sawJoin };
 }
 
-function decodeConversationOpeningLines(scriptBytes, mainPc) {
+function decodeConversationOpeningLines(scriptBytes, mainPc, vmContext = null) {
   if (!(scriptBytes instanceof Uint8Array)) {
     return [];
   }
@@ -2639,39 +3046,72 @@ function decodeConversationOpeningLines(scriptBytes, mainPc) {
     scriptBytes,
     start,
     scriptBytes.length,
-    { stopOnGoto: false, followGoto: true }
+    { stopOnGoto: false, followGoto: true, vmContext }
   );
   return Array.isArray(decoded?.lines) ? decoded.lines : [];
 }
 
-function renderConversationMacros(text) {
-  const player = String(state.net?.characterName || "Avatar").trim() || "Avatar";
-  const target = String(state.legacyConversationTargetName || "").trim();
-  const title = "milady";
-  const hour = Number(state.world?.clock_hour) | 0;
-  const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "day" : "evening");
+function decodeConversationOpeningResult(scriptBytes, mainPc, vmContext = null) {
+  if (!(scriptBytes instanceof Uint8Array)) {
+    return { lines: [], stopOpcode: 0, stopPc: -1, nextPc: -1 };
+  }
+  const start = Math.max(0, Number(mainPc) | 0);
+  const decoded = decodeConversationResponseOpcodeAware(
+    scriptBytes,
+    start,
+    scriptBytes.length,
+    { stopOnGoto: false, followGoto: true, vmContext }
+  );
+  return {
+    lines: Array.isArray(decoded?.lines) ? decoded.lines : [],
+    stopOpcode: Number(decoded?.stopOpcode) | 0,
+    stopPc: Number(decoded?.stopPc) | 0,
+    nextPc: Number(decoded?.nextPc) | 0
+  };
+}
+
+function renderConversationMacros(text, vmContext = null) {
+  const ctx = (vmContext && typeof vmContext === "object")
+    ? vmContext
+    : (state.legacyConversationVmContext || conversationVmContextForSession());
+  const varStr = Array.isArray(ctx.varStr) ? ctx.varStr : [];
   return String(text || "")
-    .replace(/\$P/g, player)
-    .replace(/\$N/g, target)
-    .replace(/\$G/g, "milady")
-    .replace(/\$T/g, title)
-    /* Legacy numbered conversation macros used by transcript/script variants. */
-    .replace(/\$4/g, player)
-    .replace(/\$5/g, timeWord)
-    .replace(/\$2/g, title)
-    /* Legacy conv scripts prefix highlighted keywords with '@'. */
+    .replace(/\$([0-9A-Z])/gi, (_m, sym) => {
+      const idx = conversationMacroSymbolToIndex(sym);
+      if (idx < 0 || idx >= varStr.length) return "";
+      return String(varStr[idx] || "");
+    })
     .replace(/@([A-Za-z0-9]+)/g, "$1");
 }
 
-function canonicalTalkFallbackGreeting(objNum, speaker) {
+function canonicalTalkFallbackGreeting(objNum, speaker, vmContext = null) {
   const n = Number(objNum) | 0;
   if (n !== 5) {
     return "";
   }
-  const hour = Number(state.world?.clock_hour) | 0;
-  const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "day" : "evening");
-  const player = String(state.net?.characterName || "Avatar").trim() || "Avatar";
+  const ctx = (vmContext && typeof vmContext === "object")
+    ? vmContext
+    : (state.legacyConversationVmContext || conversationVmContextForSession());
+  const varStr = Array.isArray(ctx.varStr) ? ctx.varStr : [];
+  const timeWord = String(varStr[conversationMacroSymbolToIndex("T")] || "morning");
+  const player = String(varStr[4] || varStr[conversationMacroSymbolToIndex("P")] || "Avatar");
   return `Good ${timeWord}, ${player}. What wouldst thou speak of?`;
+}
+
+function canonicalizeOpeningLines(objNum, lines) {
+  const n = Number(objNum) | 0;
+  const src = Array.isArray(lines) ? lines : [];
+  if (n !== 5) {
+    return src;
+  }
+  const joined = src.join(" ");
+  const asksTopic = /what wouldst thou speak of\?/i.test(joined);
+  const badPlaceholder = /\$2\b/.test(joined);
+  if (asksTopic && badPlaceholder) {
+    const fallback = canonicalTalkFallbackGreeting(n, "Lord British");
+    return fallback ? [fallback] : src;
+  }
+  return src;
 }
 
 function formatYouSeeLine(subject) {
@@ -2684,25 +3124,6 @@ function formatYouSeeLine(subject) {
     return `You see ${trimmed}`;
   }
   return `You see ${trimmed}.`;
-}
-
-function quoteConversationLines(lines) {
-  const src = Array.isArray(lines) ? lines : [];
-  const out = src
-    .map((line) => String(line || "").trim())
-    .filter(Boolean);
-  if (!out.length) {
-    return out;
-  }
-  const first = 0;
-  const last = out.length - 1;
-  if (!out[first].startsWith("\"")) {
-    out[first] = `"${out[first]}`;
-  }
-  if (!out[last].endsWith("\"")) {
-    out[last] = `${out[last]}"`;
-  }
-  return out;
 }
 
 function legacyConversationReply(targetName, typed) {
@@ -2726,11 +3147,12 @@ function legacyConversationReply(targetName, typed) {
       rule.responseBytes || new Uint8Array(0),
       script,
       Number(rule.responseStartPc),
-      Number(rule.responseEndPc)
+      Number(rule.responseEndPc),
+      state.legacyConversationVmContext
     );
     const out = [];
     for (const line of decoded.lines) {
-      const msg = renderConversationMacros(line);
+      const msg = renderConversationMacros(line, state.legacyConversationVmContext);
       if (msg) out.push(msg);
     }
     if (out.length > 0) {
@@ -2742,6 +3164,86 @@ function legacyConversationReply(targetName, typed) {
     return { kind: "ok", lines: [formatYouSeeLine(state.legacyConversationDescText)] };
   }
   return { kind: "no-match", lines: [] };
+}
+
+function conversationRunFromKeyCursor(scriptBytes, startPc, typed, vmContext) {
+  if (!(scriptBytes instanceof Uint8Array)) {
+    return { kind: "no-match", lines: [], nextPc: -1, stopOpcode: 0 };
+  }
+  let pc = Math.max(0, Number(startPc) | 0);
+  const input = String(typed || "").trim();
+  if (pc < scriptBytes.length && (scriptBytes[pc] & 0xff) === CONV_OP_ASKTOP) {
+    pc += 1;
+  } else if (pc < scriptBytes.length && (scriptBytes[pc] & 0xff) === CONV_OP_GET) {
+    /* OP_GET consumes choice-byte list up to KEY marker. */
+    pc += 1;
+    while (pc < scriptBytes.length && (scriptBytes[pc] & 0xff) !== CONV_OP_KEY) {
+      pc += 1;
+    }
+  }
+  while (pc < scriptBytes.length) {
+    const op = scriptBytes[pc] & 0xff;
+    if (op === CONV_OP_END || op === CONV_OP_ENDRES) {
+      return { kind: "no-match", lines: [], nextPc: pc + 1, stopOpcode: op };
+    }
+    if (op !== CONV_OP_KEY) {
+      pc += 1;
+      continue;
+    }
+    pc += 1;
+    const keys = [];
+    while (pc < scriptBytes.length) {
+      const keyBytes = [];
+      while (pc < scriptBytes.length && scriptBytes[pc] !== 0x2c && scriptBytes[pc] !== CONV_OP_RES) {
+        keyBytes.push(scriptBytes[pc] & 0xff);
+        pc += 1;
+      }
+      const key = String.fromCharCode(...keyBytes).trim().toLowerCase();
+      if (key) keys.push(key);
+      if (pc >= scriptBytes.length) break;
+      if (scriptBytes[pc] === 0x2c) {
+        pc += 1;
+        continue;
+      }
+      if (scriptBytes[pc] === CONV_OP_RES) {
+        pc += 1;
+        break;
+      }
+    }
+    const responseStartPc = pc;
+    while (pc < scriptBytes.length && (scriptBytes[pc] & 0xff) !== CONV_OP_ENDRES) {
+      pc += 1;
+    }
+    const responseEndPc = pc;
+    const afterResponsePc = (pc < scriptBytes.length) ? (pc + 1) : pc;
+    let matched = false;
+    for (const key of keys) {
+      if (conversationKeyMatchesInput(key, input || "bye")) {
+        matched = true;
+        break;
+      }
+    }
+    if (matched) {
+      const decoded = decodeConversationResponseOpcodeAware(
+        scriptBytes,
+        responseStartPc,
+        responseEndPc,
+        { stopOnGoto: false, followGoto: true, vmContext, stopOnInput: true }
+      );
+      const lines = (Array.isArray(decoded?.lines) ? decoded.lines : [])
+        .map((line) => renderConversationMacros(line, vmContext))
+        .map((line) => String(line || "").trim())
+        .filter((line, idx, arr) => line || (idx > 0 && idx < (arr.length - 1)));
+      const stopOpcode = Number(decoded?.stopOpcode) | 0;
+      let nextPc = afterResponsePc;
+      if (stopOpcode) {
+        nextPc = Number(decoded?.stopPc) | 0;
+      }
+      return { kind: "ok", lines, nextPc, stopOpcode };
+    }
+    pc = afterResponsePc;
+  }
+  return { kind: "no-match", lines: [], nextPc: pc, stopOpcode: 0 };
 }
 
 function submitLegacyConversationInput() {
@@ -2770,11 +3272,13 @@ function submitLegacyConversationInput() {
   }
   const reply = legacyConversationReply(state.legacyConversationTargetName, typed);
   if (reply && reply.kind === "ok") {
-    for (const line of quoteConversationLines(reply.lines)) {
+    const lines = (Array.isArray(reply.lines) ? reply.lines : []).map((line) => String(line || "").trim()).filter(Boolean);
+    if (startLegacyConversationPagination(lines)) {
+      return;
+    }
+    for (const line of lines) {
       const msg = String(line || "").trim();
-      if (msg) {
-        pushLedgerMessage(msg);
-      }
+      if (msg) pushLedgerMessage(msg);
     }
   } else if (reply && reply.kind === "unimplemented") {
     pushLedgerMessage("Not implemented: canonical conversation opcode path for this topic.");
@@ -3176,17 +3680,11 @@ function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
 }
 
 function drawLegacyContinueArrow(g, sx, sy, scale = 1, color = "#e7dcc0") {
-  const s = Math.max(1, scale | 0);
-  g.fillStyle = color;
   /*
-    Thick down-arrow pager cue (custom-drawn) used for conversation paging.
-    Coordinates are in 8x8 text-cell space before scale expansion.
+    Canonical pager cue from `u6.ch`: glyph codepoint 1 (thick down-arrow).
+    Avoid hand-drawn variants so shape exactly matches legacy font styling.
   */
-  g.fillRect(sx + (2 * s), sy + (0 * s), 4 * s, 3 * s); /* stem */
-  g.fillRect(sx + (1 * s), sy + (3 * s), 6 * s, 2 * s); /* shoulder */
-  g.fillRect(sx + (0 * s), sy + (5 * s), 8 * s, 1 * s); /* wing */
-  g.fillRect(sx + (2 * s), sy + (6 * s), 4 * s, 1 * s); /* taper */
-  g.fillRect(sx + (3 * s), sy + (7 * s), 2 * s, 1 * s); /* tip */
+  drawU6MainText(g, String.fromCharCode(1), sx, sy, Math.max(1, scale | 0), color);
 }
 
 function applyLegacyFrameLayout() {
@@ -3674,7 +4172,8 @@ function renderLegacyHudStubOnBackdrop() {
       );
     }
   }
-  if (state.legacyLedgerPrompt) {
+  const allowTalkPrompt = (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E) || state.legacyConversationActive;
+  if (state.legacyLedgerPrompt && allowTalkPrompt) {
     const ankhGlyph = String.fromCharCode(5 + ((state.legacyPromptAnimPhase | 0) & 3));
     if (state.legacyConversationActive) {
       const activeLineIndex = Math.max(0, ((state.legacyLedgerLines.length | 0) - 1));
@@ -3699,7 +4198,7 @@ function renderLegacyHudStubOnBackdrop() {
     const py = 112 + ((LEGACY_LEDGER_MAX_LINES - 1) * 8);
     /* Blink using the same cadence clock as prompt animation. */
     if (((state.legacyPromptAnimPhase | 0) & 0x02) === 0) {
-      drawLegacyContinueArrow(g, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+      drawLegacyContinueArrow(g, x(176), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
     }
   }
 
@@ -5806,7 +6305,15 @@ function tryTalkAtCell(sim, tx, ty) {
   const fallbackDesc = String(legacyLookupTileString(tileId) || "").trim();
   const desc = sanitizeLegacyHudLabelText(String(header.desc || "").trim() || fallbackDesc);
   const rules = resolvedConversation.valid ? parseConversationRules(script, header.mainPc) : [];
-  const openingLines = resolvedConversation.valid ? decodeConversationOpeningLines(script, header.mainPc) : [];
+  const vmContext = conversationVmContextForSession({
+    targetName: speaker,
+    objNum: Number(resolvedConversation.objNum) | 0
+  });
+  const openingResult = resolvedConversation.valid
+    ? decodeConversationOpeningResult(script, header.mainPc, vmContext)
+    : { lines: [], stopOpcode: 0, stopPc: -1, nextPc: -1 };
+  const openingLinesRaw = openingResult.lines;
+  const openingLines = canonicalizeOpeningLines(resolvedConversation.objNum, openingLinesRaw);
   /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
   state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
   state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
@@ -5822,6 +6329,9 @@ function tryTalkAtCell(sim, tx, ty) {
   state.legacyConversationScript = script;
   state.legacyConversationDescText = desc;
   state.legacyConversationRules = rules;
+  state.legacyConversationPc = Number(openingResult.stopPc) | 0;
+  state.legacyConversationInputOpcode = Number(openingResult.stopOpcode) | 0;
+  state.legacyConversationVmContext = vmContext;
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
   /*
     Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
@@ -5829,28 +6339,39 @@ function tryTalkAtCell(sim, tx, ty) {
   */
   state.legacyConversationShowInventory = equipSlots.length > 0;
   state.legacyConversationEquipmentSlots = equipSlots;
-  pushLedgerMessage(formatYouSeeLine(desc || speaker));
+  const openingBlock = [formatYouSeeLine(desc || speaker)];
   let pushedOpening = false;
-  const quotedOpening = quoteConversationLines(openingLines);
-  if (quotedOpening.length > 0) {
-    pushLedgerMessage("");
+  const normalizedOpening = (Array.isArray(openingLines) ? openingLines : [])
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+  if (normalizedOpening.length > 0) {
+    openingBlock.push("");
   }
-  for (const rawLine of quotedOpening) {
-    const line = renderConversationMacros(String(rawLine || "").trim());
+  for (const rawLine of normalizedOpening) {
+    const line = renderConversationMacros(String(rawLine || "").trim(), vmContext);
     if (line) {
-      pushLedgerMessage(line);
+      openingBlock.push(line);
       pushedOpening = true;
     }
   }
   if (!pushedOpening) {
-    const fallback = canonicalTalkFallbackGreeting(resolvedConversation.objNum, speaker);
+    const fallback = canonicalTalkFallbackGreeting(resolvedConversation.objNum, speaker, vmContext);
     if (fallback) {
-      for (const line of quoteConversationLines([fallback])) {
-        pushLedgerMessage(line);
-      }
+      openingBlock.push(`"${fallback}"`);
     }
   }
-  pushLegacyConversationPrompt();
+  if (pushedOpening) {
+    openingBlock.push("");
+  }
+  const pagedOpening = startLegacyConversationPagination(openingBlock);
+  if (!pagedOpening) {
+    for (const line of openingBlock) {
+      pushLedgerMessage(line);
+    }
+  }
+  if (!pagedOpening) {
+    pushLegacyConversationPrompt();
+  }
   diagBox.className = haveConverse ? "diag ok" : "diag warn";
   diagBox.textContent = `Talk: ${speaker} (actor id ${Number(actor.id) | 0}, conv id ${Number(resolvedConversation.objNum) | 0}, type 0x${(Number(actor.type) & 0x3ff).toString(16)}) at ${tx},${ty},${tz}; valid=${resolvedConversation.valid ? 1 : 0}; rules=${rules.length}; showInven=${state.legacyConversationShowInventory ? 1 : 0}; converse=${haveConverse ? "loaded" : "missing"}.`;
   return true;
