@@ -43,6 +43,16 @@
       "must_exclude": [
         { "x": 301, "y": 356, "z": 0, "type": 138, "frame": 0, "label": "plant-old-cell" }
       ]
+    },
+    {
+      "id": "british_study_right_wall_trio",
+      "center": { "x": 312, "y": 364, "z": 0 },
+      "radius": 1,
+      "must_include": [
+        { "x": 312, "y": 364, "z": 0, "type": 142, "frame": 0, "label": "right-wall-item-top" },
+        { "x": 312, "y": 365, "z": 0, "type": 140, "frame": 0, "label": "right-wall-item-bottom-a" },
+        { "x": 312, "y": 365, "z": 0, "type": 141, "frame": 0, "label": "right-wall-item-bottom-b" }
+      ]
     }
   ]
 }

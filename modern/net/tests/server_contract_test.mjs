@@ -343,6 +343,11 @@ async function main() {
       });
       assert.equal(putCycle.status, 409);
       assert.equal(String(putCycle.body?.error?.code || ""), "interaction_container_cycle");
+      assert.equal(
+        String(putCycle.body?.error?.blocked_by || ""),
+        "",
+        "self-cycle rejection should not report unrelated blocker key"
+      );
 
       const put = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
@@ -391,6 +396,11 @@ async function main() {
       });
       assert.equal(blockedTakeContained.status, 409);
       assert.equal(blockedTakeContained.body?.error?.code, "interaction_container_blocked");
+      assert.equal(
+        String(blockedTakeContained.body?.error?.blocked_by || ""),
+        containerKey,
+        "blocked take should surface containing object key"
+      );
 
       const dropContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",

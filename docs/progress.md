@@ -179,7 +179,8 @@ This checklist is intentionally mutable.
   - completed: sim-core batch containment diagnostics for `/api/world/objects` (`assoc_chain`, `root_anchor_key`, `blocked_by`) replacing net-side JS chain walker
   - completed: sim-core world-object query selection bridge for `/api/world/objects` (`projection`, `radius`, `limit`, canonical ordering) replacing net-side JS selector
   - in progress: room hotspot regression corpus anchored to level-0 reference map (`modern/net/tests/fixtures/room_hotspots.level0.json`)
-  - completed in corpus: virtue room book/key table, British study bench distribution, virtue room plant downshift guard
+  - completed in corpus: virtue room book/key table, British study bench distribution, virtue room plant downshift guard, British study right-wall trio
+  - completed: interaction lifecycle regression now asserts canonical `blocked_by` diagnostics for contained-chain blocks
   - next: broaden nested containment fixtures beyond current Virtue room/British study hotspot set
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
