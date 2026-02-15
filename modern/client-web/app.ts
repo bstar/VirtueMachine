@@ -96,6 +96,7 @@ import {
   decodeSimSnapshotBase64Runtime,
   encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
+import { loadNetPanelPrefs, saveNetPanelPref } from "./net/panel_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4435,49 +4436,48 @@ function setAccountModalOpen(open) {
 }
 
 function initNetPanel() {
-  let savedBase = "http://127.0.0.1:8081";
-  let savedUser = "avatar";
-  let savedPass = "quest123";
-  let savedEmail = "";
-  let savedPassVisible = "off";
-  let savedChar = "Avatar";
-  let savedMaintenance = "off";
-  let savedAutoLogin = "off";
-  try {
-    savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
-    savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
-    savedPass = localStorage.getItem(NET_PASSWORD_KEY) || savedPass;
-    savedEmail = localStorage.getItem(NET_EMAIL_KEY) || savedEmail;
-    savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
-    savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
-    savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
-    savedAutoLogin = localStorage.getItem(NET_AUTO_LOGIN_KEY) || savedAutoLogin;
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const prefs = loadNetPanelPrefs({
+    apiBase: NET_API_BASE_KEY,
+    username: NET_USERNAME_KEY,
+    password: NET_PASSWORD_KEY,
+    email: NET_EMAIL_KEY,
+    passwordVisible: NET_PASSWORD_VISIBLE_KEY,
+    characterName: NET_CHARACTER_NAME_KEY,
+    maintenance: NET_MAINTENANCE_KEY,
+    autoLogin: NET_AUTO_LOGIN_KEY
+  }, {
+    apiBase: "http://127.0.0.1:8081",
+    username: "avatar",
+    password: "quest123",
+    email: "",
+    passwordVisible: "off",
+    characterName: "Avatar",
+    maintenance: "off",
+    autoLogin: "off"
+  });
   if (netApiBaseInput) {
-    netApiBaseInput.value = savedBase;
+    netApiBaseInput.value = prefs.apiBase;
   }
   if (netUsernameInput) {
-    netUsernameInput.value = savedUser;
+    netUsernameInput.value = prefs.username;
   }
   if (netPasswordInput) {
-    netPasswordInput.value = savedPass;
-    netPasswordInput.type = savedPassVisible === "on" ? "text" : "password";
+    netPasswordInput.value = prefs.password;
+    netPasswordInput.type = prefs.passwordVisible === "on" ? "text" : "password";
   }
   if (netPasswordToggleButton) {
-    const isVisible = savedPassVisible === "on";
+    const isVisible = prefs.passwordVisible === "on";
     netPasswordToggleButton.textContent = isVisible ? "Hide" : "Show";
     netPasswordToggleButton.title = isVisible ? "Hide password" : "Show password";
   }
   if (netEmailInput) {
-    netEmailInput.value = savedEmail;
+    netEmailInput.value = prefs.email;
   }
   if (netCharacterNameInput) {
-    netCharacterNameInput.value = savedChar;
+    netCharacterNameInput.value = prefs.characterName;
   }
   if (netAutoLoginCheckbox) {
-    netAutoLoginCheckbox.checked = savedAutoLogin === "on";
+    netAutoLoginCheckbox.checked = prefs.autoLogin === "on";
   }
   populateNetAccountSelect();
   if (netAccountSelect && netAccountSelect.value) {
@@ -4487,19 +4487,15 @@ function initNetPanel() {
       applyNetProfile(profile);
     }
   }
-  state.net.apiBase = savedBase;
-  state.net.username = savedUser;
-  state.net.email = savedEmail;
-  state.net.characterName = savedChar;
+  state.net.apiBase = prefs.apiBase;
+  state.net.username = prefs.username;
+  state.net.email = prefs.email;
+  state.net.characterName = prefs.characterName;
   setNetStatus("idle", "Not logged in.");
 
   if (netApiBaseInput) {
     netApiBaseInput.addEventListener("input", () => {
-      try {
-        localStorage.setItem(NET_API_BASE_KEY, String(netApiBaseInput.value || ""));
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_API_BASE_KEY, String(netApiBaseInput.value || ""));
     });
   }
   if (netAccountSelect) {
@@ -4516,38 +4512,22 @@ function initNetPanel() {
   }
   if (netUsernameInput) {
     netUsernameInput.addEventListener("input", () => {
-      try {
-        localStorage.setItem(NET_USERNAME_KEY, String(netUsernameInput.value || ""));
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_USERNAME_KEY, String(netUsernameInput.value || ""));
     });
   }
   if (netPasswordInput) {
     netPasswordInput.addEventListener("input", () => {
-      try {
-        localStorage.setItem(NET_PASSWORD_KEY, String(netPasswordInput.value || ""));
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_PASSWORD_KEY, String(netPasswordInput.value || ""));
     });
   }
   if (netCharacterNameInput) {
     netCharacterNameInput.addEventListener("input", () => {
-      try {
-        localStorage.setItem(NET_CHARACTER_NAME_KEY, String(netCharacterNameInput.value || ""));
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_CHARACTER_NAME_KEY, String(netCharacterNameInput.value || ""));
     });
   }
   if (netEmailInput) {
     netEmailInput.addEventListener("input", () => {
-      try {
-        localStorage.setItem(NET_EMAIL_KEY, String(netEmailInput.value || ""));
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_EMAIL_KEY, String(netEmailInput.value || ""));
     });
   }
   if (netPasswordToggleButton && netPasswordInput) {
@@ -4556,37 +4536,25 @@ function initNetPanel() {
       netPasswordInput.type = show ? "text" : "password";
       netPasswordToggleButton.textContent = show ? "Hide" : "Show";
       netPasswordToggleButton.title = show ? "Hide password" : "Show password";
-      try {
-        localStorage.setItem(NET_PASSWORD_VISIBLE_KEY, show ? "on" : "off");
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_PASSWORD_VISIBLE_KEY, show ? "on" : "off");
     });
   }
   if (netAutoLoginCheckbox) {
     netAutoLoginCheckbox.addEventListener("change", () => {
       const enabled = !!netAutoLoginCheckbox.checked;
-      try {
-        localStorage.setItem(NET_AUTO_LOGIN_KEY, enabled ? "on" : "off");
-      } catch (_err) {
-        // ignore storage failures
-      }
+      saveNetPanelPref(NET_AUTO_LOGIN_KEY, enabled ? "on" : "off");
       if (enabled && !isNetAuthenticated()) {
         setNetStatus("idle", "Auto-login enabled. It will run on next refresh.");
       }
     });
   }
 
-  state.net.maintenanceAuto = savedMaintenance === "on";
+  state.net.maintenanceAuto = prefs.maintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
     netMaintenanceToggle.addEventListener("change", () => {
       state.net.maintenanceAuto = netMaintenanceToggle.value === "on";
-      try {
-        localStorage.setItem(NET_MAINTENANCE_KEY, state.net.maintenanceAuto ? "on" : "off");
-      } catch (_err) {
-        // ignore storage failures in restrictive browser contexts
-      }
+      saveNetPanelPref(NET_MAINTENANCE_KEY, state.net.maintenanceAuto ? "on" : "off");
     });
   }
   updateNetSessionStat();
