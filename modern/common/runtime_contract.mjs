@@ -1,0 +1,13 @@
+import runtimeContract from "./runtime_contract_core.cjs";
+
+export const RUNTIME_PROFILE_CANONICAL_STRICT = runtimeContract.RUNTIME_PROFILE_CANONICAL_STRICT;
+export const RUNTIME_PROFILE_CANONICAL_PLUS = runtimeContract.RUNTIME_PROFILE_CANONICAL_PLUS;
+export const RUNTIME_PROFILES = runtimeContract.RUNTIME_PROFILES;
+export const RUNTIME_EXTENSION_KEYS = runtimeContract.RUNTIME_EXTENSION_KEYS;
+export const DEFAULT_RUNTIME_EXTENSIONS = runtimeContract.DEFAULT_RUNTIME_EXTENSIONS;
+export const createDefaultRuntimeExtensions = runtimeContract.createDefaultRuntimeExtensions;
+export const normalizeRuntimeProfile = runtimeContract.normalizeRuntimeProfile;
+export const sanitizeRuntimeExtensions = runtimeContract.sanitizeRuntimeExtensions;
+export const parseRuntimeExtensionsHeader = runtimeContract.parseRuntimeExtensionsHeader;
+export const parseRuntimeExtensionListCsv = runtimeContract.parseRuntimeExtensionListCsv;
+export const runtimeExtensionsSummary = runtimeContract.runtimeExtensionsSummary;

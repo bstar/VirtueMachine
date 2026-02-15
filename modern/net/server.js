@@ -7,6 +7,12 @@ const crypto = require("node:crypto");
 const net = require("node:net");
 const tls = require("node:tls");
 const {
+  RUNTIME_PROFILE_CANONICAL_STRICT,
+  RUNTIME_PROFILES,
+  normalizeRuntimeProfile,
+  parseRuntimeExtensionsHeader
+} = require("../common/runtime_contract.cjs");
+const {
   OBJ_COORD_USE_LOCXYZ,
   OBJ_COORD_USE_CONTAINED,
   OBJ_COORD_USE_INVEN,
@@ -149,50 +155,16 @@ function parseAuth(req) {
   return header.slice("Bearer ".length).trim();
 }
 
-const RUNTIME_PROFILE_CANONICAL_STRICT = "canonical_strict";
-const RUNTIME_PROFILE_CANONICAL_PLUS = "canonical_plus";
-const ALLOWED_RUNTIME_PROFILES = new Set([
-  RUNTIME_PROFILE_CANONICAL_STRICT,
-  RUNTIME_PROFILE_CANONICAL_PLUS
-]);
-
-function normalizeRuntimeProfileHeader(raw) {
-  const v = String(raw || "").trim().toLowerCase();
-  if (ALLOWED_RUNTIME_PROFILES.has(v)) {
-    return v;
-  }
-  return RUNTIME_PROFILE_CANONICAL_STRICT;
-}
-
-function parseRuntimeExtensionsHeader(raw) {
-  const src = String(raw || "").trim().toLowerCase();
-  if (!src || src === "none" || src === "off") {
-    return [];
-  }
-  const out = [];
-  const seen = new Set();
-  for (const token of src.split(",")) {
-    const key = String(token || "").trim();
-    if (!key) continue;
-    if (!/^[a-z0-9_]+$/.test(key)) continue;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(key);
-  }
-  out.sort();
-  return out;
-}
-
 function runtimeContractFromHeaders(req) {
   return {
-    profile: normalizeRuntimeProfileHeader(req?.headers?.["x-vm-runtime-profile"]),
+    profile: normalizeRuntimeProfile(req?.headers?.["x-vm-runtime-profile"]),
     extensions: parseRuntimeExtensionsHeader(req?.headers?.["x-vm-runtime-extensions"])
   };
 }
 
 function runtimeContractSpec() {
   return {
-    profiles: [...ALLOWED_RUNTIME_PROFILES].sort(),
+    profiles: [...RUNTIME_PROFILES].sort(),
     default_profile: RUNTIME_PROFILE_CANONICAL_STRICT,
     extension_header_format: "comma-separated ids or 'none'",
     notes: [
@@ -745,7 +717,7 @@ function normalizeWorldInteractionLog(raw) {
       holder_kind: String(e?.holder_kind || "none"),
       holder_id: String(e?.holder_id || ""),
       holder_key: String(e?.holder_key || ""),
-      runtime_profile: normalizeRuntimeProfileHeader(e?.runtime_profile),
+      runtime_profile: normalizeRuntimeProfile(e?.runtime_profile),
       runtime_extensions: parseRuntimeExtensionsHeader(
         Array.isArray(e?.runtime_extensions)
           ? e.runtime_extensions.join(",")
@@ -791,7 +763,7 @@ function recordWorldInteractionEvent(state, event) {
     holder_kind: String(event?.holder_kind || "none"),
     holder_id: String(event?.holder_id || ""),
     holder_key: String(event?.holder_key || ""),
-    runtime_profile: normalizeRuntimeProfileHeader(event?.runtime_profile),
+    runtime_profile: normalizeRuntimeProfile(event?.runtime_profile),
     runtime_extensions: parseRuntimeExtensionsHeader(
       Array.isArray(event?.runtime_extensions)
         ? event.runtime_extensions.join(",")
@@ -872,7 +844,7 @@ function normalizePresenceRows(raw) {
     facing_dy: Number(p?.facing_dy) | 0,
     tick: Number(p?.tick) >>> 0,
     mode: String(p?.mode || "avatar"),
-    runtime_profile: normalizeRuntimeProfileHeader(p?.runtime_profile),
+    runtime_profile: normalizeRuntimeProfile(p?.runtime_profile),
     runtime_extensions: parseRuntimeExtensionsHeader(
       Array.isArray(p?.runtime_extensions)
         ? p.runtime_extensions.join(",")
@@ -1845,7 +1817,7 @@ const server = http.createServer(async (req, res) => {
         facing_dy: p.facing_dy | 0,
         tick: Number(p.tick) >>> 0,
         mode: p.mode || "avatar",
-        runtime_profile: normalizeRuntimeProfileHeader(p.runtime_profile),
+        runtime_profile: normalizeRuntimeProfile(p.runtime_profile),
         runtime_extensions: parseRuntimeExtensionsHeader(
           Array.isArray(p.runtime_extensions)
             ? p.runtime_extensions.join(",")

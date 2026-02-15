@@ -45,6 +45,17 @@ import {
   submitLegacyConversationInput as submitLegacyConversationInputImported,
   wrapLegacyLedgerLines as wrapLegacyLedgerLinesImported
 } from "./conversation/session_runtime.js";
+import {
+  DEFAULT_RUNTIME_EXTENSIONS,
+  RUNTIME_PROFILE_CANONICAL_STRICT,
+  RUNTIME_PROFILE_CANONICAL_PLUS,
+  RUNTIME_PROFILES,
+  createDefaultRuntimeExtensions,
+  normalizeRuntimeProfile,
+  parseRuntimeExtensionListCsv,
+  runtimeExtensionsSummary,
+  sanitizeRuntimeExtensions
+} from "../common/runtime_contract.mjs";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -260,29 +271,6 @@ const LEGACY_FRAME_TILES = Object.freeze({
   left: 0x1b6,
   right: 0x1b7
 });
-const RUNTIME_PROFILE_CANONICAL_STRICT = "canonical_strict";
-const RUNTIME_PROFILE_CANONICAL_PLUS = "canonical_plus";
-const RUNTIME_PROFILES = Object.freeze([
-  RUNTIME_PROFILE_CANONICAL_STRICT,
-  RUNTIME_PROFILE_CANONICAL_PLUS
-]);
-const DEFAULT_RUNTIME_EXTENSIONS = Object.freeze({
-  quest_system: false,
-  party_mmo: false,
-  housing: false,
-  crafting: false,
-  farming: false
-});
-
-function createDefaultRuntimeExtensions() {
-  return {
-    quest_system: false,
-    party_mmo: false,
-    housing: false,
-    crafting: false,
-    farming: false
-  };
-}
 const LEGACY_UI_TILE = Object.freeze({
   SLOT_EMPTY: 0x19a,
   SLOT_OCCUPIED_BG: 0x19b,
@@ -3582,42 +3570,6 @@ function createInitialSimState() {
   };
 }
 
-function normalizeRuntimeProfile(raw) {
-  const v = String(raw || "").trim().toLowerCase();
-  if (RUNTIME_PROFILES.includes(v)) {
-    return v;
-  }
-  return RUNTIME_PROFILE_CANONICAL_STRICT;
-}
-
-function sanitizeRuntimeExtensions(raw) {
-  const out = createDefaultRuntimeExtensions();
-  if (!raw || typeof raw !== "object") {
-    return out;
-  }
-  const src = raw;
-  for (const key of Object.keys(DEFAULT_RUNTIME_EXTENSIONS)) {
-    out[key] = !!src[key];
-  }
-  return out;
-}
-
-function parseRuntimeExtensionListCsv(csv) {
-  const out = createDefaultRuntimeExtensions();
-  const src = String(csv || "").trim().toLowerCase();
-  if (!src || src === "none" || src === "off") {
-    return out;
-  }
-  for (const token of src.split(",")) {
-    const k = String(token || "").trim();
-    if (!k) continue;
-    if (Object.prototype.hasOwnProperty.call(out, k)) {
-      out[k] = true;
-    }
-  }
-  return out;
-}
-
 function applyRuntimeProfileState(profile, extensions) {
   state.runtimeProfile = normalizeRuntimeProfile(profile);
   state.runtimeExtensions = sanitizeRuntimeExtensions(extensions);
@@ -3656,15 +3608,6 @@ function initRuntimeProfileConfig() {
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
-}
-
-function runtimeExtensionsSummary() {
-  const enabled = [];
-  for (const [key, on] of Object.entries(state.runtimeExtensions || {})) {
-    if (on) enabled.push(key);
-  }
-  enabled.sort();
-  return enabled;
 }
 
 function setTheme(themeName) {
