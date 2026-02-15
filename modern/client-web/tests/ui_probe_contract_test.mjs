@@ -10,6 +10,8 @@ function runSampleProbeFixture() {
   const probe = buildUiProbeContract({ mode: "sample" });
   assert.equal(probe.schema_version, UI_PROBE_SCHEMA_VERSION, "schema mismatch");
   assert.equal(probe.mode, "sample", "mode mismatch");
+  assert.equal(probe.runtime_profile, "canonical_strict", "sample runtime profile mismatch");
+  assert.deepEqual(probe.runtime_extensions, {}, "sample runtime extensions mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.id, 1, "sample avatar id mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.party_index, 0, "sample avatar active index mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.entries[0].key, "0x073:0", "inventory sort mismatch");
@@ -29,11 +31,19 @@ function runLiveProbeFixture() {
       commandLog: [
         { tick: 90, kind: "move" },
         { tick: 92, kind: "get" }
-      ]
+      ],
+      runtimeProfile: "canonical_plus",
+      runtimeExtensions: {
+        quest_system: true,
+        housing: true
+      }
     }
   });
   assert.equal(probe.mode, "live", "live mode mismatch");
   assert.equal(probe.tick, 99, "live tick mismatch");
+  assert.equal(probe.runtime_profile, "canonical_plus", "live runtime profile mismatch");
+  assert.equal(probe.runtime_extensions.quest_system, true, "live runtime quest extension mismatch");
+  assert.equal(probe.runtime_extensions.housing, true, "live runtime housing extension mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.id, 77, "live avatar resolution mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.map_x, 400, "live avatar map_x mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.entries.length, 2, "live inventory entries mismatch");

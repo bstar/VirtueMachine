@@ -92,6 +92,8 @@ function deterministicSample() {
   return {
     tick: 4242,
     mode: "sample",
+    runtime_profile: "canonical_strict",
+    runtime_extensions: {},
     world: {
       map_x: 307,
       map_y: 347,
@@ -144,6 +146,8 @@ function fromRuntime(runtime) {
   return {
     tick: toU32(sim.tick || 0),
     mode: "live",
+    runtime_profile: String(runtime.runtimeProfile || "canonical_strict"),
+    runtime_extensions: { ...(runtime.runtimeExtensions || {}) },
     world: {
       map_x: toU32(world.map_x || 0),
       map_y: toU32(world.map_y || 0),
@@ -195,6 +199,8 @@ export function buildUiProbeContract(opts = {}) {
     schema_version: UI_PROBE_SCHEMA_VERSION,
     mode: src.mode,
     tick: toU32(src.tick),
+    runtime_profile: String(src.runtime_profile || "canonical_strict"),
+    runtime_extensions: { ...(src.runtime_extensions || {}) },
     canonical_ui: {
       avatar_panel: {
         avatar

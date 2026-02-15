@@ -3658,10 +3658,13 @@ function initRuntimeProfileConfig() {
   }
 }
 
-function runtimeExtensionEnabled(key) {
-  const k = String(key || "").trim();
-  if (!k) return false;
-  return !!state.runtimeExtensions?.[k];
+function runtimeExtensionsSummary() {
+  const enabled = [];
+  for (const [key, on] of Object.entries(state.runtimeExtensions || {})) {
+    if (on) enabled.push(key);
+  }
+  enabled.sort();
+  return enabled;
 }
 
 function setTheme(themeName) {
@@ -4232,6 +4235,9 @@ async function netRequest(route, init = {}, auth = true) {
     throw new Error("Net API base URL is empty");
   }
   const headers = { ...(init.headers || {}) };
+  headers["x-vm-runtime-profile"] = String(state.runtimeProfile || RUNTIME_PROFILE_CANONICAL_STRICT);
+  const enabledExtensions = runtimeExtensionsSummary();
+  headers["x-vm-runtime-extensions"] = enabledExtensions.length ? enabledExtensions.join(",") : "none";
   if (auth && state.net.token) {
     headers.authorization = `Bearer ${state.net.token}`;
   }
@@ -9312,6 +9318,8 @@ function captureUiProbeHotkey() {
     runtime: {
       sim: state.sim,
       commandLog: state.commandLog,
+      runtimeProfile: state.runtimeProfile,
+      runtimeExtensions: { ...state.runtimeExtensions },
       conversation: {
         active: !!state.legacyConversationActive,
         target_name: String(state.legacyConversationTargetName || ""),
@@ -9361,6 +9369,8 @@ function getUiProbeForRender() {
     runtime: {
       sim: state.sim,
       commandLog: state.commandLog,
+      runtimeProfile: state.runtimeProfile,
+      runtimeExtensions: { ...state.runtimeExtensions },
       conversation: {
         active: !!state.legacyConversationActive,
         target_name: String(state.legacyConversationTargetName || ""),
@@ -10097,12 +10107,16 @@ window.addEventListener("resize", () => {
 
 loadRuntimeAssets().finally(() => {
   state.runtimeReady = true;
+  const extSummary = runtimeExtensionsSummary();
+  const runtimeModeText = extSummary.length
+    ? `${state.runtimeProfile} + ${extSummary.join(",")}`
+    : state.runtimeProfile;
   if (state.mapCtx) {
     diagBox.className = "diag ok";
-    diagBox.textContent = "Startup menu ready: select Journey Onward to enter the throne room.";
+    diagBox.textContent = `Startup menu ready (${runtimeModeText}): select Journey Onward to enter the throne room.`;
   } else {
     diagBox.className = "diag warn";
-    diagBox.textContent = "Assets missing: startup menu running in fallback mode.";
+    diagBox.textContent = `Assets missing (${runtimeModeText}): startup menu running in fallback mode.`;
   }
   requestAnimationFrame((ts) => {
     state.lastTs = ts;
