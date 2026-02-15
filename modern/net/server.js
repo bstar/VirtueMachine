@@ -190,6 +190,18 @@ function runtimeContractFromHeaders(req) {
   };
 }
 
+function runtimeContractSpec() {
+  return {
+    profiles: [...ALLOWED_RUNTIME_PROFILES].sort(),
+    default_profile: RUNTIME_PROFILE_CANONICAL_STRICT,
+    extension_header_format: "comma-separated ids or 'none'",
+    notes: [
+      "unknown/invalid profile falls back to canonical_strict",
+      "unknown/invalid extension tokens are ignored"
+    ]
+  };
+}
+
 function sendJson(res, status, value) {
   const body = `${JSON.stringify(value)}\n`;
   res.writeHead(status, {
@@ -1373,6 +1385,13 @@ const server = http.createServer(async (req, res) => {
       tick: state.worldClock.tick >>> 0,
       email_mode: EMAIL_MODE,
       world_objects: worldObjectMeta(state)
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/runtime/contract") {
+    sendJson(res, 200, {
+      runtime_contract: runtimeContractSpec()
     });
     return;
   }

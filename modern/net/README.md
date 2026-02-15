@@ -87,6 +87,7 @@ node modern/net/server.js
 Public:
 
 - `GET /health`
+- `GET /api/runtime/contract`
 - `POST /api/auth/login`
 - `POST /api/auth/change-password`
 - `GET /api/auth/recover-password?username=<name>&email=<addr>`
@@ -123,6 +124,7 @@ Current behavior:
 - `GET /api/world/clock`, `GET /api/world/objects`, and `POST /api/world/objects/interact` echo normalized runtime metadata as `runtime_contract`.
 - `POST /api/world/presence/heartbeat` echoes normalized runtime metadata as `runtime_contract`.
 - `GET /api/world/presence` includes per-player `runtime_profile` and `runtime_extensions`.
+- `GET /api/runtime/contract` exposes server-supported profile ids and default/fallback behavior.
 
 Clock note:
 - `/api/world/clock` is authoritative server time/tick.

@@ -133,6 +133,14 @@ async function main() {
   try {
     await waitForHealth(baseUrl);
 
+    const runtimeContract = await jsonFetch(baseUrl, "/api/runtime/contract", {
+      method: "GET"
+    });
+    assert.equal(runtimeContract.status, 200);
+    assert.equal(runtimeContract.body?.runtime_contract?.default_profile, "canonical_strict");
+    assert.deepEqual(runtimeContract.body?.runtime_contract?.profiles, ["canonical_plus", "canonical_strict"]);
+    assert.equal(runtimeContract.body?.runtime_contract?.extension_header_format, "comma-separated ids or 'none'");
+
     const login = await jsonFetch(baseUrl, "/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
