@@ -16,8 +16,17 @@ node_modules/
 # Logs
 *.log
 
-# Local env overrides (never commit secrets)
-.env.local
+# Local env / secret material (never commit)
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
 
 # Local/proprietary game assets (never commit)
 local/
@@ -25,5 +34,9 @@ modern/assets/runtime/
 modern/assets/pristine/
 
 # Local multiplayer runtime state (never commit)
-modern/net/data/*.json
-modern/net/data/summary.txt
+modern/net/data/**
+!modern/net/data/.gitkeep
+
+# Python cache / bytecode
+__pycache__/
+*.pyc
