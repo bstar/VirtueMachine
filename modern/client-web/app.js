@@ -57,6 +57,7 @@ import {
   sanitizeRuntimeExtensions
 } from "../common/runtime_contract.mjs";
 import { netJsonRequest } from "./net/request_runtime.js";
+import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4187,13 +4188,7 @@ async function netRequest(route, init = {}, auth = true) {
   });
   if (!out.ok) {
     if (out.status === 401) {
-      state.net.token = "";
-      state.net.userId = "";
-      state.net.characterId = "";
-      state.net.remotePlayers = [];
-      state.net.backgroundSyncPaused = false;
-      state.net.backgroundFailCount = 0;
-      state.net.firstBackgroundFailAtMs = 0;
+      clearNetSessionState(state.net);
       updateNetSessionStat();
       setNetStatus("idle", "Session expired. Please log in.");
     }
@@ -4233,15 +4228,7 @@ async function netLogin() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username, password })
   }, false);
-  state.net.token = String(login?.token || "");
-  state.net.userId = String(login?.user?.user_id || "");
-  state.net.username = String(login?.user?.username || username);
-  state.net.email = String(login?.user?.email || "");
-  state.net.emailVerified = !!login?.user?.email_verified;
-  state.net.remotePlayers = [];
-  state.net.lastPresenceHeartbeatTick = -1;
-  state.net.lastPresencePollTick = -1;
-  state.net.lastClockPollTick = -1;
+  applyNetLoginState(state.net, login, username);
   await netEnsureCharacter();
   let resumedFromSnapshot = false;
   try {
@@ -4423,17 +4410,7 @@ async function netLogoutAndPersist() {
       leaveErr = err;
     }
   }
-  state.net.token = "";
-  state.net.userId = "";
-  state.net.characterId = "";
-  state.net.remotePlayers = [];
-  state.net.lastPresenceHeartbeatTick = -1;
-  state.net.lastPresencePollTick = -1;
-  state.net.lastClockPollTick = -1;
-  state.net.resumeFromSnapshot = false;
-  state.net.backgroundSyncPaused = false;
-  state.net.backgroundFailCount = 0;
-  state.net.firstBackgroundFailAtMs = 0;
+  clearNetSessionState(state.net);
   if (state.sessionStarted) {
     returnToTitleMenu();
   } else {
