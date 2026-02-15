@@ -46,6 +46,7 @@ const LEGACY_CORNER_TABLE = [
 ];
 const OBJ_COORD_USE_MASK = 0x18;
 const OBJ_COORD_USE_LOCXYZ = 0x00;
+const OBJ_COORD_USE_EQUIP = 0x18;
 const OBJ_STATUS_INVISIBLE = 0x02;
 const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
@@ -323,6 +324,12 @@ const LEGACY_COMBAT_MODE_LABELS = Object.freeze([
   "RETREAT",
   "ASSAULT"
 ]);
+const LEGACY_GENERIC_PORTRAIT_BY_TYPE = Object.freeze({
+  /* C_2FC1_1C19 generic portrait remaps for high objNums. */
+  0x175: 0xc0, /* wisp */
+  0x17e: 0xc1, /* guard */
+  0x16b: 0xc2  /* gargoyle */
+});
 const STARTUP_MENU_HITBOX = Object.freeze({
   x0: 56,
   x1: 264,
@@ -420,6 +427,13 @@ const state = {
   legacyConversationInput: "",
   legacyConversationTargetName: "",
   legacyConversationPortraitTile: null,
+  legacyConversationTargetObjNum: 0,
+  legacyConversationTargetObjType: 0,
+  legacyConversationShowInventory: false,
+  legacyConversationEquipmentSlots: [],
+  legacyConversationPaging: false,
+  legacyConversationPages: [],
+  legacyConversationKnownNames: {},
   legacyConversationPrevStatus: LEGACY_STATUS_DISPLAY.CMD_92,
   useCursorX: 0,
   useCursorY: 0,
@@ -450,6 +464,9 @@ const state = {
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
   avatarPortraitCanvas: null,
+  portraitArchiveA: null,
+  portraitArchiveB: null,
+  portraitCanvasCache: new Map(),
   u6MainFont: null,
   runtimeReady: false,
   pristineBaselineVersion: "",
@@ -503,7 +520,7 @@ function wrapLegacyLedgerLines(text) {
   }
   let line = "";
   for (const word of src.split(" ")) {
-    const token = String(word || "").toUpperCase();
+    const token = String(word || "");
     if (!token) continue;
     if (!line) {
       if (token.length <= LEGACY_LEDGER_MAX_CHARS) {
@@ -548,6 +565,56 @@ function pushLedgerMessage(text) {
   if (extra > 0) {
     state.legacyLedgerLines.splice(0, extra);
   }
+}
+
+function paginateLedgerMessages(lines, maxLines = LEGACY_LEDGER_MAX_LINES - 1) {
+  const src = Array.isArray(lines) ? lines : [];
+  const pages = [];
+  let cur = [];
+  for (const item of src) {
+    const wrapped = wrapLegacyLedgerLines(item);
+    if (!wrapped.length) {
+      continue;
+    }
+    for (const line of wrapped) {
+      if (cur.length >= maxLines) {
+        pages.push(cur);
+        cur = [];
+      }
+      cur.push(line);
+    }
+  }
+  if (cur.length) {
+    pages.push(cur);
+  }
+  return pages;
+}
+
+function startLegacyConversationPagination(lines) {
+  const pages = paginateLedgerMessages(lines, LEGACY_LEDGER_MAX_LINES - 1);
+  if (!pages.length) {
+    return false;
+  }
+  state.legacyConversationPages = pages;
+  state.legacyConversationPaging = true;
+  state.legacyLedgerPrompt = false;
+  state.legacyLedgerLines = pages[0].slice();
+  return true;
+}
+
+function advanceLegacyConversationPagination() {
+  if (!state.legacyConversationPaging) {
+    return false;
+  }
+  if (state.legacyConversationPages.length > 1) {
+    state.legacyConversationPages.shift();
+    state.legacyLedgerLines = state.legacyConversationPages[0].slice();
+    return true;
+  }
+  state.legacyConversationPages = [];
+  state.legacyConversationPaging = false;
+  pushLegacyConversationPrompt();
+  return true;
 }
 
 function showLegacyLedgerPrompt() {
@@ -946,6 +1013,7 @@ class U6ObjectLayerJS {
     this.baseTiles = baseTiles;
     this.byCoord = new Map();
     this.entries = [];
+    this.assocEntries = [];
     this.totalLoaded = 0;
     this.filesLoaded = 0;
   }
@@ -1049,24 +1117,29 @@ class U6ObjectLayerJS {
       }
     }
     const entries = [];
+    const assocEntries = [];
     for (const row of decoded) {
+      const normalized = {
+        ...row,
+        legacyOrder: legacyOrderByIndex[row.index] | 0,
+        assocChildCount: Number(childCounts[row.index] || 0),
+        assocChild0010Count: Number(child0010Counts[row.index] || 0)
+      };
       if ((row.coordUse | 0) !== OBJ_COORD_USE_LOCXYZ) {
+        assocEntries.push(normalized);
         continue;
       }
       if (row.status & OBJ_STATUS_INVISIBLE) {
         continue;
       }
-      entries.push({
-        ...row,
-        legacyOrder: legacyOrderByIndex[row.index] | 0,
-        assocChildCount: Number(childCounts[row.index] || 0),
-        assocChild0010Count: Number(child0010Counts[row.index] || 0)
-      });
+      entries.push(normalized);
     }
-    return entries;
+    return { entries, assocEntries };
   }
 
-  addEntries(entries) {
+  addEntries(parsed) {
+    const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+    const assocEntries = Array.isArray(parsed?.assocEntries) ? parsed.assocEntries : [];
     for (const e of entries) {
       const key = this.coordKey(e.x, e.y, e.z);
       if (!this.byCoord.has(key)) {
@@ -1075,6 +1148,9 @@ class U6ObjectLayerJS {
       this.byCoord.get(key).push(e);
       this.entries.push(e);
       this.totalLoaded += 1;
+    }
+    for (const e of assocEntries) {
+      this.assocEntries.push(e);
     }
   }
 
@@ -1133,6 +1209,7 @@ class U6ObjectLayerJS {
   async loadOutdoor(fetcher) {
     this.byCoord.clear();
     this.entries = [];
+    this.assocEntries = [];
     this.totalLoaded = 0;
     this.filesLoaded = 0;
 
@@ -1205,6 +1282,7 @@ class U6EntityLayerJS {
   constructor(baseTiles) {
     this.baseTiles = baseTiles;
     this.entries = [];
+    this.assocEntries = [];
     this.totalLoaded = 0;
   }
 
@@ -1214,7 +1292,7 @@ class U6EntityLayerJS {
 
   parseObjList(bytes) {
     if (!bytes || bytes.length < 0x0900) {
-      return [];
+      return { entries: [], assocEntries: [] };
     }
     const objStatusOff = 0x0000;
     const objPosOff = 0x0100;
@@ -1222,29 +1300,46 @@ class U6EntityLayerJS {
     const npcStatusOff = 0x0800;
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const out = [];
+    const assocEntries = [];
     for (let id = 0; id < 0x100; id += 1) {
       const status = bytes[objStatusOff + id];
       const npcStatus = bytes[npcStatusOff + id];
-      if ((status & OBJ_COORD_USE_MASK) !== OBJ_COORD_USE_LOCXYZ) {
-        continue;
-      }
       const shapeType = dv.getUint16(objShapeOff + (id * 2), true);
       if (shapeType === 0) {
         continue;
       }
+      const coordUse = status & OBJ_COORD_USE_MASK;
       const type = shapeType & 0x03ff;
-      if (!this.isRenderableEntityType(type)) {
-        continue;
-      }
       const frame = shapeType >>> 10;
       const pos = objPosOff + (id * 3);
-      const x = bytes[pos + 0] | ((bytes[pos + 1] & 0x03) << 8);
-      const y = (bytes[pos + 1] >> 2) | ((bytes[pos + 2] & 0x0f) << 6);
-      const z = (bytes[pos + 2] >> 4) & 0x0f;
       const baseTile = this.baseTiles[type] ?? 0;
       if (baseTile === 0) {
         continue;
       }
+      if (coordUse !== OBJ_COORD_USE_LOCXYZ) {
+        if (coordUse === OBJ_COORD_USE_EQUIP) {
+          const assocIndex = (bytes[pos + 0] | (bytes[pos + 1] << 8)) & 0xffff;
+          assocEntries.push({
+            id,
+            status,
+            npcStatus,
+            coordUse,
+            assocIndex,
+            type,
+            frame,
+            baseTile,
+            tileId: (baseTile + frame) & 0xffff,
+            order: id
+          });
+        }
+        continue;
+      }
+      if (!this.isRenderableEntityType(type)) {
+        continue;
+      }
+      const x = bytes[pos + 0] | ((bytes[pos + 1] & 0x03) << 8);
+      const y = (bytes[pos + 1] >> 2) | ((bytes[pos + 2] & 0x0f) << 6);
+      const z = (bytes[pos + 2] >> 4) & 0x0f;
       out.push({
         id,
         x,
@@ -1260,11 +1355,14 @@ class U6EntityLayerJS {
       });
     }
     out.sort((a, b) => a.order - b.order);
-    return out;
+    assocEntries.sort((a, b) => a.order - b.order);
+    return { entries: out, assocEntries };
   }
 
   load(bytes) {
-    this.entries = this.parseObjList(bytes);
+    const parsed = this.parseObjList(bytes);
+    this.entries = parsed.entries;
+    this.assocEntries = parsed.assocEntries;
     for (const e of this.entries) {
       e.homeX = e.x;
       e.homeY = e.y;
@@ -1554,15 +1652,201 @@ function canonicalLookSentenceForTile(tileId) {
 
 function canonicalTalkSpeakerForTile(tileId) {
   const raw = String(legacyLookupTileString(tileId) || "Unknown");
+  const normalizeSpeakerText = (s) => String(s || "")
+    .replace(/\bor britannia\b/ig, "of Britannia")
+    .replace(/\s+/g, " ")
+    .trim();
   const article = String(legacyArticleForTile(tileId) || "").trim().toLowerCase();
+  const normalizeCaps = (s) => {
+    const text = normalizeSpeakerText(s);
+    if (!text) return text;
+    /* Only normalize if source string is all caps. */
+    const letters = text.replace(/[^A-Za-z]+/g, "");
+    if (!letters || letters !== letters.toUpperCase()) {
+      return text;
+    }
+    return text
+      .toLowerCase()
+      .replace(/\b([a-z])/g, (m, ch) => ch.toUpperCase());
+  };
   if (!article) {
-    return raw;
+    return normalizeCaps(raw);
   }
   const prefix = `${article} `;
   if (raw.toLowerCase().startsWith(prefix)) {
-    return raw.slice(prefix.length).trim() || raw;
+    return normalizeCaps(raw.slice(prefix.length).trim() || raw);
   }
-  return raw;
+  return normalizeCaps(raw);
+}
+
+function areaIdForWorldXY(x, y) {
+  const ax = ((Number(x) | 0) >> 7) & 0x7;
+  const ay = ((Number(y) | 0) >> 7) & 0x7;
+  return ((ay << 3) | ax) & 0x3f;
+}
+
+function legacyEquipSlotForTile(tileId) {
+  const t = Number(tileId) & 0xffff;
+  if (t === 0x21a || t === 0x21b) return 7; /* SLOT_FEET */
+  if (t === 0x258 || (t >= 0x37d && t <= 0x37f)) return 9; /* SLOT_RING pseudo */
+  if (t === 0x219 || (t >= 0x250 && t <= 0x252) || t === 0x217 || t === 0x101) return 1; /* SLOT_NECK */
+  if (t >= 0x200 && t <= 0x207) return 0; /* SLOT_HEAD */
+  if ((t >= 0x210 && t <= 0x216) || t === 0x218 || t === 0x219 || t === 0x28c || t === 0x28e || t === 0x29d || t === 0x257) return 4; /* SLOT_CHST */
+  if (t === 0x228 || t === 0x229 || t === 0x231 || t === 0x235 || (t >= 0x22b && t <= 0x22e)) return 8; /* SLOT_2HND pseudo */
+  if ((t >= 0x208 && t <= 0x20f) || t === 0x222) return 5; /* SLOT_LHND */
+  if (
+    t === 0x220 || t === 0x221 || t === 0x223 || t === 0x224 || t === 0x225 || t === 0x226 || t === 0x227 || t === 0x22a
+    || t === 0x22f || t === 0x230 || t === 0x238 || t === 0x254 || t === 0x256 || t === 0x255 || t === 0x259 || t === 0x262
+    || t === 0x263 || t === 0x264 || t === 0x270 || t === 0x271 || t === 0x272 || t === 0x273 || t === 0x274 || t === 0x275
+    || t === 0x279 || t === 0x27d || t === 0x27e || t === 0x27f || t === 0x280 || t === 0x281 || t === 0x2a2 || t === 0x2a3
+    || t === 0x2b9
+  ) return 2; /* SLOT_RHND */
+  return -1;
+}
+
+function legacyEquipmentSlotsForTalkActor(actor) {
+  if (!actor) {
+    return [];
+  }
+  const actorId = Number(actor.id) | 0;
+  const actorX = Number(actor.x) | 0;
+  const actorY = Number(actor.y) | 0;
+  const actorZ = Number(actor.z) | 0;
+  const actorType = Number(actor.type) & 0x03ff;
+  const rootAssocOwner = (row) => {
+    let cur = row;
+    const seen = new Set();
+    for (let i = 0; i < 64; i += 1) {
+      if (!cur || typeof cur !== "object") {
+        return null;
+      }
+      if ((cur.coordUse | 0) === OBJ_COORD_USE_LOCXYZ) {
+        return cur;
+      }
+      const key = String(cur.index != null ? cur.index : cur.id);
+      if (seen.has(key)) {
+        return null;
+      }
+      seen.add(key);
+      cur = cur.assocObj || null;
+    }
+    return null;
+  };
+  const ownerMatchesActor = (owner) => !!owner
+    && ((owner.coordUse | 0) === OBJ_COORD_USE_LOCXYZ)
+    && ((owner.x | 0) === actorX)
+    && ((owner.y | 0) === actorY)
+    && ((owner.z | 0) === actorZ)
+    && ((owner.type & 0x03ff) === actorType);
+  const selectEquipRows = (rows, useObjblkOwnerFallback) => (Array.isArray(rows) ? rows : [])
+    .filter((row) => {
+      if (!row || (row.coordUse | 0) !== OBJ_COORD_USE_EQUIP) {
+        return false;
+      }
+      const byIndex = ((row.assocIndex | 0) === actorId);
+      let byAssocObj = false;
+      if (useObjblkOwnerFallback) {
+        const owner = rootAssocOwner(row);
+        byAssocObj = ownerMatchesActor(owner);
+      }
+      if (!byIndex && !byAssocObj) {
+        return false;
+      }
+      const type = row.type & 0x03ff;
+      if (type === 0x150 || type === 0x151) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const ao = Number((a.legacyOrder != null) ? a.legacyOrder : a.order) | 0;
+      const bo = Number((b.legacyOrder != null) ? b.legacyOrder : b.order) | 0;
+      if (ao !== bo) return ao - bo;
+      return (a.index | 0) - (b.index | 0);
+    });
+  /*
+    Canonical source first: objlist actor table stores actor-owned/equipped objects.
+    Objblk assoc rows are a fallback for baseline/static snapshots.
+  */
+  let equipRows = selectEquipRows(state.entityLayer?.assocEntries, false);
+  if (!equipRows.length) {
+    equipRows = selectEquipRows(state.objectLayer?.assocEntries, true);
+  }
+  if (!equipRows.length && state.objectLayer && Array.isArray(state.objectLayer.assocEntries)) {
+    /*
+      Fallback for drifted actor ids: find nearest same-type actor id that owns equip rows.
+      This keeps canonical equipment visuals present while deeper id reconciliation is pending.
+    */
+    const equipByAssoc = new Map();
+    for (const row of state.objectLayer.assocEntries) {
+      if (!row || (row.coordUse | 0) !== OBJ_COORD_USE_EQUIP) continue;
+      const ownerId = row.assocIndex | 0;
+      if (ownerId < 0 || ownerId >= 0x100) continue;
+      if (!equipByAssoc.has(ownerId)) equipByAssoc.set(ownerId, []);
+      equipByAssoc.get(ownerId).push(row);
+    }
+    if (equipByAssoc.size > 0 && state.entityLayer && Array.isArray(state.entityLayer.entries)) {
+      let bestId = -1;
+      let bestDist = 0x7fffffff;
+      for (const ent of state.entityLayer.entries) {
+        if (!ent || ((ent.type & 0x03ff) !== actorType)) continue;
+        const id = ent.id | 0;
+        const owned = equipByAssoc.get(id);
+        if (!owned || owned.length === 0) continue;
+        const d = Math.max(Math.abs((ent.x | 0) - actorX), Math.abs((ent.y | 0) - actorY));
+        if (d < bestDist) {
+          bestDist = d;
+          bestId = id;
+        }
+      }
+      if (bestId >= 0) {
+        equipRows = (equipByAssoc.get(bestId) || []).slice().sort((a, b) => {
+          const ao = Number((a.legacyOrder != null) ? a.legacyOrder : a.order) | 0;
+          const bo = Number((b.legacyOrder != null) ? b.legacyOrder : b.order) | 0;
+          if (ao !== bo) return ao - bo;
+          return (a.index | 0) - (b.index | 0);
+        });
+      }
+    }
+  }
+  if (!equipRows.length) {
+    return [];
+  }
+  const occupied = new Array(8).fill(null);
+  for (const row of equipRows) {
+    let slot = legacyEquipSlotForTile(row.tileId);
+    if (slot < 0) {
+      continue;
+    }
+    if (slot === 8) { /* SLOT_2HND */
+      if (occupied[2]) {
+        slot = occupied[5] ? -1 : 5;
+      } else {
+        slot = 2;
+      }
+    } else if (slot === 2 && occupied[2] && !occupied[5]) {
+      slot = 5;
+    } else if (slot === 5 && occupied[5] && !occupied[2]) {
+      slot = 2;
+    } else if (slot === 9) { /* SLOT_RING */
+      slot = occupied[3] ? 6 : 3;
+    }
+    if (slot < 0 || slot > 7 || occupied[slot]) {
+      continue;
+    }
+    occupied[slot] = row;
+  }
+  const out = [];
+  for (let slot = 0; slot < 8; slot += 1) {
+    const row = occupied[slot];
+    if (!row) continue;
+    out.push({
+      slot,
+      object_key: `objblk:${Number(row.sourceArea) | 0}:${Number(row.index) | 0}`,
+      tile_hex: `0x${(Number(row.tileId) & 0xffff).toString(16)}`
+    });
+  }
+  return out;
 }
 
 function endLegacyConversation() {
@@ -1570,12 +1854,25 @@ function endLegacyConversation() {
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = "";
   state.legacyConversationPortraitTile = null;
+  state.legacyConversationTargetObjNum = 0;
+  state.legacyConversationTargetObjType = 0;
+  state.legacyConversationShowInventory = false;
+  state.legacyConversationEquipmentSlots = [];
+  state.legacyConversationPaging = false;
+  state.legacyConversationPages = [];
   state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
 }
 
 function pushLegacyConversationPrompt() {
-  pushLedgerMessage("you say:");
+  const rawName = String(state.net?.characterName || "Avatar").trim();
+  const name = (rawName || "Avatar").slice(0, 12);
+  pushLedgerMessage(`${name}:`);
   showLegacyLedgerPrompt();
+}
+
+function isConcernedMageSpeaker(name) {
+  const s = String(name || "").toLowerCase();
+  return s.includes("concerned looking mage") || s === "mage";
 }
 
 function legacyConversationReply(targetName, typed) {
@@ -1648,6 +1945,10 @@ function handleLegacyConversationKeydown(ev) {
     endLegacyConversation();
     diagBox.className = "diag ok";
     diagBox.textContent = "Conversation cancelled.";
+    return true;
+  }
+  if (state.legacyConversationPaging) {
+    advanceLegacyConversationPagination();
     return true;
   }
   if (k === "Enter") {
@@ -1908,6 +2209,70 @@ function decodePortraitFromArchive(bytes, index = 0) {
   };
 }
 
+function resolveLegacyPortraitEntry(objNum, objType) {
+  let n = Number(objNum) | 0;
+  const t = Number(objType) & 0x03ff;
+  if (n >= 0xe0) {
+    const mapped = LEGACY_GENERIC_PORTRAIT_BY_TYPE[t];
+    if (mapped == null) {
+      return null;
+    }
+    n = mapped;
+  }
+  if (n === 1) {
+    /*
+      Avatar portrait uses save-slot selection (D_2CCB - 1) in C_2FC1_1C19.
+      Runtime save header wiring is pending; keep existing avatar portrait path.
+    */
+    return null;
+  }
+  if (n > 0) {
+    n -= 1;
+  }
+  if (n >= 0x62) {
+    return { archive: "b", index: n - 0x62 };
+  }
+  return { archive: "a", index: n };
+}
+
+function conversationPortraitCanvas(probeConversationPanel = null) {
+  if (!state.basePalette) {
+    return null;
+  }
+  const panel = probeConversationPanel && typeof probeConversationPanel === "object"
+    ? probeConversationPanel
+    : {};
+  const objNum = panel.target_obj_num != null
+    ? (Number(panel.target_obj_num) | 0)
+    : (Number(state.legacyConversationTargetObjNum) | 0);
+  const objType = panel.target_obj_type != null
+    ? (Number(panel.target_obj_type) | 0)
+    : (Number(state.legacyConversationTargetObjType) | 0);
+  const resolved = resolveLegacyPortraitEntry(objNum, objType);
+  if (!resolved) {
+    return state.avatarPortraitCanvas;
+  }
+  const archive = resolved.archive === "b" ? state.portraitArchiveB : state.portraitArchiveA;
+  if (!archive) {
+    return null;
+  }
+  const paletteKey = getRenderPaletteKey();
+  const cacheKey = `${resolved.archive}:${resolved.index}:${paletteKey}`;
+  if (state.portraitCanvasCache.has(cacheKey)) {
+    return state.portraitCanvasCache.get(cacheKey);
+  }
+  const pix = decodePortraitFromArchive(archive, resolved.index);
+  if (!pix) {
+    return null;
+  }
+  const canvas = canvasFromIndexedPixels(pix, getRenderPalette() || state.basePalette);
+  if (!canvas) {
+    return null;
+  }
+  state.portraitCanvasCache.set(cacheKey, canvas);
+  return canvas;
+}
+
 function canvasFromIndexedPixels(pixmap, palette, transparentIndex = null) {
   if (!pixmap || !palette) {
     return null;
@@ -1943,11 +2308,12 @@ function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
     g.fillText(String(text || ""), sx, sy + (7 * scale));
     return;
   }
-  const msg = String(text || "").toUpperCase();
+  const msg = String(text || "");
   g.fillStyle = color;
   for (let i = 0; i < msg.length; i += 1) {
-    const code = msg.charCodeAt(i) & 0xff;
-    const off = code * 8;
+    let code = msg.charCodeAt(i) & 0xff;
+    let off = code * 8;
+    /* Preserve the caller's casing exactly; do not auto-upcase glyphs. */
     for (let row = 0; row < 8; row += 1) {
       const bits = state.u6MainFont[off + row] ?? 0;
       for (let col = 0; col < 8; col += 1) {
@@ -1962,6 +2328,20 @@ function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
       }
     }
   }
+}
+
+function drawLegacyContinueArrow(g, sx, sy, scale = 1, color = "#e7dcc0") {
+  const s = Math.max(1, scale | 0);
+  g.fillStyle = color;
+  /*
+    Thick down-arrow pager cue (custom-drawn) used for conversation paging.
+    Coordinates are in 8x8 text-cell space before scale expansion.
+  */
+  g.fillRect(sx + (2 * s), sy + (0 * s), 4 * s, 3 * s); /* stem */
+  g.fillRect(sx + (1 * s), sy + (3 * s), 6 * s, 2 * s); /* shoulder */
+  g.fillRect(sx + (0 * s), sy + (5 * s), 8 * s, 1 * s); /* wing */
+  g.fillRect(sx + (2 * s), sy + (6 * s), 4 * s, 1 * s); /* taper */
+  g.fillRect(sx + (3 * s), sy + (7 * s), 2 * s, 1 * s); /* tip */
 }
 
 function applyLegacyFrameLayout() {
@@ -2239,66 +2619,129 @@ function renderLegacyHudStubOnBackdrop() {
     drawLegacyVista();
   }
   const probe = getUiProbeForRender();
+  const conversationPanel = probe.canonical_ui?.conversation_panel || {};
+  const inTalkPanel = statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E;
+  const panelShowEquipment = inTalkPanel
+    ? (state.legacyConversationShowInventory !== false)
+    : true;
+  const panelShowBagGrid = !inTalkPanel;
 
   /* C_155D_028A / C_155D_1065: centered name row only in CMD_90/CMD_92. */
   if (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_90 || statusDisplay === LEGACY_STATUS_DISPLAY.CMD_92) {
-    const avatarLabel = String(state.net.characterName || "Avatar").toUpperCase();
+    const avatarLabel = String(state.net.characterName || "Avatar");
     const labelX = 176 + Math.max(0, Math.floor((136 - (avatarLabel.length * 8)) / 2));
     drawU6MainText(g, avatarLabel, x(labelX), y(8), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  }
-  /* Canonical dynamic payload only: inventory/equipment/portrait cells on top of paper frame. */
-  const avatarTile = avatarRenderTileId();
-  if (avatarTile != null) {
-    drawTile(avatarTile, 272, 16);
+  } else if (inTalkPanel) {
+    const talkLabel = String(conversationPanel.target_name || state.legacyConversationTargetName || "Converse");
+    const labelX = 176 + Math.max(0, Math.floor((136 - (talkLabel.length * 8)) / 2));
+    drawU6MainText(g, talkLabel, x(labelX), y(88), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   }
 
-  /* Canonical paperdoll backdrop from C_2FC1_1EAF(192,32): TIL_170..TIL_173. */
-  drawTile(LEGACY_UI_TILE.EQUIP_UL, 192, 32);
-  drawTile(LEGACY_UI_TILE.EQUIP_UR, 208, 32);
-  drawTile(LEGACY_UI_TILE.EQUIP_DL, 192, 48);
-  drawTile(LEGACY_UI_TILE.EQUIP_DR, 208, 48);
+  /* Canonical dynamic payload only: inventory/equipment/portrait cells on top of paper frame. */
+  let portraitSlotX = 272;
+  let portraitSlotY = 16;
+  let portraitW = 16;
+  let portraitH = 16;
+  const equipmentOffsetY = (inTalkPanel && panelShowEquipment) ? 8 : 0;
+  if (inTalkPanel) {
+    portraitSlotX = panelShowEquipment ? 248 : 216;
+    portraitSlotY = 24;
+    portraitW = 56;
+    portraitH = 64;
+    const portrait = conversationPortraitCanvas(conversationPanel);
+    if (portrait) {
+      g.drawImage(
+        portrait,
+        0,
+        0,
+        portrait.width,
+        portrait.height,
+        x(portraitSlotX),
+        y(portraitSlotY),
+        x(portraitW),
+        y(portraitH)
+      );
+    }
+  } else {
+    const avatarTile = avatarRenderTileId();
+    if (avatarTile != null) {
+      drawTile(avatarTile, portraitSlotX, portraitSlotY);
+    }
+  }
+
+  if (panelShowEquipment) {
+    /* C_2FC1_1EAF(192,32) in CMD_92, C_2FC1_1EAF(192,40) in talk-inventory mode. */
+    drawTile(LEGACY_UI_TILE.EQUIP_UL, 192, 32 + equipmentOffsetY);
+    drawTile(LEGACY_UI_TILE.EQUIP_UR, 208, 32 + equipmentOffsetY);
+    drawTile(LEGACY_UI_TILE.EQUIP_DL, 192, 48 + equipmentOffsetY);
+    drawTile(LEGACY_UI_TILE.EQUIP_DR, 208, 48 + equipmentOffsetY);
+  }
 
   /* Canonical equipment layout from C_155D_08F4/C_155D_130E, with probe-driven payload tiles. */
   const slotByKey = new Map();
-  for (const s of (probe.canonical_ui?.paperdoll_panel?.slots || [])) {
-    slotByKey.set(String(s.key), s);
+  const slotKeyByIndex = [
+    "head",
+    "neck",
+    "right_hand",
+    "right_finger",
+    "chest",
+    "left_hand",
+    "left_finger",
+    "feet"
+  ];
+  const panelSlots = inTalkPanel
+    ? (Array.isArray(state.legacyConversationEquipmentSlots) ? state.legacyConversationEquipmentSlots : [])
+    : (probe.canonical_ui?.paperdoll_panel?.slots || []);
+  for (const s of panelSlots) {
+    if (s && s.key != null) {
+      slotByKey.set(String(s.key), s);
+      continue;
+    }
+    const slotIndex = Number(s?.slot);
+    if (Number.isFinite(slotIndex) && slotIndex >= 0 && slotIndex < slotKeyByIndex.length) {
+      slotByKey.set(slotKeyByIndex[slotIndex], s);
+    }
   }
   const equipSlots = [
-    { key: "head", index: 0, sx: 200, sy: 16 },
-    { key: "neck", index: 1, sx: 176, sy: 24 },
-    { key: "chest", index: 4, sx: 224, sy: 24 },
-    { key: "right_hand", index: 2, sx: 176, sy: 40 },
-    { key: "left_hand", index: 5, sx: 224, sy: 40 },
-    { key: "right_finger", index: 3, sx: 176, sy: 56 },
-    { key: "left_finger", index: 6, sx: 224, sy: 56 },
-    { key: "feet", index: 7, sx: 200, sy: 64 }
+    { key: "head", index: 0, sx: 200, sy: 16 + equipmentOffsetY },
+    { key: "neck", index: 1, sx: 176, sy: 24 + equipmentOffsetY },
+    { key: "chest", index: 4, sx: 224, sy: 24 + equipmentOffsetY },
+    { key: "right_hand", index: 2, sx: 176, sy: 40 + equipmentOffsetY },
+    { key: "left_hand", index: 5, sx: 224, sy: 40 + equipmentOffsetY },
+    { key: "right_finger", index: 3, sx: 176, sy: 56 + equipmentOffsetY },
+    { key: "left_finger", index: 6, sx: 224, sy: 56 + equipmentOffsetY },
+    { key: "feet", index: 7, sx: 200, sy: 64 + equipmentOffsetY }
   ];
-  for (const s of equipSlots) {
-    drawTile(LEGACY_UI_TILE.SLOT_EMPTY, s.sx, s.sy);
-    const slot = slotByKey.get(s.key);
-    const tile = parseProbeTileHex(slot?.tile_hex);
-    if (tile != null) {
-      drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, s.sx, s.sy);
-      drawTile(tile, s.sx, s.sy);
+  if (panelShowEquipment) {
+    for (const s of equipSlots) {
+      drawTile(LEGACY_UI_TILE.SLOT_EMPTY, s.sx, s.sy);
+      const slot = slotByKey.get(s.key);
+      const tile = parseProbeTileHex(slot?.tile_hex);
+      if (tile != null) {
+        drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, s.sx, s.sy);
+        drawTile(tile, s.sx, s.sy);
+      }
     }
   }
 
   /* Canonical inventory grid from C_155D_0CF5/C_155D_1267. */
   const invEntries = buildDisplayInventoryEntries();
-  for (let i = 0; i < 12; i += 1) {
-    const col = i & 3;
-    const row = i >> 2;
-    const sx = 248 + (col * 16);
-    const sy = 32 + (row * 16);
-    drawTile(LEGACY_UI_TILE.SLOT_EMPTY, sx, sy);
-    const entry = invEntries[i];
-    if (!entry) {
-      continue;
-    }
-    const tile = invTileFromEntry(entry);
-    if (tile != null) {
-      drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, sx, sy);
-      drawTile(tile, sx, sy);
+  if (panelShowBagGrid) {
+    for (let i = 0; i < 12; i += 1) {
+      const col = i & 3;
+      const row = i >> 2;
+      const sx = 248 + (col * 16);
+      const sy = 32 + (row * 16);
+      drawTile(LEGACY_UI_TILE.SLOT_EMPTY, sx, sy);
+      const entry = invEntries[i];
+      if (!entry) {
+        continue;
+      }
+      const tile = invTileFromEntry(entry);
+      if (tile != null) {
+        drawTile(LEGACY_UI_TILE.SLOT_OCCUPIED_BG, sx, sy);
+        drawTile(tile, sx, sy);
+      }
     }
   }
 
@@ -2311,7 +2754,7 @@ function renderLegacyHudStubOnBackdrop() {
       const row = sel.index >> 2;
       g.strokeRect(x(248 + (col * 16)) + 1, y(32 + (row * 16)) + 1, x(16) - 2, y(16) - 2);
     } else if (sel.kind === "portrait") {
-      g.strokeRect(x(272) + 1, y(16) + 1, x(16) - 2, y(16) - 2);
+      g.strokeRect(x(portraitSlotX) + 1, y(portraitSlotY) + 1, x(portraitW) - 2, y(portraitH) - 2);
     } else if (sel.kind === "equip") {
       const e = equipSlots.find((it) => (it.index | 0) === (sel.slot | 0));
       if (e) {
@@ -2387,14 +2830,31 @@ function renderLegacyHudStubOnBackdrop() {
     }
   }
   if (state.legacyLedgerPrompt) {
-    const lineIndex = Math.min(LEGACY_LEDGER_MAX_LINES - 1, state.legacyLedgerLines.length | 0);
-    const py = 112 + (lineIndex * 8);
-    drawU6MainText(g, ">", x(176), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
     const ankhGlyph = String.fromCharCode(5 + ((state.legacyPromptAnimPhase | 0) & 3));
-    drawU6MainText(g, ankhGlyph, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
     if (state.legacyConversationActive) {
-      const input = String(state.legacyConversationInput || "").slice(0, LEGACY_LEDGER_MAX_CHARS);
-      drawU6MainText(g, input, x(192), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+      const activeLineIndex = Math.max(0, ((state.legacyLedgerLines.length | 0) - 1));
+      const lineIndex = Math.min(LEGACY_LEDGER_MAX_LINES - 1, activeLineIndex);
+      const py = 112 + (lineIndex * 8);
+      const activeLineText = String(state.legacyLedgerLines[activeLineIndex] || "");
+      const prefixChars = Math.min(LEGACY_LEDGER_MAX_CHARS - 1, activeLineText.length | 0);
+      const promptX = 176 + (prefixChars * 8);
+      const inputMax = Math.max(0, LEGACY_LEDGER_MAX_CHARS - prefixChars - 1);
+      const input = String(state.legacyConversationInput || "").slice(0, inputMax);
+      if (input.length === 0) {
+        drawU6MainText(g, ankhGlyph, x(promptX), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+      }
+      drawU6MainText(g, input, x(promptX + 8), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    } else {
+      const lineIndex = Math.min(LEGACY_LEDGER_MAX_LINES - 1, state.legacyLedgerLines.length | 0);
+      const py = 112 + (lineIndex * 8);
+      drawU6MainText(g, ">", x(176), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+      drawU6MainText(g, ankhGlyph, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
+    }
+  } else if (state.legacyConversationActive && state.legacyConversationPaging) {
+    const py = 112 + ((LEGACY_LEDGER_MAX_LINES - 1) * 8);
+    /* Blink using the same cadence clock as prompt animation. */
+    if (((state.legacyPromptAnimPhase | 0) & 0x02) === 0) {
+      drawLegacyContinueArrow(g, x(184), y(py), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
     }
   }
 
@@ -4429,7 +4889,9 @@ function tryTalkAtCell(sim, tx, ty) {
     return false;
   }
   const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
-  const speaker = canonicalTalkSpeakerForTile(tileId);
+  const actorId = Number(actor.id) | 0;
+  const knownName = state.legacyConversationKnownNames[String(actorId)] || "";
+  const speaker = knownName || canonicalTalkSpeakerForTile(tileId);
   /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
   state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
   state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
@@ -4437,11 +4899,33 @@ function tryTalkAtCell(sim, tx, ty) {
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = speaker;
   state.legacyConversationPortraitTile = tileId;
+  state.legacyConversationTargetObjNum = Number(actor.id) | 0;
+  state.legacyConversationTargetObjType = Number(actor.type) | 0;
+  const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
+  /*
+    Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
+    when `showInven` is true (derived from real EQUIP objects on the actor).
+  */
+  state.legacyConversationShowInventory = equipSlots.length > 0;
+  state.legacyConversationEquipmentSlots = equipSlots;
   pushLedgerMessage("You see");
   pushLedgerMessage(`${speaker}.`);
-  pushLegacyConversationPrompt();
+  if (!knownName && isConcernedMageSpeaker(speaker)) {
+    state.legacyConversationKnownNames[String(actorId)] = "Nystul";
+    state.legacyConversationTargetName = "Nystul";
+    const started = startLegacyConversationPagination([
+      "Hail to thee milady, and well met.",
+      "Twas I who learned of thy deeds.",
+      "I am Nystul, mage to Lord British."
+    ]);
+    if (!started) {
+      pushLegacyConversationPrompt();
+    }
+  } else {
+    pushLegacyConversationPrompt();
+  }
   diagBox.className = "diag ok";
-  diagBox.textContent = `Talk: ${speaker} at ${tx},${ty},${tz}.`;
+  diagBox.textContent = `Talk: ${speaker} (id ${Number(actor.id) | 0}, type 0x${(Number(actor.type) & 0x3ff).toString(16)}) at ${tx},${ty},${tz}; equip slots ${state.legacyConversationEquipmentSlots.length}; showInven=${state.legacyConversationShowInventory ? 1 : 0}.`;
   return true;
 }
 
@@ -4554,9 +5038,27 @@ function findObjectByAnchor(anchor) {
     return null;
   }
   const overlays = state.objectLayer.objectsAt(anchor.x | 0, anchor.y | 0, anchor.z | 0);
+  let typeMatch = null;
   for (const o of overlays) {
     if ((o.order | 0) === (anchor.order | 0) && (o.type | 0) === (anchor.type | 0)) {
       return o;
+    }
+    if (!typeMatch && (o.type | 0) === (anchor.type | 0)) {
+      typeMatch = o;
+    }
+  }
+  /*
+    Canonical object order can drift after assoc/overlay normalization. Keep anchor
+    resolution stable by falling back to same-cell/same-type when order no longer matches.
+  */
+  if (typeMatch) {
+    return typeMatch;
+  }
+  if (isChairObject(anchor) || isBedObject(anchor)) {
+    for (const o of overlays) {
+      if (isChairObject(o) || isBedObject(o)) {
+        return o;
+      }
     }
   }
   return null;
@@ -4756,6 +5258,20 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
 function clearAvatarPose(sim) {
   sim.avatarPose = "stand";
   sim.avatarPoseAnchor = null;
+  sim.avatarPoseSetTick = -1;
+}
+
+function clearPendingAvatarMoveCommands(sim) {
+  if (!Array.isArray(state.queue) || !sim) {
+    return;
+  }
+  const now = Number(sim.tick) | 0;
+  state.queue = state.queue.filter((cmd) => {
+    if (!cmd || (cmd.type | 0) !== LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
+      return true;
+    }
+    return (Number(cmd.tick) | 0) <= now;
+  });
 }
 
 function furnitureAtCell(sim, tx, ty) {
@@ -4847,6 +5363,7 @@ function tryInteractFurnitureObject(sim, o) {
   const fromX = sim.world.map_x | 0;
   const fromY = sim.world.map_y | 0;
   sim.avatarPose = nextPose;
+  sim.avatarPoseSetTick = Number(sim.tick) | 0;
   sim.avatarPoseAnchor = {
     x: o.x | 0,
     y: o.y | 0,
@@ -4854,6 +5371,8 @@ function tryInteractFurnitureObject(sim, o) {
     order: o.order | 0,
     type: o.type | 0
   };
+  /* Prevent stale buffered movement from instantly cancelling a fresh sit/sleep pose. */
+  clearPendingAvatarMoveCommands(sim);
   if (nextPose === "sleep" && isBedObject(o)) {
     const sleepCell = preferredSleepCellForBed(o, fromX, fromY);
     sim.world.map_x = sleepCell.x | 0;
@@ -5029,7 +5548,7 @@ function startSessionFromTitle() {
   state.sessionStarted = true;
   endLegacyConversation();
   state.legacyLedgerLines.length = 0;
-  pushLedgerMessage(`${String(state.net.characterName || "Avatar").toUpperCase()}:`);
+  pushLedgerMessage(`${String(state.net.characterName || "Avatar")}:`);
   showLegacyLedgerPrompt();
   const resumed = !!state.net.resumeFromSnapshot;
   state.net.resumeFromSnapshot = false;
@@ -5484,6 +6003,10 @@ function expireRemovedWorldProps(sim, tickNow) {
 
 function applyCommand(sim, cmd) {
   if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
+    if ((sim.avatarPoseSetTick | 0) === (sim.tick | 0)) {
+      /* If pose was set this tick (from USE), do not let queued move cancel it immediately. */
+      return;
+    }
     if (sim.avatarPose !== "stand") {
       clearAvatarPose(sim);
     }
@@ -5494,6 +6017,14 @@ function applyCommand(sim, cmd) {
         sim.world.map_x = nx;
         sim.world.map_y = ny;
         state.avatarLastMoveTick = sim.tick >>> 0;
+        /*
+          Canonical-facing behavior: actor pose follows occupied furniture cell.
+          NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
+        */
+        const landedFurniture = furnitureAtCell(sim, nx, ny);
+        if (landedFurniture && isChairObject(landedFurniture)) {
+          tryInteractFurnitureObject(sim, landedFurniture);
+        }
       } else {
         // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
         tryInteractFurnitureObject(sim, furnitureAtCell(sim, nx, ny));
@@ -6457,7 +6988,13 @@ function avatarRenderTileId() {
   }
   if (state.sim.avatarPose === "sleep") {
     const sleepBase = sleepBaseTileForEntity(avatar);
-    const bed = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    let bed = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    if (!bed || !isBedObject(bed)) {
+      const fallback = furnitureAtCell(state.sim, state.sim.world.map_x | 0, state.sim.world.map_y | 0);
+      if (fallback && isBedObject(fallback)) {
+        bed = fallback;
+      }
+    }
     if (bed && isBedObject(bed)) {
       return (
         sleepBase
@@ -6473,7 +7010,13 @@ function avatarRenderTileId() {
   const walkMoving = state.avatarLastMoveTick >= 0 && ((state.sim.tick - state.avatarLastMoveTick) & 0xff) < 4;
   const dirGroup = avatarFacingFrameOffset();
   if (state.sim.avatarPose === "sit") {
-    const chair = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    let chair = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    if (!chair || !isChairObject(chair)) {
+      const fallback = furnitureAtCell(state.sim, state.sim.world.map_x | 0, state.sim.world.map_y | 0);
+      if (fallback && isChairObject(fallback)) {
+        chair = fallback;
+      }
+    }
     if (chair && isChairObject(chair)) {
       const chairFrame = (chair.frame | 0) & 0x03;
       return (avatar.baseTile + 3 + (chairFrame << 2)) & 0xffff;
@@ -6710,26 +7253,39 @@ function parseProbeTileHex(v) {
 function uiProbeHitTest(logicalX, logicalY) {
   const x = logicalX | 0;
   const y = logicalY | 0;
+  const statusDisplay = Number(state.legacyStatusDisplay) | 0;
+  const inTalkPanel = statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E;
+  const showEquipment = inTalkPanel
+    ? ((getUiProbeForRender().canonical_ui?.conversation_panel?.show_inventory) !== false)
+    : true;
+  const showBagGrid = !inTalkPanel;
+  const equipOffsetY = (inTalkPanel && showEquipment) ? 8 : 0;
+  const portraitX = inTalkPanel
+    ? (showEquipment ? 248 : 216)
+    : 272;
+  const portraitY = inTalkPanel ? 24 : 16;
+  const portraitW = inTalkPanel ? 56 : 16;
+  const portraitH = inTalkPanel ? 64 : 16;
   /* C_155D_1267 inventory + portrait hitboxes. */
-  if (x >= 248 && x < 312 && y >= 32 && y < 80) {
+  if (showBagGrid && x >= 248 && x < 312 && y >= 32 && y < 80) {
     const col = Math.floor((x - 248) / 16);
     const row = Math.floor((y - 32) / 16);
     return { kind: "inventory", index: (row * 4) + col };
   }
-  if (x >= 272 && x < 288 && y >= 16 && y < 32) {
+  if (x >= portraitX && x < (portraitX + portraitW) && y >= portraitY && y < (portraitY + portraitH)) {
     return { kind: "portrait", index: 0 };
   }
   /* C_155D_130E equipment hitboxes. */
-  if (x >= 200 && x < 216 && y >= 16 && y < 32) {
+  if (showEquipment && x >= 200 && x < 216 && y >= (16 + equipOffsetY) && y < (32 + equipOffsetY)) {
     return { kind: "equip", slot: 0 };
   }
-  if (x >= 176 && x < 192 && y >= 24 && y < 72) {
-    return { kind: "equip", slot: Math.floor((y - 24) / 16) + 1 };
+  if (showEquipment && x >= 176 && x < 192 && y >= (24 + equipOffsetY) && y < (72 + equipOffsetY)) {
+    return { kind: "equip", slot: Math.floor((y - (24 + equipOffsetY)) / 16) + 1 };
   }
-  if (x >= 224 && x < 240 && y >= 24 && y < 72) {
-    return { kind: "equip", slot: Math.floor((y - 24) / 16) + 4 };
+  if (showEquipment && x >= 224 && x < 240 && y >= (24 + equipOffsetY) && y < (72 + equipOffsetY)) {
+    return { kind: "equip", slot: Math.floor((y - (24 + equipOffsetY)) / 16) + 4 };
   }
-  if (x >= 200 && x < 216 && y >= 64 && y < 80) {
+  if (showEquipment && x >= 200 && x < 216 && y >= (64 + equipOffsetY) && y < (80 + equipOffsetY)) {
     return { kind: "equip", slot: 7 };
   }
   return null;
@@ -7287,7 +7843,7 @@ function tickLoop(ts) {
   const dtMs = Math.max(0, ts - state.lastTs);
   state.accMs += dtMs;
   state.lastTs = ts;
-  if (state.legacyLedgerPrompt) {
+  if (state.legacyLedgerPrompt || (state.legacyConversationActive && state.legacyConversationPaging)) {
     state.legacyPromptAnimMs += dtMs;
     while (state.legacyPromptAnimMs >= LEGACY_PROMPT_FRAME_MS) {
       state.legacyPromptAnimMs -= LEGACY_PROMPT_FRAME_MS;
@@ -7543,16 +8099,22 @@ async function loadRuntimeAssets() {
       state.u6MainFont = null;
     }
     if (state.basePalette) {
+      state.portraitArchiveA = (portraitARes.ok && portraitABuf.byteLength > 64) ? new Uint8Array(portraitABuf) : null;
+      state.portraitArchiveB = (portraitBRes.ok && portraitBBuf.byteLength > 64) ? new Uint8Array(portraitBBuf) : null;
+      state.portraitCanvasCache.clear();
       let pix = null;
-      if (portraitBRes.ok && portraitBBuf.byteLength > 64) {
-        pix = decodePortraitFromArchive(new Uint8Array(portraitBBuf), LEGACY_AVATAR_PORTRAIT_INDEX);
+      if (state.portraitArchiveB) {
+        pix = decodePortraitFromArchive(state.portraitArchiveB, LEGACY_AVATAR_PORTRAIT_INDEX);
       }
-      if (!pix && portraitARes.ok && portraitABuf.byteLength > 64) {
-        pix = decodePortraitFromArchive(new Uint8Array(portraitABuf), LEGACY_AVATAR_PORTRAIT_INDEX);
+      if (!pix && state.portraitArchiveA) {
+        pix = decodePortraitFromArchive(state.portraitArchiveA, LEGACY_AVATAR_PORTRAIT_INDEX);
       }
       state.avatarPortraitCanvas = canvasFromIndexedPixels(pix, state.basePalette);
     } else {
       state.avatarPortraitCanvas = null;
+      state.portraitArchiveA = null;
+      state.portraitArchiveB = null;
+      state.portraitCanvasCache.clear();
     }
     if (titlesRes.ok && titlesBuf.byteLength > 8 && mainmenuRes.ok && mainmenuBuf.byteLength > 8) {
       const titles = decodeU6ShpArchive(new Uint8Array(titlesBuf));
@@ -7678,6 +8240,9 @@ async function loadRuntimeAssets() {
     state.palette = null;
     state.basePalette = null;
     state.avatarPortraitCanvas = null;
+    state.portraitArchiveA = null;
+    state.portraitArchiveB = null;
+    state.portraitCanvasCache.clear();
     state.startupTitlePixmaps = null;
     state.startupMenuPixmap = null;
     state.startupCanvasCache.clear();
@@ -7880,6 +8445,19 @@ function captureUiProbeHotkey() {
     runtime: {
       sim: state.sim,
       commandLog: state.commandLog,
+      conversation: {
+        active: !!state.legacyConversationActive,
+        target_name: String(state.legacyConversationTargetName || ""),
+        target_obj_num: Number(state.legacyConversationTargetObjNum) | 0,
+        target_obj_type: Number(state.legacyConversationTargetObjType) | 0,
+        portrait_tile_hex: state.legacyConversationPortraitTile == null
+          ? null
+          : `0x${(Number(state.legacyConversationPortraitTile) & 0xffff).toString(16)}`,
+        show_inventory: !!state.legacyConversationShowInventory,
+        equipment: Array.isArray(state.legacyConversationEquipmentSlots)
+          ? state.legacyConversationEquipmentSlots
+          : []
+      },
       // Canonical party array bridge is still pending in runtime; use avatar fallback.
       partyMembers: [1]
     }
@@ -7916,6 +8494,19 @@ function getUiProbeForRender() {
     runtime: {
       sim: state.sim,
       commandLog: state.commandLog,
+      conversation: {
+        active: !!state.legacyConversationActive,
+        target_name: String(state.legacyConversationTargetName || ""),
+        target_obj_num: Number(state.legacyConversationTargetObjNum) | 0,
+        target_obj_type: Number(state.legacyConversationTargetObjType) | 0,
+        portrait_tile_hex: state.legacyConversationPortraitTile == null
+          ? null
+          : `0x${(Number(state.legacyConversationPortraitTile) & 0xffff).toString(16)}`,
+        show_inventory: !!state.legacyConversationShowInventory,
+        equipment: Array.isArray(state.legacyConversationEquipmentSlots)
+          ? state.legacyConversationEquipmentSlots
+          : []
+      },
       partyMembers: [1]
     }
   });
