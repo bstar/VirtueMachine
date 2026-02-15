@@ -97,6 +97,7 @@ import {
   encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
 import { loadNetPanelPrefs, saveNetPanelPref } from "./net/panel_runtime.ts";
+import { deriveNetIndicatorState, deriveNetQuickStatusText } from "./net/status_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -3887,28 +3888,10 @@ function setNetStatus(level, text) {
     topNetStatus.textContent = `${lvl} - ${msg}`;
   }
   if (topNetIndicator) {
-    let indicatorState = "offline";
-    if (isNetAuthenticated()) {
-      if (lvl === "error") {
-        indicatorState = "error";
-      } else if (lvl === "sync") {
-        indicatorState = "sync";
-      } else if (lvl === "connecting") {
-        indicatorState = "connecting";
-      } else if (lvl === "offline") {
-        indicatorState = "offline";
-      } else {
-        indicatorState = "online";
-      }
-    } else if (lvl === "connecting") {
-      indicatorState = "connecting";
-    } else if (lvl === "error") {
-      indicatorState = "error";
-    }
-    topNetIndicator.dataset.state = indicatorState;
+    topNetIndicator.dataset.state = deriveNetIndicatorState(lvl, isNetAuthenticated());
   }
   if (netQuickStatus) {
-    netQuickStatus.textContent = isNetAuthenticated() ? "Account: Signed in" : "Account: Signed out";
+    netQuickStatus.textContent = deriveNetQuickStatusText(isNetAuthenticated());
   }
   updateNetAuthButton();
 }
