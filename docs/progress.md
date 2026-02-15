@@ -241,11 +241,12 @@ Continue canonical interaction-parity closure before resuming audio:
 3. Add deterministic replay/hash fixtures for repeated interaction command streams over nested chains. (`in progress`, lifecycle + reset replay hash checks landed)
 4. Add room-level canonical fixture corpus for interaction hotspots (Virtue room / British study stack cases).
 5. Only after chain semantics closure: proceed to environmental collision + sit/sleep interaction slice.
+6. Add dev-slice spec for LB early-story intro gate (battle-script dependent) but keep it deferred until combat/script compatibility is complete.
 
 Then continue R5/R3 closure and M5:
 
-6. Capture startup/title parity screenshots against legacy references.
-7. Add deterministic interaction visual-state replay fixtures (doors + sit/sleep states).
-8. Continue M5 backend/game-state authority slices.
+7. Capture startup/title parity screenshots against legacy references.
+8. Add deterministic interaction visual-state replay fixtures (doors + sit/sleep states).
+9. Continue M5 backend/game-state authority slices.
 
 After these interaction closures, execute UI parity harness slices U0-U5 before major gameplay-system rollout.

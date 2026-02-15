@@ -66,6 +66,28 @@ function normalizeEquipment(equipment) {
   }));
 }
 
+function normalizeConversation(conversation) {
+  const c = conversation && typeof conversation === "object" ? conversation : {};
+  return {
+    active: !!c.active,
+    target_name: String(c.target_name || ""),
+    target_obj_num: toU32(c.target_obj_num || 0),
+    target_obj_type: toU32(c.target_obj_type || 0),
+    portrait_tile_hex: c.portrait_tile_hex == null ? null : String(c.portrait_tile_hex),
+    /*
+      Canonical anchor: C_27A1_02D9 can switch between converse-only portrait
+      and portrait+equipment/inventory composition based on context scripts.
+      This flag drives that branch in the modern HUD renderer.
+    */
+    show_inventory: c.show_inventory == null ? true : !!c.show_inventory,
+    /*
+      Talk-mode equipment is a canonical connection point; live extraction from
+      NPC equip tables is pending, but the contract is finalized now.
+    */
+    equipment_slots: normalizeEquipment(c.equipment || [])
+  };
+}
+
 function deterministicSample() {
   return {
     tick: 4242,
@@ -96,7 +118,19 @@ function deterministicSample() {
       { tick: 4239, level: "info", text: "Party mode ready." },
       { tick: 4240, level: "system", text: "Inventory refresh complete." },
       { tick: 4241, level: "info", text: "Awaiting command." }
-    ]
+    ],
+    conversation: {
+      active: false,
+      target_name: "",
+      target_obj_num: 0,
+      target_obj_type: 0,
+      portrait_tile_hex: null,
+      show_inventory: true,
+      equipment: [
+        { slot: 2, object_key: "0x12c:1", tile_hex: "0x431" },
+        { slot: 5, object_key: "0x12e:1", tile_hex: "0x44d" }
+      ]
+    }
   };
 }
 
@@ -126,7 +160,8 @@ function fromRuntime(runtime) {
       tick: toU32(c.tick != null ? c.tick : i),
       level: "info",
       text: String(c.kind || "command")
-    }))
+    })),
+    conversation: normalizeConversation(runtime.conversation)
   };
 }
 
@@ -175,7 +210,12 @@ export function buildUiProbeContract(opts = {}) {
       },
       message_log_panel: {
         entries: normalizeMessages(src.messages)
-      }
+      },
+      conversation_panel: normalizeConversation(src.conversation)
+    },
+    canonical_contract_notes: {
+      conversation_panel:
+        "C_27A1_02D9 / TALK_talkTo alignment surface. Live NPC equipment extraction pending; fields are canonicalized now."
     },
     modern_ui: {
       account_panel: {

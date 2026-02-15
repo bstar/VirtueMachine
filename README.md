@@ -87,6 +87,9 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 5. `U4` Mechanics Rollout On Harness
 - NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons
 - each mechanic must ship with panel and replay regression coverage
+6. `U5` Story Gate Compatibility Bridge (deferred)
+- add canonical progression gate keys for early LB intro/battle sequencing
+- no story-flow implementation until combat/script compatibility slices are complete
 
 Note: when canonical screenshot references are not yet available for a panel, acceptance is based on legacy-code-derived behavior contracts and deterministic probe output first.
 

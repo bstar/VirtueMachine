@@ -100,12 +100,20 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `Shift+Y`: save current sim snapshot to net backend
 - `Shift+U`: load current character snapshot from net backend
 - `Shift+J`: capture live UI probe contract to `window.__vmLastUiProbe`
+- `Shift+K`: hide/show legacy HUD layer on parchment frame (deviation mode toggle)
+- `Shift+L`: toggle canonical UI probe mode (`live`/`sample`) for HUD payload stubs
 - `Shift+N`: run critical-item maintenance now
 - `Shift+G`: jump to selected canonical capture preset
 - `Shift+P`: capture viewport PNG
 - `Shift+Alt+P`: capture world+HUD PNG
 - `Shift+O/F/B/M/R/V`: debug overlay/animation/palette/mode/reset/replay controls
 - `Shift+C`: copy hover parity report to clipboard
+
+Legacy HUD interaction notes:
+
+- right-side parchment HUD clicks use legacy status hitboxes from:
+  - `C_155D_1267` (inventory + portrait selection)
+  - `C_155D_130E` (equipment slot selection)
   - when authenticated, report now appends `server_obj[...]` rows from `/api/world/objects` for the hovered cell using footprint projection (`fp=...`)
 
 Useful parity presets:
