@@ -434,6 +434,16 @@ const state = {
   legacyConversationPaging: false,
   legacyConversationPages: [],
   legacyConversationKnownNames: {},
+  legacyConversationNpcKey: "",
+  legacyConversationPendingPrompt: "",
+  legacyConversationTopicState: {
+    assume_intro_complete: true,
+    talked_to_british_intro: true,
+    nystul_quest_offered: false,
+    nystul_quest_accepted: false,
+    dupre_quest_offered: false,
+    dupre_quest_accepted: false
+  },
   legacyConversationPrevStatus: LEGACY_STATUS_DISPLAY.CMD_92,
   useCursorX: 0,
   useCursorY: 0,
@@ -1772,43 +1782,6 @@ function legacyEquipmentSlotsForTalkActor(actor) {
   if (!equipRows.length) {
     equipRows = selectEquipRows(state.objectLayer?.assocEntries, true);
   }
-  if (!equipRows.length && state.objectLayer && Array.isArray(state.objectLayer.assocEntries)) {
-    /*
-      Fallback for drifted actor ids: find nearest same-type actor id that owns equip rows.
-      This keeps canonical equipment visuals present while deeper id reconciliation is pending.
-    */
-    const equipByAssoc = new Map();
-    for (const row of state.objectLayer.assocEntries) {
-      if (!row || (row.coordUse | 0) !== OBJ_COORD_USE_EQUIP) continue;
-      const ownerId = row.assocIndex | 0;
-      if (ownerId < 0 || ownerId >= 0x100) continue;
-      if (!equipByAssoc.has(ownerId)) equipByAssoc.set(ownerId, []);
-      equipByAssoc.get(ownerId).push(row);
-    }
-    if (equipByAssoc.size > 0 && state.entityLayer && Array.isArray(state.entityLayer.entries)) {
-      let bestId = -1;
-      let bestDist = 0x7fffffff;
-      for (const ent of state.entityLayer.entries) {
-        if (!ent || ((ent.type & 0x03ff) !== actorType)) continue;
-        const id = ent.id | 0;
-        const owned = equipByAssoc.get(id);
-        if (!owned || owned.length === 0) continue;
-        const d = Math.max(Math.abs((ent.x | 0) - actorX), Math.abs((ent.y | 0) - actorY));
-        if (d < bestDist) {
-          bestDist = d;
-          bestId = id;
-        }
-      }
-      if (bestId >= 0) {
-        equipRows = (equipByAssoc.get(bestId) || []).slice().sort((a, b) => {
-          const ao = Number((a.legacyOrder != null) ? a.legacyOrder : a.order) | 0;
-          const bo = Number((b.legacyOrder != null) ? b.legacyOrder : b.order) | 0;
-          if (ao !== bo) return ao - bo;
-          return (a.index | 0) - (b.index | 0);
-        });
-      }
-    }
-  }
   if (!equipRows.length) {
     return [];
   }
@@ -1856,6 +1829,8 @@ function endLegacyConversation() {
   state.legacyConversationPortraitTile = null;
   state.legacyConversationTargetObjNum = 0;
   state.legacyConversationTargetObjType = 0;
+  state.legacyConversationNpcKey = "";
+  state.legacyConversationPendingPrompt = "";
   state.legacyConversationShowInventory = false;
   state.legacyConversationEquipmentSlots = [];
   state.legacyConversationPaging = false;
@@ -1875,40 +1850,131 @@ function isConcernedMageSpeaker(name) {
   return s.includes("concerned looking mage") || s === "mage";
 }
 
-function legacyConversationReply(targetName, typed) {
-  const t = String(typed || "").trim().toLowerCase();
+function resolveConversationNpcKey(targetName, objType = 0) {
   const who = String(targetName || "").trim().toLowerCase();
-  const first = t.split(/\s+/)[0] || "";
-  const isLordBritish = who.includes("lord british") || who === "british";
+  if (who.includes("lord british") || who === "british") return "lord_british";
+  if (who.includes("nystul") || who.includes("mage")) return "nystul";
+  /* Dupre often appears as a fighter description until named. */
+  if (who.includes("dupre") || who.includes("fighter")) return "dupre";
+  const t = Number(objType) & 0x03ff;
+  if (t === 0x117) return "dupre";
+  return "generic";
+}
 
-  if (t === "hello" || t === "hi" || first === "greet") {
-    return isLordBritish ? "Welcome, Avatar." : "Greetings.";
+function legacyKeywordHint(topics) {
+  const list = (Array.isArray(topics) ? topics : [])
+    .map((t) => String(t || "").trim().toUpperCase())
+    .filter(Boolean);
+  if (list.length === 0) {
+    return "";
   }
-  if (t === "name" || first === "name") {
-    return isLordBritish ? "I am Lord British, ruler of Britannia." : `I am ${targetName}.`;
+  return `(${list.join(" / ")})`;
+}
+
+function getLegacyConversationTopicState() {
+  if (!state.legacyConversationTopicState || typeof state.legacyConversationTopicState !== "object") {
+    state.legacyConversationTopicState = {};
   }
-  if (t === "job" || first === "job") {
-    return isLordBritish ? "I rule this realm and guide those who seek virtue." : "I serve as I am able.";
+  return state.legacyConversationTopicState;
+}
+
+function legacyConversationReply(targetName, typed) {
+  const raw = String(typed || "").trim().toLowerCase();
+  const t = raw.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
+  const first = t.split(/\s+/)[0] || "";
+  const npcKey = String(state.legacyConversationNpcKey || resolveConversationNpcKey(targetName, state.legacyConversationTargetObjType));
+  const topicState = getLegacyConversationTopicState();
+  const pending = String(state.legacyConversationPendingPrompt || "");
+
+  if (pending === "nystul_quest_confirm") {
+    state.legacyConversationPendingPrompt = "";
+    if (first === "yes" || first === "y") {
+      topicState.nystul_quest_accepted = true;
+      state.sim.world.is_on_quest = 1;
+      return [
+        "Excellent. Seek out the moonstone disturbances at once.",
+        legacyKeywordHint(["moonstone", "moongate", "britain"])
+      ];
+    }
+    return [
+      "As thou wilt. Return if thy mind changeth.",
+      legacyKeywordHint(["quest", "moonstone"])
+    ];
   }
-  if (t === "look" || first === "look") {
-    return `You see ${targetName || "someone"}.`;
+
+  if (pending === "dupre_quest_confirm") {
+    state.legacyConversationPendingPrompt = "";
+    if (first === "yes" || first === "y") {
+      topicState.dupre_quest_accepted = true;
+      return [
+        "Well said! Courage and honor shall serve thee.",
+        legacyKeywordHint(["honor", "companions", "quest"])
+      ];
+    }
+    return [
+      "Very well. I stand ready shouldst thou call.",
+      legacyKeywordHint(["companions", "quest"])
+    ];
   }
-  if (isLordBritish && (t === "castle" || first === "castle")) {
-    return "This is Castle Britannia, my home.";
+
+  if (npcKey === "lord_british") {
+    if (first === "name") return ["I am Lord British, ruler of Britannia."];
+    if (first === "job") return ["I guide Britannia and those who seek virtue."];
+    if (first === "quest") return ["Thy quest is underway. Speak with my mage and companions."];
+    if (first === "virtue") return ["Live by the eight virtues and thou shalt prevail."];
+    if (first === "help") return [legacyKeywordHint(["name", "job", "quest", "virtue"])];
+    return ["Welcome, Avatar.", legacyKeywordHint(["name", "job", "quest"])];
   }
-  if (isLordBritish && (t === "britannia" || first === "britannia")) {
-    return "Britannia thrives when virtue is upheld.";
+
+  if (npcKey === "nystul") {
+    if (first === "name") {
+      state.legacyConversationKnownNames[String(state.legacyConversationTargetObjNum | 0)] = "Nystul";
+      state.legacyConversationTargetName = "Nystul";
+      return ["I am Nystul, court mage to Lord British."];
+    }
+    if (first === "job") return ["I study the disturbances in the moongates and moonstones."];
+    if (first === "quest") {
+      topicState.nystul_quest_offered = true;
+      state.legacyConversationPendingPrompt = "nystul_quest_confirm";
+      return [
+        "I would ask thy aid in this matter.",
+        "Wilt thou accept this task? (YES/NO)"
+      ];
+    }
+    if (first === "moongate" || first === "moonstone") {
+      return ["Their behavior is altered. We must track the source."];
+    }
+    if (first === "help") return [legacyKeywordHint(["name", "job", "quest", "moongate", "moonstone"])];
+    return [
+      "Hail to thee, and well met.",
+      legacyKeywordHint(["name", "job", "quest"])
+    ];
   }
-  if (isLordBritish && (t === "virtue" || first === "virtue")) {
-    return "Seek and live the eight virtues.";
+
+  if (npcKey === "dupre") {
+    if (first === "name") {
+      state.legacyConversationKnownNames[String(state.legacyConversationTargetObjNum | 0)] = "Dupre";
+      state.legacyConversationTargetName = "Dupre";
+      return ["I am Dupre, at thy service."];
+    }
+    if (first === "job") return ["A fighter and companion in the cause of virtue."];
+    if (first === "quest") {
+      topicState.dupre_quest_offered = true;
+      state.legacyConversationPendingPrompt = "dupre_quest_confirm";
+      return [
+        "I shall join thy cause if thou ask it.",
+        "Shall we stand together? (YES/NO)"
+      ];
+    }
+    if (first === "honor") return ["Honor above all. Let deeds prove worth."];
+    if (first === "help") return [legacyKeywordHint(["name", "job", "quest", "honor"])];
+    return ["Well met.", legacyKeywordHint(["name", "job", "quest"])];
   }
-  if (isLordBritish && (t === "quest" || first === "quest")) {
-    return "Your destiny lies in proving thyself through virtue.";
-  }
-  if (isLordBritish && (t === "help" || first === "help")) {
-    return "Speak of virtue, britannia, or quest.";
-  }
-  return "I cannot help thee with that.";
+
+  if (first === "name") return [`I am ${targetName || "a traveler"}.`];
+  if (first === "job") return ["I serve as I am able."];
+  if (first === "help") return [legacyKeywordHint(["name", "job"])];
+  return ["No response."];
 }
 
 function submitLegacyConversationInput() {
@@ -1934,8 +2000,13 @@ function submitLegacyConversationInput() {
     pushLegacyConversationPrompt();
     return;
   }
-  /* CANONICAL STUB: talkdr keyword scripts are pending; this is interim keyword routing. */
-  pushLedgerMessage(legacyConversationReply(state.legacyConversationTargetName, typed));
+  const replies = legacyConversationReply(state.legacyConversationTargetName, typed);
+  for (const line of (Array.isArray(replies) ? replies : [String(replies || "")])) {
+    const msg = String(line || "").trim();
+    if (msg) {
+      pushLedgerMessage(msg);
+    }
+  }
   pushLegacyConversationPrompt();
 }
 
@@ -3132,6 +3203,7 @@ function createInitialSimState() {
     spawnedWorldObjects: [],
     spawnedWorldSeq: 0,
     avatarPose: "stand",
+    avatarPoseSetTick: -1,
     avatarPoseAnchor: null,
     world: { ...INITIAL_WORLD }
   };
@@ -3658,6 +3730,9 @@ function normalizeLoadedSimState(candidate) {
     avatarPose: (candidate.avatarPose === "sit" || candidate.avatarPose === "sleep")
       ? candidate.avatarPose
       : "stand",
+    avatarPoseSetTick: Number.isFinite(Number(candidate.avatarPoseSetTick))
+      ? (Number(candidate.avatarPoseSetTick) | 0)
+      : -1,
     avatarPoseAnchor: candidate.avatarPoseAnchor && typeof candidate.avatarPoseAnchor === "object"
       ? {
         x: Number(candidate.avatarPoseAnchor.x) | 0,
@@ -4731,7 +4806,21 @@ function isCloseableDoorObject(obj) {
 }
 
 function isChairObject(obj) {
-  return !!obj && OBJECT_TYPES_CHAIR.has(obj.type);
+  if (!obj) {
+    return false;
+  }
+  const type = obj.type & 0x03ff;
+  if (OBJECT_TYPES_CHAIR.has(type)) {
+    return true;
+  }
+  /* Legacy C_1E0F_0664/C_1E0F_2184 chair test: OBJ_147 with frame==2 behaves as chair seat. */
+  if (type === 0x147) {
+    const frame = obj.frame | 0;
+    if (frame === 2) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isBedObject(obj) {
@@ -4901,6 +4990,8 @@ function tryTalkAtCell(sim, tx, ty) {
   state.legacyConversationPortraitTile = tileId;
   state.legacyConversationTargetObjNum = Number(actor.id) | 0;
   state.legacyConversationTargetObjType = Number(actor.type) | 0;
+  state.legacyConversationNpcKey = resolveConversationNpcKey(speaker, state.legacyConversationTargetObjType);
+  state.legacyConversationPendingPrompt = "";
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
   /*
     Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
@@ -4913,6 +5004,7 @@ function tryTalkAtCell(sim, tx, ty) {
   if (!knownName && isConcernedMageSpeaker(speaker)) {
     state.legacyConversationKnownNames[String(actorId)] = "Nystul";
     state.legacyConversationTargetName = "Nystul";
+    state.legacyConversationNpcKey = "nystul";
     const started = startLegacyConversationPagination([
       "Hail to thee milady, and well met.",
       "Twas I who learned of thy deeds.",
@@ -5936,6 +6028,7 @@ function cloneSimState(sim) {
       : [],
     spawnedWorldSeq: Number(sim.spawnedWorldSeq) >>> 0,
     avatarPose: String(sim.avatarPose || "stand"),
+    avatarPoseSetTick: Number(sim.avatarPoseSetTick) | 0,
     avatarPoseAnchor: sim.avatarPoseAnchor ? { ...sim.avatarPoseAnchor } : null,
     world: { ...sim.world }
   };
