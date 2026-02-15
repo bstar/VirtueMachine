@@ -12,6 +12,7 @@
     "skipLibCheck": true
   },
   "include": [
+    "modern/client-web/app.ts",
     "modern/common/**/*.mjs",
     "modern/client-web/conversation/**/*.js",
     "modern/client-web/ui_probe_contract.js",
