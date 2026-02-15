@@ -81,6 +81,7 @@ import {
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
 import { performNetLoginFlow } from "./net/auth_runtime.ts";
+import { handleBackgroundFailure, resetBackgroundFailureState } from "./net/failure_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4041,25 +4042,18 @@ function hasMultipleSavedAccounts() {
 }
 
 function resetBackgroundNetFailures() {
-  state.net.backgroundFailCount = 0;
-  state.net.firstBackgroundFailAtMs = 0;
-  state.net.backgroundSyncPaused = false;
+  resetBackgroundFailureState(state.net);
 }
 
 function recordBackgroundNetFailure(err, context) {
-  const nowMs = Date.now();
-  if (!state.net.firstBackgroundFailAtMs || (nowMs - state.net.firstBackgroundFailAtMs) > NET_BACKGROUND_FAIL_WINDOW_MS) {
-    state.net.firstBackgroundFailAtMs = nowMs;
-    state.net.backgroundFailCount = 0;
-  }
-  state.net.backgroundFailCount += 1;
-  if (state.net.backgroundFailCount >= NET_BACKGROUND_FAIL_MAX) {
-    state.net.backgroundSyncPaused = true;
-    setNetStatus("offline", "Server unreachable. Auto-sync paused; use Net Login to retry.");
-    return;
-  }
-  const suffix = err ? `: ${String(err.message || err)}` : "";
-  setNetStatus("error", `${context} failed${suffix}`);
+  handleBackgroundFailure(state.net, {
+    err,
+    context,
+    nowMs: Date.now(),
+    windowMs: NET_BACKGROUND_FAIL_WINDOW_MS,
+    maxFailures: NET_BACKGROUND_FAIL_MAX,
+    setStatus: setNetStatus
+  });
 }
 
 function isTypingContext(target) {
