@@ -170,6 +170,7 @@ const netCharacterNameInput = document.getElementById("netCharacterNameInput");
 const netEmailInput = document.getElementById("netEmailInput");
 const netEmailCodeInput = document.getElementById("netEmailCodeInput");
 const netLoginButton = document.getElementById("netLoginButton");
+const netAutoLoginCheckbox = document.getElementById("netAutoLoginCheckbox");
 const netRecoverButton = document.getElementById("netRecoverButton");
 const netSetEmailButton = document.getElementById("netSetEmailButton");
 const netSendVerifyButton = document.getElementById("netSendVerifyButton");
@@ -178,6 +179,14 @@ const netSaveButton = document.getElementById("netSaveButton");
 const netLoadButton = document.getElementById("netLoadButton");
 const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
 const netMaintenanceButton = document.getElementById("netMaintenanceButton");
+const debugTabRuntime = document.getElementById("debugTabRuntime");
+const debugTabChat = document.getElementById("debugTabChat");
+const debugPanelRuntime = document.getElementById("debugPanelRuntime");
+const debugPanelChat = document.getElementById("debugPanelChat");
+const debugChatCount = document.getElementById("debugChatCount");
+const debugChatLedgerBody = document.getElementById("debugChatLedgerBody");
+const debugChatCopyButton = document.getElementById("debugChatCopyButton");
+const debugChatClearButton = document.getElementById("debugChatClearButton");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -195,6 +204,7 @@ const NET_PASSWORD_VISIBLE_KEY = "vm_net_password_visible";
 const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
 const NET_EMAIL_KEY = "vm_net_email";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
+const NET_AUTO_LOGIN_KEY = "vm_net_auto_login";
 const NET_PROFILES_KEY = "vm_net_profiles";
 const NET_PROFILE_SELECTED_KEY = "vm_net_profile_selected";
 const NET_ACTIVITY_PULSE_MS = 280;
@@ -413,6 +423,8 @@ const state = {
   uiProbeMode: "live",
   legacyHudSelection: null,
   legacyHudLayerHidden: false,
+  debugPanelTab: "runtime",
+  debugChatLedger: [],
   legacyLedgerLines: [],
   legacyLedgerPrompt: false,
   legacyPromptAnimMs: 0,
@@ -426,6 +438,7 @@ const state = {
   legacyConversationActive: false,
   legacyConversationInput: "",
   legacyConversationTargetName: "",
+  legacyConversationActorEntityId: 0,
   legacyConversationPortraitTile: null,
   legacyConversationTargetObjNum: 0,
   legacyConversationTargetObjType: 0,
@@ -470,6 +483,12 @@ const state = {
   replayUrl: null,
   legacyPaperPixmap: null,
   lookStringEntries: null,
+  converseArchiveA: null,
+  converseArchiveB: null,
+  converseArchiveDiag: "",
+  legacyConversationScript: null,
+  legacyConversationDescText: "",
+  legacyConversationRules: [],
   legacyScaleMode: "4",
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
@@ -564,9 +583,31 @@ function wrapLegacyLedgerLines(text) {
 }
 
 function pushLedgerMessage(text) {
-  const wrapped = wrapLegacyLedgerLines(text);
+  const wrapped = (text === "") ? [""] : wrapLegacyLedgerLines(text);
   if (!wrapped.length) {
     return;
+  }
+  const tick = Number(state.sim?.tick) >>> 0;
+  const convoMeta = state.legacyConversationActive
+    ? {
+      actorId: Number(state.legacyConversationActorEntityId) | 0,
+      convId: Number(state.legacyConversationTargetObjNum) | 0,
+      objType: Number(state.legacyConversationTargetObjType) & 0x03ff
+    }
+    : null;
+  for (const line of wrapped) {
+    state.debugChatLedger.push({
+      tick,
+      line: String(line || ""),
+      ts: Date.now(),
+      actorId: convoMeta ? convoMeta.actorId : null,
+      convId: convoMeta ? convoMeta.convId : null,
+      objType: convoMeta ? convoMeta.objType : null
+    });
+  }
+  const maxEntries = 2000;
+  if (state.debugChatLedger.length > maxEntries) {
+    state.debugChatLedger.splice(0, state.debugChatLedger.length - maxEntries);
   }
   for (const line of wrapped) {
     state.legacyLedgerLines.push(line);
@@ -574,6 +615,61 @@ function pushLedgerMessage(text) {
   const extra = state.legacyLedgerLines.length - LEGACY_LEDGER_MAX_LINES;
   if (extra > 0) {
     state.legacyLedgerLines.splice(0, extra);
+  }
+}
+
+function buildDebugChatLedgerText() {
+  const lines = [];
+  const src = Array.isArray(state.debugChatLedger) ? state.debugChatLedger : [];
+  for (const entry of src) {
+    const tick = Number(entry.tick) >>> 0;
+    const msg = String(entry.line || "");
+    const actorId = Number(entry.actorId);
+    const convId = Number(entry.convId);
+    const objType = Number(entry.objType);
+    const hasMeta = Number.isFinite(actorId) && actorId >= 0
+      && Number.isFinite(convId) && convId >= 0
+      && Number.isFinite(objType) && objType >= 0;
+    if (hasMeta) {
+      lines.push(`[${String(tick).padStart(7, "0")}] ${msg} {actor=${actorId} conv=${convId} type=0x${(objType & 0x03ff).toString(16)}}`);
+    } else {
+      lines.push(`[${String(tick).padStart(7, "0")}] ${msg}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function renderDebugChatLedgerPanel() {
+  if (debugChatCount) {
+    const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
+    debugChatCount.textContent = `${count} entr${count === 1 ? "y" : "ies"}`;
+  }
+  if (debugChatLedgerBody) {
+    debugChatLedgerBody.textContent = buildDebugChatLedgerText();
+    debugChatLedgerBody.scrollTop = debugChatLedgerBody.scrollHeight;
+  }
+}
+
+function setDebugPanelTab(tab) {
+  const next = (tab === "chat") ? "chat" : "runtime";
+  state.debugPanelTab = next;
+  const runtimeActive = next === "runtime";
+  if (debugPanelRuntime) {
+    debugPanelRuntime.classList.toggle("hidden", !runtimeActive);
+  }
+  if (debugPanelChat) {
+    debugPanelChat.classList.toggle("hidden", runtimeActive);
+  }
+  if (debugTabRuntime) {
+    debugTabRuntime.classList.toggle("is-active", runtimeActive);
+    debugTabRuntime.setAttribute("aria-selected", runtimeActive ? "true" : "false");
+  }
+  if (debugTabChat) {
+    debugTabChat.classList.toggle("is-active", !runtimeActive);
+    debugTabChat.setAttribute("aria-selected", runtimeActive ? "false" : "true");
+  }
+  if (!runtimeActive) {
+    renderDebugChatLedgerPanel();
   }
 }
 
@@ -604,6 +700,20 @@ function startLegacyConversationPagination(lines) {
   const pages = paginateLedgerMessages(lines, LEGACY_LEDGER_MAX_LINES - 1);
   if (!pages.length) {
     return false;
+  }
+  const tick = Number(state.sim?.tick) >>> 0;
+  for (const page of pages) {
+    for (const line of page) {
+      state.debugChatLedger.push({
+        tick,
+        line: String(line || ""),
+        ts: Date.now()
+      });
+    }
+  }
+  const maxEntries = 2000;
+  if (state.debugChatLedger.length > maxEntries) {
+    state.debugChatLedger.splice(0, state.debugChatLedger.length - maxEntries);
   }
   state.legacyConversationPages = pages;
   state.legacyConversationPaging = true;
@@ -1321,6 +1431,7 @@ class U6EntityLayerJS {
       const coordUse = status & OBJ_COORD_USE_MASK;
       const type = shapeType & 0x03ff;
       const frame = shapeType >>> 10;
+      const qual = bytes[0x0700 + id] & 0xff;
       const pos = objPosOff + (id * 3);
       const baseTile = this.baseTiles[type] ?? 0;
       if (baseTile === 0) {
@@ -1357,6 +1468,7 @@ class U6EntityLayerJS {
         z,
         status,
         npcStatus,
+        qual,
         type,
         frame,
         baseTile,
@@ -1689,6 +1801,14 @@ function canonicalTalkSpeakerForTile(tileId) {
   return normalizeCaps(raw);
 }
 
+function sanitizeLegacyHudLabelText(text) {
+  return String(text || "")
+    .replace(/[^\x20-\x7e]+/g, " ")
+    .replace(/[^A-Za-z0-9 .,'-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function areaIdForWorldXY(x, y) {
   const ax = ((Number(x) | 0) >> 7) & 0x7;
   const ay = ((Number(y) | 0) >> 7) & 0x7;
@@ -1826,6 +1946,7 @@ function endLegacyConversation() {
   state.legacyConversationActive = false;
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = "";
+  state.legacyConversationActorEntityId = 0;
   state.legacyConversationPortraitTile = null;
   state.legacyConversationTargetObjNum = 0;
   state.legacyConversationTargetObjType = 0;
@@ -1835,6 +1956,9 @@ function endLegacyConversation() {
   state.legacyConversationEquipmentSlots = [];
   state.legacyConversationPaging = false;
   state.legacyConversationPages = [];
+  state.legacyConversationScript = null;
+  state.legacyConversationDescText = "";
+  state.legacyConversationRules = [];
   state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
 }
 
@@ -1845,136 +1969,779 @@ function pushLegacyConversationPrompt() {
   showLegacyLedgerPrompt();
 }
 
-function isConcernedMageSpeaker(name) {
-  const s = String(name || "").toLowerCase();
-  return s.includes("concerned looking mage") || s === "mage";
+const CONV_OP_KEY = 0xef;
+const CONV_OP_RES = 0xf6;
+const CONV_OP_ENDRES = 0xee;
+const CONV_OP_DESC = 0xf1;
+const CONV_OP_MAIN = 0xf2;
+const CONV_OP_END = 0xff;
+const CONV_OP_JOIN = 0xca;
+
+function decodeU6LzwWithKnownLength(srcBytes, outLen) {
+  const src = (srcBytes instanceof Uint8Array) ? srcBytes : new Uint8Array(srcBytes || 0);
+  const outSize = Number(outLen) >>> 0;
+  if (!src.length || outSize === 0 || outSize > 0x7fffffff) {
+    return null;
+  }
+  /*
+    Runtime LZW decoder consumes a 32-bit little-endian output length header.
+    Conversation archives store compressed payload + external known length.
+  */
+  const wrapped = new Uint8Array(src.length + 4);
+  wrapped[0] = outSize & 0xff;
+  wrapped[1] = (outSize >>> 8) & 0xff;
+  wrapped[2] = (outSize >>> 16) & 0xff;
+  wrapped[3] = (outSize >>> 24) & 0xff;
+  wrapped.set(src, 4);
+  return decompressU6Lzw(wrapped);
 }
 
-function resolveConversationNpcKey(targetName, objType = 0) {
-  const who = String(targetName || "").trim().toLowerCase();
-  if (who.includes("lord british") || who === "british") return "lord_british";
-  if (who.includes("nystul") || who.includes("mage")) return "nystul";
-  /* Dupre often appears as a fighter description until named. */
-  if (who.includes("dupre") || who.includes("fighter")) return "dupre";
+function conversationArchiveForNpc(objNum, objType) {
+  const n = Number(objNum) | 0;
   const t = Number(objType) & 0x03ff;
-  if (t === 0x117) return "dupre";
-  return "generic";
+  if (n >= 0xe0) {
+    if (t === 0x175) return { archive: "b", index: 0x66 };
+    if (t === 0x17e) return { archive: "b", index: 0x67 };
+    if (t === 0x16b) return { archive: "b", index: 0x68 };
+    return null;
+  }
+  if (n > 0x62) {
+    return { archive: "b", index: n - 0x63 };
+  }
+  if (n < 0) {
+    return null;
+  }
+  return { archive: "a", index: n };
 }
 
-function legacyKeywordHint(topics) {
-  const list = (Array.isArray(topics) ? topics : [])
-    .map((t) => String(t || "").trim().toUpperCase())
+function loadLegacyConversationScript(objNum, objType) {
+  const spec = conversationArchiveForNpc(objNum, objType);
+  if (!spec) {
+    return null;
+  }
+  const archive = (spec.archive === "b") ? state.converseArchiveB : state.converseArchiveA;
+  if (!(archive instanceof Uint8Array) || archive.length < 4) {
+    return null;
+  }
+  const idx = Number(spec.index) | 0;
+  const offPtr = idx << 2;
+  if (offPtr < 0 || (offPtr + 4) > archive.length) {
+    return null;
+  }
+  const dv = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const offset = dv.getUint32(offPtr, true) >>> 0;
+  if (!offset || (offset + 4) > archive.length) {
+    return null;
+  }
+  const inflatedSize = dv.getUint32(offset, true) >>> 0;
+  let bytes = null;
+  if (inflatedSize && inflatedSize < 0x2800) {
+    bytes = decodeU6LzwWithKnownLength(archive.subarray(offset + 4), inflatedSize);
+  } else {
+    const end = Math.min(archive.length, offset + 4 + 0x2800);
+    bytes = archive.subarray(offset + 4, end);
+  }
+  if (!(bytes instanceof Uint8Array) || bytes.length < 4) {
+    return null;
+  }
+  return bytes;
+}
+
+function parseConversationHeaderAndDesc(scriptBytes) {
+  if (!(scriptBytes instanceof Uint8Array) || scriptBytes.length < 4) {
+    return { name: "", desc: "", mainPc: 0 };
+  }
+  let i = 0;
+  if (scriptBytes[i] === CONV_OP_END) i += 1; /* OP__FF */
+  if (i < scriptBytes.length) i += 1; /* npc num */
+  let name = "";
+  while (i < scriptBytes.length && scriptBytes[i] !== CONV_OP_DESC) {
+    const b = scriptBytes[i++];
+    if (b >= 32 && b < 127) {
+      name += String.fromCharCode(b);
+    }
+  }
+  if (i < scriptBytes.length && scriptBytes[i] === CONV_OP_DESC) {
+    i += 1;
+  }
+  let desc = "";
+  while (i < scriptBytes.length && scriptBytes[i] !== CONV_OP_MAIN) {
+    const b = scriptBytes[i++];
+    if (b === 0x2a) { /* legacy separator '*' before topic table */
+      break;
+    }
+    if (b === 10 || b === 13) {
+      desc += " ";
+    } else if (b >= 32 && b < 127) {
+      desc += String.fromCharCode(b);
+    }
+  }
+  while (i < scriptBytes.length && scriptBytes[i] !== CONV_OP_MAIN) {
+    i += 1;
+  }
+  if (i < scriptBytes.length && scriptBytes[i] === CONV_OP_MAIN) {
+    i += 1;
+  }
+  return {
+    name: String(name || "").trim(),
+    desc: String(desc || "").replace(/\s+/g, " ").trim(),
+    mainPc: i
+  };
+}
+
+function conversationTextReadabilityScore(text) {
+  const s = String(text || "");
+  if (!s) return 0;
+  let good = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (/[A-Za-z0-9 ,.'!?-]/.test(ch)) {
+      good += 1;
+    }
+  }
+  return good / s.length;
+}
+
+function isLikelyValidConversationHeader(header) {
+  const name = String(header?.name || "").trim();
+  const desc = String(header?.desc || "").trim();
+  if (!name || !desc) {
+    return false;
+  }
+  if (conversationTextReadabilityScore(name) < 0.85) {
+    return false;
+  }
+  if (conversationTextReadabilityScore(desc) < 0.85) {
+    return false;
+  }
+  return /[A-Za-z]/.test(name) && /[A-Za-z]/.test(desc);
+}
+
+function isLikelyValidConversationScript(scriptBytes, header) {
+  if (!(scriptBytes instanceof Uint8Array) || scriptBytes.length < 8) {
+    return false;
+  }
+  if (scriptBytes[0] !== CONV_OP_END) {
+    return false;
+  }
+  if (!isLikelyValidConversationHeader(header)) {
+    return false;
+  }
+  const mainPc = Number(header?.mainPc) | 0;
+  if (mainPc <= 2 || mainPc >= scriptBytes.length) {
+    return false;
+  }
+  let keyCount = 0;
+  for (let i = mainPc; i < scriptBytes.length; i += 1) {
+    if (scriptBytes[i] === CONV_OP_KEY) {
+      keyCount += 1;
+      if (keyCount >= 1) break;
+    }
+  }
+  return keyCount >= 1;
+}
+
+function canonicalConversationHintIdFromSpeaker(speaker) {
+  const s = String(speaker || "").toLowerCase();
+  if (s.includes("lord british") || s.includes("ruler of britannia")) return 5;
+  if (s.includes("nystul") || s.includes("concerned looking mage") || s === "mage") return 6;
+  if (s.includes("dupre") || s.includes("fighter")) return 2;
+  return -1;
+}
+
+function expectedCanonicalNameForConversationId(objNum) {
+  const n = Number(objNum) | 0;
+  if (n === 5) return "Lord British";
+  if (n === 6) return "Nystul";
+  if (n === 2) return "Dupre";
+  return "";
+}
+
+function expectedCanonicalDescTokensForConversationId(objNum) {
+  const n = Number(objNum) | 0;
+  if (n === 5) return ["ruler", "britannia"];
+  if (n === 6) return ["concerned", "mage"];
+  if (n === 2) return ["handsome", "man"];
+  return [];
+}
+
+function normalizedNameForCompare(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function headerMatchesExpectedCanonicalName(header, objNum) {
+  const expected = expectedCanonicalNameForConversationId(objNum);
+  if (!expected) return true;
+  const got = normalizedNameForCompare(header?.name || "");
+  const want = normalizedNameForCompare(expected);
+  if (!got || !want) return false;
+  return got === want || got.startsWith(want) || want.startsWith(got);
+}
+
+function headerMatchesExpectedCanonicalDesc(header, objNum) {
+  const tokens = expectedCanonicalDescTokensForConversationId(objNum);
+  if (!Array.isArray(tokens) || tokens.length === 0) {
+    return true;
+  }
+  const desc = normalizedNameForCompare(header?.desc || "");
+  if (!desc) {
+    return false;
+  }
+  for (const token of tokens) {
+    if (!desc.includes(String(token || "").toLowerCase())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function headerIsPlausibleCanonicalFallback(script, header, objNum) {
+  const n = Number(objNum) | 0;
+  if (!(script instanceof Uint8Array)) {
+    return false;
+  }
+  if (!headerMatchesExpectedCanonicalName(header, n)) {
+    return false;
+  }
+  const rules = parseConversationRules(script, Number(header?.mainPc) | 0);
+  if (n === 5) return rules.length >= 20;
+  if (n === 2) return rules.length >= 8;
+  if (n === 6) return rules.length >= 1;
+  return false;
+}
+
+function resolveConversationScriptForActor(actor, tileId) {
+  const actorId = Number(actor?.id) | 0;
+  const actorType = Number(actor?.type) & 0x03ff;
+  const actorQual = Number(actor?.qual) & 0xff;
+  const speakerHint = canonicalTalkSpeakerForTile(tileId);
+  const hintId = canonicalConversationHintIdFromSpeaker(speakerHint);
+  const candidates = [];
+  const pushCandidate = (n) => {
+    const v = Number(n) | 0;
+    if (v < 0) return;
+    if (!candidates.includes(v)) candidates.push(v);
+  };
+  if (hintId >= 0) {
+    pushCandidate(hintId);
+  }
+  if (actorType === 0x189 || actorType === 0x18d || actorType === 0x18e || actorType === 0x18f) {
+    pushCandidate(actorQual);
+  }
+  pushCandidate(actorId);
+  for (const objNum of candidates) {
+    const script = loadLegacyConversationScript(objNum, actorType);
+    const header = parseConversationHeaderAndDesc(script);
+    if (
+      isLikelyValidConversationScript(script, header)
+      && (
+        (
+          headerMatchesExpectedCanonicalName(header, objNum)
+          && headerMatchesExpectedCanonicalDesc(header, objNum)
+        )
+        || headerIsPlausibleCanonicalFallback(script, header, objNum)
+      )
+    ) {
+      return { objNum, script, header, valid: true };
+    }
+  }
+  if (hintId >= 0) {
+    const script = loadLegacyConversationScript(hintId, actorType);
+    const header = parseConversationHeaderAndDesc(script);
+    return {
+      objNum: hintId,
+      script,
+      header,
+      valid: (
+        isLikelyValidConversationScript(script, header)
+        && (
+          (
+            headerMatchesExpectedCanonicalName(header, hintId)
+            && headerMatchesExpectedCanonicalDesc(header, hintId)
+          )
+          || headerIsPlausibleCanonicalFallback(script, header, hintId)
+        )
+      )
+    };
+  }
+  const fallbackScript = loadLegacyConversationScript(actorId, actorType);
+  const fallbackHeader = parseConversationHeaderAndDesc(fallbackScript);
+  return {
+    objNum: actorId,
+    script: fallbackScript,
+    header: fallbackHeader,
+    valid: isLikelyValidConversationScript(fallbackScript, fallbackHeader)
+  };
+}
+
+function debugConversationResolutionSummary(actor, tileId) {
+  const actorId = Number(actor?.id) | 0;
+  const actorType = Number(actor?.type) & 0x03ff;
+  const actorQual = Number(actor?.qual) & 0xff;
+  const speakerHint = canonicalTalkSpeakerForTile(tileId);
+  const hintId = canonicalConversationHintIdFromSpeaker(speakerHint);
+  const candidates = [];
+  const pushCandidate = (n) => {
+    const v = Number(n) | 0;
+    if (v < 0) return;
+    if (!candidates.includes(v)) candidates.push(v);
+  };
+  if (hintId >= 0) pushCandidate(hintId);
+  if (actorType === 0x189 || actorType === 0x18d || actorType === 0x18e || actorType === 0x18f) {
+    pushCandidate(actorQual);
+  }
+  pushCandidate(actorId);
+  const parts = [];
+  const convA = (state.converseArchiveA instanceof Uint8Array) ? 1 : 0;
+  const convB = (state.converseArchiveB instanceof Uint8Array) ? 1 : 0;
+  parts.push(`convA=${convA} convB=${convB} hint=${hintId} actor=${actorId} type=0x${actorType.toString(16)}`);
+  for (const objNum of candidates) {
+    const script = loadLegacyConversationScript(objNum, actorType);
+    const header = parseConversationHeaderAndDesc(script);
+    const validScript = isLikelyValidConversationScript(script, header) ? 1 : 0;
+    const nameOk = headerMatchesExpectedCanonicalName(header, objNum) ? 1 : 0;
+    const descOk = headerMatchesExpectedCanonicalDesc(header, objNum) ? 1 : 0;
+    const fallbackOk = headerIsPlausibleCanonicalFallback(script, header, objNum) ? 1 : 0;
+    const rules = parseConversationRules(script, Number(header?.mainPc) | 0).length;
+    const headerName = sanitizeLegacyHudLabelText(String(header?.name || "").slice(0, 24));
+    parts.push(`c${objNum}[v=${validScript} n=${nameOk} d=${descOk} f=${fallbackOk} r=${rules} h=${headerName || "-"}]`);
+  }
+  const loadDiag = String(state.converseArchiveDiag || "").trim();
+  if (loadDiag) {
+    parts.push(`load{${loadDiag}}`);
+  }
+  return parts.join(" | ");
+}
+
+function splitConversationInputWords(input) {
+  return String(input || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9?\s]+/g, " ")
+    .split(/\s+/)
     .filter(Boolean);
-  if (list.length === 0) {
+}
+
+function conversationWordMatchesPattern(pattern, word) {
+  const p = String(pattern || "").toLowerCase();
+  const w = String(word || "").toLowerCase();
+  if (!p || p.length !== w.length) {
+    return false;
+  }
+  for (let i = 0; i < p.length; i += 1) {
+    const pc = p[i];
+    if (pc !== "?" && pc !== w[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function conversationKeyMatchesInput(pattern, input) {
+  const key = String(pattern || "").trim().toLowerCase();
+  if (!key) return false;
+  if (key === "*") return true;
+  const words = splitConversationInputWords(input);
+  for (const w of words) {
+    if (conversationWordMatchesPattern(key, w)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function parseConversationRulesInRange(scriptBytes, startPc, endPc, out) {
+  const end = Math.max(0, Math.min(Number(endPc) | 0, scriptBytes.length));
+  let i = Math.max(0, Math.min(Number(startPc) | 0, end));
+  while (i < end) {
+    if (scriptBytes[i] !== CONV_OP_KEY) {
+      i += 1;
+      continue;
+    }
+    i += 1;
+    const keys = [];
+    while (i < end) {
+      const keyBytes = [];
+      while (i < end && scriptBytes[i] !== 0x2c && scriptBytes[i] !== CONV_OP_RES) {
+        keyBytes.push(scriptBytes[i]);
+        i += 1;
+      }
+      const key = String.fromCharCode(...keyBytes).trim().toLowerCase();
+      if (key) {
+        keys.push(key);
+      }
+      if (i >= end) break;
+      if (scriptBytes[i] === 0x2c) {
+        i += 1;
+        continue;
+      }
+      if (scriptBytes[i] === CONV_OP_RES) {
+        i += 1;
+        break;
+      }
+    }
+    const respStart = i;
+    while (i < end && scriptBytes[i] !== CONV_OP_ENDRES) {
+      i += 1;
+    }
+    const respEnd = i;
+    if (i < end && scriptBytes[i] === CONV_OP_ENDRES) {
+      i += 1;
+    }
+    if (keys.length > 0 && respEnd > respStart) {
+      out.push({
+        keys,
+        responseBytes: scriptBytes.slice(respStart, respEnd),
+        responseStartPc: respStart,
+        responseEndPc: respEnd
+      });
+      /* Canonical conversations frequently nest KEY/RES inside responses (e.g. LB name->job). */
+      parseConversationRulesInRange(scriptBytes, respStart, respEnd, out);
+    }
+  }
+}
+
+function parseConversationRules(scriptBytes, mainPc) {
+  if (!(scriptBytes instanceof Uint8Array) || !scriptBytes.length) {
+    return [];
+  }
+  const out = [];
+  parseConversationRulesInRange(scriptBytes, Math.max(0, Number(mainPc) | 0), scriptBytes.length, out);
+  return out;
+}
+
+function findConversationFirstKeyPc(scriptBytes, mainPc) {
+  if (!(scriptBytes instanceof Uint8Array) || !scriptBytes.length) {
+    return -1;
+  }
+  let pc = Math.max(0, Number(mainPc) | 0);
+  while (pc < scriptBytes.length) {
+    if ((scriptBytes[pc] & 0xff) === CONV_OP_KEY) {
+      return pc;
+    }
+    pc += 1;
+  }
+  return -1;
+}
+
+function appendConversationChar(ch, linesRef) {
+  const arr = linesRef;
+  if (!Array.isArray(arr) || arr.length <= 0) {
+    arr.push("");
+  }
+  const idx = arr.length - 1;
+  arr[idx] = String(arr[idx] || "") + ch;
+}
+
+function pushConversationLineBreak(linesRef) {
+  const arr = linesRef;
+  if (!Array.isArray(arr) || arr.length <= 0) {
+    arr.push("");
+    return;
+  }
+  if (arr[arr.length - 1] !== "") {
+    arr.push("");
+  }
+}
+
+function readConversationCString(scriptBytes, startPc) {
+  const out = [];
+  let i = Math.max(0, Number(startPc) | 0);
+  while (i < scriptBytes.length) {
+    const b = scriptBytes[i] & 0xff;
+    i += 1;
+    if (b === 0x00) {
+      break;
+    }
+    if (b >= 0x20 && b < 0x80 && b !== 0x22) {
+      out.push(String.fromCharCode(b));
+    } else if (b === 10 || b === 13) {
+      out.push(" ");
+    }
+  }
+  return out.join("").replace(/\s+/g, " ").trim();
+}
+
+function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
+  const options = (opts && typeof opts === "object") ? opts : {};
+  const stopOnGoto = options.stopOnGoto !== false;
+  const followGoto = !!options.followGoto;
+  const lines = [""];
+  let sawJoin = false;
+  let quoted = false;
+  let pc = Math.max(0, Number(startPc) | 0);
+  const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
+  const maxSteps = Math.max(1024, Math.min(65536, scriptBytes.length * 4));
+  let steps = 0;
+  const seenTargets = new Set();
+  while (pc < end) {
+    steps += 1;
+    if (steps > maxSteps) {
+      break;
+    }
+    const op = scriptBytes[pc] & 0xff;
+    pc += 1;
+    if (op === 0x22) { /* '"' */
+      quoted = !quoted;
+      continue;
+    }
+    if (op < 0x80) {
+      if (op === 10 || op === 13) {
+        pushConversationLineBreak(lines);
+      } else if (op >= 0x20 && op < 0x7f && op !== 0x22) {
+        appendConversationChar(String.fromCharCode(op), lines);
+      }
+      continue;
+    }
+    if (op === CONV_OP_JOIN) {
+      sawJoin = true;
+      continue;
+    }
+    if (op === CONV_OP_ENDRES || op === CONV_OP_END) {
+      break;
+    }
+    if (op === CONV_OP_KEY) {
+      /* Encountering a key block means we have reached the next prompt branch. */
+      break;
+    }
+    if (op === 0xb0) {
+      if ((pc + 4) > scriptBytes.length) {
+        break;
+      }
+      const target = (
+        (scriptBytes[pc] & 0xff)
+        | ((scriptBytes[pc + 1] & 0xff) << 8)
+        | ((scriptBytes[pc + 2] & 0xff) << 16)
+        | ((scriptBytes[pc + 3] & 0xff) << 24)
+      ) >>> 0;
+      pc += 4;
+      if (stopOnGoto) {
+        break;
+      }
+      if (followGoto && target < scriptBytes.length) {
+        const key = `${pc}->${target}`;
+        if (seenTargets.has(key)) {
+          break;
+        }
+        seenTargets.add(key);
+        pc = target;
+      }
+      continue;
+    }
+    if (op === 0xb1 || op === 0xd2) {
+      /* GOTO/CALL/ADDRESS carry 32-bit offsets in script stream. */
+      pc += 4;
+      continue;
+    }
+    if (op === 0xd3) {
+      pc += 1;
+      continue;
+    }
+    if (op === 0xd4) {
+      pc += 2;
+      continue;
+    }
+    if (op === 0xb5) {
+      /* OP_PRINTSTR: common constant-string form is OP_ADDRESS + cstring. */
+      if (pc < end && (scriptBytes[pc] & 0xff) === 0xd2 && (pc + 4) < end) {
+        pc += 1;
+        const target = (
+          (scriptBytes[pc] & 0xff)
+          | ((scriptBytes[pc + 1] & 0xff) << 8)
+          | ((scriptBytes[pc + 2] & 0xff) << 16)
+          | ((scriptBytes[pc + 3] & 0xff) << 24)
+        ) >>> 0;
+        pc += 4;
+        const text = readConversationCString(scriptBytes, target);
+        if (text) {
+          if (String(lines[lines.length - 1] || "").trim()) {
+            appendConversationChar(" ", lines);
+          }
+          appendConversationChar(text, lines);
+        }
+      } else {
+        /* Skip light-weight var form: idx + OP_VARSTR. */
+        if (pc < end) pc += 1;
+        if (pc < end && (scriptBytes[pc] & 0xff) === 0xb3) pc += 1;
+      }
+      continue;
+    }
+  }
+  const out = lines.map((s) => String(s || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+  return { lines: out, sawJoin };
+}
+
+function decodeConversationResponseBytes(responseBytes, scriptBytes = null, startPc = -1, endPc = -1) {
+  if (scriptBytes instanceof Uint8Array && startPc >= 0 && endPc > startPc) {
+    return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc);
+  }
+  const lines = [];
+  let cur = "";
+  let quoted = false;
+  let sawQuotedText = false;
+  let sawJoin = false;
+  const flush = () => {
+    const text = cur.replace(/\s+/g, " ").trim();
+    if (text) lines.push(text);
+    cur = "";
+  };
+  for (let i = 0; i < responseBytes.length; i += 1) {
+    const b = responseBytes[i] & 0xff;
+    if (b === CONV_OP_JOIN) {
+      sawJoin = true;
+      continue;
+    }
+    if (b === 0x22) { /* '"' */
+      if (quoted) {
+        flush();
+      }
+      quoted = !quoted;
+      sawQuotedText = true;
+      continue;
+    }
+    if (quoted && b >= 32 && b < 0x80) {
+      cur += String.fromCharCode(b);
+      continue;
+    }
+    /* Outside quotes: always skip control/opcode/payload bytes. */
+  }
+  if (quoted) flush();
+  if (!sawQuotedText && !lines.length && scriptBytes instanceof Uint8Array && startPc >= 0 && endPc > startPc) {
+    return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc);
+  }
+  if (!sawQuotedText && !lines.length) {
+    /* Fallback for non-quoted responses: keep conservative ASCII words only. */
+    let tmp = "";
+    for (let i = 0; i < responseBytes.length; i += 1) {
+      const b = responseBytes[i] & 0xff;
+      if (b >= 32 && b < 0x7f) {
+        tmp += String.fromCharCode(b);
+      } else {
+        tmp += " ";
+      }
+    }
+    const safe = tmp.replace(/\s+/g, " ").trim();
+    if (safe) {
+      lines.push(safe);
+    }
+  }
+  return { lines, sawJoin };
+}
+
+function decodeConversationOpeningLines(scriptBytes, mainPc) {
+  if (!(scriptBytes instanceof Uint8Array)) {
+    return [];
+  }
+  const start = Math.max(0, Number(mainPc) | 0);
+  const decoded = decodeConversationResponseOpcodeAware(
+    scriptBytes,
+    start,
+    scriptBytes.length,
+    { stopOnGoto: false, followGoto: true }
+  );
+  return Array.isArray(decoded?.lines) ? decoded.lines : [];
+}
+
+function renderConversationMacros(text) {
+  const player = String(state.net?.characterName || "Avatar").trim() || "Avatar";
+  const target = String(state.legacyConversationTargetName || "").trim();
+  const title = "milady";
+  const hour = Number(state.world?.clock_hour) | 0;
+  const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "day" : "evening");
+  return String(text || "")
+    .replace(/\$P/g, player)
+    .replace(/\$N/g, target)
+    .replace(/\$G/g, "milady")
+    .replace(/\$T/g, title)
+    /* Legacy numbered conversation macros used by transcript/script variants. */
+    .replace(/\$4/g, player)
+    .replace(/\$5/g, timeWord)
+    .replace(/\$2/g, title)
+    /* Legacy conv scripts prefix highlighted keywords with '@'. */
+    .replace(/@([A-Za-z0-9]+)/g, "$1");
+}
+
+function canonicalTalkFallbackGreeting(objNum, speaker) {
+  const n = Number(objNum) | 0;
+  if (n !== 5) {
     return "";
   }
-  return `(${list.join(" / ")})`;
+  const hour = Number(state.world?.clock_hour) | 0;
+  const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "day" : "evening");
+  const player = String(state.net?.characterName || "Avatar").trim() || "Avatar";
+  return `Good ${timeWord}, ${player}. What wouldst thou speak of?`;
 }
 
-function getLegacyConversationTopicState() {
-  if (!state.legacyConversationTopicState || typeof state.legacyConversationTopicState !== "object") {
-    state.legacyConversationTopicState = {};
+function formatYouSeeLine(subject) {
+  const base = String(subject || "").trim();
+  if (!base) {
+    return "You see someone.";
   }
-  return state.legacyConversationTopicState;
+  const trimmed = base.replace(/\s+/g, " ").trim();
+  if (/[.!?]$/.test(trimmed)) {
+    return `You see ${trimmed}`;
+  }
+  return `You see ${trimmed}.`;
+}
+
+function quoteConversationLines(lines) {
+  const src = Array.isArray(lines) ? lines : [];
+  const out = src
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+  if (!out.length) {
+    return out;
+  }
+  const first = 0;
+  const last = out.length - 1;
+  if (!out[first].startsWith("\"")) {
+    out[first] = `"${out[first]}`;
+  }
+  if (!out[last].endsWith("\"")) {
+    out[last] = `${out[last]}"`;
+  }
+  return out;
 }
 
 function legacyConversationReply(targetName, typed) {
-  const raw = String(typed || "").trim().toLowerCase();
-  const t = raw.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
-  const first = t.split(/\s+/)[0] || "";
-  const npcKey = String(state.legacyConversationNpcKey || resolveConversationNpcKey(targetName, state.legacyConversationTargetObjType));
-  const topicState = getLegacyConversationTopicState();
-  const pending = String(state.legacyConversationPendingPrompt || "");
-
-  if (pending === "nystul_quest_confirm") {
-    state.legacyConversationPendingPrompt = "";
-    if (first === "yes" || first === "y") {
-      topicState.nystul_quest_accepted = true;
-      state.sim.world.is_on_quest = 1;
-      return [
-        "Excellent. Seek out the moonstone disturbances at once.",
-        legacyKeywordHint(["moonstone", "moongate", "britain"])
-      ];
+  const query = String(typed || "").trim();
+  const queryUse = query || "bye";
+  const rules = Array.isArray(state.legacyConversationRules) ? state.legacyConversationRules : [];
+  const script = (state.legacyConversationScript instanceof Uint8Array) ? state.legacyConversationScript : null;
+  for (const rule of rules) {
+    const keys = Array.isArray(rule.keys) ? rule.keys : [];
+    let matched = false;
+    for (const key of keys) {
+      if (conversationKeyMatchesInput(key, queryUse)) {
+        matched = true;
+        break;
+      }
     }
-    return [
-      "As thou wilt. Return if thy mind changeth.",
-      legacyKeywordHint(["quest", "moonstone"])
-    ];
+    if (!matched) {
+      continue;
+    }
+    const decoded = decodeConversationResponseBytes(
+      rule.responseBytes || new Uint8Array(0),
+      script,
+      Number(rule.responseStartPc),
+      Number(rule.responseEndPc)
+    );
+    const out = [];
+    for (const line of decoded.lines) {
+      const msg = renderConversationMacros(line);
+      if (msg) out.push(msg);
+    }
+    if (out.length > 0) {
+      return { kind: "ok", lines: out };
+    }
+    return { kind: "unimplemented", lines: [] };
   }
-
-  if (pending === "dupre_quest_confirm") {
-    state.legacyConversationPendingPrompt = "";
-    if (first === "yes" || first === "y") {
-      topicState.dupre_quest_accepted = true;
-      return [
-        "Well said! Courage and honor shall serve thee.",
-        legacyKeywordHint(["honor", "companions", "quest"])
-      ];
-    }
-    return [
-      "Very well. I stand ready shouldst thou call.",
-      legacyKeywordHint(["companions", "quest"])
-    ];
+  if (String(queryUse).toLowerCase() === "look" && state.legacyConversationDescText) {
+    return { kind: "ok", lines: [formatYouSeeLine(state.legacyConversationDescText)] };
   }
-
-  if (npcKey === "lord_british") {
-    if (first === "name") return ["I am Lord British, ruler of Britannia."];
-    if (first === "job") return ["I guide Britannia and those who seek virtue."];
-    if (first === "quest") return ["Thy quest is underway. Speak with my mage and companions."];
-    if (first === "virtue") return ["Live by the eight virtues and thou shalt prevail."];
-    if (first === "help") return [legacyKeywordHint(["name", "job", "quest", "virtue"])];
-    return ["Welcome, Avatar.", legacyKeywordHint(["name", "job", "quest"])];
-  }
-
-  if (npcKey === "nystul") {
-    if (first === "name") {
-      state.legacyConversationKnownNames[String(state.legacyConversationTargetObjNum | 0)] = "Nystul";
-      state.legacyConversationTargetName = "Nystul";
-      return ["I am Nystul, court mage to Lord British."];
-    }
-    if (first === "job") return ["I study the disturbances in the moongates and moonstones."];
-    if (first === "quest") {
-      topicState.nystul_quest_offered = true;
-      state.legacyConversationPendingPrompt = "nystul_quest_confirm";
-      return [
-        "I would ask thy aid in this matter.",
-        "Wilt thou accept this task? (YES/NO)"
-      ];
-    }
-    if (first === "moongate" || first === "moonstone") {
-      return ["Their behavior is altered. We must track the source."];
-    }
-    if (first === "help") return [legacyKeywordHint(["name", "job", "quest", "moongate", "moonstone"])];
-    return [
-      "Hail to thee, and well met.",
-      legacyKeywordHint(["name", "job", "quest"])
-    ];
-  }
-
-  if (npcKey === "dupre") {
-    if (first === "name") {
-      state.legacyConversationKnownNames[String(state.legacyConversationTargetObjNum | 0)] = "Dupre";
-      state.legacyConversationTargetName = "Dupre";
-      return ["I am Dupre, at thy service."];
-    }
-    if (first === "job") return ["A fighter and companion in the cause of virtue."];
-    if (first === "quest") {
-      topicState.dupre_quest_offered = true;
-      state.legacyConversationPendingPrompt = "dupre_quest_confirm";
-      return [
-        "I shall join thy cause if thou ask it.",
-        "Shall we stand together? (YES/NO)"
-      ];
-    }
-    if (first === "honor") return ["Honor above all. Let deeds prove worth."];
-    if (first === "help") return [legacyKeywordHint(["name", "job", "quest", "honor"])];
-    return ["Well met.", legacyKeywordHint(["name", "job", "quest"])];
-  }
-
-  if (first === "name") return [`I am ${targetName || "a traveler"}.`];
-  if (first === "job") return ["I serve as I am able."];
-  if (first === "help") return [legacyKeywordHint(["name", "job"])];
-  return ["No response."];
+  return { kind: "no-match", lines: [] };
 }
 
 function submitLegacyConversationInput() {
@@ -1996,16 +2763,23 @@ function submitLegacyConversationInput() {
     return;
   }
   if (cmd === "look") {
-    pushLedgerMessage(`You see ${state.legacyConversationTargetName || "someone"}.`);
+    const desc = String(state.legacyConversationDescText || "").trim();
+    pushLedgerMessage(formatYouSeeLine(desc || state.legacyConversationTargetName || "someone"));
     pushLegacyConversationPrompt();
     return;
   }
-  const replies = legacyConversationReply(state.legacyConversationTargetName, typed);
-  for (const line of (Array.isArray(replies) ? replies : [String(replies || "")])) {
-    const msg = String(line || "").trim();
-    if (msg) {
-      pushLedgerMessage(msg);
+  const reply = legacyConversationReply(state.legacyConversationTargetName, typed);
+  if (reply && reply.kind === "ok") {
+    for (const line of quoteConversationLines(reply.lines)) {
+      const msg = String(line || "").trim();
+      if (msg) {
+        pushLedgerMessage(msg);
+      }
     }
+  } else if (reply && reply.kind === "unimplemented") {
+    pushLedgerMessage("Not implemented: canonical conversation opcode path for this topic.");
+  } else {
+    pushLedgerMessage("No response.");
   }
   pushLegacyConversationPrompt();
 }
@@ -2699,11 +3473,11 @@ function renderLegacyHudStubOnBackdrop() {
 
   /* C_155D_028A / C_155D_1065: centered name row only in CMD_90/CMD_92. */
   if (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_90 || statusDisplay === LEGACY_STATUS_DISPLAY.CMD_92) {
-    const avatarLabel = String(state.net.characterName || "Avatar");
+    const avatarLabel = sanitizeLegacyHudLabelText(String(state.net.characterName || "Avatar")) || "Avatar";
     const labelX = 176 + Math.max(0, Math.floor((136 - (avatarLabel.length * 8)) / 2));
     drawU6MainText(g, avatarLabel, x(labelX), y(8), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   } else if (inTalkPanel) {
-    const talkLabel = String(conversationPanel.target_name || state.legacyConversationTargetName || "Converse");
+    const talkLabel = sanitizeLegacyHudLabelText(String(conversationPanel.target_name || state.legacyConversationTargetName || "Converse")) || "Converse";
     const labelX = 176 + Math.max(0, Math.floor((136 - (talkLabel.length * 8)) / 2));
     drawU6MainText(g, talkLabel, x(labelX), y(88), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   }
@@ -4289,6 +5063,7 @@ function initNetPanel() {
   let savedPassVisible = "off";
   let savedChar = "Avatar";
   let savedMaintenance = "off";
+  let savedAutoLogin = "off";
   try {
     savedBase = localStorage.getItem(NET_API_BASE_KEY) || savedBase;
     savedUser = localStorage.getItem(NET_USERNAME_KEY) || savedUser;
@@ -4297,6 +5072,7 @@ function initNetPanel() {
     savedPassVisible = localStorage.getItem(NET_PASSWORD_VISIBLE_KEY) || savedPassVisible;
     savedChar = localStorage.getItem(NET_CHARACTER_NAME_KEY) || savedChar;
     savedMaintenance = localStorage.getItem(NET_MAINTENANCE_KEY) || savedMaintenance;
+    savedAutoLogin = localStorage.getItem(NET_AUTO_LOGIN_KEY) || savedAutoLogin;
   } catch (_err) {
     // ignore storage failures in restrictive browser contexts
   }
@@ -4320,6 +5096,9 @@ function initNetPanel() {
   }
   if (netCharacterNameInput) {
     netCharacterNameInput.value = savedChar;
+  }
+  if (netAutoLoginCheckbox) {
+    netAutoLoginCheckbox.checked = savedAutoLogin === "on";
   }
   populateNetAccountSelect();
   if (netAccountSelect && netAccountSelect.value) {
@@ -4405,6 +5184,19 @@ function initNetPanel() {
       }
     });
   }
+  if (netAutoLoginCheckbox) {
+    netAutoLoginCheckbox.addEventListener("change", () => {
+      const enabled = !!netAutoLoginCheckbox.checked;
+      try {
+        localStorage.setItem(NET_AUTO_LOGIN_KEY, enabled ? "on" : "off");
+      } catch (_err) {
+        // ignore storage failures
+      }
+      if (enabled && !isNetAuthenticated()) {
+        setNetStatus("idle", "Auto-login enabled. It will run on next refresh.");
+      }
+    });
+  }
 
   state.net.maintenanceAuto = savedMaintenance === "on";
   if (netMaintenanceToggle) {
@@ -4451,6 +5243,21 @@ function initNetPanel() {
         diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
       }
     });
+  }
+  if (savedAutoLogin === "on" && !isNetAuthenticated()) {
+    (async () => {
+      try {
+        setNetStatus("connecting", "Auto-login...");
+        await netLogin();
+        setAccountModalOpen(false);
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Auto-login ok: ${state.net.username}/${state.net.characterName}`;
+      } catch (err) {
+        setNetStatus("error", `Auto-login failed: ${String(err.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Auto-login failed: ${String(err.message || err)}`;
+      }
+    })();
   }
   if (netRecoverButton) {
     netRecoverButton.addEventListener("click", async () => {
@@ -4977,21 +5784,44 @@ function tryTalkAtCell(sim, tx, ty) {
     showLegacyLedgerPrompt();
     return false;
   }
+  const haveConverse = (state.converseArchiveA instanceof Uint8Array) || (state.converseArchiveB instanceof Uint8Array);
   const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
   const actorId = Number(actor.id) | 0;
+  const resolvedConversation = resolveConversationScriptForActor(actor, tileId);
+  if (!resolvedConversation.valid || !(resolvedConversation.script instanceof Uint8Array)) {
+    const summary = debugConversationResolutionSummary(actor, tileId);
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Talk unavailable: ${summary}`;
+    pushLedgerMessage("Not implemented: canonical conversation script unavailable for this actor.");
+    pushLedgerMessage(`Talk diag: ${summary}`);
+    showLegacyLedgerPrompt();
+    return false;
+  }
+  const script = resolvedConversation.script;
+  const header = resolvedConversation.header;
   const knownName = state.legacyConversationKnownNames[String(actorId)] || "";
-  const speaker = knownName || canonicalTalkSpeakerForTile(tileId);
+  const scriptName = String(header.name || "").trim();
+  const speakerRaw = knownName || scriptName || canonicalTalkSpeakerForTile(tileId);
+  const speaker = sanitizeLegacyHudLabelText(speakerRaw) || "Unknown";
+  const fallbackDesc = String(legacyLookupTileString(tileId) || "").trim();
+  const desc = sanitizeLegacyHudLabelText(String(header.desc || "").trim() || fallbackDesc);
+  const rules = resolvedConversation.valid ? parseConversationRules(script, header.mainPc) : [];
+  const openingLines = resolvedConversation.valid ? decodeConversationOpeningLines(script, header.mainPc) : [];
   /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
   state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
   state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
   state.legacyConversationActive = true;
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = speaker;
+  state.legacyConversationActorEntityId = actorId;
   state.legacyConversationPortraitTile = tileId;
-  state.legacyConversationTargetObjNum = Number(actor.id) | 0;
+  state.legacyConversationTargetObjNum = Number(resolvedConversation.objNum) | 0;
   state.legacyConversationTargetObjType = Number(actor.type) | 0;
-  state.legacyConversationNpcKey = resolveConversationNpcKey(speaker, state.legacyConversationTargetObjType);
+  state.legacyConversationNpcKey = "";
   state.legacyConversationPendingPrompt = "";
+  state.legacyConversationScript = script;
+  state.legacyConversationDescText = desc;
+  state.legacyConversationRules = rules;
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
   /*
     Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
@@ -4999,25 +5829,30 @@ function tryTalkAtCell(sim, tx, ty) {
   */
   state.legacyConversationShowInventory = equipSlots.length > 0;
   state.legacyConversationEquipmentSlots = equipSlots;
-  pushLedgerMessage("You see");
-  pushLedgerMessage(`${speaker}.`);
-  if (!knownName && isConcernedMageSpeaker(speaker)) {
-    state.legacyConversationKnownNames[String(actorId)] = "Nystul";
-    state.legacyConversationTargetName = "Nystul";
-    state.legacyConversationNpcKey = "nystul";
-    const started = startLegacyConversationPagination([
-      "Hail to thee milady, and well met.",
-      "Twas I who learned of thy deeds.",
-      "I am Nystul, mage to Lord British."
-    ]);
-    if (!started) {
-      pushLegacyConversationPrompt();
-    }
-  } else {
-    pushLegacyConversationPrompt();
+  pushLedgerMessage(formatYouSeeLine(desc || speaker));
+  let pushedOpening = false;
+  const quotedOpening = quoteConversationLines(openingLines);
+  if (quotedOpening.length > 0) {
+    pushLedgerMessage("");
   }
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Talk: ${speaker} (id ${Number(actor.id) | 0}, type 0x${(Number(actor.type) & 0x3ff).toString(16)}) at ${tx},${ty},${tz}; equip slots ${state.legacyConversationEquipmentSlots.length}; showInven=${state.legacyConversationShowInventory ? 1 : 0}.`;
+  for (const rawLine of quotedOpening) {
+    const line = renderConversationMacros(String(rawLine || "").trim());
+    if (line) {
+      pushLedgerMessage(line);
+      pushedOpening = true;
+    }
+  }
+  if (!pushedOpening) {
+    const fallback = canonicalTalkFallbackGreeting(resolvedConversation.objNum, speaker);
+    if (fallback) {
+      for (const line of quoteConversationLines([fallback])) {
+        pushLedgerMessage(line);
+      }
+    }
+  }
+  pushLegacyConversationPrompt();
+  diagBox.className = haveConverse ? "diag ok" : "diag warn";
+  diagBox.textContent = `Talk: ${speaker} (actor id ${Number(actor.id) | 0}, conv id ${Number(resolvedConversation.objNum) | 0}, type 0x${(Number(actor.type) & 0x3ff).toString(16)}) at ${tx},${ty},${tz}; valid=${resolvedConversation.valid ? 1 : 0}; rules=${rules.length}; showInven=${state.legacyConversationShowInventory ? 1 : 0}; converse=${haveConverse ? "loaded" : "missing"}.`;
   return true;
 }
 
@@ -7760,6 +8595,12 @@ function updateStats() {
     const remote = Array.isArray(state.net.remotePlayers) ? state.net.remotePlayers.length : 0;
     statNetPlayers.textContent = String(1 + remote);
   }
+  if (state.debugPanelTab === "chat") {
+    renderDebugChatLedgerPanel();
+  } else if (debugChatCount) {
+    const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
+    debugChatCount.textContent = `${count} entr${count === 1 ? "y" : "ies"}`;
+  }
 }
 
 function releaseReplayUrl() {
@@ -8085,6 +8926,180 @@ async function loadPristineObjectBaseline(baseTiles) {
   throw (lastErr || new Error("no valid object baseline path"));
 }
 
+async function fetchRuntimeAssetWithFallback(paths, minBytes = 1) {
+  const list = Array.isArray(paths) ? paths : [];
+  for (const p of list) {
+    const path = String(p || "").trim();
+    if (!path) continue;
+    try {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength >= (Number(minBytes) | 0)) {
+        return new Uint8Array(buf);
+      }
+    } catch (_err) {
+      /* ignore and continue fallback chain */
+    }
+  }
+  return null;
+}
+
+function looksLikeConversationArchive(bytes, minIndexCount = 8) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 512) {
+    return false;
+  }
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const count = Math.max(4, Number(minIndexCount) | 0);
+  let validCount = 0;
+  for (let i = 0; i < count; i += 1) {
+    const offPtr = i << 2;
+    if ((offPtr + 4) > bytes.length) {
+      return false;
+    }
+    const offset = dv.getUint32(offPtr, true) >>> 0;
+    if (offset && (offset + 4) <= bytes.length) {
+      validCount += 1;
+    }
+  }
+  /* converse.a may have zero offsets in early entries; require enough valid pointers, not all. */
+  return validCount >= Math.max(2, Math.floor(count / 4));
+}
+
+function archiveHasRecoverableCanonicalTriplet(archive) {
+  if (!(archive instanceof Uint8Array)) {
+    return false;
+  }
+  const triplet = [2, 5, 6]; /* Dupre, Lord British, Nystul */
+  for (const idx of triplet) {
+    const script = loadLegacyConversationScriptFromArchive(archive, idx);
+    const header = parseConversationHeaderAndDesc(script);
+    if (!isLikelyValidConversationScript(script, header)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function loadLegacyConversationScriptFromArchive(archive, index) {
+  if (!(archive instanceof Uint8Array) || archive.length < 4) {
+    return null;
+  }
+  const idx = Number(index) | 0;
+  if (idx < 0) {
+    return null;
+  }
+  const offPtr = idx << 2;
+  if (offPtr < 0 || (offPtr + 4) > archive.length) {
+    return null;
+  }
+  const dv = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const offset = dv.getUint32(offPtr, true) >>> 0;
+  if (!offset || (offset + 4) > archive.length) {
+    return null;
+  }
+  const inflatedSize = dv.getUint32(offset, true) >>> 0;
+  let bytes = null;
+  if (inflatedSize && inflatedSize < 0x2800) {
+    bytes = decodeU6LzwWithKnownLength(archive.subarray(offset + 4), inflatedSize);
+  } else {
+    const end = Math.min(archive.length, offset + 4 + 0x2800);
+    bytes = archive.subarray(offset + 4, end);
+  }
+  if (!(bytes instanceof Uint8Array) || bytes.length < 8) {
+    return null;
+  }
+  return bytes;
+}
+
+function validateConversationArchiveA(archive) {
+  const checks = [
+    { index: 5, name: "lord british", descTokens: ["ruler", "britannia"] },
+    { index: 6, name: "nystul", descTokens: ["concerned", "mage"] },
+    { index: 2, name: "dupre", descTokens: ["handsome", "man"] }
+  ];
+  for (const check of checks) {
+    const script = loadLegacyConversationScriptFromArchive(archive, check.index);
+    const header = parseConversationHeaderAndDesc(script);
+    if (!isLikelyValidConversationScript(script, header)) {
+      return false;
+    }
+    const gotName = normalizedNameForCompare(header?.name || "");
+    if (!gotName.includes(check.name)) {
+      return false;
+    }
+    const gotDesc = normalizedNameForCompare(header?.desc || "");
+    for (const tok of check.descTokens) {
+      if (!gotDesc.includes(tok)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+async function fetchConversationArchiveAWithValidation(paths, minBytes = 256) {
+  const list = Array.isArray(paths) ? paths : [];
+  for (const p of list) {
+    const path = String(p || "").trim();
+    if (!path) continue;
+    try {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength < (Number(minBytes) | 0)) {
+        continue;
+      }
+      const bytes = new Uint8Array(buf);
+      if (validateConversationArchiveA(bytes)) {
+        return bytes;
+      }
+    } catch (_err) {
+      /* keep trying fallback paths */
+    }
+  }
+  return null;
+}
+
+async function fetchConversationArchiveAny(paths, minBytes = 256) {
+  const list = Array.isArray(paths) ? paths : [];
+  for (const p of list) {
+    const path = String(p || "").trim();
+    if (!path) continue;
+    try {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength < (Number(minBytes) | 0)) continue;
+      const bytes = new Uint8Array(buf);
+      if (looksLikeConversationArchive(bytes, 8) && archiveHasRecoverableCanonicalTriplet(bytes)) {
+        return bytes;
+      }
+    } catch (_err) {
+      /* continue */
+    }
+  }
+  return null;
+}
+
+function conversationArchiveCandidatePaths(name) {
+  const file = String(name || "").trim();
+  if (!file) return [];
+  const base = [
+    `../assets/runtime/${file}`,
+    `./assets/runtime/${file}`,
+    `assets/runtime/${file}`,
+    `../../assets/runtime/${file}`,
+    `../runtime/${file}`,
+    `./runtime/${file}`,
+    `/assets/runtime/${file}`,
+    `/modern/assets/runtime/${file}`,
+    `/modern/client-web/assets/runtime/${file}`,
+    `/runtime/${file}`
+  ];
+  return Array.from(new Set(base));
+}
+
 async function refreshPristineBaseline(force = false) {
   if (!state.tileSet || !state.objectLayer || !state.entityLayer) {
     return false;
@@ -8131,7 +9146,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes, lookRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes, lookRes, converseARes, converseBRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -8149,9 +9164,11 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/titles.shp"),
       fetch("../assets/runtime/mainmenu.shp"),
       fetch("../assets/runtime/u6mcga.ptr"),
-      fetch("../assets/runtime/look.lzd")
+      fetch("../assets/runtime/look.lzd"),
+      fetch("../assets/runtime/converse.a"),
+      fetch("../assets/runtime/converse.b")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf, lookBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf, lookBuf, converseABuf, converseBBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -8169,7 +9186,9 @@ async function loadRuntimeAssets() {
       titlesRes.arrayBuffer(),
       mainmenuRes.arrayBuffer(),
       cursorRes.arrayBuffer(),
-      lookRes.arrayBuffer()
+      lookRes.arrayBuffer(),
+      converseARes.arrayBuffer(),
+      converseBRes.arrayBuffer()
     ]);
     state.mapCtx = new U6MapJS(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
@@ -8234,6 +9253,58 @@ async function loadRuntimeAssets() {
       state.lookStringEntries = decodeLookLzdEntries(new Uint8Array(lookBuf));
     } else {
       state.lookStringEntries = null;
+    }
+    const converseAPrimaryRaw = (converseARes.ok && converseABuf.byteLength > 256)
+      ? new Uint8Array(converseABuf)
+      : null;
+    const converseBPrimaryRaw = (converseBRes.ok && converseBBuf.byteLength > 256)
+      ? new Uint8Array(converseBBuf)
+      : null;
+    const converseAPrimary = looksLikeConversationArchive(converseAPrimaryRaw, 8) ? converseAPrimaryRaw : null;
+    const converseBPrimary = looksLikeConversationArchive(converseBPrimaryRaw, 4) ? converseBPrimaryRaw : null;
+    let converseA = converseAPrimary;
+    let converseB = converseBPrimary;
+    let converseAValidated = true;
+    if (converseA && !validateConversationArchiveA(converseA)) {
+      converseA = null;
+      converseAValidated = false;
+    }
+    if (!converseA) {
+      converseA = await fetchConversationArchiveAWithValidation(conversationArchiveCandidatePaths("converse.a"), 256);
+      if (converseA) {
+        converseAValidated = true;
+      }
+    }
+    if (!converseA) {
+      converseA = await fetchConversationArchiveAny(conversationArchiveCandidatePaths("converse.a"), 256);
+      if (converseA) {
+        converseAValidated = false;
+      }
+    }
+    if (!converseB) {
+      converseB = await fetchRuntimeAssetWithFallback(conversationArchiveCandidatePaths("converse.b"), 256);
+    }
+    if (!converseB) {
+      converseB = await fetchConversationArchiveAny(conversationArchiveCandidatePaths("converse.b"), 256);
+    }
+    if (!converseB && converseBPrimary) {
+      converseB = converseBPrimary;
+    }
+    state.converseArchiveA = converseA;
+    state.converseArchiveB = converseB;
+    state.converseArchiveDiag = [
+      `aRes=${converseARes.status || 0}/${converseABuf.byteLength}`,
+      `bRes=${converseBRes.status || 0}/${converseBBuf.byteLength}`,
+      `aLoad=${(converseA instanceof Uint8Array) ? converseA.byteLength : 0}`,
+      `bLoad=${(converseB instanceof Uint8Array) ? converseB.byteLength : 0}`,
+      `aValid=${converseAValidated ? 1 : 0}`
+    ].join(",");
+    if (!(state.converseArchiveA instanceof Uint8Array)) {
+      diagBox.className = "diag warn";
+      diagBox.textContent = "Conversation archive converse.a not loaded; talk falls back to tile strings.";
+    } else if (!converseAValidated) {
+      diagBox.className = "diag warn";
+      diagBox.textContent = "Conversation archive loaded but failed canonical validation; scripts are disabled for safety.";
     }
     if (flagRes.ok && flagBuf.byteLength >= 0x1c00) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
@@ -9363,3 +10434,27 @@ if (paritySnapshotButton) {
     void captureParitySnapshotJson();
   });
 }
+if (debugTabRuntime) {
+  debugTabRuntime.addEventListener("click", () => setDebugPanelTab("runtime"));
+}
+if (debugTabChat) {
+  debugTabChat.addEventListener("click", () => setDebugPanelTab("chat"));
+}
+if (debugChatCopyButton) {
+  debugChatCopyButton.addEventListener("click", async () => {
+    const ok = await copyTextToClipboard(buildDebugChatLedgerText());
+    diagBox.className = ok ? "diag ok" : "diag warn";
+    diagBox.textContent = ok
+      ? "Copied chat ledger to clipboard."
+      : "Failed to copy chat ledger to clipboard.";
+  });
+}
+if (debugChatClearButton) {
+  debugChatClearButton.addEventListener("click", () => {
+    state.debugChatLedger.length = 0;
+    renderDebugChatLedgerPanel();
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Cleared chat ledger history.";
+  });
+}
+setDebugPanelTab("runtime");

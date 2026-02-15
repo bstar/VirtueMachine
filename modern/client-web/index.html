@@ -42,6 +42,10 @@
               </div>
               <div class="mt-1 flex items-center gap-2">
                 <strong id="netQuickStatus" class="vm-muted-text text-xs">Account: Signed out</strong>
+                <label class="vm-muted-text text-xs inline-flex items-center gap-1">
+                  <input id="netAutoLoginCheckbox" type="checkbox" aria-label="Auto-login on refresh">
+                  Auto-login
+                </label>
               </div>
               <p class="vm-game-time mt-2 text-sm text-right">Probe/Copy: <strong id="topCopyStatus" class="font-semibold">idle</strong></p>
             </div>
@@ -66,6 +70,12 @@
           <p class="vm-muted-text text-xs">Runtime status, controls, and rendering diagnostics</p>
         </div>
 
+        <div class="vm-debug-tabs mb-3" role="tablist" aria-label="Debug Panel Tabs">
+          <button id="debugTabRuntime" class="vm-debug-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="debugPanelRuntime">Runtime</button>
+          <button id="debugTabChat" class="vm-debug-tab" type="button" role="tab" aria-selected="false" aria-controls="debugPanelChat">Chat Ledger</button>
+        </div>
+
+        <section id="debugPanelRuntime" role="tabpanel" aria-labelledby="debugTabRuntime">
         <div class="space-y-2 text-sm">
           <div class="stat-row"><span>Tick</span><strong id="statTick">0</strong></div>
           <div class="stat-row"><span>Map Position</span><strong id="statPos">0, 0, 0</strong></div>
@@ -148,12 +158,26 @@
           <p>Journey Onward requires login</p>
           <p>`Ctrl+S` save world snapshot, `Ctrl+R` load world snapshot</p>
           <p>`Ctrl+Z` sound toggle, `Ctrl+H` help toggle, `Ctrl+V` version banner</p>
-          <p>`Shift+Y` save snapshot, `Shift+U` load snapshot, `Shift+J` UI probe, `Shift+N` maintenance</p>
+          <p>`Shift+Y` save snapshot, `Shift+U` load snapshot, `Shift+J` UI probe JSON, `Shift+N` maintenance</p>
+          <p>`Shift+K` hide/show legacy HUD layer (deviation), `Shift+L` live/sample probe mode</p>
+          <p>Click right-side canonical hitbox regions (inventory/equipment/portrait)</p>
           <p>`Shift+O/F/B/M/G/R/V` debug toggles + preset/replay</p>
           <p>`Shift+P` capture viewport, `Shift+Alt+P` capture world+HUD</p>
           <p>`Shift+RightClick` or `Shift+Backquote` copy hover parity report</p>
           <p>`Shift+,` / `Shift+.` cycle cursor glyph, `Shift+[` / `Shift+]` scale</p>
         </div>
+        </section>
+
+        <section id="debugPanelChat" class="hidden" role="tabpanel" aria-labelledby="debugTabChat">
+          <div class="vm-chat-ledger-toolbar">
+            <span id="debugChatCount" class="vm-muted-text text-xs">0 entries</span>
+            <div class="vm-chat-ledger-actions">
+              <button id="debugChatCopyButton" class="control-btn text-xs px-2" type="button">Copy</button>
+              <button id="debugChatClearButton" class="control-btn text-xs px-2" type="button">Clear</button>
+            </div>
+          </div>
+          <pre id="debugChatLedgerBody" class="vm-chat-ledger-body"></pre>
+        </section>
       </aside>
     </main>
 
