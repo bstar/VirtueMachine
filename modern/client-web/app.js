@@ -33,6 +33,18 @@ import {
   conversationRunFromKeyCursor as conversationRunFromKeyCursorImported,
   legacyConversationReply as legacyConversationReplyImported
 } from "./conversation/dialog_runtime.js";
+import {
+  advanceLegacyConversationPagination as advanceLegacyConversationPaginationImported,
+  buildDebugChatLedgerText as buildDebugChatLedgerTextImported,
+  endLegacyConversation as endLegacyConversationImported,
+  handleLegacyConversationKeydown as handleLegacyConversationKeydownImported,
+  paginateLedgerMessages as paginateLedgerMessagesImported,
+  pushLedgerMessage as pushLedgerMessageImported,
+  showLegacyLedgerPrompt as showLegacyLedgerPromptImported,
+  startLegacyConversationPagination as startLegacyConversationPaginationImported,
+  submitLegacyConversationInput as submitLegacyConversationInputImported,
+  wrapLegacyLedgerLines as wrapLegacyLedgerLinesImported
+} from "./conversation/session_runtime.js";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -234,6 +246,8 @@ const NET_MAINTENANCE_KEY = "vm_net_maintenance";
 const NET_AUTO_LOGIN_KEY = "vm_net_auto_login";
 const NET_PROFILES_KEY = "vm_net_profiles";
 const NET_PROFILE_SELECTED_KEY = "vm_net_profile_selected";
+const RUNTIME_PROFILE_KEY = "vm_runtime_profile";
+const RUNTIME_EXTENSIONS_KEY = "vm_runtime_extensions";
 const NET_ACTIVITY_PULSE_MS = 280;
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
@@ -246,6 +260,29 @@ const LEGACY_FRAME_TILES = Object.freeze({
   left: 0x1b6,
   right: 0x1b7
 });
+const RUNTIME_PROFILE_CANONICAL_STRICT = "canonical_strict";
+const RUNTIME_PROFILE_CANONICAL_PLUS = "canonical_plus";
+const RUNTIME_PROFILES = Object.freeze([
+  RUNTIME_PROFILE_CANONICAL_STRICT,
+  RUNTIME_PROFILE_CANONICAL_PLUS
+]);
+const DEFAULT_RUNTIME_EXTENSIONS = Object.freeze({
+  quest_system: false,
+  party_mmo: false,
+  housing: false,
+  crafting: false,
+  farming: false
+});
+
+function createDefaultRuntimeExtensions() {
+  return {
+    quest_system: false,
+    party_mmo: false,
+    housing: false,
+    crafting: false,
+    farming: false
+  };
+}
 const LEGACY_UI_TILE = Object.freeze({
   SLOT_EMPTY: 0x19a,
   SLOT_OCCUPIED_BG: 0x19b,
@@ -536,6 +573,8 @@ const state = {
   startupTitlePixmaps: null,
   startupMenuPixmap: null,
   startupCanvasCache: new Map(),
+  runtimeProfile: RUNTIME_PROFILE_CANONICAL_STRICT,
+  runtimeExtensions: createDefaultRuntimeExtensions(),
   cursorPixmaps: null,
   cursorIndex: 0,
   mouseNormX: 0,
@@ -572,101 +611,20 @@ const state = {
 };
 
 function wrapLegacyLedgerLines(text) {
-  const out = [];
-  const src = String(text || "").replace(/\s+/g, " ").trim();
-  if (!src) {
-    return out;
-  }
-  let line = "";
-  for (const word of src.split(" ")) {
-    const token = String(word || "");
-    if (!token) continue;
-    if (!line) {
-      if (token.length <= LEGACY_LEDGER_MAX_CHARS) {
-        line = token;
-      } else {
-        for (let i = 0; i < token.length; i += LEGACY_LEDGER_MAX_CHARS) {
-          out.push(token.slice(i, i + LEGACY_LEDGER_MAX_CHARS));
-        }
-      }
-      continue;
-    }
-    const merged = `${line} ${token}`;
-    if (merged.length <= LEGACY_LEDGER_MAX_CHARS) {
-      line = merged;
-    } else {
-      out.push(line);
-      if (token.length <= LEGACY_LEDGER_MAX_CHARS) {
-        line = token;
-      } else {
-        line = "";
-        for (let i = 0; i < token.length; i += LEGACY_LEDGER_MAX_CHARS) {
-          out.push(token.slice(i, i + LEGACY_LEDGER_MAX_CHARS));
-        }
-      }
-    }
-  }
-  if (line) {
-    out.push(line);
-  }
-  return out;
+  return wrapLegacyLedgerLinesImported(text, LEGACY_LEDGER_MAX_CHARS);
 }
 
 function pushLedgerMessage(text) {
-  const wrapped = (text === "") ? [""] : wrapLegacyLedgerLines(text);
-  if (!wrapped.length) {
-    return;
-  }
-  const tick = Number(state.sim?.tick) >>> 0;
-  const convoMeta = state.legacyConversationActive
-    ? {
-      actorId: Number(state.legacyConversationActorEntityId) | 0,
-      convId: Number(state.legacyConversationTargetObjNum) | 0,
-      objType: Number(state.legacyConversationTargetObjType) & 0x03ff
-    }
-    : null;
-  for (const line of wrapped) {
-    state.debugChatLedger.push({
-      tick,
-      line: String(line || ""),
-      ts: Date.now(),
-      actorId: convoMeta ? convoMeta.actorId : null,
-      convId: convoMeta ? convoMeta.convId : null,
-      objType: convoMeta ? convoMeta.objType : null
-    });
-  }
-  const maxEntries = 2000;
-  if (state.debugChatLedger.length > maxEntries) {
-    state.debugChatLedger.splice(0, state.debugChatLedger.length - maxEntries);
-  }
-  for (const line of wrapped) {
-    state.legacyLedgerLines.push(line);
-  }
-  const extra = state.legacyLedgerLines.length - LEGACY_LEDGER_MAX_LINES;
-  if (extra > 0) {
-    state.legacyLedgerLines.splice(0, extra);
-  }
+  pushLedgerMessageImported(state, text, {
+    maxChars: LEGACY_LEDGER_MAX_CHARS,
+    maxLines: LEGACY_LEDGER_MAX_LINES,
+    tick: Number(state.sim?.tick) >>> 0,
+    nowMs: Date.now()
+  });
 }
 
 function buildDebugChatLedgerText() {
-  const lines = [];
-  const src = Array.isArray(state.debugChatLedger) ? state.debugChatLedger : [];
-  for (const entry of src) {
-    const tick = Number(entry.tick) >>> 0;
-    const msg = String(entry.line || "");
-    const actorId = Number(entry.actorId);
-    const convId = Number(entry.convId);
-    const objType = Number(entry.objType);
-    const hasMeta = Number.isFinite(actorId) && actorId >= 0
-      && Number.isFinite(convId) && convId >= 0
-      && Number.isFinite(objType) && objType >= 0;
-    if (hasMeta) {
-      lines.push(`[${String(tick).padStart(7, "0")}] ${msg} {actor=${actorId} conv=${convId} type=0x${(objType & 0x03ff).toString(16)}}`);
-    } else {
-      lines.push(`[${String(tick).padStart(7, "0")}] ${msg}`);
-    }
-  }
-  return lines.join("\n");
+  return buildDebugChatLedgerTextImported(state.debugChatLedger);
 }
 
 function renderDebugChatLedgerPanel() {
@@ -704,75 +662,24 @@ function setDebugPanelTab(tab) {
 }
 
 function paginateLedgerMessages(lines, maxLines = LEGACY_LEDGER_MAX_LINES - 1) {
-  const src = Array.isArray(lines) ? lines : [];
-  const pages = [];
-  let cur = [];
-  for (const item of src) {
-    const wrapped = (item === "") ? [""] : wrapLegacyLedgerLines(item);
-    if (!wrapped.length) {
-      continue;
-    }
-    for (const line of wrapped) {
-      if (cur.length >= maxLines) {
-        pages.push(cur);
-        cur = [];
-      }
-      cur.push(line);
-    }
-  }
-  if (cur.length) {
-    pages.push(cur);
-  }
-  return pages;
+  return paginateLedgerMessagesImported(lines, maxLines, LEGACY_LEDGER_MAX_CHARS);
 }
 
 function startLegacyConversationPagination(lines) {
-  const pages = paginateLedgerMessages(lines, LEGACY_LEDGER_MAX_LINES - 1);
-  if (!pages.length) {
-    return false;
-  }
-  const tick = Number(state.sim?.tick) >>> 0;
-  for (const page of pages) {
-    for (const line of page) {
-      state.debugChatLedger.push({
-        tick,
-        line: String(line || ""),
-        ts: Date.now()
-      });
-    }
-  }
-  const maxEntries = 2000;
-  if (state.debugChatLedger.length > maxEntries) {
-    state.debugChatLedger.splice(0, state.debugChatLedger.length - maxEntries);
-  }
-  state.legacyConversationPages = pages;
-  state.legacyConversationPaging = true;
-  state.legacyLedgerPrompt = false;
-  state.legacyLedgerLines = pages[0].slice();
-  return true;
+  return startLegacyConversationPaginationImported(state, lines, {
+    pageMaxLines: LEGACY_LEDGER_MAX_LINES - 1,
+    maxChars: LEGACY_LEDGER_MAX_CHARS,
+    tick: Number(state.sim?.tick) >>> 0,
+    nowMs: Date.now()
+  });
 }
 
 function advanceLegacyConversationPagination() {
-  if (!state.legacyConversationPaging) {
-    return false;
-  }
-  if (state.legacyConversationPages.length > 1) {
-    state.legacyConversationPages.shift();
-    state.legacyLedgerLines = state.legacyConversationPages[0].slice();
-    return true;
-  }
-  state.legacyConversationPages = [];
-  state.legacyConversationPaging = false;
-  pushLegacyConversationPrompt();
-  return true;
+  return advanceLegacyConversationPaginationImported(state, pushLegacyConversationPrompt);
 }
 
 function showLegacyLedgerPrompt() {
-  if (!state.legacyLedgerPrompt) {
-    state.legacyPromptAnimMs = 0;
-    state.legacyPromptAnimPhase = 0;
-  }
-  state.legacyLedgerPrompt = true;
+  showLegacyLedgerPromptImported(state);
 }
 
 function isLegacyScaleMode(mode) {
@@ -1973,30 +1880,7 @@ function legacyEquipmentSlotsForTalkActor(actor) {
 }
 
 function endLegacyConversation() {
-  state.legacyConversationActive = false;
-  state.legacyConversationInput = "";
-  state.legacyConversationTargetName = "";
-  state.legacyConversationActorEntityId = 0;
-  state.legacyConversationPortraitTile = null;
-  state.legacyConversationTargetObjNum = 0;
-  state.legacyConversationTargetObjType = 0;
-  state.legacyConversationNpcKey = "";
-  state.legacyConversationPendingPrompt = "";
-  state.legacyConversationShowInventory = false;
-  state.legacyConversationEquipmentSlots = [];
-  state.legacyConversationPaging = false;
-  state.legacyConversationPages = [];
-  state.legacyConversationScript = null;
-  state.legacyConversationDescText = "";
-  state.legacyConversationRules = [];
-  state.legacyConversationPc = -1;
-  state.legacyConversationInputOpcode = 0;
-  state.legacyConversationVmContext = null;
-  /* Canonical talk exit clears inline prompt/ankh from non-talk HUD panels. */
-  state.legacyLedgerPrompt = false;
-  state.legacyPromptAnimMs = 0;
-  state.legacyPromptAnimPhase = 0;
-  state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
+  endLegacyConversationImported(state);
 }
 
 function pushLegacyConversationPrompt() {
@@ -2510,80 +2394,33 @@ function conversationRunFromKeyCursor(scriptBytes, startPc, typed, vmContext) {
 }
 
 function submitLegacyConversationInput() {
-  const typed = String(state.legacyConversationInput || "").trim();
-  state.legacyConversationInput = "";
-  state.legacyLedgerPrompt = false;
-  if (!typed) {
-    pushLegacyConversationPrompt();
-    return;
-  }
-  pushLedgerMessage(typed);
-  const cmd = typed.toLowerCase();
-  if (cmd === "bye" || cmd === "farewell") {
-    pushLedgerMessage("Fare thee well.");
-    showLegacyLedgerPrompt();
-    endLegacyConversation();
+  const out = submitLegacyConversationInputImported(state, {
+    pushLedgerMessage,
+    pushPrompt: pushLegacyConversationPrompt,
+    showPrompt: showLegacyLedgerPrompt,
+    endConversation: endLegacyConversation,
+    formatYouSeeLine,
+    reply: (typed) => legacyConversationReply(state.legacyConversationTargetName, typed),
+    startPagination: startLegacyConversationPagination
+  });
+  if (out && out.diagText) {
     diagBox.className = "diag ok";
-    diagBox.textContent = "Conversation ended.";
-    return;
+    diagBox.textContent = out.diagText;
   }
-  if (cmd === "look") {
-    const desc = String(state.legacyConversationDescText || "").trim();
-    pushLedgerMessage(formatYouSeeLine(desc || state.legacyConversationTargetName || "someone"));
-    pushLegacyConversationPrompt();
-    return;
-  }
-  const reply = legacyConversationReply(state.legacyConversationTargetName, typed);
-  if (reply && reply.kind === "ok") {
-    const lines = (Array.isArray(reply.lines) ? reply.lines : []).map((line) => String(line || "").trim()).filter(Boolean);
-    if (startLegacyConversationPagination(lines)) {
-      return;
-    }
-    for (const line of lines) {
-      const msg = String(line || "").trim();
-      if (msg) pushLedgerMessage(msg);
-    }
-  } else if (reply && reply.kind === "unimplemented") {
-    pushLedgerMessage("Not implemented: canonical conversation opcode path for this topic.");
-  } else {
-    pushLedgerMessage("No response.");
-  }
-  pushLegacyConversationPrompt();
 }
 
 function handleLegacyConversationKeydown(ev) {
-  const k = String(ev.key || "");
-  if (k === "Escape") {
-    endLegacyConversation();
+  const out = handleLegacyConversationKeydownImported(state, ev, {
+    endConversation: endLegacyConversation,
+    advancePagination: advanceLegacyConversationPagination,
+    submitInput: submitLegacyConversationInput,
+    maxChars: LEGACY_LEDGER_MAX_CHARS
+  });
+  if (out && out.diagText) {
     diagBox.className = "diag ok";
-    diagBox.textContent = "Conversation cancelled.";
-    return true;
+    diagBox.textContent = out.diagText;
   }
-  if (state.legacyConversationPaging) {
-    advanceLegacyConversationPagination();
-    return true;
-  }
-  if (k === "Enter") {
-    submitLegacyConversationInput();
-    return true;
-  }
-  if (k === "Backspace") {
-    if (state.legacyConversationInput.length > 0) {
-      state.legacyConversationInput = state.legacyConversationInput.slice(0, -1);
-    }
-    return true;
-  }
-  if (k === "Tab") {
-    return true;
-  }
-  if (k.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
-    /* Legacy CON_gets route: keep keyboard focus in talk prompt and accept printable chars. */
-    if (state.legacyConversationInput.length < LEGACY_LEDGER_MAX_CHARS) {
-      state.legacyConversationInput += k;
-    }
-    return true;
-  }
-  return false;
+  return !!out?.handled;
 }
 
 function decodeU6ShapeFromBuffer(buf) {
@@ -3743,6 +3580,88 @@ function createInitialSimState() {
     avatarPoseAnchor: null,
     world: { ...INITIAL_WORLD }
   };
+}
+
+function normalizeRuntimeProfile(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  if (RUNTIME_PROFILES.includes(v)) {
+    return v;
+  }
+  return RUNTIME_PROFILE_CANONICAL_STRICT;
+}
+
+function sanitizeRuntimeExtensions(raw) {
+  const out = createDefaultRuntimeExtensions();
+  if (!raw || typeof raw !== "object") {
+    return out;
+  }
+  const src = raw;
+  for (const key of Object.keys(DEFAULT_RUNTIME_EXTENSIONS)) {
+    out[key] = !!src[key];
+  }
+  return out;
+}
+
+function parseRuntimeExtensionListCsv(csv) {
+  const out = createDefaultRuntimeExtensions();
+  const src = String(csv || "").trim().toLowerCase();
+  if (!src || src === "none" || src === "off") {
+    return out;
+  }
+  for (const token of src.split(",")) {
+    const k = String(token || "").trim();
+    if (!k) continue;
+    if (Object.prototype.hasOwnProperty.call(out, k)) {
+      out[k] = true;
+    }
+  }
+  return out;
+}
+
+function applyRuntimeProfileState(profile, extensions) {
+  state.runtimeProfile = normalizeRuntimeProfile(profile);
+  state.runtimeExtensions = sanitizeRuntimeExtensions(extensions);
+  document.documentElement.setAttribute("data-runtime-profile", state.runtimeProfile);
+}
+
+function initRuntimeProfileConfig() {
+  let profile = RUNTIME_PROFILE_CANONICAL_STRICT;
+  let extensions = createDefaultRuntimeExtensions();
+  try {
+    profile = normalizeRuntimeProfile(localStorage.getItem(RUNTIME_PROFILE_KEY) || profile);
+    const raw = localStorage.getItem(RUNTIME_EXTENSIONS_KEY);
+    if (raw) {
+      extensions = sanitizeRuntimeExtensions(JSON.parse(raw));
+    }
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+
+  try {
+    const qs = new URLSearchParams(window.location.search || "");
+    if (qs.has("profile")) {
+      profile = normalizeRuntimeProfile(qs.get("profile"));
+    }
+    if (qs.has("ext")) {
+      extensions = parseRuntimeExtensionListCsv(qs.get("ext"));
+    }
+  } catch (_err) {
+    // ignore malformed query params
+  }
+
+  applyRuntimeProfileState(profile, extensions);
+  try {
+    localStorage.setItem(RUNTIME_PROFILE_KEY, state.runtimeProfile);
+    localStorage.setItem(RUNTIME_EXTENSIONS_KEY, JSON.stringify(state.runtimeExtensions));
+  } catch (_err) {
+    // ignore storage failures in restrictive browser contexts
+  }
+}
+
+function runtimeExtensionEnabled(key) {
+  const k = String(key || "").trim();
+  if (!k) return false;
+  return !!state.runtimeExtensions?.[k];
 }
 
 function setTheme(themeName) {
@@ -10191,6 +10110,7 @@ loadRuntimeAssets().finally(() => {
   });
 });
 
+initRuntimeProfileConfig();
 initTheme();
 initFont();
 initGrid();

@@ -19,6 +19,7 @@ Note: legacy source references such as `SRC/...` are relative to `legacy/u6-deco
 4. Explicit provenance: no undocumented renames or inferred mechanics.
 5. Phase gates: each milestone requires tests and documentation updates.
 6. Authority contract before stack cleanup: do not expand client/server architecture (TS/Vite/Bun consolidation, orchestration refactors, broad module moves) beyond local slices until a documented C/WASM sim-core authority contract is locked and adopted.
+7. Canonical core first, extensions second: future MMO-oriented systems (quest abstractions, expanded party mechanics, housing, crafting/farming) must be implemented as opt-in extension slices and never silently replace canonical baseline behavior.
 
 ## Workstreams
 
@@ -136,6 +137,22 @@ Multiplayer handling policy during this phase:
 
 - 2-player co-op lockstep over fixed tick rate
 - desync detection + debug logs
+
+## Extension Strategy (Forward Plan)
+
+- Keep one authoritative runtime with profile-driven behavior:
+  - `canonical_strict` for legacy-faithful play
+  - `canonical_plus` for extension-enabled worlds
+- Stage future extensions only after canonical subsystem completion for each domain:
+  - quest system abstraction layer
+  - MMO party mechanics extensions
+  - housing ownership/persistence model
+  - crafting/farming loops
+- Every extension slice must define:
+  - enable/disable flag(s)
+  - state ownership and persistence contract
+  - compatibility behavior when disabled
+  - deterministic test coverage in both enabled and disabled profiles
 
 ## Traceability Standard
 

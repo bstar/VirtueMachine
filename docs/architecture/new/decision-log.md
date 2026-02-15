@@ -43,3 +43,12 @@ Legacy References: `../legacy/module-map.md` (quest/progression flow surfaces), 
 Alternatives Considered: no respawn policy, GM-only manual restoration, full world reset
 Consequences: requires an explicit item policy table and server-side spawn auditing, but guarantees quest continuity across long-lived worlds.
 Validation Plan: implement deterministic recovery rules and add tests ensuring critical items can always be reacquired after loss/destruction.
+
+Decision ID: DEC-0004
+Date: 2026-02-15
+Status: accepted
+Decision: preserve a canonical-by-default gameplay core and introduce future MMO systems (expanded questing, party model changes, housing, crafting/farming) only as explicit feature-gated extension modules.
+Legacy References: `../legacy/module-map.md`, `../legacy/symbol-catalog.md`, `../../wiki/12-canonical-completion-roadmap.md`
+Alternatives Considered: ad hoc feature additions directly into canonical code paths; maintaining two separate runtimes
+Consequences: requires stronger contracts and feature-flag discipline now, but keeps canonical parity testable while allowing strategic expansion later. Enables running classic-faithful mode and extension-enabled mode from the same authoritative runtime.
+Validation Plan: add contract tests that run canonical mode with extensions disabled, and integration tests that run with specific extension sets enabled without mutating canonical baseline behavior.

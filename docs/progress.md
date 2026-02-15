@@ -165,6 +165,7 @@ This checklist is intentionally mutable.
 - `[x]` Complete startup/menu art parity implementation pass
 - `[x]` Complete in-engine legacy cursor integration pass
 - `[x]` Resolve blackout wall-render parity and remove Nuvie mode fork
+- `[x]` Lock architectural direction for canonical core + feature-gated extension profiles (`DEC-0004`)
 - `[ ]` Lock and document C/WASM sim-core authority contract gate before major stack cleanup:
   - define backend authority boundary for simulation-critical state transitions
   - ensure JS net/client remain transport/projection, not gameplay-rule authority

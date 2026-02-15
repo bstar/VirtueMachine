@@ -10,6 +10,8 @@ Define a stable, deterministic gameplay runtime API that remains faithful to leg
 2. Fixed-tick stepping independent of render frame rate.
 3. Serializable authoritative state for saves and multiplayer synchronization.
 4. Explicit control over RNG source and seed.
+5. Canonical-by-default behavior profile that matches legacy mechanics when extensions are disabled.
+6. Extension surfaces must be explicit, feature-gated, and reversible (enable/disable without changing canonical baseline semantics).
 
 ## M1 Bootstrap API Surface
 
@@ -63,6 +65,23 @@ Defined in:
 - Replay tests: command log -> deterministic state hash checkpoints.
 - Golden scenario tests for key systems (movement/combat/dialogue/save-load).
 - Hash mismatch diagnostics include subsystem and tick context.
+- Canonical profile tests run with all extensions disabled and must remain green as a release gate.
+- Extension profile tests run per enabled feature pack (quest extensions, MMO party, housing, crafting/farming) and must not alter canonical-profile outputs for equivalent command streams.
+
+## Canonical + Extension Profiles
+
+Runtime profiles must be treated as contract state:
+
+- `canonical_strict`: legacy-faithful behavior only (default, required baseline).
+- `canonical_plus`: canonical core plus explicitly enabled extension modules.
+
+Required architecture rules:
+
+1. Core mechanics live in canonical subsystems first (movement, dialogue, combat, inventory, party baseline).
+2. Extensions are opt-in modules behind explicit feature flags and capability manifests.
+3. Extension modules must not mutate canonical data formats in-place; add versioned sidecar state where needed.
+4. Network protocol/session setup must declare active profile + extension set so server and client agree on rules.
+5. Save/snapshot formats must encode profile and extension metadata for deterministic replays and migrations.
 
 Current bootstrap test:
 
