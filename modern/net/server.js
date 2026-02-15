@@ -844,6 +844,32 @@ function updateAuthoritativeClock(state) {
   return clock;
 }
 
+function normalizePresenceRows(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((p) => ({
+    user_id: String(p?.user_id || ""),
+    username: String(p?.username || ""),
+    session_id: String(p?.session_id || ""),
+    character_name: String(p?.character_name || ""),
+    map_x: Number(p?.map_x) | 0,
+    map_y: Number(p?.map_y) | 0,
+    map_z: Number(p?.map_z) | 0,
+    facing_dx: Number(p?.facing_dx) | 0,
+    facing_dy: Number(p?.facing_dy) | 0,
+    tick: Number(p?.tick) >>> 0,
+    mode: String(p?.mode || "avatar"),
+    runtime_profile: normalizeRuntimeProfileHeader(p?.runtime_profile),
+    runtime_extensions: parseRuntimeExtensionsHeader(
+      Array.isArray(p?.runtime_extensions)
+        ? p.runtime_extensions.join(",")
+        : p?.runtime_extensions
+    ),
+    updated_at_ms: Number(p?.updated_at_ms || 0)
+  }));
+}
+
 function loadState() {
   ensureDataDir();
   const rawWorldObjectDeltas = readJson(FILES.worldObjectDeltas, null);
@@ -862,7 +888,7 @@ function loadState() {
       snapshot_base64: null,
       updated_at: nowIso()
     }),
-    presence: readJson(FILES.presence, []),
+    presence: normalizePresenceRows(readJson(FILES.presence, [])),
     worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
     worldObjects,
@@ -1702,6 +1728,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/presence/heartbeat") {
+    const runtimeContract = runtimeContractFromHeaders(req);
     let body;
     try {
       body = await readBody(req);
@@ -1728,11 +1755,18 @@ const server = http.createServer(async (req, res) => {
       facing_dy: Number(body && body.facing_dy) | 0,
       tick: clock.tick >>> 0,
       mode: String(body && body.mode || "avatar"),
+      runtime_profile: runtimeContract.profile,
+      runtime_extensions: runtimeContract.extensions,
       updated_at_ms: nowMs
     };
     upsertPresenceRow(state, row, nowMs);
     persistState(state);
-    sendJson(res, 200, { ok: true, now: nowIso(), tick: clock.tick >>> 0 });
+    sendJson(res, 200, {
+      ok: true,
+      now: nowIso(),
+      tick: clock.tick >>> 0,
+      runtime_contract: runtimeContract
+    });
     return;
   }
 
@@ -1792,6 +1826,12 @@ const server = http.createServer(async (req, res) => {
         facing_dy: p.facing_dy | 0,
         tick: Number(p.tick) >>> 0,
         mode: p.mode || "avatar",
+        runtime_profile: normalizeRuntimeProfileHeader(p.runtime_profile),
+        runtime_extensions: parseRuntimeExtensionsHeader(
+          Array.isArray(p.runtime_extensions)
+            ? p.runtime_extensions.join(",")
+            : p.runtime_extensions
+        ),
         updated_at_ms: Number(p.updated_at_ms || 0)
       }))
     });

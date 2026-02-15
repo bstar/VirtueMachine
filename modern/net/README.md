@@ -121,6 +121,8 @@ Current behavior:
 
 - If omitted/invalid, server defaults to `canonical_strict` with no extensions.
 - `GET /api/world/clock`, `GET /api/world/objects`, and `POST /api/world/objects/interact` echo normalized runtime metadata as `runtime_contract`.
+- `POST /api/world/presence/heartbeat` echoes normalized runtime metadata as `runtime_contract`.
+- `GET /api/world/presence` includes per-player `runtime_profile` and `runtime_extensions`.
 
 Clock note:
 - `/api/world/clock` is authoritative server time/tick.

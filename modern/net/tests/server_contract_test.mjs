@@ -575,6 +575,8 @@ async function main() {
     });
     assert.equal(heartbeat.status, 200);
     assert.equal(heartbeat.body?.ok, true);
+    assert.equal(heartbeat.body?.runtime_contract?.profile, "canonical_plus");
+    assert.deepEqual(heartbeat.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
 
     const heartbeatSecondSession = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
       method: "POST",
@@ -593,6 +595,8 @@ async function main() {
     });
     assert.equal(heartbeatSecondSession.status, 200);
     assert.equal(heartbeatSecondSession.body?.ok, true);
+    assert.equal(heartbeatSecondSession.body?.runtime_contract?.profile, "canonical_plus");
+    assert.deepEqual(heartbeatSecondSession.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
 
     const presence = await jsonFetch(baseUrl, "/api/world/presence", {
       method: "GET",
@@ -604,6 +608,8 @@ async function main() {
     assert.equal(presence.body.players[0]?.username, "avatar_renamed");
     assert.equal(presence.body.players[0]?.map_x, 309);
     assert.equal(presence.body.players[0]?.session_id, "test-session-2");
+    assert.equal(presence.body.players[0]?.runtime_profile, "canonical_plus");
+    assert.deepEqual(presence.body.players[0]?.runtime_extensions, ["housing", "quest_system"]);
 
     const leave = await jsonFetch(baseUrl, "/api/world/presence/leave", {
       method: "POST",
