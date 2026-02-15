@@ -66,6 +66,13 @@ import {
   performNetSetEmail,
   performNetVerifyEmail
 } from "./net/account_runtime.ts";
+import {
+  applyAuthoritativeWorldClockToSim,
+  performPresenceHeartbeat,
+  performPresenceLeave,
+  performPresencePoll,
+  performWorldClockPoll
+} from "./net/presence_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4507,102 +4514,75 @@ async function netRunCriticalMaintenance(opts = {}) {
 }
 
 async function netSendPresenceHeartbeat() {
-  if (!isNetAuthenticated() || !state.sessionStarted) {
-    return;
-  }
-  await netRequest("/api/world/presence/heartbeat", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      session_id: state.net.sessionId,
-      character_name: state.net.characterName || "Avatar",
-      map_x: state.sim.world.map_x | 0,
-      map_y: state.sim.world.map_y | 0,
-      map_z: state.sim.world.map_z | 0,
-      facing_dx: state.avatarFacingDx | 0,
-      facing_dy: state.avatarFacingDy | 0,
-      tick: state.sim.tick >>> 0,
-      mode: state.movementMode
-    })
-  }, true);
-  resetBackgroundNetFailures();
+  await performPresenceHeartbeat({
+    session_id: state.net.sessionId,
+    character_name: state.net.characterName || "Avatar",
+    map_x: state.sim.world.map_x | 0,
+    map_y: state.sim.world.map_y | 0,
+    map_z: state.sim.world.map_z | 0,
+    facing_dx: state.avatarFacingDx | 0,
+    facing_dy: state.avatarFacingDy | 0,
+    tick: state.sim.tick >>> 0,
+    mode: state.movementMode
+  }, {
+    isAuthenticated: isNetAuthenticated,
+    isSessionStarted: () => state.sessionStarted,
+    request: netRequest,
+    resetBackgroundFailures: resetBackgroundNetFailures
+  });
 }
 
 async function netLeavePresence() {
-  if (!isNetAuthenticated()) {
-    return;
-  }
-  await netRequest("/api/world/presence/leave", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      session_id: state.net.sessionId
-    })
-  }, true);
-  resetBackgroundNetFailures();
+  await performPresenceLeave(state.net.sessionId, {
+    isAuthenticated: isNetAuthenticated,
+    request: netRequest,
+    resetBackgroundFailures: resetBackgroundNetFailures
+  });
 }
 
 async function netPollPresence() {
-  if (!isNetAuthenticated()) {
-    state.net.remotePlayers = [];
-    return;
-  }
-  if (state.net.presencePollInFlight) {
-    return;
-  }
-  state.net.presencePollInFlight = true;
-  try {
-    const out = await netRequest("/api/world/presence", { method: "GET" }, true);
-    const players = Array.isArray(out?.players) ? out.players : [];
-    const filtered = players.filter((p) => {
-      const sameSession = String(p.session_id || "") === String(state.net.sessionId || "");
-      const sameUser = String(p.user_id || "") === String(state.net.userId || "");
-      const sameUsername = String(p.username || "").toLowerCase() === String(state.net.username || "").toLowerCase();
-      return !sameSession && !sameUser && !sameUsername;
-    });
-    const newestByIdentity = new Map();
-    for (const p of filtered) {
-      const key = String(p.user_id || p.username || p.session_id || "");
-      const prev = newestByIdentity.get(key);
-      if (!prev || Number(p.updated_at_ms || 0) >= Number(prev.updated_at_ms || 0)) {
-        newestByIdentity.set(key, p);
-      }
-    }
-    state.net.remotePlayers = [...newestByIdentity.values()];
-    resetBackgroundNetFailures();
-  } finally {
-    state.net.presencePollInFlight = false;
-  }
+  await performPresencePoll({
+    isAuthenticated: isNetAuthenticated,
+    request: netRequest,
+    resetBackgroundFailures: resetBackgroundNetFailures,
+    isPollInFlight: () => state.net.presencePollInFlight,
+    setPollInFlight: (inFlight) => {
+      state.net.presencePollInFlight = !!inFlight;
+    },
+    setRemotePlayers: (players) => {
+      state.net.remotePlayers = Array.isArray(players) ? players : [];
+    },
+    selfIdentity: () => ({
+      sessionId: state.net.sessionId,
+      userId: state.net.userId,
+      username: state.net.username
+    })
+  });
 }
 
 function applyAuthoritativeWorldClock(clock) {
-  if (!clock || typeof clock !== "object") {
-    return;
-  }
-  const w = state.sim.world;
-  state.sim.tick = Number(clock.tick) >>> 0;
-  w.time_m = Number(clock.time_m) >>> 0;
-  w.time_h = Number(clock.time_h) >>> 0;
-  w.date_d = Number(clock.date_d) >>> 0;
-  w.date_m = Number(clock.date_m) >>> 0;
-  w.date_y = Number(clock.date_y) >>> 0;
+  applyAuthoritativeWorldClockToSim(clock, (next) => {
+    state.sim.tick = next.tick;
+    const w = state.sim.world;
+    w.time_m = next.time_m;
+    w.time_h = next.time_h;
+    w.date_d = next.date_d;
+    w.date_m = next.date_m;
+    w.date_y = next.date_y;
+  });
 }
 
 async function netPollWorldClock() {
-  if (!isNetAuthenticated()) {
-    return;
-  }
-  if (state.net.clockPollInFlight) {
-    return;
-  }
-  state.net.clockPollInFlight = true;
-  try {
-    const out = await netRequest("/api/world/clock", { method: "GET" }, true);
-    applyAuthoritativeWorldClock(out);
-    resetBackgroundNetFailures();
-  } finally {
-    state.net.clockPollInFlight = false;
-  }
+  await performWorldClockPoll({
+    isAuthenticated: isNetAuthenticated,
+    request: netRequest,
+    resetBackgroundFailures: resetBackgroundNetFailures,
+    isPollInFlight: () => state.net.clockPollInFlight,
+    setPollInFlight: (inFlight) => {
+      state.net.clockPollInFlight = !!inFlight;
+    },
+    applyClock: applyAuthoritativeWorldClock
+  });
 }
 
 async function netFetchWorldObjectsAtCell(x, y, z) {
