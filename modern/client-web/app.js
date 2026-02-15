@@ -56,7 +56,7 @@ import {
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
 } from "../common/runtime_contract.mjs";
-import { netJsonRequest } from "./net/request_runtime.ts";
+import { performManagedNetRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 import { performNetLoadSnapshot, performNetSaveSnapshot } from "./net/snapshot_runtime.ts";
 import {
@@ -4169,7 +4169,7 @@ function decodeSimSnapshotBase64(snapshotBase64) {
 
 async function netRequest(route, init = {}, auth = true) {
   const enabledExtensions = runtimeExtensionsSummary();
-  const out = await netJsonRequest({
+  return performManagedNetRequest({
     apiBase: String(state.net.apiBase || ""),
     route: String(route || ""),
     init,
@@ -4177,18 +4177,13 @@ async function netRequest(route, init = {}, auth = true) {
     token: String(state.net.token || ""),
     runtimeProfile: String(state.runtimeProfile || RUNTIME_PROFILE_CANONICAL_STRICT),
     runtimeExtensions: enabledExtensions,
-    onPulse: pulseNetIndicator
-  });
-  if (!out.ok) {
-    if (out.status === 401) {
+    onPulse: pulseNetIndicator,
+    onUnauthorized: () => {
       clearNetSessionState(state.net);
       updateNetSessionStat();
       setNetStatus("idle", "Session expired. Please log in.");
     }
-    const msg = out.body?.error?.message || `${out.status} ${out.statusText}`;
-    throw new Error(msg);
-  }
-  return out.body;
+  });
 }
 
 async function netEnsureCharacter() {

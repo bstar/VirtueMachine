@@ -70,3 +70,34 @@ export async function netJsonRequest(options: NetRuntimeRequestOptions): Promise
     body
   };
 }
+
+export async function performManagedNetRequest(options: {
+  apiBase: string;
+  route: string;
+  init?: RequestInit;
+  auth?: boolean;
+  token?: string;
+  runtimeProfile?: string;
+  runtimeExtensions?: string[];
+  onPulse?: () => void;
+  onUnauthorized?: () => void;
+}): Promise<any> {
+  const out = await netJsonRequest({
+    apiBase: options.apiBase,
+    route: options.route,
+    init: options.init,
+    auth: options.auth,
+    token: options.token,
+    runtimeProfile: options.runtimeProfile,
+    runtimeExtensions: options.runtimeExtensions,
+    onPulse: options.onPulse
+  });
+  if (!out.ok) {
+    if (out.status === 401 && typeof options.onUnauthorized === "function") {
+      options.onUnauthorized();
+    }
+    const msg = out.body?.error?.message || `${out.status} ${out.statusText}`;
+    throw new Error(msg);
+  }
+  return out.body;
+}
