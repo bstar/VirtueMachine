@@ -58,6 +58,7 @@ import {
 } from "../common/runtime_contract.mjs";
 import { netJsonRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
+import { performNetLoadSnapshot, performNetSaveSnapshot } from "./net/snapshot_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4436,50 +4437,38 @@ async function netLogoutAndPersist() {
 }
 
 async function netSaveSnapshot() {
-  setNetStatus("sync", "Saving world snapshot...");
-  if (!state.net.token) {
-    await netLogin();
-  }
-  const snapshotBase64 = encodeSimSnapshotBase64(state.sim);
-  const out = await netRequest("/api/world/snapshot", {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      schema_version: 1,
-      sim_core_version: "client-web-js",
-      saved_tick: state.sim.tick >>> 0,
-      snapshot_base64: snapshotBase64
-    })
-  }, true);
-  resetBackgroundNetFailures();
-  state.net.lastSavedTick = Number(out?.snapshot_meta?.saved_tick || 0) >>> 0;
-  setNetStatus("online", `Saved tick ${state.net.lastSavedTick}`);
-  return out;
+  return performNetSaveSnapshot({
+    ensureAuth: netLogin,
+    isAuthenticated: () => !!state.net.token,
+    request: netRequest,
+    encodeSnapshot: () => encodeSimSnapshotBase64(state.sim),
+    currentTick: () => state.sim.tick >>> 0,
+    onSavedTick: (tick) => {
+      state.net.lastSavedTick = Number(tick) >>> 0;
+    },
+    resetBackgroundFailures: resetBackgroundNetFailures,
+    setStatus: setNetStatus
+  });
 }
 
 async function netLoadSnapshot() {
-  setNetStatus("sync", "Loading world snapshot...");
-  if (!state.net.token) {
-    await netLogin();
-  }
-  const out = await netRequest("/api/world/snapshot", { method: "GET" }, true);
-  if (!out?.snapshot_base64) {
-    throw new Error("No world snapshot is saved yet");
-  }
-  const loaded = decodeSimSnapshotBase64(out.snapshot_base64);
-  if (!loaded) {
-    throw new Error("Snapshot payload is invalid");
-  }
-  state.sim = loaded;
-  state.queue = [];
-  state.commandLog = [];
-  state.accMs = 0;
-  state.lastMoveQueueAtMs = -1;
-  state.avatarLastMoveTick = -1;
-  state.interactionProbeTile = null;
-  resetBackgroundNetFailures();
-  setNetStatus("online", `Loaded tick ${Number(out?.snapshot_meta?.saved_tick || 0)}`);
-  return out;
+  return performNetLoadSnapshot({
+    ensureAuth: netLogin,
+    isAuthenticated: () => !!state.net.token,
+    request: netRequest,
+    decodeSnapshot: decodeSimSnapshotBase64,
+    applyLoadedSim: (loaded) => {
+      state.sim = loaded;
+      state.queue = [];
+      state.commandLog = [];
+      state.accMs = 0;
+      state.lastMoveQueueAtMs = -1;
+      state.avatarLastMoveTick = -1;
+      state.interactionProbeTile = null;
+    },
+    resetBackgroundFailures: resetBackgroundNetFailures,
+    setStatus: setNetStatus
+  });
 }
 
 function collectWorldItemsForMaintenance() {
