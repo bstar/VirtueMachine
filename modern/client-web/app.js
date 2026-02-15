@@ -82,6 +82,12 @@ import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
 import { performNetLoginFlow } from "./net/auth_runtime.ts";
 import { handleBackgroundFailure, resetBackgroundFailureState } from "./net/failure_runtime.ts";
+import {
+  loadNetProfilesFromStorage,
+  profileKey as profileKeyRuntime,
+  sanitizeProfile as sanitizeProfileRuntime,
+  saveNetProfilesToStorage
+} from "./net/profile_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -3914,49 +3920,19 @@ function pulseNetIndicator() {
 }
 
 function profileKey(profile) {
-  const apiBase = String(profile?.apiBase || "").trim().toLowerCase();
-  const username = String(profile?.username || "").trim().toLowerCase();
-  return `${apiBase}|${username}`;
+  return profileKeyRuntime(profile);
 }
 
 function sanitizeProfile(profile) {
-  const apiBase = String(profile?.apiBase || "").trim();
-  const username = String(profile?.username || "").trim().toLowerCase();
-  if (!apiBase || !username) {
-    return null;
-  }
-  return {
-    apiBase,
-    username,
-    password: String(profile?.password || ""),
-    characterName: String(profile?.characterName || "Avatar").trim() || "Avatar",
-    email: String(profile?.email || "").trim().toLowerCase()
-  };
+  return sanitizeProfileRuntime(profile);
 }
 
 function loadNetProfiles() {
-  try {
-    const raw = localStorage.getItem(NET_PROFILES_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    const out = [];
-    for (const row of arr) {
-      const p = sanitizeProfile(row);
-      if (p) out.push(p);
-    }
-    return out;
-  } catch (_err) {
-    return [];
-  }
+  return loadNetProfilesFromStorage(NET_PROFILES_KEY);
 }
 
 function saveNetProfiles(profiles) {
-  try {
-    localStorage.setItem(NET_PROFILES_KEY, JSON.stringify(profiles));
-  } catch (_err) {
-    // ignore storage failures
-  }
+  saveNetProfilesToStorage(NET_PROFILES_KEY, profiles);
 }
 
 function setSelectedProfileKey(key) {
