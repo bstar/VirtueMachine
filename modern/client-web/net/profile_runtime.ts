@@ -57,3 +57,19 @@ export function saveNetProfilesToStorage(storageKey: string, profiles: any[]): v
     // ignore storage failures
   }
 }
+
+export function setSelectedProfileKeyInStorage(storageKey: string, key: string): void {
+  try {
+    localStorage.setItem(storageKey, String(key || ""));
+  } catch (_err) {
+    // ignore storage failures
+  }
+}
+
+export function getSelectedProfileKeyFromStorage(storageKey: string): string {
+  try {
+    return String(localStorage.getItem(storageKey) || "");
+  } catch (_err) {
+    return "";
+  }
+}
