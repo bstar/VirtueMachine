@@ -15,7 +15,8 @@
     "modern/client-web/conversation/**/*.js",
     "modern/client-web/ui_probe_contract.js",
     "modern/client-web/render_composition.js",
-    "modern/client-web/legacy_object_order.js"
+    "modern/client-web/legacy_object_order.js",
+    "modern/client-web/net/**/*.js"
   ],
   "exclude": [
     "modern/**/tests/**"

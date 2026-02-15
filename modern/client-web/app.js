@@ -56,6 +56,7 @@ import {
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
 } from "../common/runtime_contract.mjs";
+import { netJsonRequest } from "./net/request_runtime.js";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4173,22 +4174,19 @@ function decodeSimSnapshotBase64(snapshotBase64) {
 }
 
 async function netRequest(route, init = {}, auth = true) {
-  const base = String(state.net.apiBase || "").trim().replace(/\/+$/, "");
-  if (!base) {
-    throw new Error("Net API base URL is empty");
-  }
-  const headers = { ...(init.headers || {}) };
-  headers["x-vm-runtime-profile"] = String(state.runtimeProfile || RUNTIME_PROFILE_CANONICAL_STRICT);
   const enabledExtensions = runtimeExtensionsSummary();
-  headers["x-vm-runtime-extensions"] = enabledExtensions.length ? enabledExtensions.join(",") : "none";
-  if (auth && state.net.token) {
-    headers.authorization = `Bearer ${state.net.token}`;
-  }
-  const res = await fetch(`${base}${route}`, { ...init, headers });
-  const text = await res.text();
-  const body = text.trim() ? JSON.parse(text) : null;
-  if (!res.ok) {
-    if (res.status === 401) {
+  const out = await netJsonRequest({
+    apiBase: String(state.net.apiBase || ""),
+    route: String(route || ""),
+    init,
+    auth,
+    token: String(state.net.token || ""),
+    runtimeProfile: String(state.runtimeProfile || RUNTIME_PROFILE_CANONICAL_STRICT),
+    runtimeExtensions: enabledExtensions,
+    onPulse: pulseNetIndicator
+  });
+  if (!out.ok) {
+    if (out.status === 401) {
       state.net.token = "";
       state.net.userId = "";
       state.net.characterId = "";
@@ -4199,11 +4197,10 @@ async function netRequest(route, init = {}, auth = true) {
       updateNetSessionStat();
       setNetStatus("idle", "Session expired. Please log in.");
     }
-    const msg = body?.error?.message || `${res.status} ${res.statusText}`;
+    const msg = out.body?.error?.message || `${out.status} ${out.statusText}`;
     throw new Error(msg);
   }
-  pulseNetIndicator();
-  return body;
+  return out.body;
 }
 
 async function netEnsureCharacter() {
