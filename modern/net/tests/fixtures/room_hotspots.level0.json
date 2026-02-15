@@ -32,6 +32,17 @@
         { "x": 294, "y": 354, "z": 0, "type": 279, "frame": 4, "label": "stacked-bench-piece-294" },
         { "x": 295, "y": 354, "z": 0, "type": 279, "frame": 4, "label": "stacked-bench-piece-295" }
       ]
+    },
+    {
+      "id": "virtue_room_plant_downshift",
+      "center": { "x": 301, "y": 357, "z": 0 },
+      "radius": 1,
+      "must_include": [
+        { "x": 301, "y": 357, "z": 0, "type": 138, "frame": 0, "label": "plant-shifted-down" }
+      ],
+      "must_exclude": [
+        { "x": 301, "y": 356, "z": 0, "type": 138, "frame": 0, "label": "plant-old-cell" }
+      ]
     }
   ]
 }
