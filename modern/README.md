@@ -12,11 +12,13 @@ All new implementation work goes here.
 
 ## One-Command Dev Stack
 
-Run both the web client server and net API server together:
+Run both the web client (Vite HMR) and net API server together in one process:
 
 ```bash
 ./modern/tools/dev_stack.sh
 ```
+
+`dev_stack.sh` now auto-stops existing listeners on the configured web/net ports before startup, so rerunning the command does not fail on stale processes.
 
 `dev_stack.sh` auto-loads env overrides from `.env.local` at repo root (or `VM_DEV_ENV_FILE`), so you can keep local secrets/config out of git.
 
@@ -24,6 +26,7 @@ Config via env vars:
 
 - `DEV_WEB_BIND` (default `0.0.0.0`)
 - `DEV_WEB_PORT` (default `8080`)
+- `DEV_WEB_SERVER` (default `vite`, alternative `secure`)
 - `VM_NET_HOST` (default `127.0.0.1`)
 - `VM_NET_PORT` (default `8081`)
 - `VM_NET_RUNTIME_DIR` (default auto-detect: `../ultima6` if present, else `modern/assets/runtime`)
@@ -33,6 +36,21 @@ Config via env vars:
 - `VM_EMAIL_MODE` (`resend` default, `smtp` alternative, `log` fallback)
 - `VM_EMAIL_FROM`, `VM_EMAIL_RESEND_API_KEY` (for Resend mode)
 - `VM_EMAIL_SMTP_HOST`, `VM_EMAIL_SMTP_PORT`, `VM_EMAIL_SMTP_USER`, `VM_EMAIL_SMTP_PASS` (for SMTP mode)
+
+## TypeScript Migration Scaffold (Incremental)
+
+The repo now includes Bun+Vite+TypeScript scaffolding for gradual migration:
+
+```bash
+bun install
+bun run dev:web
+bun run typecheck
+```
+
+Notes:
+
+- `typecheck` runs `tsc` in `allowJs + checkJs` mode first (non-breaking migration lane).
+- Runtime behavior remains JS-first while abstractions are moved into typed modules slice by slice.
 
 ## Baseline Profiles
 

@@ -40,3 +40,6 @@ modern/net/data/**
 # Python cache / bytecode
 __pycache__/
 *.pyc
+
+# Local dev temp (bun/vite)
+.tmp-bun/

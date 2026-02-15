@@ -179,6 +179,19 @@ Run the first web rendering prototype:
 ./modern/tools/dev_web.sh
 ```
 
+Run full frontend+backend dev stack in one process (with Vite hot reload on frontend):
+
+```bash
+./modern/tools/dev_stack.sh
+```
+
+Set up Bun/Vite/TypeScript toolchain for the gradual migration lane:
+
+```bash
+bun install
+bun run typecheck
+```
+
 ## Progress Snapshot
 
 R1 canonical parity captures (web renderer):

@@ -1,0 +1,13 @@
+{
+  "name": "virtuemachine",
+  "private": true,
+  "scripts": {
+    "dev:web": "vite --host 0.0.0.0 --port 8080 --strictPort",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}

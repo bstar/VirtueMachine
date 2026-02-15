@@ -13,6 +13,8 @@ fi
 
 DEV_WEB_BIND="${DEV_WEB_BIND:-0.0.0.0}"
 DEV_WEB_PORT="${DEV_WEB_PORT:-8080}"
+DEV_WEB_SERVER="${DEV_WEB_SERVER:-vite}"
+BUN_TMPDIR="${BUN_TMPDIR:-$ROOT_DIR/.tmp-bun}"
 VM_NET_HOST="${VM_NET_HOST:-127.0.0.1}"
 VM_NET_PORT="${VM_NET_PORT:-8081}"
 VM_NET_DATA_DIR="${VM_NET_DATA_DIR:-$ROOT_DIR/modern/net/data}"
@@ -44,14 +46,53 @@ if [[ -z "$VM_NET_RUNTIME_DIR" ]]; then
   fi
 fi
 
+collect_listener_pids() {
+  local port="$1"
+  if [[ -z "$port" ]]; then
+    return 0
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "sport = :$port" 2>/dev/null \
+      | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' \
+      | sort -u
+    return 0
+  fi
+}
+
+kill_listener_port() {
+  local port="$1"
+  local pids
+  pids="$(collect_listener_pids "$port" | tr '\n' ' ' | xargs -r echo || true)"
+  if [[ -z "${pids:-}" ]]; then
+    return 0
+  fi
+  echo "Stopping existing listeners on :$port -> $pids"
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null || true
+  sleep 0.2
+  # shellcheck disable=SC2086
+  kill -9 $pids 2>/dev/null || true
+}
+
+kill_listener_port "$DEV_WEB_PORT"
+kill_listener_port "$VM_NET_PORT"
+
 cleanup() {
   local code=$?
   if [[ -n "${WEB_PID:-}" ]] && kill -0 "$WEB_PID" 2>/dev/null; then
+    pkill -P "$WEB_PID" 2>/dev/null || true
     kill "$WEB_PID" 2>/dev/null || true
   fi
   if [[ -n "${NET_PID:-}" ]] && kill -0 "$NET_PID" 2>/dev/null; then
+    pkill -P "$NET_PID" 2>/dev/null || true
     kill "$NET_PID" 2>/dev/null || true
   fi
+  pkill -f "bunx --bun vite --config $ROOT_DIR/vite.config.mjs" 2>/dev/null || true
+  pkill -f "node $ROOT_DIR/modern/net/server.js" 2>/dev/null || true
   wait 2>/dev/null || true
   exit "$code"
 }
@@ -64,12 +105,18 @@ if [[ ! -x "$VM_SIM_CORE_INTERACT_BIN" ]]; then
   cmake --build "${U6M_BUILD_DIR:-$ROOT_DIR/build}" --target sim_core_world_interact_bridge >/dev/null
 fi
 
-python3 "$ROOT_DIR/modern/tools/secure_web_server.py" \
-  --root "$ROOT_DIR" \
-  --bind "$DEV_WEB_BIND" \
-  --port "$DEV_WEB_PORT" \
-  >"$WEB_LOG" 2>&1 &
-WEB_PID=$!
+if [[ "$DEV_WEB_SERVER" == "vite" ]]; then
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "DEV_WEB_SERVER=vite requires bun in PATH. Set DEV_WEB_SERVER=secure to use secure_web_server." >&2
+    exit 1
+  fi
+  mkdir -p "$BUN_TMPDIR"
+  bash -lc "cd '$ROOT_DIR' && TMPDIR='$BUN_TMPDIR' bunx --bun vite --config '$ROOT_DIR/vite.config.mjs' --host '$DEV_WEB_BIND' --port '$DEV_WEB_PORT' --strictPort --clearScreen false 2>&1 | tee '$WEB_LOG' | sed 's/^/[web] /'" &
+  WEB_PID=$!
+else
+  bash -lc "cd '$ROOT_DIR' && python3 '$ROOT_DIR/modern/tools/secure_web_server.py' --root '$ROOT_DIR' --bind '$DEV_WEB_BIND' --port '$DEV_WEB_PORT' 2>&1 | tee '$WEB_LOG' | sed 's/^/[web] /'" &
+  WEB_PID=$!
+fi
 
 VM_NET_HOST="$VM_NET_HOST" VM_NET_PORT="$VM_NET_PORT" VM_NET_DATA_DIR="$VM_NET_DATA_DIR" VM_NET_RUNTIME_DIR="$VM_NET_RUNTIME_DIR" VM_NET_OBJECT_BASELINE_DIR="$VM_NET_OBJECT_BASELINE_DIR" \
 VM_SIM_CORE_INTERACT_BIN="$VM_SIM_CORE_INTERACT_BIN" VM_SIM_CORE_INTERACT_REQUIRED="$VM_SIM_CORE_INTERACT_REQUIRED" \
@@ -78,7 +125,7 @@ VM_EMAIL_SMTP_HOST="$VM_EMAIL_SMTP_HOST" VM_EMAIL_SMTP_PORT="$VM_EMAIL_SMTP_PORT
 VM_EMAIL_SMTP_USER="$VM_EMAIL_SMTP_USER" VM_EMAIL_SMTP_PASS="$VM_EMAIL_SMTP_PASS" \
 VM_EMAIL_RESEND_API_KEY="$VM_EMAIL_RESEND_API_KEY" VM_EMAIL_RESEND_BASE_URL="$VM_EMAIL_RESEND_BASE_URL" \
   node "$ROOT_DIR/modern/net/server.js" \
-  >"$NET_LOG" 2>&1 &
+  2>&1 | tee "$NET_LOG" | sed 's/^/[net] /' &
 NET_PID=$!
 
 sleep 0.3
@@ -95,7 +142,7 @@ fi
 
 cat <<EOF
 VirtueMachine dev stack is up.
-Web client: http://${DEV_WEB_BIND}:${DEV_WEB_PORT}/modern/client-web/
+Web client: http://${DEV_WEB_BIND}:${DEV_WEB_PORT}/modern/client-web/index.html (${DEV_WEB_SERVER})
 Net API:    http://${VM_NET_HOST}:${VM_NET_PORT}/health
 Runtime:    ${VM_NET_RUNTIME_DIR}
 Baseline:   ${VM_NET_OBJECT_BASELINE_DIR}
