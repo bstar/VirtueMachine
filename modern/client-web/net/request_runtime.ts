@@ -1,27 +1,24 @@
-/**
- * @typedef {Object} NetRuntimeRequestOptions
- * @property {string} apiBase
- * @property {string} route
- * @property {RequestInit=} init
- * @property {boolean=} auth
- * @property {string=} token
- * @property {string=} runtimeProfile
- * @property {string[]} runtimeExtensions
- * @property {() => void=} onPulse
- */
+export type NetRuntimeRequestOptions = {
+  apiBase: string;
+  route: string;
+  init?: RequestInit;
+  auth?: boolean;
+  token?: string;
+  runtimeProfile?: string;
+  runtimeExtensions?: string[];
+  onPulse?: () => void;
+};
 
 /**
  * Build runtime contract headers for client->net requests.
- *
- * @param {Object} options
- * @param {string} options.runtimeProfile
- * @param {string[]} options.runtimeExtensions
- * @param {string=} options.token
- * @param {Record<string, string>=} options.extraHeaders
- * @param {boolean=} options.auth
- * @returns {Record<string, string>}
  */
-export function buildRuntimeContractHeaders(options) {
+export function buildRuntimeContractHeaders(options: {
+  runtimeProfile: string;
+  runtimeExtensions: string[];
+  token?: string;
+  extraHeaders?: Record<string, string>;
+  auth?: boolean;
+}): Record<string, string> {
   const profile = String(options?.runtimeProfile || "").trim();
   const extensions = Array.isArray(options?.runtimeExtensions)
     ? options.runtimeExtensions.map((v) => String(v || "").trim()).filter(Boolean)
@@ -29,8 +26,7 @@ export function buildRuntimeContractHeaders(options) {
   const token = String(options?.token || "").trim();
   const extra = options?.extraHeaders || {};
   const auth = options?.auth !== false;
-  /** @type {Record<string, string>} */
-  const headers = { ...extra };
+  const headers: Record<string, string> = { ...extra };
   headers["x-vm-runtime-profile"] = profile;
   headers["x-vm-runtime-extensions"] = extensions.length ? extensions.join(",") : "none";
   if (auth && token) {
@@ -41,17 +37,19 @@ export function buildRuntimeContractHeaders(options) {
 
 /**
  * Execute a net request and decode JSON response body.
- *
- * @param {NetRuntimeRequestOptions} options
- * @returns {Promise<{status:number, ok:boolean, body:any, statusText:string}>}
  */
-export async function netJsonRequest(options) {
+export async function netJsonRequest(options: NetRuntimeRequestOptions): Promise<{
+  status: number;
+  ok: boolean;
+  body: any;
+  statusText: string;
+}> {
   const base = String(options?.apiBase || "").trim().replace(/\/+$/, "");
   if (!base) {
     throw new Error("Net API base URL is empty");
   }
   const init = options?.init || {};
-  const inHeaders = /** @type {Record<string, string>} */ (init.headers || {});
+  const inHeaders = (init.headers || {}) as Record<string, string>;
   const headers = buildRuntimeContractHeaders({
     runtimeProfile: String(options?.runtimeProfile || ""),
     runtimeExtensions: Array.isArray(options?.runtimeExtensions) ? options.runtimeExtensions : [],

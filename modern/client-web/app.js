@@ -56,7 +56,7 @@ import {
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
 } from "../common/runtime_contract.mjs";
-import { netJsonRequest } from "./net/request_runtime.js";
+import { netJsonRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 
 const TICK_MS = 100;
