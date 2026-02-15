@@ -73,6 +73,11 @@ import {
   performPresencePoll,
   performWorldClockPoll
 } from "./net/presence_runtime.ts";
+import {
+  collectWorldItemsForMaintenanceFromLayer,
+  requestCriticalMaintenance,
+  requestWorldObjectsAtCell
+} from "./net/world_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4457,21 +4462,7 @@ async function netLoadSnapshot() {
 }
 
 function collectWorldItemsForMaintenance() {
-  if (!state.objectLayer || !state.objectLayer.byCoord) {
-    return [];
-  }
-  const worldItems = [];
-  for (const list of state.objectLayer.byCoord.values()) {
-    for (const obj of list) {
-      const typeHex = (obj.type & 0x3ff).toString(16).padStart(3, "0");
-      worldItems.push({
-        item_id: `item_type_0x${typeHex}`,
-        reachable: true,
-        at: { x: obj.x | 0, y: obj.y | 0, z: obj.z | 0 }
-      });
-    }
-  }
-  return worldItems;
+  return collectWorldItemsForMaintenanceFromLayer(state.objectLayer);
 }
 
 async function netRunCriticalMaintenance(opts = {}) {
@@ -4485,15 +4476,10 @@ async function netRunCriticalMaintenance(opts = {}) {
     if (!state.net.token) {
       await netLogin();
     }
-    const out = await netRequest("/api/world/critical-items/maintenance", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        tick: state.sim.tick >>> 0,
-        world_items: collectWorldItemsForMaintenance()
-      })
-    }, true);
-    const events = Array.isArray(out?.events) ? out.events : [];
+    const events = await requestCriticalMaintenance({
+      tick: state.sim.tick >>> 0,
+      world_items: collectWorldItemsForMaintenance()
+    }, netRequest);
     resetBackgroundNetFailures();
     state.net.recoveryEventCount += events.length;
     state.net.lastMaintenanceTick = state.sim.tick >>> 0;
@@ -4511,6 +4497,13 @@ async function netRunCriticalMaintenance(opts = {}) {
   } finally {
     state.net.maintenanceInFlight = false;
   }
+}
+
+async function netFetchWorldObjectsAtCell(x, y, z) {
+  if (!isNetAuthenticated()) {
+    return null;
+  }
+  return requestWorldObjectsAtCell(x, y, z, netRequest);
 }
 
 async function netSendPresenceHeartbeat() {
@@ -4583,18 +4576,6 @@ async function netPollWorldClock() {
     },
     applyClock: applyAuthoritativeWorldClock
   });
-}
-
-async function netFetchWorldObjectsAtCell(x, y, z) {
-  if (!isNetAuthenticated()) {
-    return null;
-  }
-  const out = await netRequest(
-    `/api/world/objects?x=${encodeURIComponent(x | 0)}&y=${encodeURIComponent(y | 0)}&z=${encodeURIComponent(z | 0)}&radius=0&limit=128&projection=footprint&include_footprint=1`,
-    { method: "GET" },
-    true
-  );
-  return out && typeof out === "object" ? out : null;
 }
 
 function setAccountModalOpen(open) {
