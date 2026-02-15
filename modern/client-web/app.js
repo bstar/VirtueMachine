@@ -78,6 +78,7 @@ import {
   requestCriticalMaintenance,
   requestWorldObjectsAtCell
 } from "./net/world_runtime.ts";
+import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4219,19 +4220,12 @@ async function netRequest(route, init = {}, auth = true) {
 }
 
 async function netEnsureCharacter() {
-  const characterName = String(netCharacterNameInput?.value || "Avatar").trim() || "Avatar";
-  const list = await netRequest("/api/characters", { method: "GET" }, true);
-  const chars = Array.isArray(list?.characters) ? list.characters : [];
-  let pick = chars.find((c) => String(c.name || "").toLowerCase() === characterName.toLowerCase());
-  if (!pick) {
-    pick = await netRequest("/api/characters", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: characterName })
-    }, true);
-  }
-  state.net.characterId = String(pick.character_id || "");
-  state.net.characterName = characterName;
+  const out = await performNetEnsureCharacter(
+    String(netCharacterNameInput?.value || "Avatar"),
+    netRequest
+  );
+  state.net.characterId = out.characterId;
+  state.net.characterName = out.characterName;
 }
 
 async function netLogin() {
