@@ -4876,13 +4876,6 @@ function initLegacyFramePreview() {
   }
 }
 
-function topWorldObjectAtCell(sim, tx, ty, tz, opts = {}) {
-  return topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, opts, {
-    isObjectRemoved: isObjectRemovedRuntime,
-    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
-  });
-}
-
 function tryLookAtCell(sim, tx, ty) {
   if (!state.mapCtx) {
     return false;
@@ -4895,7 +4888,10 @@ function tryLookAtCell(sim, tx, ty) {
     showLegacyLedgerPrompt();
     return false;
   }
-  const obj = topWorldObjectAtCell(sim, tx, ty, tz);
+  const obj = topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, {}, {
+    isObjectRemoved: isObjectRemovedRuntime,
+    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
+  });
   if (obj) {
     const tileId = ((obj.baseTile | 0) + (obj.frame | 0)) & 0xffff;
     pushLedgerMessage(canonicalLookSentenceForTile(tileId));
@@ -5039,7 +5035,10 @@ function tryGetAtCell(sim, tx, ty) {
     diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
     return false;
   }
-  const obj = topWorldObjectAtCell(sim, tx, ty, tz, { pickupOnly: true });
+  const obj = topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, { pickupOnly: true }, {
+    isObjectRemoved: isObjectRemovedRuntime,
+    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
+  });
   if (!obj) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
