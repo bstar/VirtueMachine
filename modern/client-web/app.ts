@@ -118,6 +118,11 @@ import {
 } from "./sim/hash_runtime.ts";
 import { packCommandRuntime, unpackCommandRuntime } from "./sim/command_wire_runtime.ts";
 import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
+import {
+  appendCommandLogRuntime,
+  shouldSuppressRepeatedMoveRuntime,
+  upsertMoveCommandForTickRuntime
+} from "./sim/queue_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4597,7 +4602,7 @@ function initNetPanel() {
       }
     });
   }
-  if (savedAutoLogin === "on" && !isNetAuthenticated()) {
+  if (prefs.autoLogin === "on" && !isNetAuthenticated()) {
     (async () => {
       try {
         setNetStatus("connecting", "Auto-login...");
@@ -6371,11 +6376,7 @@ function unpackCommand(bytes) {
 }
 
 function appendCommandLog(cmd) {
-  state.commandLog.push({ ...cmd });
-  const extra = state.commandLog.length - COMMAND_LOG_MAX;
-  if (extra > 0) {
-    state.commandLog.splice(0, extra);
-  }
+  appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
 }
 
 function queueMove(dx, dy) {
@@ -6385,8 +6386,15 @@ function queueMove(dx, dy) {
   dx |= 0;
   dy |= 0;
   const nowMs = performance.now();
-  const sameAsLast = (dx === state.lastMoveInputDx) && (dy === state.lastMoveInputDy);
-  if (sameAsLast && state.lastMoveQueueAtMs >= 0 && (nowMs - state.lastMoveQueueAtMs) < MOVE_INPUT_MIN_INTERVAL_MS) {
+  if (shouldSuppressRepeatedMoveRuntime({
+    dx,
+    dy,
+    lastDx: state.lastMoveInputDx,
+    lastDy: state.lastMoveInputDy,
+    lastQueuedAtMs: state.lastMoveQueueAtMs,
+    nowMs,
+    minIntervalMs: MOVE_INPUT_MIN_INTERVAL_MS
+  })) {
     return;
   }
   state.lastMoveQueueAtMs = nowMs;
@@ -6399,28 +6407,15 @@ function queueMove(dx, dy) {
   const cmd = unpackCommand(bytes);
 
   // Keep exactly one pending move command so repeated key events cannot stack.
-  for (let i = state.queue.length - 1; i >= 0; i -= 1) {
-    if (state.queue[i].type === LEGACY_COMMAND_TYPE.MOVE_AVATAR && state.queue[i].tick === targetTick) {
-      if (state.queue[i].arg0 === dx && state.queue[i].arg1 === dy) {
-        return;
-      }
-      state.queue[i] = cmd;
-      for (let j = state.commandLog.length - 1; j >= 0; j -= 1) {
-        const prev = state.commandLog[j];
-        if (prev.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR && prev.tick === targetTick) {
-          state.commandLog.splice(j, 1);
-          break;
-        }
-      }
-      appendCommandLog(cmd);
-      return;
-    }
-  }
-
-  for (let i = state.queue.length - 1; i >= 0; i -= 1) {
-    if (state.queue[i].type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
-      state.queue.splice(i, 1);
-    }
+  if (upsertMoveCommandForTickRuntime({
+    queue: state.queue,
+    commandLog: state.commandLog,
+    cmd,
+    targetTick,
+    moveType: LEGACY_COMMAND_TYPE.MOVE_AVATAR,
+    commandLogMax: COMMAND_LOG_MAX
+  })) {
+    return;
   }
 
   state.queue.push(cmd);
