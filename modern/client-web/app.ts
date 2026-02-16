@@ -3996,10 +3996,6 @@ function upsertNetProfileFromInputs() {
   });
 }
 
-function hasMultipleSavedAccounts() {
-  return countSavedProfilesRuntime(NET_PROFILES_KEY) > 1;
-}
-
 function recordBackgroundNetFailure(err, context) {
   recordBackgroundFailureRuntime(state.net, {
     err,
@@ -8449,7 +8445,7 @@ function promptNetLoginLogout() {
     netLogout();
     return;
   }
-  if (hasMultipleSavedAccounts()) {
+  if (countSavedProfilesRuntime(NET_PROFILES_KEY) > 1) {
     populateNetAccountSelect();
     setAccountModalOpen(true);
     setNetStatus("idle", "Choose an account in Account Setup, then login.");
