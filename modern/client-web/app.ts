@@ -5,7 +5,7 @@ import {
   topInteractiveOverlayAtModel
 } from "./render_composition.js";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
-import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.js";
+import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
 import {
   buildConversationVmContext as buildConversationVmContextImported,
   conversationKeyMatchesInput as conversationKeyMatchesInputImported,

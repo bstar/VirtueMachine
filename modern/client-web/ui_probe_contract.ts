@@ -13,11 +13,11 @@ const LEGACY_EQUIP_SLOTS = Object.freeze([
   { index: 9, key: "ring", legacy: "SLOT_RING" }
 ]);
 
-function toU32(v) {
+function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
 
-function normalizeInventory(inventory) {
+function normalizeInventory(inventory: Record<string, unknown> | null | undefined) {
   const out = [];
   for (const [k, v] of Object.entries(inventory || {})) {
     out.push({
@@ -29,7 +29,7 @@ function normalizeInventory(inventory) {
   return out;
 }
 
-function normalizeParty(party) {
+function normalizeParty(party: unknown) {
   const out = Array.isArray(party) ? party.slice() : [];
   out.sort((a, b) => (toU32(a.id) - toU32(b.id)));
   return out.map((m) => ({
@@ -40,7 +40,7 @@ function normalizeParty(party) {
   }));
 }
 
-function normalizeMessages(messages) {
+function normalizeMessages(messages: unknown) {
   const out = Array.isArray(messages) ? messages.slice() : [];
   out.sort((a, b) => (toU32(a.tick) - toU32(b.tick)) || (String(a.text || "").localeCompare(String(b.text || ""))));
   return out.map((m) => ({
@@ -50,7 +50,7 @@ function normalizeMessages(messages) {
   }));
 }
 
-function normalizeEquipment(equipment) {
+function normalizeEquipment(equipment: unknown) {
   const byIndex = new Map();
   for (const e of (Array.isArray(equipment) ? equipment : [])) {
     const idx = toU32(e.slot);
@@ -66,8 +66,8 @@ function normalizeEquipment(equipment) {
   }));
 }
 
-function normalizeConversation(conversation) {
-  const c = conversation && typeof conversation === "object" ? conversation : {};
+function normalizeConversation(conversation: any) {
+  const c: any = conversation && typeof conversation === "object" ? conversation : {};
   return {
     active: !!c.active,
     target_name: String(c.target_name || ""),
@@ -136,7 +136,7 @@ function deterministicSample() {
   };
 }
 
-function fromRuntime(runtime) {
+function fromRuntime(runtime: any) {
   const sim = runtime && runtime.sim ? runtime.sim : {};
   const world = sim.world || {};
   const commandLog = Array.isArray(runtime && runtime.commandLog) ? runtime.commandLog : [];
@@ -175,7 +175,7 @@ function fromRuntime(runtime) {
  2) Resolve avatar object id from Party[active] else Party[0], mirroring legacy fallback.
  3) Anchor panel location to current world map coords.
 */
-export function createCanonicalTestAvatar(snapshot = {}) {
+export function createCanonicalTestAvatar(snapshot: any = {}) {
   const partyMembers = Array.isArray(snapshot.party_members) ? snapshot.party_members.map((v) => toU32(v)) : [1];
   const activeIndex = toU32(snapshot.active_party_index || 0);
   const resolvedId = partyMembers[activeIndex] || partyMembers[0] || 1;
@@ -191,7 +191,7 @@ export function createCanonicalTestAvatar(snapshot = {}) {
   };
 }
 
-export function buildUiProbeContract(opts = {}) {
+export function buildUiProbeContract(opts: any = {}) {
   const mode = String(opts.mode || "sample");
   const src = mode === "live" ? fromRuntime(opts.runtime || {}) : deterministicSample();
   const avatar = createCanonicalTestAvatar(src);
@@ -238,7 +238,7 @@ export function buildUiProbeContract(opts = {}) {
   };
 }
 
-export function uiProbeDigest(probe) {
+export function uiProbeDigest(probe: unknown): string {
   const json = JSON.stringify(probe);
   let h = 2166136261 >>> 0;
   for (let i = 0; i < json.length; i += 1) {

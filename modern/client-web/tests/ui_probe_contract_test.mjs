@@ -4,7 +4,7 @@ import {
   buildUiProbeContract,
   createCanonicalTestAvatar,
   uiProbeDigest
-} from "../ui_probe_contract.js";
+} from "../ui_probe_contract.ts";
 
 function runSampleProbeFixture() {
   const probe = buildUiProbeContract({ mode: "sample" });
