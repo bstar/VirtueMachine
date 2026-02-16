@@ -6,7 +6,8 @@ export function isTypingContextRuntime(target: EventTarget | null): boolean {
   if (!el) {
     return false;
   }
-  if (el.isContentEditable) {
+  const htmlEl = el as HTMLElement;
+  if (htmlEl.isContentEditable) {
     return true;
   }
   const tag = el.tagName ? el.tagName.toLowerCase() : "";

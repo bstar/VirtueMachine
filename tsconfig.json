@@ -15,6 +15,7 @@
     "modern/common/**/*.ts"
   ],
   "exclude": [
-    "modern/**/tests/**"
+    "modern/**/tests/**",
+    "modern/client-web/app.ts"
   ]
 }

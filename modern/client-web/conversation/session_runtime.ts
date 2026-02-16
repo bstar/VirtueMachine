@@ -1,4 +1,4 @@
-export function wrapLegacyLedgerLines(text, maxChars) {
+export function wrapLegacyLedgerLines(text: any, maxChars: any) {
   const out = [];
   const limit = Math.max(1, Number(maxChars) | 0);
   const src = String(text || "").replace(/\s+/g, " ").trim();
@@ -40,7 +40,7 @@ export function wrapLegacyLedgerLines(text, maxChars) {
   return out;
 }
 
-export function showLegacyLedgerPrompt(state) {
+export function showLegacyLedgerPrompt(state: any) {
   if (!state?.legacyLedgerPrompt) {
     state.legacyPromptAnimMs = 0;
     state.legacyPromptAnimPhase = 0;
@@ -48,7 +48,7 @@ export function showLegacyLedgerPrompt(state) {
   state.legacyLedgerPrompt = true;
 }
 
-export function pushLedgerMessage(state, text, opts = {}) {
+export function pushLedgerMessage(state: any, text: any, opts: any = {}) {
   const maxChars = Math.max(1, Number(opts.maxChars) | 0);
   const maxLines = Math.max(1, Number(opts.maxLines) | 0);
   const tick = Number(opts.tick) >>> 0;
@@ -93,7 +93,7 @@ export function pushLedgerMessage(state, text, opts = {}) {
   }
 }
 
-export function buildDebugChatLedgerText(entries) {
+export function buildDebugChatLedgerText(entries: any) {
   const lines = [];
   const src = Array.isArray(entries) ? entries : [];
   for (const entry of src) {
@@ -114,7 +114,7 @@ export function buildDebugChatLedgerText(entries) {
   return lines.join("\n");
 }
 
-export function paginateLedgerMessages(lines, maxLines, maxChars) {
+export function paginateLedgerMessages(lines: any, maxLines: any, maxChars: any) {
   const src = Array.isArray(lines) ? lines : [];
   const pageMax = Math.max(1, Number(maxLines) | 0);
   const lineMax = Math.max(1, Number(maxChars) | 0);
@@ -139,7 +139,7 @@ export function paginateLedgerMessages(lines, maxLines, maxChars) {
   return pages;
 }
 
-export function startLegacyConversationPagination(state, lines, opts = {}) {
+export function startLegacyConversationPagination(state: any, lines: any, opts: any = {}) {
   const pages = paginateLedgerMessages(lines, opts.pageMaxLines, opts.maxChars);
   if (!pages.length) {
     return false;
@@ -169,7 +169,7 @@ export function startLegacyConversationPagination(state, lines, opts = {}) {
   return true;
 }
 
-export function advanceLegacyConversationPagination(state, onEndPrompt) {
+export function advanceLegacyConversationPagination(state: any, onEndPrompt: any) {
   if (!state.legacyConversationPaging) {
     return false;
   }
@@ -186,7 +186,7 @@ export function advanceLegacyConversationPagination(state, onEndPrompt) {
   return true;
 }
 
-export function endLegacyConversation(state) {
+export function endLegacyConversation(state: any) {
   state.legacyConversationActive = false;
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = "";
@@ -212,7 +212,7 @@ export function endLegacyConversation(state) {
   state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
 }
 
-export function submitLegacyConversationInput(state, deps = {}) {
+export function submitLegacyConversationInput(state: any, deps: any = {}) {
   const typed = String(state.legacyConversationInput || "").trim();
   state.legacyConversationInput = "";
   state.legacyLedgerPrompt = false;
@@ -271,7 +271,7 @@ export function submitLegacyConversationInput(state, deps = {}) {
   return { kind: "response" };
 }
 
-export function handleLegacyConversationKeydown(state, ev, deps = {}) {
+export function handleLegacyConversationKeydown(state: any, ev: any, deps: any = {}) {
   const key = String(ev?.key || "");
   if (key === "Escape") {
     if (typeof deps.endConversation === "function") {

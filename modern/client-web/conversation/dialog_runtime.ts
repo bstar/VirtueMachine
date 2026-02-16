@@ -67,7 +67,7 @@ export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {})
   const keyMatchesInput = (typeof opts.keyMatchesInput === "function")
     ? opts.keyMatchesInput
     : (() => false);
-  const op = opts.opcodes || {};
+  const op: any = (opts as any).opcodes || {};
   const OP_ASKTOP = Number(op.ASKTOP) & 0xff;
   const OP_GET = Number(op.GET) & 0xff;
   const OP_KEY = Number(op.KEY) & 0xff;
