@@ -44,7 +44,7 @@ import {
   startLegacyConversationPagination as startLegacyConversationPaginationImported,
   submitLegacyConversationInput as submitLegacyConversationInputImported,
   wrapLegacyLedgerLines as wrapLegacyLedgerLinesImported
-} from "./conversation/session_runtime.js";
+} from "./conversation/session_runtime.ts";
 import {
   DEFAULT_RUNTIME_EXTENSIONS,
   RUNTIME_PROFILE_CANONICAL_STRICT,
