@@ -4887,50 +4887,10 @@ function initLegacyFramePreview() {
   }
 }
 
-function isCloseableDoorObject(obj) {
-  return isCloseableDoorObjectRuntime(obj);
-}
-
-function isChairObject(obj) {
-  return isChairObjectRuntime(obj);
-}
-
-function isBedObject(obj) {
-  return isBedObjectRuntime(obj);
-}
-
-function isSolidEnvObject(obj) {
-  return isSolidEnvObjectRuntime(obj);
-}
-
-function objectAnchorKey(obj) {
-  return objectAnchorKeyRuntime(obj);
-}
-
-function isObjectRemoved(sim, obj) {
-  return isObjectRemovedRuntime(sim, obj);
-}
-
-function markObjectRemoved(sim, obj) {
-  markObjectRemovedRuntime(sim, obj);
-}
-
-function inventoryKeyForObject(obj) {
-  return inventoryKeyForObjectRuntime(obj);
-}
-
-function addObjectToInventory(sim, obj) {
-  addObjectToInventoryRuntime(sim, obj);
-}
-
-function isLikelyPickupObjectType(type) {
-  return isLikelyPickupObjectTypeRuntime(type);
-}
-
 function topWorldObjectAtCell(sim, tx, ty, tz, opts = {}) {
   return topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, opts, {
-    isObjectRemoved,
-    isLikelyPickupObjectType
+    isObjectRemoved: isObjectRemovedRuntime,
+    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
   });
 }
 
@@ -5100,9 +5060,9 @@ function tryGetAtCell(sim, tx, ty) {
     diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
     return false;
   }
-  addObjectToInventory(sim, obj);
-  markObjectRemoved(sim, obj);
-  const invKey = inventoryKeyForObject(obj);
+  addObjectToInventoryRuntime(sim, obj);
+  markObjectRemovedRuntime(sim, obj);
+  const invKey = inventoryKeyForObjectRuntime(obj);
   const count = Number(sim.inventory[invKey]) >>> 0;
   diagBox.className = "diag ok";
   diagBox.textContent = `Get: picked 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${invKey}=${count}).`;
@@ -5187,9 +5147,9 @@ function findObjectByAnchor(anchor) {
   if (typeMatch) {
     return typeMatch;
   }
-  if (isChairObject(anchor) || isBedObject(anchor)) {
+  if (isChairObjectRuntime(anchor) || isBedObjectRuntime(anchor)) {
     for (const o of overlays) {
-      if (isChairObject(o) || isBedObject(o)) {
+      if (isChairObjectRuntime(o) || isBedObjectRuntime(o)) {
         return o;
       }
     }
@@ -5270,7 +5230,7 @@ function isBlockedAt(sim, wx, wy, wz) {
     const ty = wrap10(wy);
     const checkObjectBlockAt = (o, ox, oy) => {
       const cells = objectFootprintTiles(sim, o, ox, oy);
-      const isDoor = isCloseableDoorObject(o);
+      const isDoor = isCloseableDoorObjectRuntime(o);
       const doorOpen = isDoor ? isDoorFrameOpen(o, resolvedDoorFrame(sim, o)) : false;
       for (const c of cells) {
         if (c.x !== tx || c.y !== ty) {
@@ -5286,7 +5246,7 @@ function isBlockedAt(sim, wx, wy, wz) {
           }
           continue;
         }
-        if (isSolidEnvObject(o)) {
+        if (isSolidEnvObjectRuntime(o)) {
           return true;
         }
         if (isImplicitSolidObjectTile(o.type, c.tileId)) {
@@ -5340,7 +5300,7 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
   const tz = sim.world.map_z | 0;
   const overlays = state.objectLayer.objectsAt(tx, ty, tz);
   for (const o of overlays) {
-    if (!isCloseableDoorObject(o)) {
+    if (!isCloseableDoorObjectRuntime(o)) {
       continue;
     }
     const beforeFrame = resolvedDoorFrame(sim, o);
@@ -5387,7 +5347,7 @@ function furnitureAtCell(sim, tx, ty) {
   const seen = new Set();
   const addCandidatesAt = (sx, sy) => {
     for (const o of state.objectLayer.objectsAt(sx, sy, tz)) {
-      if (!isChairObject(o) && !isBedObject(o)) {
+      if (!isChairObjectRuntime(o) && !isBedObjectRuntime(o)) {
         continue;
       }
       const cells = furnitureOccupancyCells(o);
@@ -5410,9 +5370,9 @@ function furnitureAtCell(sim, tx, ty) {
   const chairs = [];
   const beds = [];
   for (const o of overlays) {
-    if (isChairObject(o)) {
+    if (isChairObjectRuntime(o)) {
       chairs.push(o);
-    } else if (isBedObject(o)) {
+    } else if (isBedObjectRuntime(o)) {
       beds.push(o);
     }
   }
@@ -5452,11 +5412,11 @@ function tryInteractFurnitureObject(sim, o) {
     return false;
   }
 
-  const nextPose = isBedObject(o) ? "sleep" : "sit";
+  const nextPose = isBedObjectRuntime(o) ? "sleep" : "sit";
   const currentKey = sim.avatarPoseAnchor
     ? `${sim.avatarPoseAnchor.x & 0x3ff},${sim.avatarPoseAnchor.y & 0x3ff},${sim.avatarPoseAnchor.z & 0x0f},${sim.avatarPoseAnchor.order & 0xffff},${sim.avatarPoseAnchor.type & 0x3ff}`
     : "";
-  const targetKey = objectAnchorKey(o);
+  const targetKey = objectAnchorKeyRuntime(o);
   if (sim.avatarPose === nextPose && currentKey === targetKey) {
     clearAvatarPose(sim);
     diagBox.className = "diag ok";
@@ -5477,7 +5437,7 @@ function tryInteractFurnitureObject(sim, o) {
   };
   /* Prevent stale buffered movement from instantly cancelling a fresh sit/sleep pose. */
   clearPendingAvatarMoveCommands(sim);
-  if (nextPose === "sleep" && isBedObject(o)) {
+  if (nextPose === "sleep" && isBedObjectRuntime(o)) {
     const sleepCell = preferredSleepCellForBed(o, fromX, fromY);
     sim.world.map_x = sleepCell.x | 0;
     sim.world.map_y = sleepCell.y | 0;
@@ -5507,7 +5467,7 @@ function tryToggleDoorAtCell(sim, tx, ty, tz) {
   }
   const overlays = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
   for (const o of overlays) {
-    if (!isCloseableDoorObject(o)) {
+    if (!isCloseableDoorObjectRuntime(o)) {
       continue;
     }
     const beforeFrame = resolvedDoorFrame(sim, o);
@@ -6026,7 +5986,7 @@ function applyCommand(sim, cmd) {
           NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
         */
         const landedFurniture = furnitureAtCell(sim, nx, ny);
-        if (landedFurniture && isChairObject(landedFurniture)) {
+        if (landedFurniture && isChairObjectRuntime(landedFurniture)) {
           tryInteractFurnitureObject(sim, landedFurniture);
         }
       } else {
@@ -6917,13 +6877,13 @@ function avatarRenderTileId() {
   if (state.sim.avatarPose === "sleep") {
     const sleepBase = sleepBaseTileForEntity(avatar);
     let bed = findObjectByAnchor(state.sim.avatarPoseAnchor);
-    if (!bed || !isBedObject(bed)) {
+    if (!bed || !isBedObjectRuntime(bed)) {
       const fallback = furnitureAtCell(state.sim, state.sim.world.map_x | 0, state.sim.world.map_y | 0);
-      if (fallback && isBedObject(fallback)) {
+      if (fallback && isBedObjectRuntime(fallback)) {
         bed = fallback;
       }
     }
-    if (bed && isBedObject(bed)) {
+    if (bed && isBedObjectRuntime(bed)) {
       return (
         sleepBase
         + sleepFrameOffsetForBedAtCell(
@@ -6939,13 +6899,13 @@ function avatarRenderTileId() {
   const dirGroup = avatarFacingFrameOffset();
   if (state.sim.avatarPose === "sit") {
     let chair = findObjectByAnchor(state.sim.avatarPoseAnchor);
-    if (!chair || !isChairObject(chair)) {
+    if (!chair || !isChairObjectRuntime(chair)) {
       const fallback = furnitureAtCell(state.sim, state.sim.world.map_x | 0, state.sim.world.map_y | 0);
-      if (fallback && isChairObject(fallback)) {
+      if (fallback && isChairObjectRuntime(fallback)) {
         chair = fallback;
       }
     }
-    if (chair && isChairObject(chair)) {
+    if (chair && isChairObjectRuntime(chair)) {
       const chairFrame = (chair.frame | 0) & 0x03;
       return (avatar.baseTile + 3 + (chairFrame << 2)) & 0xffff;
     }
@@ -6974,10 +6934,10 @@ function entityPoseAt(entity) {
   }
   const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
   for (const o of overlays) {
-    if (isBedObject(o)) {
+    if (isBedObjectRuntime(o)) {
       return "sleep";
     }
-    if (isChairObject(o)) {
+    if (isChairObjectRuntime(o)) {
       return "sit";
     }
   }
@@ -6990,7 +6950,7 @@ function entityChairAt(entity) {
   }
   const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
   for (const o of overlays) {
-    if (isChairObject(o)) {
+    if (isChairObjectRuntime(o)) {
       return o;
     }
   }
@@ -7003,7 +6963,7 @@ function entityBedAt(entity) {
   }
   const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
   for (const o of overlays) {
-    if (isBedObject(o)) {
+    if (isBedObjectRuntime(o)) {
       return o;
     }
   }
