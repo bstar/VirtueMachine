@@ -6027,6 +6027,11 @@ function appendCommandLog(cmd) {
   appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
 }
 
+function buildWireCommand(tick, type, arg0, arg1) {
+  const bytes = packCommandRuntime(tick, type, arg0, arg1, COMMAND_WIRE_SIZE);
+  return unpackCommandRuntime(bytes);
+}
+
 function queueMove(dx, dy) {
   if (state.legacyConversationActive) {
     return;
@@ -6051,8 +6056,7 @@ function queueMove(dx, dy) {
   state.avatarFacingDx = dx;
   state.avatarFacingDy = dy;
   const targetTick = (state.sim.tick + 1) >>> 0;
-  const bytes = packCommandRuntime(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy, COMMAND_WIRE_SIZE);
-  const cmd = unpackCommandRuntime(bytes);
+  const cmd = buildWireCommand(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy);
 
   // Keep exactly one pending move command so repeated key events cannot stack.
   if (upsertMoveCommandForTickRuntime({
@@ -6074,14 +6078,12 @@ function queueInteractDoor() {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const bytes = packCommandRuntime(
+  const cmd = buildWireCommand(
     state.sim.tick + 1,
     LEGACY_COMMAND_TYPE.USE_FACING,
     state.avatarFacingDx | 0,
-    state.avatarFacingDy | 0,
-    COMMAND_WIRE_SIZE
+    state.avatarFacingDy | 0
   );
-  const cmd = unpackCommandRuntime(bytes);
   enqueueCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
@@ -6096,8 +6098,7 @@ function queueInteractAtCell(wx, wy) {
   }
   const tx = wx | 0;
   const ty = wy | 0;
-  const bytes = packCommandRuntime(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty, COMMAND_WIRE_SIZE);
-  const cmd = unpackCommandRuntime(bytes);
+  const cmd = buildWireCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty);
   enqueueCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
@@ -6117,8 +6118,7 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   }
   const tx = wx | 0;
   const ty = wy | 0;
-  const bytes = packCommandRuntime(state.sim.tick + 1, type, tx, ty, COMMAND_WIRE_SIZE);
-  const cmd = unpackCommandRuntime(bytes);
+  const cmd = buildWireCommand(state.sim.tick + 1, type, tx, ty);
   enqueueCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
