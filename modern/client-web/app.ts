@@ -132,6 +132,15 @@ import {
   resolvedDoorFrameRuntime,
   toggleDoorStateRuntime
 } from "./sim/door_runtime.ts";
+import {
+  addObjectToInventoryRuntime,
+  decrementInventoryKeyRuntime,
+  firstInventoryKeyRuntime,
+  inventoryKeyForObjectRuntime,
+  isObjectRemovedRuntime,
+  markObjectRemovedRuntime,
+  objectAnchorKeyRuntime
+} from "./sim/inventory_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -5006,47 +5015,23 @@ function isSolidEnvObject(obj) {
 }
 
 function objectAnchorKey(obj) {
-  return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff},${obj.type & 0x3ff}`;
+  return objectAnchorKeyRuntime(obj);
 }
 
 function isObjectRemoved(sim, obj) {
-  if (!sim || !obj) {
-    return false;
-  }
-  return !!(sim.removedObjectKeys && sim.removedObjectKeys[objectAnchorKey(obj)]);
+  return isObjectRemovedRuntime(sim, obj);
 }
 
 function markObjectRemoved(sim, obj) {
-  if (!sim || !obj) {
-    return;
-  }
-  if (!sim.removedObjectKeys) {
-    sim.removedObjectKeys = {};
-  }
-  if (!sim.removedObjectAtTick) {
-    sim.removedObjectAtTick = {};
-  }
-  const key = objectAnchorKey(obj);
-  if (!sim.removedObjectKeys[key]) {
-    sim.removedObjectKeys[key] = 1;
-    sim.removedObjectAtTick[key] = Number(sim.tick) >>> 0;
-    sim.removedObjectCount = (Number(sim.removedObjectCount) + 1) >>> 0;
-  }
+  markObjectRemovedRuntime(sim, obj);
 }
 
 function inventoryKeyForObject(obj) {
-  const typeHex = (obj.type & 0x3ff).toString(16).padStart(3, "0");
-  const frameHex = (obj.frame & 0x3f).toString(16).padStart(2, "0");
-  return `0x${typeHex}:0x${frameHex}`;
+  return inventoryKeyForObjectRuntime(obj);
 }
 
 function addObjectToInventory(sim, obj) {
-  if (!sim.inventory) {
-    sim.inventory = {};
-  }
-  const key = inventoryKeyForObject(obj);
-  const prev = Number(sim.inventory[key]) >>> 0;
-  sim.inventory[key] = (prev + 1) >>> 0;
+  addObjectToInventoryRuntime(sim, obj);
 }
 
 function isLikelyPickupObjectType(type) {
@@ -5270,32 +5255,11 @@ function tryGetAtCell(sim, tx, ty) {
 }
 
 function firstInventoryKey(sim) {
-  const inv = sim && sim.inventory ? sim.inventory : null;
-  if (!inv) {
-    return "";
-  }
-  for (const [key, countRaw] of Object.entries(inv)) {
-    const count = Number(countRaw) >>> 0;
-    if (!key || count <= 0) {
-      continue;
-    }
-    return String(key);
-  }
-  return "";
+  return firstInventoryKeyRuntime(sim);
 }
 
 function decrementInventoryKey(sim, key) {
-  if (!sim || !sim.inventory || !key) {
-    return 0;
-  }
-  const prev = Number(sim.inventory[key]) >>> 0;
-  if (prev <= 1) {
-    delete sim.inventory[key];
-    return 0;
-  }
-  const next = (prev - 1) >>> 0;
-  sim.inventory[key] = next;
-  return next;
+  return decrementInventoryKeyRuntime(sim, key);
 }
 
 function tryAttackAtCell(sim, tx, ty) {
