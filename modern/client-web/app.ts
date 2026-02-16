@@ -4002,6 +4002,14 @@ function applyProfileToNetControls(profile) {
   });
 }
 
+function refreshNetAccountSelect() {
+  return populateNetAccountSelectRuntime({
+    accountSelect: netAccountSelect,
+    storageKey: NET_PROFILES_KEY,
+    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+  });
+}
+
 function resetBackgroundFailures() {
   resetBackgroundFailureState(state.net);
 }
@@ -4413,11 +4421,7 @@ function initNetPanel() {
     characterNameInput: netCharacterNameInput,
     autoLoginCheckbox: netAutoLoginCheckbox
   });
-  populateNetAccountSelectRuntime({
-    accountSelect: netAccountSelect,
-    storageKey: NET_PROFILES_KEY,
-    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-  });
+  refreshNetAccountSelect();
   if (netAccountSelect && netAccountSelect.value) {
     const key = netAccountSelect.value;
     const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
@@ -4475,11 +4479,7 @@ function initNetPanel() {
   updateNetAuthButton();
   if (netAccountOpenButton) {
     netAccountOpenButton.addEventListener("click", () => {
-      populateNetAccountSelectRuntime({
-        accountSelect: netAccountSelect,
-        storageKey: NET_PROFILES_KEY,
-        selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-      });
+      refreshNetAccountSelect();
       setAccountModalOpen(true);
     });
   }
@@ -8440,11 +8440,7 @@ function promptNetLoginLogout() {
     return;
   }
   if (countSavedProfilesRuntime(NET_PROFILES_KEY) > 1) {
-    populateNetAccountSelectRuntime({
-      accountSelect: netAccountSelect,
-      storageKey: NET_PROFILES_KEY,
-      selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-    });
+    refreshNetAccountSelect();
     setAccountModalOpen(true);
     setNetStatus("idle", "Choose an account in Account Setup, then login.");
     return;
