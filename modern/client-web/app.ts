@@ -1217,7 +1217,6 @@ class U6ObjectLayerJS {
       const assocIndex = (bytes[off + 1] | (bytes[off + 2] << 8)) & 0xffff;
       decoded.push({
         index: i,
-        coordUse,
         assocIndex,
         x,
         y,
