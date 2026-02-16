@@ -150,6 +150,11 @@ import {
 } from "./sim/object_types_runtime.ts";
 import { nearestTalkTargetAtCellRuntime, topWorldObjectAtCellRuntime } from "./sim/target_runtime.ts";
 import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
+import {
+  normalizeStartupMenuIndexRuntime,
+  startupMenuIndexAtLogicalPosRuntime,
+  startupMenuIndexAtSurfacePointRuntime
+} from "./ui/startup_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -5668,17 +5673,7 @@ function activeCapturePreset() {
 }
 
 function setStartupMenuIndex(nextIndex) {
-  if (!STARTUP_MENU.length) {
-    state.startupMenuIndex = 0;
-    return;
-  }
-  const count = STARTUP_MENU.length;
-  let idx = nextIndex | 0;
-  if (idx < 0) {
-    idx = count - 1;
-  } else if (idx >= count) {
-    idx = 0;
-  }
+  const idx = normalizeStartupMenuIndexRuntime(nextIndex, STARTUP_MENU.length);
   if (state.startupMenuIndex !== idx) {
     state.startupCanvasCache.clear();
   }
@@ -9132,35 +9127,19 @@ window.addEventListener("keydown", (ev) => {
 }, true);
 
 function startupMenuIndexAtLogicalPos(lx, ly) {
-  if (lx < STARTUP_MENU_HITBOX.x0 || lx > STARTUP_MENU_HITBOX.x1) {
-    return -1;
-  }
-  for (let i = 0; i < STARTUP_MENU_HITBOX.rows.length; i += 1) {
-    const row = STARTUP_MENU_HITBOX.rows[i];
-    if (ly > row[0] && ly < row[1]) {
-      return i;
-    }
-  }
-  return -1;
+  return startupMenuIndexAtLogicalPosRuntime(lx, ly, STARTUP_MENU_HITBOX);
 }
 
 function startupMenuIndexAtEvent(ev, surface) {
   const s = surface || canvas;
   const rect = s.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return -1;
-  }
-  const surfaceW = s.width || 0;
-  const surfaceH = s.height || 0;
-  if (surfaceW <= 0 || surfaceH <= 0) {
-    return -1;
-  }
-  const px = ((ev.clientX - rect.left) * surfaceW) / rect.width;
-  const py = ((ev.clientY - rect.top) * surfaceH) / rect.height;
-  const menuScale = Math.max(1, Math.floor(surfaceW / 320));
-  const lx = Math.floor(px / menuScale);
-  const ly = Math.floor(py / menuScale);
-  return startupMenuIndexAtLogicalPos(lx, ly);
+  return startupMenuIndexAtSurfacePointRuntime(
+    ev.clientX,
+    ev.clientY,
+    { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+    { width: s.width || 0, height: s.height || 0 },
+    STARTUP_MENU_HITBOX
+  );
 }
 
 function clampInt(v, lo, hi) {
