@@ -3461,7 +3461,7 @@ function renderStartupMenuLayer(g, scale) {
 
   for (let i = 0; i < STARTUP_MENU.length; i += 1) {
     const item = STARTUP_MENU[i];
-    const enabled = startupMenuItemEnabled(item);
+    const enabled = startupMenuItemEnabledRuntime(item, isNetAuthenticated());
     const rowY = 74 + (i * 20);
     const selected = i === state.startupMenuIndex;
     g.fillStyle = selected ? "#5f2e1d" : "#1f1a14";
