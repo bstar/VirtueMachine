@@ -83,14 +83,12 @@ import { performNetLogoutSequence } from "./net/logout_runtime.ts";
 import { performNetLoginFlow } from "./net/auth_runtime.ts";
 import { handleBackgroundFailure, resetBackgroundFailureState } from "./net/failure_runtime.ts";
 import {
-  buildProfileSelectOptions,
-  getSelectedProfileKeyFromStorage,
+  applyNetProfileToControlsRuntime,
+  countSavedProfilesRuntime,
   loadNetProfilesFromStorage,
+  populateNetAccountSelectRuntime,
   profileKey as profileKeyRuntime,
-  setSelectedProfileKeyInStorage,
-  sanitizeProfile as sanitizeProfileRuntime,
-  saveNetProfilesToStorage,
-  upsertProfileList
+  upsertNetProfileFromControlsRuntime
 } from "./net/profile_runtime.ts";
 import {
   decodeSimSnapshotBase64Runtime,
@@ -3977,90 +3975,46 @@ function pulseNetIndicator() {
   }, NET_ACTIVITY_PULSE_MS);
 }
 
-function profileKey(profile) {
-  return profileKeyRuntime(profile);
-}
-
-function sanitizeProfile(profile) {
-  return sanitizeProfileRuntime(profile);
-}
-
-function loadNetProfiles() {
-  return loadNetProfilesFromStorage(NET_PROFILES_KEY);
-}
-
-function saveNetProfiles(profiles) {
-  saveNetProfilesToStorage(NET_PROFILES_KEY, profiles);
-}
-
-function setSelectedProfileKey(key) {
-  setSelectedProfileKeyInStorage(NET_PROFILE_SELECTED_KEY, key);
-}
-
-function getSelectedProfileKey() {
-  return getSelectedProfileKeyFromStorage(NET_PROFILE_SELECTED_KEY);
-}
-
 function populateNetAccountSelect() {
-  if (!netAccountSelect) {
-    return [];
-  }
-  const profiles = loadNetProfiles();
-  const selected = getSelectedProfileKey();
-  netAccountSelect.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = profiles.length ? "Select saved account..." : "No saved accounts yet";
-  netAccountSelect.appendChild(placeholder);
-  for (const option of buildProfileSelectOptions(profiles)) {
-    const opt = document.createElement("option");
-    opt.value = option.value;
-    opt.textContent = option.label;
-    if (opt.value === selected) {
-      opt.selected = true;
-    }
-    netAccountSelect.appendChild(opt);
-  }
-  return profiles;
+  return populateNetAccountSelectRuntime({
+    accountSelect: netAccountSelect,
+    storageKey: NET_PROFILES_KEY,
+    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+  });
 }
 
 function applyNetProfile(profile) {
-  const p = sanitizeProfile(profile);
-  if (!p) {
-    return false;
-  }
-  if (netApiBaseInput) netApiBaseInput.value = p.apiBase;
-  if (netUsernameInput) netUsernameInput.value = p.username;
-  if (netPasswordInput) netPasswordInput.value = p.password;
-  if (netCharacterNameInput) netCharacterNameInput.value = p.characterName;
-  if (netEmailInput) netEmailInput.value = p.email;
-  setSelectedProfileKey(profileKey(p));
-  return true;
+  return applyNetProfileToControlsRuntime({
+    profile,
+    controls: {
+      apiBaseInput: netApiBaseInput,
+      usernameInput: netUsernameInput,
+      passwordInput: netPasswordInput,
+      characterNameInput: netCharacterNameInput,
+      emailInput: netEmailInput
+    },
+    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+  });
 }
 
 function upsertNetProfileFromInputs() {
-  const p = sanitizeProfile({
-    apiBase: netApiBaseInput?.value,
-    username: netUsernameInput?.value,
-    password: netPasswordInput?.value,
-    characterName: netCharacterNameInput?.value,
-    email: netEmailInput?.value
+  upsertNetProfileFromControlsRuntime({
+    controls: {
+      apiBaseInput: netApiBaseInput,
+      usernameInput: netUsernameInput,
+      passwordInput: netPasswordInput,
+      characterNameInput: netCharacterNameInput,
+      emailInput: netEmailInput
+    },
+    storageKey: NET_PROFILES_KEY,
+    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY,
+    accountSelect: netAccountSelect,
+    maxEntries: 12
   });
-  if (!p) {
-    return;
-  }
-  const key = profileKey(p);
-  const profiles = upsertProfileList(loadNetProfiles(), p, 12);
-  saveNetProfiles(profiles);
-  setSelectedProfileKey(key);
-  populateNetAccountSelect();
-  if (netAccountSelect) {
-    netAccountSelect.value = key;
-  }
 }
 
 function hasMultipleSavedAccounts() {
-  return loadNetProfiles().length > 1;
+  return countSavedProfilesRuntime(NET_PROFILES_KEY) > 1;
 }
 
 function resetBackgroundNetFailures() {
@@ -4500,7 +4454,7 @@ function initNetPanel() {
   populateNetAccountSelect();
   if (netAccountSelect && netAccountSelect.value) {
     const key = netAccountSelect.value;
-    const profile = loadNetProfiles().find((row) => profileKey(row) === key);
+    const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
     if (profile) {
       applyNetProfile(profile);
     }
@@ -4513,8 +4467,8 @@ function initNetPanel() {
 
   bindAccountProfileSelectionRuntime({
     accountSelect: netAccountSelect,
-    loadProfiles: loadNetProfiles,
-    profileKey,
+    loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILES_KEY),
+    profileKey: profileKeyRuntime,
     applyProfile: applyNetProfile
   });
   state.net.maintenanceAuto = prefs.maintenance === "on";

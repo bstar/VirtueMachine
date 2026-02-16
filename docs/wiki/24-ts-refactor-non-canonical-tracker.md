@@ -54,6 +54,14 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 - Risk: generic success/error formatting can accidentally override flow-specific messaging if used on paths that already produce canonicalized diagnostics.
 - Exit criteria: keep wrapper scoped to simple account actions only, or replace with per-action typed controllers once full UI canonicalization is complete.
 
+### 6) Saved-account profile UX remains modern-only
+
+- Status: `temporary`
+- Location: `modern/client-web/net/profile_runtime.ts`
+- Note: account profile select/apply/upsert helpers were moved into typed runtime helpers for TS extraction speed.
+- Risk: this area is not a legacy U6 canonical system, so behavior could drift from intended modern UX if we later fold profile state into broader auth/session orchestration.
+- Exit criteria: decide final ownership boundary for auth/profile UX (panel runtime vs app orchestrator) and lock with integration tests.
+
 ## Canonical Guardrails
 
 For every new extraction slice:

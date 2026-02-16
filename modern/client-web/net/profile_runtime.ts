@@ -96,3 +96,95 @@ export function buildProfileSelectOptions(
     label: `${p.username} @ ${p.apiBase}`
   }));
 }
+
+export type NetProfileControls = {
+  apiBaseInput?: HTMLInputElement | null;
+  usernameInput?: HTMLInputElement | null;
+  passwordInput?: HTMLInputElement | null;
+  characterNameInput?: HTMLInputElement | null;
+  emailInput?: HTMLInputElement | null;
+};
+
+export function populateNetAccountSelectRuntime(args: {
+  accountSelect?: HTMLSelectElement | null;
+  storageKey: string;
+  selectedKeyStorageKey: string;
+}): NetProfile[] {
+  const profiles = loadNetProfilesFromStorage(args.storageKey);
+  const selected = getSelectedProfileKeyFromStorage(args.selectedKeyStorageKey);
+  if (!args.accountSelect) {
+    return profiles;
+  }
+  args.accountSelect.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = profiles.length ? "Select saved account..." : "No saved accounts yet";
+  args.accountSelect.appendChild(placeholder);
+  for (const option of buildProfileSelectOptions(profiles)) {
+    const opt = document.createElement("option");
+    opt.value = option.value;
+    opt.textContent = option.label;
+    if (opt.value === selected) {
+      opt.selected = true;
+    }
+    args.accountSelect.appendChild(opt);
+  }
+  return profiles;
+}
+
+export function applyNetProfileToControlsRuntime(args: {
+  profile: any;
+  controls: NetProfileControls;
+  selectedKeyStorageKey: string;
+}): boolean {
+  const p = sanitizeProfile(args.profile);
+  if (!p) {
+    return false;
+  }
+  if (args.controls.apiBaseInput) args.controls.apiBaseInput.value = p.apiBase;
+  if (args.controls.usernameInput) args.controls.usernameInput.value = p.username;
+  if (args.controls.passwordInput) args.controls.passwordInput.value = p.password;
+  if (args.controls.characterNameInput) args.controls.characterNameInput.value = p.characterName;
+  if (args.controls.emailInput) args.controls.emailInput.value = p.email;
+  setSelectedProfileKeyInStorage(args.selectedKeyStorageKey, profileKey(p));
+  return true;
+}
+
+export function upsertNetProfileFromControlsRuntime(args: {
+  controls: NetProfileControls;
+  storageKey: string;
+  selectedKeyStorageKey: string;
+  accountSelect?: HTMLSelectElement | null;
+  maxEntries?: number;
+}): void {
+  const p = sanitizeProfile({
+    apiBase: args.controls.apiBaseInput?.value,
+    username: args.controls.usernameInput?.value,
+    password: args.controls.passwordInput?.value,
+    characterName: args.controls.characterNameInput?.value,
+    email: args.controls.emailInput?.value
+  });
+  if (!p) {
+    return;
+  }
+  const key = profileKey(p);
+  const profiles = upsertProfileList(
+    loadNetProfilesFromStorage(args.storageKey),
+    p,
+    Number.isFinite(args.maxEntries) ? Number(args.maxEntries) : 12
+  );
+  saveNetProfilesToStorage(args.storageKey, profiles);
+  setSelectedProfileKeyInStorage(args.selectedKeyStorageKey, key);
+  populateNetAccountSelectRuntime({
+    accountSelect: args.accountSelect,
+    storageKey: args.storageKey,
+    selectedKeyStorageKey: args.selectedKeyStorageKey
+  });
+  if (args.accountSelect) {
+    args.accountSelect.value = key;
+  }
+}
+
+export function countSavedProfilesRuntime(storageKey: string): number {
+  return loadNetProfilesFromStorage(storageKey).length;
+}
