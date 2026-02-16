@@ -63,6 +63,25 @@ function assetBypassPlugin() {
   };
 }
 
+function rootRedirectPlugin() {
+  return {
+    name: "vm-root-redirect",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const rawUrl = String(req.url || "");
+        const urlPath = decodeURIComponent(rawUrl.split("?", 1)[0] || "/");
+        if (urlPath === "/" || urlPath === "/index.html") {
+          res.statusCode = 302;
+          res.setHeader("Location", "/modern/client-web/index.html");
+          res.end();
+          return;
+        }
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig({
   appType: "spa",
   server: {
@@ -73,5 +92,5 @@ export default defineConfig({
       allow: [ROOT_DIR]
     }
   },
-  plugins: [assetBypassPlugin()]
+  plugins: [rootRedirectPlugin(), assetBypassPlugin()]
 });

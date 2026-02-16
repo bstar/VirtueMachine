@@ -22,7 +22,7 @@ class SecureU6Handler(BaseHTTPRequestHandler):
         req_path = unquote(parsed.path)
 
         if req_path == "/":
-            self._redirect("/modern/client-web/")
+            self._redirect("/modern/client-web/index.html")
             return
 
         candidate = self._resolve_candidate(req_path)

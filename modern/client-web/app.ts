@@ -175,6 +175,8 @@ const NET_PRESENCE_POLL_TICKS = 10;
 const NET_CLOCK_POLL_TICKS = 2;
 const NET_BACKGROUND_FAIL_WINDOW_MS = 12000;
 const NET_BACKGROUND_FAIL_MAX = 6;
+const LOOP_MAX_CATCHUP_STEPS = 4;
+const LOOP_MAX_ACC_MS = TICK_MS * LOOP_MAX_CATCHUP_STEPS;
 const RUNTIME_OBJECT_PATH = "../assets/runtime/savegame";
 const PRISTINE_OBJECT_PATH = "../assets/pristine/savegame";
 const PRISTINE_BASELINE_VERSION_PATH = "../assets/pristine/.baseline_version";
@@ -5566,6 +5568,9 @@ function startSessionFromTitle() {
   if (!state.net.resumeFromSnapshot) {
     placeCameraAtPresetId("avatar_start");
   }
+  state.accMs = 0;
+  state.lastTs = performance.now();
+  state.queue.length = 0;
   state.sessionStarted = true;
   endLegacyConversation();
   state.legacyLedgerLines.length = 0;
@@ -7680,106 +7685,126 @@ function resetRun() {
 }
 
 function tickLoop(ts) {
-  const dtMs = Math.max(0, ts - state.lastTs);
-  state.accMs += dtMs;
-  state.lastTs = ts;
-  if (state.legacyLedgerPrompt || (state.legacyConversationActive && state.legacyConversationPaging)) {
-    state.legacyPromptAnimMs += dtMs;
-    while (state.legacyPromptAnimMs >= LEGACY_PROMPT_FRAME_MS) {
-      state.legacyPromptAnimMs -= LEGACY_PROMPT_FRAME_MS;
-      state.legacyPromptAnimPhase = ((state.legacyPromptAnimPhase + 1) & 3) | 0;
+  try {
+    const dtMs = Math.max(0, ts - state.lastTs);
+    state.accMs = Math.min(state.accMs + dtMs, LOOP_MAX_ACC_MS);
+    state.lastTs = ts;
+    if (state.legacyLedgerPrompt || (state.legacyConversationActive && state.legacyConversationPaging)) {
+      state.legacyPromptAnimMs += dtMs;
+      while (state.legacyPromptAnimMs >= LEGACY_PROMPT_FRAME_MS) {
+        state.legacyPromptAnimMs -= LEGACY_PROMPT_FRAME_MS;
+        state.legacyPromptAnimPhase = ((state.legacyPromptAnimPhase + 1) & 3) | 0;
+      }
     }
-  }
-  const useCustomCursor = !!(state.cursorPixmaps && state.cursorPixmaps.length > 0);
-  canvas.style.cursor = useCustomCursor ? "none" : "default";
-  if (legacyBackdropCanvas) {
-    legacyBackdropCanvas.style.cursor = useCustomCursor ? "none" : "default";
-  }
-  if (legacyViewportCanvas) {
-    legacyViewportCanvas.style.cursor = useCustomCursor ? "none" : "default";
-    legacyViewportCanvas.style.visibility = state.sessionStarted ? "visible" : "hidden";
-    legacyViewportCanvas.style.pointerEvents = "none";
-  }
+    const useCustomCursor = !!(state.cursorPixmaps && state.cursorPixmaps.length > 0);
+    canvas.style.cursor = useCustomCursor ? "none" : "default";
+    if (legacyBackdropCanvas) {
+      legacyBackdropCanvas.style.cursor = useCustomCursor ? "none" : "default";
+    }
+    if (legacyViewportCanvas) {
+      legacyViewportCanvas.style.cursor = useCustomCursor ? "none" : "default";
+      legacyViewportCanvas.style.visibility = state.sessionStarted ? "visible" : "hidden";
+      legacyViewportCanvas.style.pointerEvents = "none";
+    }
 
-  while (state.sessionStarted && state.accMs >= TICK_MS) {
-    state.accMs -= TICK_MS;
-    state.queue = stepSimTick(state.sim, state.queue);
-    if (state.entityLayer) {
-      const startX = state.sim.world.map_x - (VIEW_W >> 1);
-      const startY = state.sim.world.map_y - (VIEW_H >> 1);
-      const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
-      const blocked = state.entityLayer.step(
-        state.sim.tick,
-        state.mapCtx,
-        state.tileFlags,
-        state.terrainType,
-        state.objectLayer,
-        viewCtx ? (x, y) => viewCtx.visibleAtWorld(x, y) : null
-      );
-      state.npcOcclusionBlockedMoves += blocked;
+    if (!state.sessionStarted) {
+      // Avoid stale backlog while sitting in title/login mode.
+      state.accMs = 0;
     }
-    if (
-      isNetAuthenticated()
-      && !state.net.backgroundSyncPaused
-      && state.sessionStarted
-      && (state.sim.tick - state.net.lastPresenceHeartbeatTick) >= NET_PRESENCE_HEARTBEAT_TICKS
-    ) {
-      state.net.lastPresenceHeartbeatTick = state.sim.tick >>> 0;
-      netSendPresenceHeartbeat().catch((err) => {
-        recordBackgroundNetFailure(err, "Presence heartbeat");
-      });
-    }
-    if (
-      isNetAuthenticated()
-      && !state.net.backgroundSyncPaused
-      && (state.sim.tick - state.net.lastClockPollTick) >= NET_CLOCK_POLL_TICKS
-    ) {
-      state.net.lastClockPollTick = state.sim.tick >>> 0;
-      netPollWorldClock().catch((err) => {
-        recordBackgroundNetFailure(err, "Clock sync");
-      });
-    }
-    if (
-      isNetAuthenticated()
-      && !state.net.backgroundSyncPaused
-      && (state.sim.tick - state.net.lastPresencePollTick) >= NET_PRESENCE_POLL_TICKS
-    ) {
-      state.net.lastPresencePollTick = state.sim.tick >>> 0;
-      netPollPresence().catch((err) => {
-        recordBackgroundNetFailure(err, "Presence poll");
-      });
-    }
-    if (
-      state.net.maintenanceAuto
-      && state.net.token
-      && !state.net.backgroundSyncPaused
-      && !state.net.maintenanceInFlight
-      && (state.sim.tick % 120) === 0
-      && state.sim.tick !== state.net.lastMaintenanceTick
-    ) {
-      netRunCriticalMaintenance({ silent: true }).catch((err) => {
-        recordBackgroundNetFailure(err, "Maintenance");
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
-      });
-    }
-    if (
-      state.sessionStarted
-      && !state.pristineBaselinePollInFlight
-      && (state.sim.tick - state.pristineBaselineLastPollTick) >= PRISTINE_BASELINE_POLL_TICKS
-    ) {
-      state.pristineBaselineLastPollTick = state.sim.tick >>> 0;
-      refreshPristineBaseline(false).catch((_err) => {});
-    }
-  }
 
-  drawTileGrid();
-  if (state.sessionStarted) {
-    composeLegacyViewportFromModernGrid();
-    renderLegacyHudStubOnBackdrop();
+    let catchupSteps = 0;
+    while (state.sessionStarted && state.accMs >= TICK_MS) {
+      if (catchupSteps >= LOOP_MAX_CATCHUP_STEPS) {
+        // Drop stale backlog caused by tab throttling/long pauses.
+        state.accMs = state.accMs % TICK_MS;
+        break;
+      }
+      catchupSteps += 1;
+      state.accMs -= TICK_MS;
+      state.queue = stepSimTick(state.sim, state.queue);
+      if (state.entityLayer) {
+        const startX = state.sim.world.map_x - (VIEW_W >> 1);
+        const startY = state.sim.world.map_y - (VIEW_H >> 1);
+        const viewCtx = buildLegacyViewContext(startX, startY, state.sim.world.map_z);
+        const blocked = state.entityLayer.step(
+          state.sim.tick,
+          state.mapCtx,
+          state.tileFlags,
+          state.terrainType,
+          state.objectLayer,
+          viewCtx ? (x, y) => viewCtx.visibleAtWorld(x, y) : null
+        );
+        state.npcOcclusionBlockedMoves += blocked;
+      }
+      if (
+        isNetAuthenticated()
+        && !state.net.backgroundSyncPaused
+        && state.sessionStarted
+        && (state.sim.tick - state.net.lastPresenceHeartbeatTick) >= NET_PRESENCE_HEARTBEAT_TICKS
+      ) {
+        state.net.lastPresenceHeartbeatTick = state.sim.tick >>> 0;
+        netSendPresenceHeartbeat().catch((err) => {
+          recordBackgroundNetFailure(err, "Presence heartbeat");
+        });
+      }
+      if (
+        isNetAuthenticated()
+        && !state.net.backgroundSyncPaused
+        && (state.sim.tick - state.net.lastClockPollTick) >= NET_CLOCK_POLL_TICKS
+      ) {
+        state.net.lastClockPollTick = state.sim.tick >>> 0;
+        netPollWorldClock().catch((err) => {
+          recordBackgroundNetFailure(err, "Clock sync");
+        });
+      }
+      if (
+        isNetAuthenticated()
+        && !state.net.backgroundSyncPaused
+        && (state.sim.tick - state.net.lastPresencePollTick) >= NET_PRESENCE_POLL_TICKS
+      ) {
+        state.net.lastPresencePollTick = state.sim.tick >>> 0;
+        netPollPresence().catch((err) => {
+          recordBackgroundNetFailure(err, "Presence poll");
+        });
+      }
+      if (
+        state.net.maintenanceAuto
+        && state.net.token
+        && !state.net.backgroundSyncPaused
+        && !state.net.maintenanceInFlight
+        && (state.sim.tick % 120) === 0
+        && state.sim.tick !== state.net.lastMaintenanceTick
+      ) {
+        netRunCriticalMaintenance({ silent: true }).catch((err) => {
+          recordBackgroundNetFailure(err, "Maintenance");
+          diagBox.className = "diag warn";
+          diagBox.textContent = `Critical maintenance failed: ${String((err as any)?.message || err)}`;
+        });
+      }
+      if (
+        state.sessionStarted
+        && !state.pristineBaselinePollInFlight
+        && (state.sim.tick - state.pristineBaselineLastPollTick) >= PRISTINE_BASELINE_POLL_TICKS
+      ) {
+        state.pristineBaselineLastPollTick = state.sim.tick >>> 0;
+        refreshPristineBaseline(false).catch((_err) => {});
+      }
+    }
+
+    drawTileGrid();
+    if (state.sessionStarted) {
+      composeLegacyViewportFromModernGrid();
+      renderLegacyHudStubOnBackdrop();
+    }
+    drawCustomCursorLayer();
+    updateStats();
+  } catch (err) {
+    state.accMs = 0;
+    state.lastTs = performance.now();
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Frame loop recovered from error: ${String((err as any)?.message || err)}`;
+    console.error("tickLoop error", err);
   }
-  drawCustomCursorLayer();
-  updateStats();
   requestAnimationFrame(tickLoop);
 }
 
@@ -9274,6 +9299,11 @@ if (legacyViewportCanvas) {
 
 window.addEventListener("resize", () => {
   applyLegacyFrameLayout();
+});
+
+document.addEventListener("visibilitychange", () => {
+  state.lastTs = performance.now();
+  state.accMs = 0;
 });
 
 loadRuntimeAssets().finally(() => {
