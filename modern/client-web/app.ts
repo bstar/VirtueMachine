@@ -130,10 +130,7 @@ import {
   upsertMoveCommandForTickRuntime
 } from "./sim/queue_runtime.ts";
 import {
-  doorStateKeyRuntime,
-  doorToggleMaskRuntime,
   isDoorFrameOpenRuntime,
-  isDoorToggledRuntime,
   resolveDoorTileIdRuntime,
   resolvedDoorFrameRuntime,
   toggleDoorStateRuntime
@@ -5153,18 +5150,6 @@ function findObjectByAnchor(anchor) {
   return null;
 }
 
-function doorStateKey(obj) {
-  return doorStateKeyRuntime(obj);
-}
-
-function doorToggleMask(obj) {
-  return doorToggleMaskRuntime(obj?.type);
-}
-
-function isDoorToggled(sim, obj) {
-  return isDoorToggledRuntime(sim, obj);
-}
-
 function toggleDoorState(sim, obj) {
   return toggleDoorStateRuntime(sim, obj);
 }
@@ -5182,11 +5167,11 @@ function resolveDoorTileId(sim, obj) {
 }
 
 function resolveLegacyFootprintTile(sim, obj) {
-  return resolveDoorTileId(sim, obj);
+  return resolveDoorTileIdRuntime(sim, obj);
 }
 
 function resolveDoorTileIdForVisibility(sim, obj) {
-  return resolveDoorTileId(sim, obj);
+  return resolveDoorTileIdRuntime(sim, obj);
 }
 
 function objectFootprintTiles(sim, o, ox, oy) {
