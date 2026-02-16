@@ -289,6 +289,7 @@ const statNpcOcclusionBlocks = byId("statNpcOcclusionBlocks");
 const statQueued = byId("statQueued");
 const statSource = byId("statSource");
 const statHash = byId("statHash");
+const statLoopHealth = byId("statLoopHealth");
 const statReplay = byId("statReplay");
 const statPalettePhase = byId("statPalettePhase");
 const statCenterTiles = byId("statCenterTiles");
@@ -653,6 +654,13 @@ const state: any = {
   cornerVariantCache: new Map(),
   lastTs: performance.now(),
   accMs: 0,
+  loopHealth: {
+    lastDtMs: 0,
+    maxDtMs: 0,
+    backlogDrops: 0,
+    visibilityResets: 0,
+    frameErrors: 0
+  },
   replayUrl: null,
   legacyPaperPixmap: null,
   lookStringEntries: null,
@@ -3928,6 +3936,7 @@ function initPanelCopyButtons() {
     "statRenderParity",
     "statSource",
     "statHash",
+    "statLoopHealth",
     "statReplay",
     "statCenterTiles",
     "statNetSession"
@@ -5570,6 +5579,8 @@ function startSessionFromTitle() {
   }
   state.accMs = 0;
   state.lastTs = performance.now();
+  state.loopHealth.lastDtMs = 0;
+  state.loopHealth.maxDtMs = 0;
   state.queue.length = 0;
   state.sessionStarted = true;
   endLegacyConversation();
@@ -7493,6 +7504,12 @@ function updateStats() {
     statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
   }
   statHash.textContent = hashHexRuntime(simStateHashRuntime(state.sim, HASH_CFG));
+  if (statLoopHealth) {
+    const lh = state.loopHealth;
+    const last = Math.round(Math.max(0, Number(lh.lastDtMs) || 0));
+    const max = Math.round(Math.max(0, Number(lh.maxDtMs) || 0));
+    statLoopHealth.textContent = `dt ${last}ms / max ${max}ms | drop ${lh.backlogDrops | 0} | vis ${lh.visibilityResets | 0} | err ${lh.frameErrors | 0}`;
+  }
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
   }
@@ -7687,6 +7704,10 @@ function resetRun() {
 function tickLoop(ts) {
   try {
     const dtMs = Math.max(0, ts - state.lastTs);
+    state.loopHealth.lastDtMs = dtMs;
+    if (dtMs > state.loopHealth.maxDtMs) {
+      state.loopHealth.maxDtMs = dtMs;
+    }
     state.accMs = Math.min(state.accMs + dtMs, LOOP_MAX_ACC_MS);
     state.lastTs = ts;
     if (state.legacyLedgerPrompt || (state.legacyConversationActive && state.legacyConversationPaging)) {
@@ -7716,6 +7737,7 @@ function tickLoop(ts) {
     while (state.sessionStarted && state.accMs >= TICK_MS) {
       if (catchupSteps >= LOOP_MAX_CATCHUP_STEPS) {
         // Drop stale backlog caused by tab throttling/long pauses.
+        state.loopHealth.backlogDrops += 1;
         state.accMs = state.accMs % TICK_MS;
         break;
       }
@@ -7799,6 +7821,7 @@ function tickLoop(ts) {
     drawCustomCursorLayer();
     updateStats();
   } catch (err) {
+    state.loopHealth.frameErrors += 1;
     state.accMs = 0;
     state.lastTs = performance.now();
     diagBox.className = "diag warn";
@@ -9302,6 +9325,8 @@ window.addEventListener("resize", () => {
 });
 
 document.addEventListener("visibilitychange", () => {
+  state.loopHealth.visibilityResets += 1;
+  state.loopHealth.lastDtMs = 0;
   state.lastTs = performance.now();
   state.accMs = 0;
 });
