@@ -28,7 +28,7 @@ import {
   canonicalizeOpeningLines as canonicalizeOpeningLinesImported,
   canonicalTalkFallbackGreeting as canonicalTalkFallbackGreetingImported,
   formatYouSeeLine as formatYouSeeLineImported
-} from "./conversation/presentation_runtime.js";
+} from "./conversation/presentation_runtime.ts";
 import {
   conversationRunFromKeyCursor as conversationRunFromKeyCursorImported,
   legacyConversationReply as legacyConversationReplyImported
