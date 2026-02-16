@@ -126,6 +126,7 @@ import { packCommandRuntime, unpackCommandRuntime } from "./sim/command_wire_run
 import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 import {
   appendCommandLogRuntime,
+  enqueueCommandRuntime,
   shouldSuppressRepeatedMoveRuntime,
   upsertMoveCommandForTickRuntime
 } from "./sim/queue_runtime.ts";
@@ -6276,8 +6277,12 @@ function queueInteractDoor() {
   }
   const bytes = packCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_FACING, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
   const cmd = unpackCommand(bytes);
-  state.queue.push(cmd);
-  appendCommandLog(cmd);
+  enqueueCommandRuntime({
+    queue: state.queue,
+    commandLog: state.commandLog,
+    cmd,
+    commandLogMax: COMMAND_LOG_MAX
+  });
 }
 
 function queueInteractAtCell(wx, wy) {
@@ -6288,8 +6293,12 @@ function queueInteractAtCell(wx, wy) {
   const ty = wy | 0;
   const bytes = packCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty);
   const cmd = unpackCommand(bytes);
-  state.queue.push(cmd);
-  appendCommandLog(cmd);
+  enqueueCommandRuntime({
+    queue: state.queue,
+    commandLog: state.commandLog,
+    cmd,
+    commandLogMax: COMMAND_LOG_MAX
+  });
 }
 
 function queueLegacyTargetVerb(verb, wx, wy) {
@@ -6305,8 +6314,12 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   const ty = wy | 0;
   const bytes = packCommand(state.sim.tick + 1, type, tx, ty);
   const cmd = unpackCommand(bytes);
-  state.queue.push(cmd);
-  appendCommandLog(cmd);
+  enqueueCommandRuntime({
+    queue: state.queue,
+    commandLog: state.commandLog,
+    cmd,
+    commandLogMax: COMMAND_LOG_MAX
+  });
 }
 
 function buildPaletteFromU6Pal(bytes) {

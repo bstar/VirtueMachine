@@ -62,3 +62,13 @@ export function upsertMoveCommandForTickRuntime(args: {
   }
   return false;
 }
+
+export function enqueueCommandRuntime(args: {
+  queue: Array<any>;
+  commandLog: Array<any>;
+  cmd: any;
+  commandLogMax: number;
+}): void {
+  args.queue.push(args.cmd);
+  appendCommandLogRuntime(args.commandLog, args.cmd, args.commandLogMax);
+}
