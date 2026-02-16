@@ -11,7 +11,7 @@ const {
   RUNTIME_PROFILES,
   normalizeRuntimeProfile,
   parseRuntimeExtensionsHeader
-} = require("../common/runtime_contract.cjs");
+} = require("../common/runtime_contract.ts");
 const {
   OBJ_COORD_USE_LOCXYZ,
   OBJ_COORD_USE_CONTAINED,
