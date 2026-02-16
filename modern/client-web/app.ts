@@ -13,7 +13,7 @@ import {
   conversationWordMatchesPattern as conversationWordMatchesPatternImported,
   renderConversationMacrosWithContext as renderConversationMacrosWithContextImported,
   splitConversationInputWords as splitConversationInputWordsImported
-} from "./conversation/text_runtime.js";
+} from "./conversation/text_runtime.ts";
 import {
   decodeConversationOpeningLines as decodeConversationOpeningLinesImported,
   decodeConversationOpeningResult as decodeConversationOpeningResultImported,

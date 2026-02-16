@@ -1,4 +1,4 @@
-export function conversationMacroSymbolToIndex(sym) {
+export function conversationMacroSymbolToIndex(sym: unknown): number {
   const ch = String(sym || "").toUpperCase();
   if (!ch) return -1;
   if (ch >= "0" && ch <= "9") {
@@ -10,7 +10,14 @@ export function conversationMacroSymbolToIndex(sym) {
   return -1;
 }
 
-export function buildConversationVmContext(input = null) {
+export type ConversationVmContext = {
+  varStr: string[];
+  varInt: number[];
+  talkFlags: Record<string, unknown>;
+  objNum: number;
+};
+
+export function buildConversationVmContext(input: Record<string, unknown> | null = null): ConversationVmContext {
   const src = (input && typeof input === "object") ? input : {};
   const varStr = new Array(64).fill("");
   const varInt = new Array(64).fill(0);
@@ -37,7 +44,7 @@ export function buildConversationVmContext(input = null) {
   };
 }
 
-export function renderConversationMacrosWithContext(text, vmContext = null) {
+export function renderConversationMacrosWithContext(text: unknown, vmContext: ConversationVmContext | Record<string, unknown> | null = null): string {
   const ctx = (vmContext && typeof vmContext === "object") ? vmContext : {};
   const varStr = Array.isArray(ctx.varStr) ? ctx.varStr : [];
   return String(text || "")
@@ -49,7 +56,7 @@ export function renderConversationMacrosWithContext(text, vmContext = null) {
     .replace(/@([A-Za-z0-9]+)/g, "$1");
 }
 
-export function splitConversationInputWords(input) {
+export function splitConversationInputWords(input: unknown): string[] {
   return String(input || "")
     .toLowerCase()
     .replace(/[^a-z0-9?\s]+/g, " ")
@@ -57,7 +64,7 @@ export function splitConversationInputWords(input) {
     .filter(Boolean);
 }
 
-export function conversationWordMatchesPattern(pattern, word) {
+export function conversationWordMatchesPattern(pattern: unknown, word: unknown): boolean {
   const p = String(pattern || "").toLowerCase();
   const w = String(word || "").toLowerCase();
   if (!p || w.length < p.length) {
@@ -72,7 +79,7 @@ export function conversationWordMatchesPattern(pattern, word) {
   return true;
 }
 
-export function conversationKeyMatchesInput(pattern, input) {
+export function conversationKeyMatchesInput(pattern: unknown, input: unknown): boolean {
   const key = String(pattern || "").trim().toLowerCase();
   if (!key) return false;
   if (key === "*") return true;
