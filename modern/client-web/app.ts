@@ -116,6 +116,7 @@ import {
   hashMixU32Runtime,
   simStateHashRuntime
 } from "./sim/hash_runtime.ts";
+import { packCommandRuntime, unpackCommandRuntime } from "./sim/command_wire_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -6367,23 +6368,11 @@ function timeOfDayLabel(hour) {
 }
 
 function packCommand(tick, type, arg0, arg1) {
-  const b = new Uint8Array(COMMAND_WIRE_SIZE);
-  const dv = new DataView(b.buffer);
-  dv.setUint32(0, tick, true);
-  dv.setUint8(4, type);
-  dv.setInt32(8, arg0, true);
-  dv.setInt32(12, arg1, true);
-  return b;
+  return packCommandRuntime(tick, type, arg0, arg1, COMMAND_WIRE_SIZE);
 }
 
 function unpackCommand(bytes) {
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return {
-    tick: dv.getUint32(0, true),
-    type: dv.getUint8(4),
-    arg0: dv.getInt32(8, true),
-    arg1: dv.getInt32(12, true)
-  };
+  return unpackCommandRuntime(bytes);
 }
 
 function appendCommandLog(cmd) {
