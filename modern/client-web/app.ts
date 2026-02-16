@@ -23,7 +23,7 @@ import {
 import {
   findConversationFirstKeyPc as findConversationFirstKeyPcImported,
   parseConversationRules as parseConversationRulesImported
-} from "./conversation/rules_runtime.js";
+} from "./conversation/rules_runtime.ts";
 import {
   canonicalizeOpeningLines as canonicalizeOpeningLinesImported,
   canonicalTalkFallbackGreeting as canonicalTalkFallbackGreetingImported,

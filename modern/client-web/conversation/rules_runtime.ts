@@ -1,4 +1,23 @@
-function parseConversationRulesInRange(scriptBytes, startPc, endPc, out, opcodes) {
+export type ConversationOpcodeMap = {
+  KEY: number;
+  RES: number;
+  ENDRES: number;
+};
+
+export type ConversationRule = {
+  keys: string[];
+  responseBytes: Uint8Array;
+  responseStartPc: number;
+  responseEndPc: number;
+};
+
+function parseConversationRulesInRange(
+  scriptBytes: Uint8Array,
+  startPc: number,
+  endPc: number,
+  out: ConversationRule[],
+  opcodes: ConversationOpcodeMap
+): void {
   const keyOp = Number(opcodes?.KEY) & 0xff;
   const resOp = Number(opcodes?.RES) & 0xff;
   const endResOp = Number(opcodes?.ENDRES) & 0xff;
@@ -56,7 +75,11 @@ function parseConversationRulesInRange(scriptBytes, startPc, endPc, out, opcodes
   }
 }
 
-export function parseConversationRules(scriptBytes, mainPc, opcodes) {
+export function parseConversationRules(
+  scriptBytes: Uint8Array,
+  mainPc: number,
+  opcodes: ConversationOpcodeMap
+): ConversationRule[] {
   if (!(scriptBytes instanceof Uint8Array) || !scriptBytes.length) {
     return [];
   }
@@ -71,7 +94,11 @@ export function parseConversationRules(scriptBytes, mainPc, opcodes) {
   return out;
 }
 
-export function findConversationFirstKeyPc(scriptBytes, mainPc, opcodes) {
+export function findConversationFirstKeyPc(
+  scriptBytes: Uint8Array,
+  mainPc: number,
+  opcodes: ConversationOpcodeMap
+): number {
   if (!(scriptBytes instanceof Uint8Array) || !scriptBytes.length) {
     return -1;
   }
