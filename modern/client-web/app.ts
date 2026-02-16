@@ -149,6 +149,7 @@ import {
   isSolidEnvObjectRuntime
 } from "./sim/object_types_runtime.ts";
 import { nearestTalkTargetAtCellRuntime, topWorldObjectAtCellRuntime } from "./sim/target_runtime.ts";
+import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -5048,9 +5049,7 @@ function tryLookAtCell(sim, tx, ty) {
     return false;
   }
   const tz = sim.world.map_z | 0;
-  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
-  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
-  if (Math.max(dx, dy) > 7) {
+  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 7)) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Look: ${tx},${ty} is out of range.`;
     pushLedgerMessage("Thou dost see nothing.");
@@ -5085,9 +5084,7 @@ function tryLookAtCell(sim, tx, ty) {
 
 function tryTalkAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
-  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
-  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
-  if (Math.max(dx, dy) > 1) {
+  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: target must be adjacent (${tx},${ty}).`;
     pushLedgerMessage("No one responds.");
@@ -5198,9 +5195,7 @@ function tryTalkAtCell(sim, tx, ty) {
 
 function tryGetAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
-  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
-  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
-  if (Math.max(dx, dy) > 1) {
+  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
     return false;
@@ -5251,9 +5246,7 @@ function tryCastAtCell(sim, tx, ty) {
 
 function tryDropAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
-  const dx = Math.abs((sim.world.map_x | 0) - (tx | 0));
-  const dy = Math.abs((sim.world.map_y | 0) - (ty | 0));
-  if (Math.max(dx, dy) > 1) {
+  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Drop: target must be adjacent (${tx},${ty}).`;
     return false;
