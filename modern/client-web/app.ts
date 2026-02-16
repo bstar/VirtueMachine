@@ -32,7 +32,7 @@ import {
 import {
   conversationRunFromKeyCursor as conversationRunFromKeyCursorImported,
   legacyConversationReply as legacyConversationReplyImported
-} from "./conversation/dialog_runtime.js";
+} from "./conversation/dialog_runtime.ts";
 import {
   advanceLegacyConversationPagination as advanceLegacyConversationPaginationImported,
   buildDebugChatLedgerText as buildDebugChatLedgerTextImported,

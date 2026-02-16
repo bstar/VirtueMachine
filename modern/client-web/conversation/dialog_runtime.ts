@@ -1,4 +1,4 @@
-export function legacyConversationReply(opts = {}) {
+export function legacyConversationReply(opts: Record<string, unknown> = {}) {
   const query = String(opts.typed || "").trim();
   const queryUse = query || "bye";
   const rules = Array.isArray(opts.rules) ? opts.rules : [];
@@ -53,7 +53,7 @@ export function legacyConversationReply(opts = {}) {
   return { kind: "no-match", lines: [] };
 }
 
-export function conversationRunFromKeyCursor(opts = {}) {
+export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {}) {
   const scriptBytes = (opts.scriptBytes instanceof Uint8Array) ? opts.scriptBytes : null;
   if (!scriptBytes) {
     return { kind: "no-match", lines: [], nextPc: -1, stopOpcode: 0 };
