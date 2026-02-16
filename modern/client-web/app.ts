@@ -3959,28 +3959,6 @@ function pulseNetIndicator() {
   }, NET_ACTIVITY_PULSE_MS);
 }
 
-function populateNetAccountSelect() {
-  return populateNetAccountSelectRuntime({
-    accountSelect: netAccountSelect,
-    storageKey: NET_PROFILES_KEY,
-    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-  });
-}
-
-function applyNetProfile(profile) {
-  return applyNetProfileToControlsRuntime({
-    profile,
-    controls: {
-      apiBaseInput: netApiBaseInput,
-      usernameInput: netUsernameInput,
-      passwordInput: netPasswordInput,
-      characterNameInput: netCharacterNameInput,
-      emailInput: netEmailInput
-    },
-    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-  });
-}
-
 function upsertNetProfileFromInputs() {
   upsertNetProfileFromControlsRuntime({
     controls: {
@@ -4415,12 +4393,26 @@ function initNetPanel() {
     characterNameInput: netCharacterNameInput,
     autoLoginCheckbox: netAutoLoginCheckbox
   });
-  populateNetAccountSelect();
+  populateNetAccountSelectRuntime({
+    accountSelect: netAccountSelect,
+    storageKey: NET_PROFILES_KEY,
+    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+  });
   if (netAccountSelect && netAccountSelect.value) {
     const key = netAccountSelect.value;
     const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
     if (profile) {
-      applyNetProfile(profile);
+      applyNetProfileToControlsRuntime({
+        profile,
+        controls: {
+          apiBaseInput: netApiBaseInput,
+          usernameInput: netUsernameInput,
+          passwordInput: netPasswordInput,
+          characterNameInput: netCharacterNameInput,
+          emailInput: netEmailInput
+        },
+        selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+      });
     }
   }
   state.net.apiBase = prefs.apiBase;
@@ -4433,7 +4425,19 @@ function initNetPanel() {
     accountSelect: netAccountSelect,
     loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILES_KEY),
     profileKey: profileKeyRuntime,
-    applyProfile: applyNetProfile
+    applyProfile: (profile) => {
+      applyNetProfileToControlsRuntime({
+        profile,
+        controls: {
+          apiBaseInput: netApiBaseInput,
+          usernameInput: netUsernameInput,
+          passwordInput: netPasswordInput,
+          characterNameInput: netCharacterNameInput,
+          emailInput: netEmailInput
+        },
+        selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+      });
+    }
   });
   state.net.maintenanceAuto = prefs.maintenance === "on";
   if (netMaintenanceToggle) {
@@ -4471,7 +4475,11 @@ function initNetPanel() {
   updateNetAuthButton();
   if (netAccountOpenButton) {
     netAccountOpenButton.addEventListener("click", () => {
-      populateNetAccountSelect();
+      populateNetAccountSelectRuntime({
+        accountSelect: netAccountSelect,
+        storageKey: NET_PROFILES_KEY,
+        selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+      });
       setAccountModalOpen(true);
     });
   }
@@ -8430,7 +8438,11 @@ function promptNetLoginLogout() {
     return;
   }
   if (countSavedProfilesRuntime(NET_PROFILES_KEY) > 1) {
-    populateNetAccountSelect();
+    populateNetAccountSelectRuntime({
+      accountSelect: netAccountSelect,
+      storageKey: NET_PROFILES_KEY,
+      selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+    });
     setAccountModalOpen(true);
     setNetStatus("idle", "Choose an account in Account Setup, then login.");
     return;
