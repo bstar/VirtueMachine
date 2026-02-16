@@ -19,7 +19,7 @@ import {
   decodeConversationOpeningResult as decodeConversationOpeningResultImported,
   decodeConversationResponseBytes as decodeConversationResponseBytesImported,
   decodeConversationResponseOpcodeAware as decodeConversationResponseOpcodeAwareImported
-} from "./conversation/vm_runtime.js";
+} from "./conversation/vm_runtime.ts";
 import {
   findConversationFirstKeyPc as findConversationFirstKeyPcImported,
   parseConversationRules as parseConversationRulesImported
