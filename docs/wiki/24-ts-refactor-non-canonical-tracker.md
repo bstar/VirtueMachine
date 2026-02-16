@@ -62,6 +62,14 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 - Risk: this area is not a legacy U6 canonical system, so behavior could drift from intended modern UX if we later fold profile state into broader auth/session orchestration.
 - Exit criteria: decide final ownership boundary for auth/profile UX (panel runtime vs app orchestrator) and lock with integration tests.
 
+### 7) Net status render orchestration split
+
+- Status: `temporary`
+- Location: `modern/client-web/net/status_runtime.ts`
+- Note: session/auth/status label rendering now runs through typed helpers, while `app.ts` still owns status timing/call order.
+- Risk: status text/indicator update ordering may drift if future slices bypass `setNetStatus`.
+- Exit criteria: centralize all status writes through one path and add UI integration coverage for login/logout/error transitions.
+
 ## Canonical Guardrails
 
 For every new extraction slice:

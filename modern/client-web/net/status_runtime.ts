@@ -47,3 +47,60 @@ export function deriveNetAuthButtonModel(isAuthenticated: boolean): {
 export function deriveTopNetStatusText(level: string, text: string): string {
   return `${String(level || "idle")} - ${String(text || "")}`;
 }
+
+export function renderNetSessionStatRuntime(
+  statNetSession: HTMLElement | null | undefined,
+  args: {
+    token: string;
+    userId: string;
+    username: string;
+    characterName: string;
+  }
+): void {
+  if (!statNetSession) {
+    return;
+  }
+  statNetSession.textContent = deriveNetSessionText(args);
+}
+
+export function renderNetAuthButtonRuntime(
+  netLoginButton: HTMLButtonElement | null | undefined,
+  isAuthenticated: boolean
+): void {
+  if (!netLoginButton) {
+    return;
+  }
+  const model = deriveNetAuthButtonModel(isAuthenticated);
+  netLoginButton.textContent = model.text;
+  netLoginButton.classList.remove(...model.removeClasses);
+  netLoginButton.classList.add(model.addClass);
+}
+
+export function applyNetStatusRuntime(args: {
+  stateNet: {
+    statusLevel: string;
+    statusText: string;
+  };
+  level: string;
+  text: string;
+  isAuthenticated: boolean;
+  topNetStatus?: HTMLElement | null;
+  topNetIndicator?: HTMLElement | null;
+  netQuickStatus?: HTMLElement | null;
+  netLoginButton?: HTMLButtonElement | null;
+}): void {
+  const lvl = String(args.level || "idle");
+  const msg = String(args.text || "");
+  args.stateNet.statusLevel = lvl;
+  args.stateNet.statusText = msg;
+  if (args.topNetStatus) {
+    args.topNetStatus.textContent = deriveTopNetStatusText(lvl, msg);
+  }
+  if (args.topNetIndicator) {
+    args.topNetIndicator.dataset.state = deriveNetIndicatorState(lvl, args.isAuthenticated);
+  }
+  if (args.netQuickStatus) {
+    args.netQuickStatus.textContent = deriveNetQuickStatusText(args.isAuthenticated);
+  }
+  renderNetAuthButtonRuntime(args.netLoginButton, args.isAuthenticated);
+}

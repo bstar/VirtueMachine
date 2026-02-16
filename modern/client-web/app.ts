@@ -105,11 +105,9 @@ import {
 } from "./net/panel_bindings_runtime.ts";
 import { runNetPanelActionRuntime } from "./net/panel_actions_runtime.ts";
 import {
-  deriveNetAuthButtonModel,
-  deriveNetIndicatorState,
-  deriveNetQuickStatusText,
-  deriveNetSessionText,
-  deriveTopNetStatusText
+  applyNetStatusRuntime,
+  renderNetAuthButtonRuntime,
+  renderNetSessionStatRuntime
 } from "./net/status_runtime.ts";
 import {
   advanceWorldMinuteRuntime,
@@ -3924,10 +3922,7 @@ function initPanelCopyButtons() {
 }
 
 function updateNetSessionStat() {
-  if (!statNetSession) {
-    return;
-  }
-  statNetSession.textContent = deriveNetSessionText({
+  renderNetSessionStatRuntime(statNetSession, {
     token: state.net.token,
     userId: state.net.userId,
     username: state.net.username,
@@ -3936,30 +3931,20 @@ function updateNetSessionStat() {
 }
 
 function updateNetAuthButton() {
-  if (!netLoginButton) {
-    return;
-  }
-  const model = deriveNetAuthButtonModel(isNetAuthenticated());
-  netLoginButton.textContent = model.text;
-  netLoginButton.classList.remove(...model.removeClasses);
-  netLoginButton.classList.add(model.addClass);
+  renderNetAuthButtonRuntime(netLoginButton, isNetAuthenticated());
 }
 
 function setNetStatus(level, text) {
-  const lvl = String(level || "idle");
-  const msg = String(text || "");
-  state.net.statusLevel = lvl;
-  state.net.statusText = msg;
-  if (topNetStatus) {
-    topNetStatus.textContent = deriveTopNetStatusText(lvl, msg);
-  }
-  if (topNetIndicator) {
-    topNetIndicator.dataset.state = deriveNetIndicatorState(lvl, isNetAuthenticated());
-  }
-  if (netQuickStatus) {
-    netQuickStatus.textContent = deriveNetQuickStatusText(isNetAuthenticated());
-  }
-  updateNetAuthButton();
+  applyNetStatusRuntime({
+    stateNet: state.net,
+    level,
+    text,
+    isAuthenticated: isNetAuthenticated(),
+    topNetStatus,
+    topNetIndicator,
+    netQuickStatus,
+    netLoginButton
+  });
 }
 
 let netActivityPulseTimer = 0;
