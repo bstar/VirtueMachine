@@ -109,7 +109,7 @@ Date: 2026-02-11
 Area: First Rendering Prototype
 Legacy Source Ref: `SRC/seg_101C.c` (map/chunk tile addressing patterns)
 Summary: first browser rendering path is functional: fixed-tick loop, command-envelope movement input, and tile viewport using runtime `map`/`chunks` binary reads with deterministic synthetic fallback.
-Evidence: `modern/client-web/app.js` implements map-window/chunk decode logic aligned with `seg_101C` assumptions and renders 11x11 tile viewport.
+Evidence: `modern/client-web/app.ts` implements map-window/chunk decode logic aligned with `seg_101C` assumptions and renders 11x11 tile viewport.
 Confidence: medium
 Impact on Port: unblocks visual iteration and UX work while preserving deterministic input/tick flow.
 Next Validation Step: wire rendering reads through a shared sim-core boundary (wasm or generated bridge) to remove JS-side duplicate logic.
@@ -121,7 +121,7 @@ Date: 2026-02-11
 Area: Runtime Asset Preflight + Diagnostics
 Legacy Source Ref: `SRC/seg_101C.c` (runtime `map`/`chunks` dependency surface)
 Summary: browser client startup now distinguishes required runtime files (`map`, `chunks`) from optional assets and falls back deterministically when required files are absent.
-Evidence: `modern/tools/validate_assets.sh` validates required/optional manifests; `modern/client-web/app.js` performs preflight fetch checks and emits explicit diagnostics UI state.
+Evidence: `modern/tools/validate_assets.sh` validates required/optional manifests; `modern/client-web/app.ts` performs preflight fetch checks and emits explicit diagnostics UI state.
 Confidence: high
 Impact on Port: reduces startup ambiguity for contributors, preserves runnable web demo without proprietary data, and clarifies when viewport output is real map data versus synthetic fallback.
 Next Validation Step: move map/chunk read path behind shared sim-core boundary to remove duplicate decode logic and unify diagnostics.
@@ -133,7 +133,7 @@ Date: 2026-02-11
 Area: Browser Walkaround Determinism Surface
 Legacy Source Ref: `SRC/D_2C4A.c` (world clock fields), `SRC/seg_0A33.c` (calendar usage), `SRC/seg_101C.c` (map movement context)
 Summary: browser walkaround now advances a deterministic world clock/date and exposes per-tick state hashes with replay checkpoint export for stability verification.
-Evidence: `modern/client-web/app.js` now mirrors sim-core tick semantics (xorshift32, 4 ticks/minute, rollover rules), computes FNV-1a 64-bit state hash, and verifies replay checkpoints via dual re-run comparison.
+Evidence: `modern/client-web/app.ts` now mirrors sim-core tick semantics (xorshift32, 4 ticks/minute, rollover rules), computes FNV-1a 64-bit state hash, and verifies replay checkpoints via dual re-run comparison.
 Confidence: medium
 Impact on Port: provides a practical browser-side determinism harness for movement slices and creates reproducible checkpoint artifacts before wasm unification is introduced.
 Next Validation Step: replace JS-side deterministic helpers with direct sim-core wasm calls to eliminate duplicate authority logic.
@@ -205,7 +205,7 @@ Date: 2026-02-11
 Area: Renderer/Interaction Coordinate Parity and Occlusion Telemetry
 Legacy Source Ref: `SRC/seg_1184.c` (`C_1184_35EA` object spill to neighbor cells), `SRC/seg_1100.c` (visibility/open-area behavior)
 Summary: web client now builds a single overlay-cell composition model for object rendering and interaction probing, and records actor-vs-occluder parity warnings from the same data source.
-Evidence: `modern/client-web/app.js` now routes object spill/main tile placement through `buildOverlayCells(...)`, uses `topInteractiveOverlayAt(...)` for probe tile selection, and computes `measureActorOcclusionParity(...)` for deterministic HUD diagnostics.
+Evidence: `modern/client-web/app.ts` now routes object spill/main tile placement through `buildOverlayCells(...)`, uses `topInteractiveOverlayAt(...)` for probe tile selection, and computes `measureActorOcclusionParity(...)` for deterministic HUD diagnostics.
 Confidence: medium-high
 Impact on Port: removes a class of renderer/probe coordinate drift bugs and gives a deterministic signal when doorway/wall transition ordering regresses.
 Next Validation Step: add fixture-driven parity checks for known corner/edge overlap and transparency hotspots (throne room and interior door transitions), then compare against canonical captures.
@@ -217,7 +217,7 @@ Date: 2026-02-11
 Area: Deterministic Client-Side Layer Composition Fixtures
 Legacy Source Ref: `SRC/seg_1184.c` (`C_1184_35EA` double-width/height spill), `SRC/u6.h` (tile flag-driven composition semantics)
 Summary: extracted pure renderer-composition logic into a standalone module and added fixture tests for spill ordering, visibility suppression, actor-vs-occluder parity warnings, and mask/transparency edge rules.
-Evidence: `modern/client-web/render_composition.js`, `modern/client-web/tests/render_composition_fixtures.mjs`, and CTest integration via `client_web_render_composition_test`.
+Evidence: `modern/client-web/render_composition.ts`, `modern/client-web/tests/render_composition_fixtures.ts`, and CTest integration via `client_web_render_composition_test`.
 Confidence: high
 Impact on Port: catches corner/edge overlap and transparency regressions before runtime manual testing; reduces risk of reintroducing throne-room/door transition artifacts.
 Next Validation Step: extend fixtures with canonical map-coordinate captures once screenshot diff tooling lands.
@@ -229,7 +229,7 @@ Date: 2026-02-11
 Area: Ghost vs Avatar Movement Authority + First Door Visual State
 Legacy Source Ref: `SRC/seg_1184.c` (door/object placement and tile spill behavior), `SRC/u6.h` (tile flags and blocking semantics)
 Summary: client now supports explicit movement authority modes: `ghost` (free camera locomotion) and `avatar` (collision-aware locomotion). Avatar mode introduces first world-state-backed door toggles and uses the same door state for both passability and rendered tile variant.
-Evidence: `modern/client-web/app.js` adds `movementMode`, collision gating in `applyCommand`, `queueInteractDoor` command flow, and deterministic `sim.doorOpenStates` hashing.
+Evidence: `modern/client-web/app.ts` adds `movementMode`, collision gating in `applyCommand`, `queueInteractDoor` command flow, and deterministic `sim.doorOpenStates` hashing.
 Confidence: medium
 Impact on Port: enables practical avatar-centric interaction testing (doors + collision) without dropping existing free-roam inspection workflow.
 Next Validation Step: add replay fixtures for avatar-mode door open/close command sequences and verify hash parity across repeated runs.

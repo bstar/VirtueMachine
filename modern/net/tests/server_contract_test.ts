@@ -5,7 +5,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 
 const ROOT = path.resolve(new URL("../../../..", import.meta.url).pathname);
-const SERVER_JS = path.join(ROOT, "modern/net/server.js");
+const SERVER_TS = path.join(ROOT, "modern/net/server.ts");
 const SIM_CORE_INTERACT_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_interact_bridge");
 const SIM_CORE_ASSOC_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_bridge");
 const SIM_CORE_ASSOC_BATCH_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_batch_bridge");
@@ -110,7 +110,7 @@ async function main() {
   const port = 18081;
   const baseUrl = `http://${host}:${port}`;
 
-  const child = spawn(process.execPath, [SERVER_JS], {
+  const child = spawn(process.execPath, [SERVER_TS], {
     env: {
       ...process.env,
       VM_NET_HOST: host,

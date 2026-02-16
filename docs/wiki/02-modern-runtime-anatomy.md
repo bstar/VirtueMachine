@@ -79,7 +79,7 @@ Purpose:
 
 Key file:
 
-- `modern/net/server.js`
+- `modern/net/server.ts`
 
 Important world-object model:
 

@@ -65,8 +65,8 @@ Ultima VI Online comparative URLs:
 
 ## Local VirtueMachine Files To Compare
 
-- `modern/client-web/render_composition.js`
-- `modern/client-web/app.js`
+- `modern/client-web/render_composition.ts`
+- `modern/client-web/app.ts`
 - `modern/client-web/tests/render_composition.test.js`
 
 ## Legacy Decompiled Anchors

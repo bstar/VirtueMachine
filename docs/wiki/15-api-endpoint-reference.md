@@ -1,6 +1,6 @@
 # API Endpoint Reference (OpenAPI-Style, Human Readable)
 
-This page is the canonical HTTP API reference for `modern/net/server.js`.
+This page is the canonical HTTP API reference for `modern/net/server.ts`.
 
 It is intentionally written like an OpenAPI handbook, but in markdown:
 
@@ -77,7 +77,7 @@ Primary schema files live under `modern/net/contracts/`:
 - `world_presence_response.schema.json`
 - `critical_item_policy.schema.json`
 
-Note: server responses can include fields beyond some schema files because implementation evolved; server behavior in `modern/net/server.js` is the final source of truth.
+Note: server responses can include fields beyond some schema files because implementation evolved; server behavior in `modern/net/server.ts` is the final source of truth.
 
 ## Endpoint Catalog
 
@@ -644,7 +644,7 @@ Any unmatched route returns:
 
 ## Client Mapping (Where UI Calls These)
 
-Primary call sites in `modern/client-web/app.js`:
+Primary call sites in `modern/client-web/app.ts`:
 
 - `netRequest(...)` common fetch wrapper
 - `netLogin()`

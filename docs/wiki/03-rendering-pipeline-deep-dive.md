@@ -25,12 +25,12 @@ This ordering is not aesthetic preference. It encodes interaction expectations:
 
 ### Base Layer
 
-- `buildBaseTileBuffersCurrent(...)` in `modern/client-web/app.js`
+- `buildBaseTileBuffersCurrent(...)` in `modern/client-web/app.ts`
 - applies map tile selection and selected object background substitution
 
 ### Overlay Layer
 
-- `buildOverlayCellsModel(...)` in `modern/client-web/render_composition.js`
+- `buildOverlayCellsModel(...)` in `modern/client-web/render_composition.ts`
 - consumes `objectsInWindowLegacyOrder(...)`
 - applies legacy-like insertion behavior using `insertLegacyCellTile(...)`
 

@@ -149,7 +149,7 @@ These are architecture choices, not visual hacks. They are documented so future 
 
 ## Source Anchors
 
-- Client sync orchestration: `modern/client-web/app.js` (`netLogin`, `netRequest`, `netPollWorldClock`, `netPollPresence`, `tickLoop`)
-- Server API handlers: `modern/net/server.js`
+- Client sync orchestration: `modern/client-web/app.ts` (`netLogin`, `netRequest`, `netPollWorldClock`, `netPollPresence`, `tickLoop`)
+- Server API handlers: `modern/net/server.ts`
 - Contract schemas: `modern/net/contracts/*.json`
 - Persistence payloads: `modern/net/data/*.json`

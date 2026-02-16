@@ -31,7 +31,7 @@ Use this skill when modifying the parchment/frame HUD area in the game engine.
 1. Identify target UI behavior and map it to exact legacy routine(s).
 2. Implement only on the existing in-engine frame/HUD layer (not a detached debug panel).
 3. Preserve canonical coordinates/hitboxes; only payload data source may vary.
-4. Add/adjust tests when feasible (`modern/client-web/tests/ui_probe_contract_test.mjs` and `modern/tools/test.sh` gate).
+4. Add/adjust tests when feasible (`modern/client-web/tests/ui_probe_contract_test.ts` and `modern/tools/test.sh` gate).
 5. Update docs:
    - `docs/wiki/18-in-game-ui-canonicalization.md`
    - `docs/wiki/08-deviation-ledger.md` (if deviating)

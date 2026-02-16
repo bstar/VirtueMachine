@@ -92,7 +92,7 @@ cleanup() {
     kill "$NET_PID" 2>/dev/null || true
   fi
   pkill -f "bunx --bun vite --config $ROOT_DIR/vite.config.mjs" 2>/dev/null || true
-  pkill -f "node $ROOT_DIR/modern/net/server.js" 2>/dev/null || true
+  pkill -f "bun $ROOT_DIR/modern/net/server.ts" 2>/dev/null || true
   wait 2>/dev/null || true
   exit "$code"
 }
@@ -124,7 +124,7 @@ VM_EMAIL_MODE="$VM_EMAIL_MODE" VM_EMAIL_FROM="$VM_EMAIL_FROM" \
 VM_EMAIL_SMTP_HOST="$VM_EMAIL_SMTP_HOST" VM_EMAIL_SMTP_PORT="$VM_EMAIL_SMTP_PORT" VM_EMAIL_SMTP_SECURE="$VM_EMAIL_SMTP_SECURE" \
 VM_EMAIL_SMTP_USER="$VM_EMAIL_SMTP_USER" VM_EMAIL_SMTP_PASS="$VM_EMAIL_SMTP_PASS" \
 VM_EMAIL_RESEND_API_KEY="$VM_EMAIL_RESEND_API_KEY" VM_EMAIL_RESEND_BASE_URL="$VM_EMAIL_RESEND_BASE_URL" \
-  node "$ROOT_DIR/modern/net/server.js" \
+  bun "$ROOT_DIR/modern/net/server.ts" \
   2>&1 | tee "$NET_LOG" | sed 's/^/[net] /' &
 NET_PID=$!
 

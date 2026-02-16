@@ -23,7 +23,7 @@
   <text class="title" x="44" y="52">VirtueMachine Runtime Topology: API ↔ UI ↔ Persistence</text>
 
   <rect class="panel" x="44" y="90" width="530" height="320"/>
-  <text class="h2" x="68" y="126">Client Web Runtime (`modern/client-web/app.js`)</text>
+  <text class="h2" x="68" y="126">Client Web Runtime (`modern/client-web/app.ts`)</text>
   <text class="txt" x="68" y="160">• Local tick loop (`tickLoop`) drives simulation and render cadence</text>
   <text class="txt" x="68" y="186">• Net orchestration (`netLogin`, `netRequest`, poll + heartbeat functions)</text>
   <text class="txt" x="68" y="212">• UI controls trigger explicit writes (save/load/maintenance/account)</text>
@@ -31,7 +31,7 @@
   <text class="small" x="68" y="276">Authority here: immediate local responsiveness + render composition</text>
 
   <rect class="panel" x="706" y="90" width="530" height="320"/>
-  <text class="h2" x="730" y="126">Net Server (`modern/net/server.js`)</text>
+  <text class="h2" x="730" y="126">Net Server (`modern/net/server.ts`)</text>
   <text class="txt" x="730" y="160">• Auth, character records, snapshot storage, presence registry</text>
   <text class="txt" x="730" y="186">• Authoritative world clock (`/api/world/clock`)</text>
   <text class="txt" x="730" y="212">• Presence heartbeat + TTL pruning (`/api/world/presence/*`)</text>

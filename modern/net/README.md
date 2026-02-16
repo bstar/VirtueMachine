@@ -21,7 +21,7 @@ Email delivery modes:
 ## Run
 
 ```bash
-node modern/net/server.js
+bun modern/net/server.ts
 ```
 
 With dev stack + local secrets file:
@@ -66,7 +66,7 @@ Example (Resend):
 VM_EMAIL_MODE=resend \
 VM_EMAIL_FROM=no-reply@yourdomain.com \
 VM_EMAIL_RESEND_API_KEY=re_xxxxxxxxxxxxx \
-node modern/net/server.js
+bun modern/net/server.ts
 ```
 
 Example (real SMTP):
@@ -79,7 +79,7 @@ VM_EMAIL_SMTP_PORT=465 \
 VM_EMAIL_SMTP_SECURE=on \
 VM_EMAIL_SMTP_USER=your_smtp_user \
 VM_EMAIL_SMTP_PASS=your_smtp_password \
-node modern/net/server.js
+bun modern/net/server.ts
 ```
 
 ## API (Current)

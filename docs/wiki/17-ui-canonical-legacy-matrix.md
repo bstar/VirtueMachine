@@ -91,7 +91,7 @@ Tooling added in this slice:
 - extractor: `modern/tools/extract_legacy_ui_anchors.sh`
 - guard test: `modern/tools/test_legacy_ui_anchors.sh`
 - probe contract module: `modern/client-web/ui_probe_contract.js`
-- probe regression test: `modern/client-web/tests/ui_probe_contract_test.mjs`
+- probe regression test: `modern/client-web/tests/ui_probe_contract_test.ts`
 
 Purpose:
 

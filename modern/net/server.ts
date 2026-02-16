@@ -19,9 +19,9 @@ const {
   OBJ_COORD_USE_EQUIP,
   coordUseOfStatus,
   applyCanonicalWorldInteractionCommand
-} = require("./world_interaction_bridge");
-const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge");
-const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge");
+} = require("./world_interaction_bridge.ts");
+const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge.ts");
+const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);

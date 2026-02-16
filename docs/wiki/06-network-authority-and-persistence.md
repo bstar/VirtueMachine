@@ -12,7 +12,7 @@ Current closure step:
 
 ## Server Authority Model
 
-`modern/net/server.js` provides host-authoritative world object state via:
+`modern/net/server.ts` provides host-authoritative world object state via:
 
 - immutable baseline load (`objblk??` + `objlist`)
 - runtime delta overlay (removed/moved/spawned)
