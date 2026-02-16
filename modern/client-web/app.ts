@@ -365,6 +365,10 @@ const NET_MAINTENANCE_KEY = "vm_net_maintenance";
 const NET_AUTO_LOGIN_KEY = "vm_net_auto_login";
 const NET_PROFILES_KEY = "vm_net_profiles";
 const NET_PROFILE_SELECTED_KEY = "vm_net_profile_selected";
+const NET_PROFILE_STORAGE = {
+  storageKey: NET_PROFILES_KEY,
+  selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+};
 const RUNTIME_PROFILE_KEY = "vm_runtime_profile";
 const RUNTIME_EXTENSIONS_KEY = "vm_runtime_extensions";
 const NET_ACTIVITY_PULSE_MS = 280;
@@ -3966,8 +3970,7 @@ function pulseNetIndicator() {
 function upsertNetProfileFromInputs() {
   upsertNetProfileFromControlsRuntime({
     controls: currentNetProfileControls(),
-    storageKey: NET_PROFILES_KEY,
-    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY,
+    ...NET_PROFILE_STORAGE,
     accountSelect: netAccountSelect,
     maxEntries: 12
   });
@@ -3998,16 +4001,12 @@ function applyProfileToNetControls(profile) {
   return applyNetProfileToControlsRuntime({
     profile,
     controls: currentNetProfileControls(),
-    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+    selectedKeyStorageKey: NET_PROFILE_STORAGE.selectedKeyStorageKey
   });
 }
 
 function refreshNetAccountSelect() {
-  return populateNetAccountSelectRuntime({
-    accountSelect: netAccountSelect,
-    storageKey: NET_PROFILES_KEY,
-    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-  });
+  return populateNetAccountSelectRuntime({ accountSelect: netAccountSelect, ...NET_PROFILE_STORAGE });
 }
 
 function applySelectedNetAccountProfile() {
@@ -4015,7 +4014,7 @@ function applySelectedNetAccountProfile() {
     return;
   }
   const key = netAccountSelect.value;
-  const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
+  const profile = loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey).find((row) => profileKeyRuntime(row) === key);
   if (profile) {
     applyProfileToNetControls(profile);
   }
@@ -4442,7 +4441,7 @@ function initNetPanel() {
 
   bindAccountProfileSelectionRuntime({
     accountSelect: netAccountSelect,
-    loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILES_KEY),
+    loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey),
     profileKey: profileKeyRuntime,
     applyProfile: (profile) => {
       applyProfileToNetControls(profile);
@@ -8444,7 +8443,7 @@ function promptNetLoginLogout() {
     netLogout();
     return;
   }
-  if (countSavedProfilesRuntime(NET_PROFILES_KEY) > 1) {
+  if (countSavedProfilesRuntime(NET_PROFILE_STORAGE.storageKey) > 1) {
     refreshNetAccountSelect();
     setAccountModalOpen(true);
     setNetStatus("idle", "Choose an account in Account Setup, then login.");
