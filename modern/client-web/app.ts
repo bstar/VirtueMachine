@@ -3961,13 +3961,7 @@ function pulseNetIndicator() {
 
 function upsertNetProfileFromInputs() {
   upsertNetProfileFromControlsRuntime({
-    controls: {
-      apiBaseInput: netApiBaseInput,
-      usernameInput: netUsernameInput,
-      passwordInput: netPasswordInput,
-      characterNameInput: netCharacterNameInput,
-      emailInput: netEmailInput
-    },
+    controls: currentNetProfileControls(),
     storageKey: NET_PROFILES_KEY,
     selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY,
     accountSelect: netAccountSelect,
@@ -3984,6 +3978,16 @@ function recordBackgroundNetFailure(err, context) {
     maxFailures: NET_BACKGROUND_FAIL_MAX,
     setStatus: setNetStatus
   });
+}
+
+function currentNetProfileControls() {
+  return {
+    apiBaseInput: netApiBaseInput,
+    usernameInput: netUsernameInput,
+    passwordInput: netPasswordInput,
+    characterNameInput: netCharacterNameInput,
+    emailInput: netEmailInput
+  };
 }
 
 function updateCriticalRecoveryStat() {
@@ -4404,13 +4408,7 @@ function initNetPanel() {
     if (profile) {
       applyNetProfileToControlsRuntime({
         profile,
-        controls: {
-          apiBaseInput: netApiBaseInput,
-          usernameInput: netUsernameInput,
-          passwordInput: netPasswordInput,
-          characterNameInput: netCharacterNameInput,
-          emailInput: netEmailInput
-        },
+        controls: currentNetProfileControls(),
         selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
       });
     }
@@ -4428,13 +4426,7 @@ function initNetPanel() {
     applyProfile: (profile) => {
       applyNetProfileToControlsRuntime({
         profile,
-        controls: {
-          apiBaseInput: netApiBaseInput,
-          usernameInput: netUsernameInput,
-          passwordInput: netPasswordInput,
-          characterNameInput: netCharacterNameInput,
-          emailInput: netEmailInput
-        },
+        controls: currentNetProfileControls(),
         selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
       });
     }
