@@ -104,3 +104,23 @@ export function applyNetStatusRuntime(args: {
   }
   renderNetAuthButtonRuntime(args.netLoginButton, args.isAuthenticated);
 }
+
+export function pulseNetIndicatorRuntime(args: {
+  indicator?: HTMLElement | null;
+  currentTimer: number;
+  timeoutMs: number;
+  setTimer: (nextTimer: number) => void;
+}): void {
+  if (!args.indicator) {
+    return;
+  }
+  args.indicator.classList.add("is-active");
+  if (args.currentTimer) {
+    clearTimeout(args.currentTimer);
+  }
+  const nextTimer = window.setTimeout(() => {
+    args.indicator?.classList.remove("is-active");
+    args.setTimer(0);
+  }, args.timeoutMs);
+  args.setTimer(nextTimer as unknown as number);
+}

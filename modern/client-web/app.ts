@@ -107,6 +107,7 @@ import {
 import { runNetPanelActionRuntime } from "./net/panel_actions_runtime.ts";
 import {
   applyNetStatusRuntime,
+  pulseNetIndicatorRuntime,
   renderNetAuthButtonRuntime,
   renderNetSessionStatRuntime
 } from "./net/status_runtime.ts";
@@ -3955,17 +3956,14 @@ function setNetStatus(level, text) {
 
 let netActivityPulseTimer = 0;
 function pulseNetIndicator() {
-  if (!topNetIndicator) {
-    return;
-  }
-  topNetIndicator.classList.add("is-active");
-  if (netActivityPulseTimer) {
-    clearTimeout(netActivityPulseTimer);
-  }
-  netActivityPulseTimer = setTimeout(() => {
-    topNetIndicator.classList.remove("is-active");
-    netActivityPulseTimer = 0;
-  }, NET_ACTIVITY_PULSE_MS);
+  pulseNetIndicatorRuntime({
+    indicator: topNetIndicator,
+    currentTimer: netActivityPulseTimer,
+    timeoutMs: NET_ACTIVITY_PULSE_MS,
+    setTimer: (nextTimer) => {
+      netActivityPulseTimer = nextTimer | 0;
+    }
+  });
 }
 
 function upsertNetProfileFromInputs() {
