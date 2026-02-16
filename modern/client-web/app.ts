@@ -117,6 +117,7 @@ import {
   simStateHashRuntime
 } from "./sim/hash_runtime.ts";
 import { packCommandRuntime, unpackCommandRuntime } from "./sim/command_wire_runtime.ts";
+import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -6358,13 +6359,7 @@ function asU32Signed(value) {
 }
 
 function timeOfDayLabel(hour) {
-  const h = hour | 0;
-  if (h < 5) return "Midnight";
-  if (h < 8) return "Dawn";
-  if (h < 12) return "Morning";
-  if (h < 17) return "Afternoon";
-  if (h < 20) return "Dusk";
-  return "Night";
+  return timeOfDayLabelRuntime(hour);
 }
 
 function packCommand(tick, type, arg0, arg1) {
