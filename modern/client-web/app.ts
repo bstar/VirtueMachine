@@ -257,6 +257,10 @@ const HASH_OFFSET = 1469598103934665603n;
 const HASH_PRIME = 1099511628211n;
 const HASH_MASK = (1n << 64n) - 1n;
 const HASH_CFG = { offset: HASH_OFFSET, prime: HASH_PRIME, mask: HASH_MASK };
+const WORLD_OBJECT_LOOKUP_DEPS = {
+  isObjectRemoved: isObjectRemovedRuntime,
+  isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
+};
 
 const canvas = document.getElementById("viewport");
 const ctx = canvas.getContext("2d");
@@ -4888,10 +4892,7 @@ function tryLookAtCell(sim, tx, ty) {
     showLegacyLedgerPrompt();
     return false;
   }
-  const obj = topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, {}, {
-    isObjectRemoved: isObjectRemovedRuntime,
-    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
-  });
+  const obj = topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, {}, WORLD_OBJECT_LOOKUP_DEPS);
   if (obj) {
     const tileId = ((obj.baseTile | 0) + (obj.frame | 0)) & 0xffff;
     pushLedgerMessage(canonicalLookSentenceForTile(tileId));
@@ -5035,10 +5036,15 @@ function tryGetAtCell(sim, tx, ty) {
     diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
     return false;
   }
-  const obj = topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, { pickupOnly: true }, {
-    isObjectRemoved: isObjectRemovedRuntime,
-    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
-  });
+  const obj = topWorldObjectAtCellRuntime(
+    state.objectLayer,
+    sim,
+    tx,
+    ty,
+    tz,
+    { pickupOnly: true },
+    WORLD_OBJECT_LOOKUP_DEPS
+  );
   if (!obj) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
