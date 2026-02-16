@@ -102,6 +102,7 @@ import {
   bindAccountProfileSelectionRuntime,
   bindNetPanelPrefPersistenceRuntime
 } from "./net/panel_bindings_runtime.ts";
+import { runNetPanelActionRuntime } from "./net/panel_actions_runtime.ts";
 import {
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
@@ -4615,70 +4616,82 @@ function initNetPanel() {
   }
   if (netRecoverButton) {
     netRecoverButton.addEventListener("click", async () => {
-      try {
-        const out = await netRecoverPassword();
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Recovery email sent for ${out?.user?.username || "user"}.`;
-      } catch (err) {
-        setNetStatus("error", `Recovery failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Password recovery failed: ${String(err.message || err)}`;
-      }
+      await runNetPanelActionRuntime({
+        run: netRecoverPassword,
+        setStatus: setNetStatus,
+        setDiag: (kind, text) => {
+          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
+          diagBox.textContent = text;
+        },
+        okText: (out) => `Recovery email sent for ${out?.user?.username || "user"}.`,
+        errorStatusPrefix: "Recovery failed",
+        errorDiagPrefix: "Password recovery failed"
+      });
     });
   }
   if (netSetEmailButton) {
     netSetEmailButton.addEventListener("click", async () => {
-      try {
-        const out = await netSetEmail();
-        diagBox.className = "diag ok";
-        const verified = !!out?.user?.email_verified;
-        diagBox.textContent = verified
-          ? `Recovery email set and verified (${out?.user?.email || ""}).`
-          : `Recovery email set (${out?.user?.email || ""}). Verification required.`;
-      } catch (err) {
-        setNetStatus("error", `Set email failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Set email failed: ${String(err.message || err)}`;
-      }
+      await runNetPanelActionRuntime({
+        run: netSetEmail,
+        setStatus: setNetStatus,
+        setDiag: (kind, text) => {
+          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
+          diagBox.textContent = text;
+        },
+        okText: (out) => {
+          const verified = !!out?.user?.email_verified;
+          return verified
+            ? `Recovery email set and verified (${out?.user?.email || ""}).`
+            : `Recovery email set (${out?.user?.email || ""}). Verification required.`;
+        },
+        errorStatusPrefix: "Set email failed",
+        errorDiagPrefix: "Set email failed"
+      });
     });
   }
   if (netSendVerifyButton) {
     netSendVerifyButton.addEventListener("click", async () => {
-      try {
-        await netSendEmailVerification();
-        diagBox.className = "diag ok";
-        diagBox.textContent = "Verification code sent to recovery email.";
-      } catch (err) {
-        setNetStatus("error", `Send code failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Send code failed: ${String(err.message || err)}`;
-      }
+      await runNetPanelActionRuntime({
+        run: netSendEmailVerification,
+        setStatus: setNetStatus,
+        setDiag: (kind, text) => {
+          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
+          diagBox.textContent = text;
+        },
+        okText: "Verification code sent to recovery email.",
+        errorStatusPrefix: "Send code failed",
+        errorDiagPrefix: "Send code failed"
+      });
     });
   }
   if (netVerifyEmailButton) {
     netVerifyEmailButton.addEventListener("click", async () => {
-      try {
-        await netVerifyEmail();
-        diagBox.className = "diag ok";
-        diagBox.textContent = "Recovery email verified.";
-      } catch (err) {
-        setNetStatus("error", `Verify email failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Verify email failed: ${String(err.message || err)}`;
-      }
+      await runNetPanelActionRuntime({
+        run: netVerifyEmail,
+        setStatus: setNetStatus,
+        setDiag: (kind, text) => {
+          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
+          diagBox.textContent = text;
+        },
+        okText: "Recovery email verified.",
+        errorStatusPrefix: "Verify email failed",
+        errorDiagPrefix: "Verify email failed"
+      });
     });
   }
   if (netChangePasswordButton) {
     netChangePasswordButton.addEventListener("click", async () => {
-      try {
-        await netChangePassword();
-        diagBox.className = "diag ok";
-        diagBox.textContent = "Account password updated.";
-      } catch (err) {
-        setNetStatus("error", `Change password failed: ${String(err.message || err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Change password failed: ${String(err.message || err)}`;
-      }
+      await runNetPanelActionRuntime({
+        run: netChangePassword,
+        setStatus: setNetStatus,
+        setDiag: (kind, text) => {
+          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
+          diagBox.textContent = text;
+        },
+        okText: "Account password updated.",
+        errorStatusPrefix: "Change password failed",
+        errorDiagPrefix: "Change password failed"
+      });
     });
   }
   if (netSaveButton) {

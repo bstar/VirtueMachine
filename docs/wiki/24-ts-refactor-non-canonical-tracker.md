@@ -46,6 +46,14 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 - Risk: silent shape drift and late runtime failures.
 - Exit criteria: define shared interfaces for `state.net`, `sim`, object/entity records; increase strictness incrementally.
 
+### 5) Net panel action wrapper abstraction
+
+- Status: `temporary`
+- Location: `modern/client-web/net/panel_actions_runtime.ts`
+- Note: repetitive account-action `try/catch` blocks now route through a generic action wrapper.
+- Risk: generic success/error formatting can accidentally override flow-specific messaging if used on paths that already produce canonicalized diagnostics.
+- Exit criteria: keep wrapper scoped to simple account actions only, or replace with per-action typed controllers once full UI canonicalization is complete.
+
 ## Canonical Guardrails
 
 For every new extraction slice:
