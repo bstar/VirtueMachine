@@ -57,3 +57,19 @@ export function startupMenuIndexAtSurfacePointRuntime(
   const ly = Math.floor(py / menuScale);
   return startupMenuIndexAtLogicalPosRuntime(lx, ly, hitbox);
 }
+
+export function startupMenuItemEnabledRuntime(
+  item: { id?: string; enabled?: boolean } | null | undefined,
+  isAuthenticated: boolean
+): boolean {
+  if (!item) {
+    return false;
+  }
+  if (!item.enabled) {
+    return false;
+  }
+  if (item.id === "journey") {
+    return !!isAuthenticated;
+  }
+  return true;
+}

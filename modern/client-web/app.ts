@@ -157,6 +157,7 @@ import { nearestTalkTargetAtCellRuntime, topWorldObjectAtCellRuntime } from "./s
 import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 import {
   normalizeStartupMenuIndexRuntime,
+  startupMenuItemEnabledRuntime,
   startupMenuIndexAtLogicalPosRuntime,
   startupMenuIndexAtSurfacePointRuntime
 } from "./ui/startup_runtime.ts";
@@ -5648,16 +5649,7 @@ function isNetAuthenticated() {
 }
 
 function startupMenuItemEnabled(item) {
-  if (!item) {
-    return false;
-  }
-  if (!item.enabled) {
-    return false;
-  }
-  if (item.id === "journey") {
-    return isNetAuthenticated();
-  }
-  return true;
+  return startupMenuItemEnabledRuntime(item, isNetAuthenticated());
 }
 
 function activateStartupMenuSelection() {
