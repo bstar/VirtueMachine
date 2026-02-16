@@ -21,18 +21,22 @@
     { file: "18-in-game-ui-canonicalization.md", title: "In-Game UI Canonicalization" }
   ];
 
-  const pageListEl = document.getElementById("page-list");
-  const docEl = document.getElementById("doc");
-  const sourceLinkEl = document.getElementById("source-link");
-  const searchEl = document.getElementById("search");
-  const referenceSearchEl = document.getElementById("reference-search");
-  const referenceFocusCardEl = document.getElementById("reference-focus-card");
-  const referenceListEl = document.getElementById("reference-list");
-  const codeOverlayEl = document.getElementById("code-overlay");
-  const codeOverlayBackdropEl = document.getElementById("code-overlay-backdrop");
-  const codeOverlayCloseEl = document.getElementById("code-overlay-close");
-  const codeOverlayPathEl = document.getElementById("code-overlay-path");
-  const codeOverlayCodeEl = document.getElementById("code-overlay-code");
+  function byId<T = any>(id: string): T {
+    return document.getElementById(id) as unknown as T;
+  }
+
+  const pageListEl = byId("page-list");
+  const docEl = byId("doc");
+  const sourceLinkEl = byId("source-link");
+  const searchEl = byId("search");
+  const referenceSearchEl = byId("reference-search");
+  const referenceFocusCardEl = byId("reference-focus-card");
+  const referenceListEl = byId("reference-list");
+  const codeOverlayEl = byId("code-overlay");
+  const codeOverlayBackdropEl = byId("code-overlay-backdrop");
+  const codeOverlayCloseEl = byId("code-overlay-close");
+  const codeOverlayPathEl = byId("code-overlay-path");
+  const codeOverlayCodeEl = byId("code-overlay-code");
   const state = {
     currentPage: "README.md",
     currentTerm: "",
@@ -461,7 +465,7 @@
   }
 
   docEl.addEventListener("click", (evt) => {
-    const link = evt.target.closest("a.code-link");
+    const link = (evt.target as HTMLElement | null)?.closest("a.code-link");
     if (!link) {
       return;
     }

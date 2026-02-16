@@ -12,7 +12,9 @@
   },
   "include": [
     "modern/client-web/**/*.ts",
-    "modern/common/**/*.ts"
+    "modern/common/**/*.ts",
+    "docs/wiki/**/*.ts",
+    "vite.config.ts"
   ],
   "exclude": [
     "modern/**/tests/**"
