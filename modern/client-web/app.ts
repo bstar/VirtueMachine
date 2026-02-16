@@ -141,6 +141,13 @@ import {
   markObjectRemovedRuntime,
   objectAnchorKeyRuntime
 } from "./sim/inventory_runtime.ts";
+import {
+  isBedObjectRuntime,
+  isChairObjectRuntime,
+  isCloseableDoorObjectRuntime,
+  isLikelyPickupObjectTypeRuntime,
+  isSolidEnvObjectRuntime
+} from "./sim/object_types_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4985,33 +4992,19 @@ function initLegacyFramePreview() {
 }
 
 function isCloseableDoorObject(obj) {
-  return !!obj && OBJECT_TYPES_CLOSEABLE_DOOR.has(obj.type);
+  return isCloseableDoorObjectRuntime(obj);
 }
 
 function isChairObject(obj) {
-  if (!obj) {
-    return false;
-  }
-  const type = obj.type & 0x03ff;
-  if (OBJECT_TYPES_CHAIR.has(type)) {
-    return true;
-  }
-  /* Legacy C_1E0F_0664/C_1E0F_2184 chair test: OBJ_147 with frame==2 behaves as chair seat. */
-  if (type === 0x147) {
-    const frame = obj.frame | 0;
-    if (frame === 2) {
-      return true;
-    }
-  }
-  return false;
+  return isChairObjectRuntime(obj);
 }
 
 function isBedObject(obj) {
-  return !!obj && OBJECT_TYPES_BED.has(obj.type);
+  return isBedObjectRuntime(obj);
 }
 
 function isSolidEnvObject(obj) {
-  return !!obj && OBJECT_TYPES_SOLID_ENV.has(obj.type);
+  return isSolidEnvObjectRuntime(obj);
 }
 
 function objectAnchorKey(obj) {
@@ -5035,13 +5028,7 @@ function addObjectToInventory(sim, obj) {
 }
 
 function isLikelyPickupObjectType(type) {
-  const t = type & 0x03ff;
-  if (OBJECT_TYPES_DOOR.has(t)) return false;
-  if (OBJECT_TYPES_CHAIR.has(t)) return false;
-  if (OBJECT_TYPES_BED.has(t)) return false;
-  if (OBJECT_TYPES_SOLID_ENV.has(t)) return false;
-  if (OBJECT_TYPES_TOP_DECOR.has(t)) return false;
-  return true;
+  return isLikelyPickupObjectTypeRuntime(type);
 }
 
 function topWorldObjectAtCell(sim, tx, ty, tz, opts = {}) {
