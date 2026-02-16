@@ -4010,6 +4010,17 @@ function refreshNetAccountSelect() {
   });
 }
 
+function applySelectedNetAccountProfile() {
+  if (!netAccountSelect || !netAccountSelect.value) {
+    return;
+  }
+  const key = netAccountSelect.value;
+  const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
+  if (profile) {
+    applyProfileToNetControls(profile);
+  }
+}
+
 function resetBackgroundFailures() {
   resetBackgroundFailureState(state.net);
 }
@@ -4422,13 +4433,7 @@ function initNetPanel() {
     autoLoginCheckbox: netAutoLoginCheckbox
   });
   refreshNetAccountSelect();
-  if (netAccountSelect && netAccountSelect.value) {
-    const key = netAccountSelect.value;
-    const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
-    if (profile) {
-      applyProfileToNetControls(profile);
-    }
-  }
+  applySelectedNetAccountProfile();
   state.net.apiBase = prefs.apiBase;
   state.net.username = prefs.username;
   state.net.email = prefs.email;
