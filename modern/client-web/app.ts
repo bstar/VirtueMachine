@@ -879,7 +879,7 @@ function resolveAnimatedObjectTileAtTick(obj, counter) {
   if (!obj) {
     return 0;
   }
-  const doorTileId = resolveDoorTileId(state.sim, obj);
+  const doorTileId = resolveDoorTileIdRuntime(state.sim, obj);
   if (state.animData && state.animData.hasBaseTile(obj.baseTile)) {
     const animBase = state.animData.animatedTile(obj.baseTile, counter);
     return (animBase + (obj.frame | 0)) & 0xffff;
@@ -5142,22 +5142,6 @@ function findObjectByAnchor(anchor) {
   return null;
 }
 
-function toggleDoorState(sim, obj) {
-  return toggleDoorStateRuntime(sim, obj);
-}
-
-function resolvedDoorFrame(sim, obj) {
-  return resolvedDoorFrameRuntime(sim, obj);
-}
-
-function isDoorFrameOpen(obj, frame) {
-  return isDoorFrameOpenRuntime(obj?.type, frame);
-}
-
-function resolveDoorTileId(sim, obj) {
-  return resolveDoorTileIdRuntime(sim, obj);
-}
-
 function resolveLegacyFootprintTile(sim, obj) {
   return resolveDoorTileIdRuntime(sim, obj);
 }
@@ -5170,7 +5154,7 @@ function objectFootprintTiles(sim, o, ox, oy) {
   const wrap10 = (v) => v & 0x3ff;
   const sx = wrap10(ox);
   const sy = wrap10(oy);
-  const tileId = resolveDoorTileId(sim, o) & 0xffff;
+  const tileId = resolveDoorTileIdRuntime(sim, o) & 0xffff;
   const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
   const out = [{ x: sx, y: sy, tileId }];
   if (tf & 0x80) {
@@ -5204,7 +5188,7 @@ function isBlockedAt(sim, wx, wy, wz) {
     const checkObjectBlockAt = (o, ox, oy) => {
       const cells = objectFootprintTiles(sim, o, ox, oy);
       const isDoor = isCloseableDoorObjectRuntime(o);
-      const doorOpen = isDoor ? isDoorFrameOpen(o, resolvedDoorFrame(sim, o)) : false;
+      const doorOpen = isDoor ? isDoorFrameOpenRuntime(o?.type, resolvedDoorFrameRuntime(sim, o)) : false;
       for (const c of cells) {
         if (c.x !== tx || c.y !== ty) {
           continue;
@@ -5276,11 +5260,11 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
     if (!isCloseableDoorObjectRuntime(o)) {
       continue;
     }
-    const beforeFrame = resolvedDoorFrame(sim, o);
-    const beforeOpen = isDoorFrameOpen(o, beforeFrame);
-    toggleDoorState(sim, o);
-    const afterFrame = resolvedDoorFrame(sim, o);
-    const afterOpen = isDoorFrameOpen(o, afterFrame);
+    const beforeFrame = resolvedDoorFrameRuntime(sim, o);
+    const beforeOpen = isDoorFrameOpenRuntime(o?.type, beforeFrame);
+    toggleDoorStateRuntime(sim, o);
+    const afterFrame = resolvedDoorFrameRuntime(sim, o);
+    const afterOpen = isDoorFrameOpenRuntime(o?.type, afterFrame);
     diagBox.className = "diag ok";
     diagBox.textContent = afterOpen && !beforeOpen
       ? `Opened door at ${tx},${ty},${tz}`
@@ -5443,11 +5427,11 @@ function tryToggleDoorAtCell(sim, tx, ty, tz) {
     if (!isCloseableDoorObjectRuntime(o)) {
       continue;
     }
-    const beforeFrame = resolvedDoorFrame(sim, o);
-    const beforeOpen = isDoorFrameOpen(o, beforeFrame);
-    toggleDoorState(sim, o);
-    const afterFrame = resolvedDoorFrame(sim, o);
-    const afterOpen = isDoorFrameOpen(o, afterFrame);
+    const beforeFrame = resolvedDoorFrameRuntime(sim, o);
+    const beforeOpen = isDoorFrameOpenRuntime(o?.type, beforeFrame);
+    toggleDoorStateRuntime(sim, o);
+    const afterFrame = resolvedDoorFrameRuntime(sim, o);
+    const afterOpen = isDoorFrameOpenRuntime(o?.type, afterFrame);
     diagBox.className = "diag ok";
     diagBox.textContent = afterOpen && !beforeOpen
       ? `Opened door at ${tx},${ty},${tz}`
@@ -5874,7 +5858,7 @@ async function captureParitySnapshotJson() {
       }));
       const objects = state.objectLayer
         ? state.objectLayer.objectsAt(wx, wy, cz).map((o, idx) => {
-          const tileId = resolveDoorTileId(state.sim, o) & 0xffff;
+          const tileId = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
           const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
           return {
             idx,
@@ -9056,7 +9040,7 @@ function buildHoverReportText() {
 
   const objects = state.objectLayer ? state.objectLayer.objectsAt(wx, wy, wz) : [];
   const objLines = objects.map((o, idx) => {
-    const tileId = resolveDoorTileId(state.sim, o) & 0xffff;
+    const tileId = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
     const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
     return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0} lord=${Number(o.legacyOrder || 0) | 0} achild=${Number(o.assocChildCount || 0) | 0} a0010=${Number(o.assocChild0010Count || 0) | 0}`;
   });
