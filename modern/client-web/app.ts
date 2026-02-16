@@ -96,7 +96,7 @@ import {
   decodeSimSnapshotBase64Runtime,
   encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
-import { loadNetPanelPrefs, saveNetPanelPref } from "./net/panel_runtime.ts";
+import { loadNetPanelPrefs, persistNetLoginSettings, saveNetPanelPref } from "./net/panel_runtime.ts";
 import {
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
@@ -4124,14 +4124,17 @@ async function netLogin() {
       }
     },
     persistLoginSettings: ({ apiBase, username, characterName, email }) => {
-      try {
-        localStorage.setItem(NET_API_BASE_KEY, String(apiBase || ""));
-        localStorage.setItem(NET_USERNAME_KEY, String(username || ""));
-        localStorage.setItem(NET_CHARACTER_NAME_KEY, String(characterName || ""));
-        localStorage.setItem(NET_EMAIL_KEY, String(email || ""));
-      } catch (_err) {
-        // ignore storage failures in restrictive browser contexts
-      }
+      persistNetLoginSettings({
+        apiBase: NET_API_BASE_KEY,
+        username: NET_USERNAME_KEY,
+        characterName: NET_CHARACTER_NAME_KEY,
+        email: NET_EMAIL_KEY
+      }, {
+        apiBase: String(apiBase || ""),
+        username: String(username || ""),
+        characterName: String(characterName || ""),
+        email: String(email || "")
+      });
     },
     onProfileUpdated: upsertNetProfileFromInputs
   });

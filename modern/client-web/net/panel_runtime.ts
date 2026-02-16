@@ -47,3 +47,23 @@ export function saveNetPanelPref(storageKey: string, value: string): void {
     // ignore storage failures
   }
 }
+
+export function persistNetLoginSettings(
+  keys: {
+    apiBase: string;
+    username: string;
+    characterName: string;
+    email: string;
+  },
+  values: {
+    apiBase: string;
+    username: string;
+    characterName: string;
+    email: string;
+  }
+): void {
+  saveNetPanelPref(keys.apiBase, values.apiBase);
+  saveNetPanelPref(keys.username, values.username);
+  saveNetPanelPref(keys.characterName, values.characterName);
+  saveNetPanelPref(keys.email, values.email);
+}
