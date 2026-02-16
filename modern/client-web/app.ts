@@ -4004,10 +4004,6 @@ function hasMultipleSavedAccounts() {
   return countSavedProfilesRuntime(NET_PROFILES_KEY) > 1;
 }
 
-function resetBackgroundNetFailures() {
-  resetBackgroundFailureState(state.net);
-}
-
 function recordBackgroundNetFailure(err, context) {
   recordBackgroundFailureRuntime(state.net, {
     err,
@@ -4088,7 +4084,7 @@ async function netLogin() {
     setResumeFromSnapshot: (resumed) => {
       state.net.resumeFromSnapshot = !!resumed;
     },
-    resetBackgroundFailures: resetBackgroundNetFailures,
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net),
     updateSessionStat: updateNetSessionStat,
     getUsername: () => String(state.net.username || ""),
     getCharacterName: () => String(state.net.characterName || ""),
@@ -4251,7 +4247,7 @@ async function netSaveSnapshot() {
     onSavedTick: (tick) => {
       state.net.lastSavedTick = Number(tick) >>> 0;
     },
-    resetBackgroundFailures: resetBackgroundNetFailures,
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net),
     setStatus: setNetStatus
   });
 }
@@ -4271,7 +4267,7 @@ async function netLoadSnapshot() {
       state.avatarLastMoveTick = -1;
       state.interactionProbeTile = null;
     },
-    resetBackgroundFailures: resetBackgroundNetFailures,
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net),
     setStatus: setNetStatus
   });
 }
@@ -4295,7 +4291,7 @@ async function netRunCriticalMaintenance(opts = {}) {
       tick: state.sim.tick >>> 0,
       world_items: collectWorldItemsForMaintenance()
     }, netRequest);
-    resetBackgroundNetFailures();
+    resetBackgroundFailureState(state.net);
     state.net.recoveryEventCount += events.length;
     state.net.lastMaintenanceTick = state.sim.tick >>> 0;
     updateCriticalRecoveryStat();
@@ -4336,7 +4332,7 @@ async function netSendPresenceHeartbeat() {
     isAuthenticated: isNetAuthenticated,
     isSessionStarted: () => state.sessionStarted,
     request: netRequest,
-    resetBackgroundFailures: resetBackgroundNetFailures
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net)
   });
 }
 
@@ -4344,7 +4340,7 @@ async function netLeavePresence() {
   await performPresenceLeave(state.net.sessionId, {
     isAuthenticated: isNetAuthenticated,
     request: netRequest,
-    resetBackgroundFailures: resetBackgroundNetFailures
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net)
   });
 }
 
@@ -4352,7 +4348,7 @@ async function netPollPresence() {
   await performPresencePoll({
     isAuthenticated: isNetAuthenticated,
     request: netRequest,
-    resetBackgroundFailures: resetBackgroundNetFailures,
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net),
     isPollInFlight: () => state.net.presencePollInFlight,
     setPollInFlight: (inFlight) => {
       state.net.presencePollInFlight = !!inFlight;
@@ -4384,7 +4380,7 @@ async function netPollWorldClock() {
   await performWorldClockPoll({
     isAuthenticated: isNetAuthenticated,
     request: netRequest,
-    resetBackgroundFailures: resetBackgroundNetFailures,
+    resetBackgroundFailures: () => resetBackgroundFailureState(state.net),
     isPollInFlight: () => state.net.clockPollInFlight,
     setPollInFlight: (inFlight) => {
       state.net.clockPollInFlight = !!inFlight;
