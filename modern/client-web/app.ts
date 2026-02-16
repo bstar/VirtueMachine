@@ -3994,6 +3994,14 @@ function currentNetProfileControls() {
   };
 }
 
+function applyProfileToNetControls(profile) {
+  return applyNetProfileToControlsRuntime({
+    profile,
+    controls: currentNetProfileControls(),
+    selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
+  });
+}
+
 function resetBackgroundFailures() {
   resetBackgroundFailureState(state.net);
 }
@@ -4414,11 +4422,7 @@ function initNetPanel() {
     const key = netAccountSelect.value;
     const profile = loadNetProfilesFromStorage(NET_PROFILES_KEY).find((row) => profileKeyRuntime(row) === key);
     if (profile) {
-      applyNetProfileToControlsRuntime({
-        profile,
-        controls: currentNetProfileControls(),
-        selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-      });
+      applyProfileToNetControls(profile);
     }
   }
   state.net.apiBase = prefs.apiBase;
@@ -4432,11 +4436,7 @@ function initNetPanel() {
     loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILES_KEY),
     profileKey: profileKeyRuntime,
     applyProfile: (profile) => {
-      applyNetProfileToControlsRuntime({
-        profile,
-        controls: currentNetProfileControls(),
-        selectedKeyStorageKey: NET_PROFILE_SELECTED_KEY
-      });
+      applyProfileToNetControls(profile);
     }
   });
   state.net.maintenanceAuto = prefs.maintenance === "on";
