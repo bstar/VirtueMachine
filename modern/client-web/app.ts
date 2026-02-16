@@ -5062,14 +5062,6 @@ function tryGetAtCell(sim, tx, ty) {
   return true;
 }
 
-function firstInventoryKey(sim) {
-  return firstInventoryKeyRuntime(sim);
-}
-
-function decrementInventoryKey(sim, key) {
-  return decrementInventoryKeyRuntime(sim, key);
-}
-
 function tryAttackAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
   const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
@@ -5098,13 +5090,13 @@ function tryDropAtCell(sim, tx, ty) {
     diagBox.textContent = `Drop: target must be adjacent (${tx},${ty}).`;
     return false;
   }
-  const key = firstInventoryKey(sim);
+  const key = firstInventoryKeyRuntime(sim);
   if (!key) {
     diagBox.className = "diag warn";
     diagBox.textContent = "Drop: inventory is empty.";
     return false;
   }
-  const remaining = decrementInventoryKey(sim, key);
+  const remaining = decrementInventoryKeyRuntime(sim, key);
   /* CANONICAL STUB: world drop object spawn/stack semantics still pending in sim core. */
   diagBox.className = "diag ok";
   diagBox.textContent = `Drop: ${key} at ${tx},${ty},${tz} (remaining ${remaining}).`;
@@ -6086,14 +6078,6 @@ function timeOfDayLabel(hour) {
   return timeOfDayLabelRuntime(hour);
 }
 
-function packCommand(tick, type, arg0, arg1) {
-  return packCommandRuntime(tick, type, arg0, arg1, COMMAND_WIRE_SIZE);
-}
-
-function unpackCommand(bytes) {
-  return unpackCommandRuntime(bytes);
-}
-
 function appendCommandLog(cmd) {
   appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
 }
@@ -6122,8 +6106,8 @@ function queueMove(dx, dy) {
   state.avatarFacingDx = dx;
   state.avatarFacingDy = dy;
   const targetTick = (state.sim.tick + 1) >>> 0;
-  const bytes = packCommand(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy);
-  const cmd = unpackCommand(bytes);
+  const bytes = packCommandRuntime(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy, COMMAND_WIRE_SIZE);
+  const cmd = unpackCommandRuntime(bytes);
 
   // Keep exactly one pending move command so repeated key events cannot stack.
   if (upsertMoveCommandForTickRuntime({
@@ -6145,8 +6129,14 @@ function queueInteractDoor() {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const bytes = packCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_FACING, state.avatarFacingDx | 0, state.avatarFacingDy | 0);
-  const cmd = unpackCommand(bytes);
+  const bytes = packCommandRuntime(
+    state.sim.tick + 1,
+    LEGACY_COMMAND_TYPE.USE_FACING,
+    state.avatarFacingDx | 0,
+    state.avatarFacingDy | 0,
+    COMMAND_WIRE_SIZE
+  );
+  const cmd = unpackCommandRuntime(bytes);
   enqueueCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
@@ -6161,8 +6151,8 @@ function queueInteractAtCell(wx, wy) {
   }
   const tx = wx | 0;
   const ty = wy | 0;
-  const bytes = packCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty);
-  const cmd = unpackCommand(bytes);
+  const bytes = packCommandRuntime(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty, COMMAND_WIRE_SIZE);
+  const cmd = unpackCommandRuntime(bytes);
   enqueueCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
@@ -6182,8 +6172,8 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   }
   const tx = wx | 0;
   const ty = wy | 0;
-  const bytes = packCommand(state.sim.tick + 1, type, tx, ty);
-  const cmd = unpackCommand(bytes);
+  const bytes = packCommandRuntime(state.sim.tick + 1, type, tx, ty, COMMAND_WIRE_SIZE);
+  const cmd = unpackCommandRuntime(bytes);
   enqueueCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
