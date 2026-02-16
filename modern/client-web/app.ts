@@ -9110,12 +9110,6 @@ function startupMenuIndexAtEvent(ev, surface) {
   );
 }
 
-function clampInt(v, lo, hi) {
-  if (v < lo) return lo;
-  if (v > hi) return hi;
-  return v | 0;
-}
-
 function hoveredWorldCellFromMouse() {
   if (!state.sessionStarted || !state.mouseInCanvas || !state.mapCtx) {
     return null;
@@ -9141,8 +9135,8 @@ function hoveredWorldCellFromMouse() {
     }
     const lx = (mx - mapX) / scale;
     const ly = (my - mapY) / scale;
-    const gx = clampInt(Math.floor((lx / 160) * VIEW_W), 0, VIEW_W - 1);
-    const gy = clampInt(Math.floor((ly / 160) * VIEW_H), 0, VIEW_H - 1);
+    const gx = clampI32Runtime(Math.floor((lx / 160) * VIEW_W), 0, VIEW_W - 1);
+    const gy = clampI32Runtime(Math.floor((ly / 160) * VIEW_H), 0, VIEW_H - 1);
     return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
   }
 
@@ -9153,8 +9147,8 @@ function hoveredWorldCellFromMouse() {
   }
   const mx = Math.floor(state.mouseNormX * w);
   const my = Math.floor(state.mouseNormY * h);
-  const gx = clampInt(Math.floor((mx / w) * VIEW_W), 0, VIEW_W - 1);
-  const gy = clampInt(Math.floor((my / h) * VIEW_H), 0, VIEW_H - 1);
+  const gx = clampI32Runtime(Math.floor((mx / w) * VIEW_W), 0, VIEW_W - 1);
+  const gy = clampI32Runtime(Math.floor((my / h) * VIEW_H), 0, VIEW_H - 1);
   return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
 }
 
