@@ -148,6 +148,7 @@ import {
   isLikelyPickupObjectTypeRuntime,
   isSolidEnvObjectRuntime
 } from "./sim/object_types_runtime.ts";
+import { nearestTalkTargetAtCellRuntime, topWorldObjectAtCellRuntime } from "./sim/target_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -5032,36 +5033,14 @@ function isLikelyPickupObjectType(type) {
 }
 
 function topWorldObjectAtCell(sim, tx, ty, tz, opts = {}) {
-  if (!state.objectLayer) {
-    return null;
-  }
-  const pickupOnly = !!opts.pickupOnly;
-  const list = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    const o = list[i];
-    if (!o.renderable || isObjectRemoved(sim, o)) {
-      continue;
-    }
-    if (pickupOnly && !isLikelyPickupObjectType(o.type)) {
-      continue;
-    }
-    return o;
-  }
-  return null;
+  return topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, opts, {
+    isObjectRemoved,
+    isLikelyPickupObjectType
+  });
 }
 
 function nearestTalkTargetAtCell(sim, tx, ty, tz) {
-  if (!state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
-    return null;
-  }
-  for (const e of state.entityLayer.entries) {
-    if ((e.z | 0) !== (tz | 0)) continue;
-    if ((e.x | 0) !== (tx | 0)) continue;
-    if ((e.y | 0) !== (ty | 0)) continue;
-    if ((e.id | 0) === AVATAR_ENTITY_ID) continue;
-    return e;
-  }
-  return null;
+  return nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
 }
 
 function tryLookAtCell(sim, tx, ty) {
