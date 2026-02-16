@@ -104,6 +104,12 @@ import {
   deriveNetSessionText,
   deriveTopNetStatusText
 } from "./net/status_runtime.ts";
+import {
+  advanceWorldMinuteRuntime,
+  clampI32Runtime,
+  expireRemovedWorldPropsRuntime,
+  xorshift32Runtime
+} from "./sim/sim_utils_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -6208,66 +6214,6 @@ async function captureParitySnapshotJson() {
   }
 }
 
-function xorshift32(x) {
-  let v = x >>> 0;
-  if (v === 0) {
-    v = 0x6d2b79f5;
-  }
-  v ^= v << 13;
-  v ^= v >>> 17;
-  v ^= v << 5;
-  return v >>> 0;
-}
-
-function clampI32(value, lo, hi) {
-  if (value < lo) return lo;
-  if (value > hi) return hi;
-  return value | 0;
-}
-
-function advanceWorldMinute(world) {
-  world.time_m += 1;
-  if (world.time_m < MINUTES_PER_HOUR) return;
-  world.time_m = 0;
-  world.time_h += 1;
-  if (world.time_h < HOURS_PER_DAY) return;
-  world.time_h = 0;
-  world.date_d += 1;
-  if (world.date_d <= DAYS_PER_MONTH) return;
-  world.date_d = 1;
-  world.date_m += 1;
-  if (world.date_m <= MONTHS_PER_YEAR) return;
-  world.date_m = 1;
-  world.date_y += 1;
-}
-
-function expireRemovedWorldProps(sim, tickNow) {
-  const removed = sim.removedObjectKeys;
-  if (!removed || typeof removed !== "object") {
-    sim.removedObjectCount = 0;
-    return;
-  }
-  const atTick = sim.removedObjectAtTick || {};
-  let remaining = 0;
-  for (const key of Object.keys(removed)) {
-    if (!removed[key]) {
-      delete removed[key];
-      delete atTick[key];
-      continue;
-    }
-    const removedTick = Number(atTick[key]) >>> 0;
-    const age = (tickNow - removedTick) >>> 0;
-    if (age >= WORLD_PROP_RESET_TICKS) {
-      delete removed[key];
-      delete atTick[key];
-      continue;
-    }
-    remaining += 1;
-  }
-  sim.removedObjectAtTick = atTick;
-  sim.removedObjectCount = remaining >>> 0;
-}
-
 function applyCommand(sim, cmd) {
   if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
     if ((sim.avatarPoseSetTick | 0) === (sim.tick | 0)) {
@@ -6277,8 +6223,8 @@ function applyCommand(sim, cmd) {
     if (sim.avatarPose !== "stand") {
       clearAvatarPose(sim);
     }
-    const nx = clampI32(sim.world.map_x + cmd.arg0, -4096, 4095);
-    const ny = clampI32(sim.world.map_y + cmd.arg1, -4096, 4095);
+    const nx = clampI32Runtime(sim.world.map_x + cmd.arg0, -4096, 4095);
+    const ny = clampI32Runtime(sim.world.map_y + cmd.arg1, -4096, 4095);
     if (state.movementMode === "avatar") {
       if (!isBlockedAt(sim, nx, ny, sim.world.map_z)) {
         sim.world.map_x = nx;
@@ -6364,11 +6310,16 @@ function stepSimTick(sim, queue) {
     pending.push(cmd);
   }
 
-  sim.rngState = xorshift32(sim.rngState);
+  sim.rngState = xorshift32Runtime(sim.rngState);
   sim.worldFlags ^= sim.rngState & 1;
-  expireRemovedWorldProps(sim, nextTick);
+  expireRemovedWorldPropsRuntime(sim, nextTick, WORLD_PROP_RESET_TICKS);
   if (!isNetAuthenticated() && (nextTick % TICKS_PER_MINUTE) === 0) {
-    advanceWorldMinute(sim.world);
+    advanceWorldMinuteRuntime(sim.world, {
+      minutesPerHour: MINUTES_PER_HOUR,
+      hoursPerDay: HOURS_PER_DAY,
+      daysPerMonth: DAYS_PER_MONTH,
+      monthsPerYear: MONTHS_PER_YEAR
+    });
   }
   sim.tick = nextTick;
 
@@ -8778,8 +8729,8 @@ function clampUseCursorToView() {
   const startY = viewStartY();
   const maxX = startX + VIEW_W - 1;
   const maxY = startY + VIEW_H - 1;
-  state.useCursorX = clampI32(state.useCursorX | 0, startX, maxX);
-  state.useCursorY = clampI32(state.useCursorY | 0, startY, maxY);
+  state.useCursorX = clampI32Runtime(state.useCursorX | 0, startX, maxX);
+  state.useCursorY = clampI32Runtime(state.useCursorY | 0, startY, maxY);
   const verb = String(state.targetVerb || "");
   const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
   if (Number.isFinite(range) && range >= 0) {
@@ -8792,8 +8743,8 @@ function clampUseCursorToView() {
       const s = range / Math.max(1, cheb);
       const nx = cx + Math.round(dx * s);
       const ny = cy + Math.round(dy * s);
-      state.useCursorX = clampI32(nx | 0, startX, maxX);
-      state.useCursorY = clampI32(ny | 0, startY, maxY);
+      state.useCursorX = clampI32Runtime(nx | 0, startX, maxX);
+      state.useCursorY = clampI32Runtime(ny | 0, startY, maxY);
     }
   }
 }
