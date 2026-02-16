@@ -35,7 +35,7 @@ Historical context:
 Implemented in `modern/tools/sync_assets.sh`:
 
 1. use root `objblk??` if present
-2. else decode `lzobjblk` into `objblk??` via `modern/tools/extract_lzobjblk_savegame.js`
+2. else decode `lzobjblk` into `objblk??` via `modern/tools/extract_lzobjblk_savegame.ts`
 3. else fallback to `savegame/objblk??`
 
 ## `lzobjblk` Nuance

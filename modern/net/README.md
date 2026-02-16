@@ -148,7 +148,7 @@ Machine-readable schema stubs are in `modern/net/contracts/`.
 ## Test
 
 ```bash
-node modern/net/tests/server_contract_test.mjs
+bun modern/net/tests/server_contract_test.ts
 ```
 
 Or via tooling wrapper:

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 "use strict";
 
 const fs = require("node:fs");
@@ -21,7 +21,7 @@ function parseArgs(argv) {
     if (a === "--set" && next) { out.sets.push(String(next)); i += 1; continue; }
   }
   if (!out.from || !out.to || out.sets.length === 0) {
-    throw new Error("Usage: patch_baseline_profile.js --from <profile> --to <profile> --set <object_key:x,y,z> [--set ...]");
+    throw new Error("Usage: patch_baseline_profile.ts --from <profile> --to <profile> --set <object_key:x,y,z> [--set ...]");
   }
   return out;
 }

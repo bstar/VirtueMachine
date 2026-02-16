@@ -80,7 +80,7 @@ if find "$SRC_DIR" -maxdepth 1 -type f -iname "objblk??" -print -quit | grep -q 
   world_objlist_source="$SRC_DIR"
 elif [[ -f "$SRC_DIR/lzobjblk" ]]; then
   tmp_obj_source="$(mktemp -d "${TMPDIR:-/tmp}/u6m_lzobjblk_XXXXXX")"
-  node "$ROOT_DIR/modern/tools/extract_lzobjblk_savegame.js" "$SRC_DIR/lzobjblk" "$tmp_obj_source"
+  bun "$ROOT_DIR/modern/tools/extract_lzobjblk_savegame.ts" "$SRC_DIR/lzobjblk" "$tmp_obj_source"
   world_obj_source="$tmp_obj_source"
   if [[ -f "$SRC_DIR/objlist" ]]; then
     world_objlist_source="$SRC_DIR"

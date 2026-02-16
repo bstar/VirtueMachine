@@ -29,7 +29,7 @@ if ! kill -0 "$STACK_PID" >/dev/null 2>&1; then
 fi
 
 echo "[5/5] Reloading server baseline..."
-node "$ROOT_DIR/modern/tools/reload_net_baseline.js" \
+bun "$ROOT_DIR/modern/tools/reload_net_baseline.ts" \
   --api "$API_BASE" \
   --user "$USER_NAME" \
   --pass "$USER_PASS"

@@ -54,8 +54,8 @@ Purpose:
 
 Key files:
 
-- `modern/client-web/app.js`
-- `modern/client-web/render_composition.js`
+- `modern/client-web/app.ts`
+- `modern/client-web/render_composition.ts`
 
 Important boundaries:
 
@@ -106,7 +106,7 @@ Now supports canonical object baseline resolution:
 
 Extractor:
 
-- `modern/tools/extract_lzobjblk_savegame.js`
+- `modern/tools/extract_lzobjblk_savegame.ts`
 
 ## Practical Takeaway
 

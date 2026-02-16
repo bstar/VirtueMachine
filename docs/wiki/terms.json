@@ -469,7 +469,7 @@
         "Expecting code/data fix to appear without server reload"
       ],
       "debug_checks": [
-        "Run reload_net_baseline.js",
+        "Run reload_net_baseline.ts",
         "Confirm delta overlay does not reintroduce old state"
       ]
     },

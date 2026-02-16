@@ -49,5 +49,5 @@ echo "Activated baseline profile: $PROFILE_NAME"
 echo "Active baseline dir: $ACTIVE_DIR"
 
 if [[ "$NET_RELOAD" == "--reload-net" ]]; then
-  node "$ROOT_DIR/modern/tools/reload_net_baseline.js" --api "$NET_API_BASE" --user "$NET_USER" --pass "$NET_PASS"
+  bun "$ROOT_DIR/modern/tools/reload_net_baseline.ts" --api "$NET_API_BASE" --user "$NET_USER" --pass "$NET_PASS"
 fi

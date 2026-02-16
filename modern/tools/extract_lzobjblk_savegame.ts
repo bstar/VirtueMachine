@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 "use strict";
 
 const fs = require("fs");
@@ -93,7 +93,7 @@ function areaName(areaId) {
 }
 
 function usage() {
-  console.error("Usage: extract_lzobjblk_savegame.js <lzobjblk_path> <out_dir>");
+  console.error("Usage: extract_lzobjblk_savegame.ts <lzobjblk_path> <out_dir>");
 }
 
 function main() {

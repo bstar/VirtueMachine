@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 "use strict";
 
 const fs = require("fs");
@@ -146,7 +146,7 @@ function inspectFile(filePath) {
 function main() {
   const args = process.argv.slice(2);
   if (!args.length) {
-    console.error("Usage: inspect_shp.js <file> [file...]");
+    console.error("Usage: inspect_shp.ts <file> [file...]");
     process.exit(2);
   }
   const results = [];

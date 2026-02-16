@@ -49,7 +49,7 @@ Changing baseline files alone may not update a running server process until base
 
 Useful script:
 
-- `modern/tools/reload_net_baseline.js`
+- `modern/tools/reload_net_baseline.ts`
 
 If parity changes seem ignored, use this order:
 
