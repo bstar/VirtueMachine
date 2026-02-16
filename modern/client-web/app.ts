@@ -97,7 +97,13 @@ import {
   encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
 import { loadNetPanelPrefs, saveNetPanelPref } from "./net/panel_runtime.ts";
-import { deriveNetIndicatorState, deriveNetQuickStatusText } from "./net/status_runtime.ts";
+import {
+  deriveNetAuthButtonModel,
+  deriveNetIndicatorState,
+  deriveNetQuickStatusText,
+  deriveNetSessionText,
+  deriveTopNetStatusText
+} from "./net/status_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -3861,22 +3867,22 @@ function updateNetSessionStat() {
   if (!statNetSession) {
     return;
   }
-  if (!state.net.token || !state.net.userId) {
-    statNetSession.textContent = "offline";
-    return;
-  }
-  const name = state.net.characterName || "(no-char)";
-  statNetSession.textContent = `${state.net.username}/${name}`;
+  statNetSession.textContent = deriveNetSessionText({
+    token: state.net.token,
+    userId: state.net.userId,
+    username: state.net.username,
+    characterName: state.net.characterName
+  });
 }
 
 function updateNetAuthButton() {
   if (!netLoginButton) {
     return;
   }
-  const authed = isNetAuthenticated();
-  netLoginButton.textContent = authed ? "Logout (Shift+I)" : "Net Login (Shift+I)";
-  netLoginButton.classList.remove("control-btn--login", "control-btn--logout");
-  netLoginButton.classList.add(authed ? "control-btn--logout" : "control-btn--login");
+  const model = deriveNetAuthButtonModel(isNetAuthenticated());
+  netLoginButton.textContent = model.text;
+  netLoginButton.classList.remove(...model.removeClasses);
+  netLoginButton.classList.add(model.addClass);
 }
 
 function setNetStatus(level, text) {
@@ -3885,7 +3891,7 @@ function setNetStatus(level, text) {
   state.net.statusLevel = lvl;
   state.net.statusText = msg;
   if (topNetStatus) {
-    topNetStatus.textContent = `${lvl} - ${msg}`;
+    topNetStatus.textContent = deriveTopNetStatusText(lvl, msg);
   }
   if (topNetIndicator) {
     topNetIndicator.dataset.state = deriveNetIndicatorState(lvl, isNetAuthenticated());
