@@ -110,6 +110,12 @@ import {
   expireRemovedWorldPropsRuntime,
   xorshift32Runtime
 } from "./sim/sim_utils_runtime.ts";
+import {
+  asU32SignedRuntime,
+  hashHexRuntime,
+  hashMixU32Runtime,
+  simStateHashRuntime
+} from "./sim/hash_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -6326,93 +6332,28 @@ function stepSimTick(sim, queue) {
   return pending;
 }
 
-function hashMixU32(h, value) {
-  const mixed = (h ^ BigInt(value >>> 0)) * HASH_PRIME;
-  return mixed & HASH_MASK;
-}
-
-function asU32Signed(value) {
-  return (value | 0) >>> 0;
-}
-
 function simStateHash(sim) {
-  let h = HASH_OFFSET;
-  h = hashMixU32(h, sim.tick);
-  h = hashMixU32(h, sim.rngState);
-  h = hashMixU32(h, sim.worldFlags);
-  h = hashMixU32(h, sim.commandsApplied);
-  h = hashMixU32(h, sim.world.is_on_quest);
-  h = hashMixU32(h, sim.world.next_sleep);
-  h = hashMixU32(h, sim.world.time_m);
-  h = hashMixU32(h, sim.world.time_h);
-  h = hashMixU32(h, sim.world.date_d);
-  h = hashMixU32(h, sim.world.date_m);
-  h = hashMixU32(h, sim.world.date_y);
-  h = hashMixU32(h, asU32Signed(sim.world.wind_dir));
-  h = hashMixU32(h, sim.world.active);
-  h = hashMixU32(h, asU32Signed(sim.world.map_x));
-  h = hashMixU32(h, asU32Signed(sim.world.map_y));
-  h = hashMixU32(h, asU32Signed(sim.world.map_z));
-  h = hashMixU32(h, sim.world.in_combat);
-  h = hashMixU32(h, sim.world.sound_enabled);
-  const avatarPose = sim.avatarPose === "sleep" ? 2 : (sim.avatarPose === "sit" ? 1 : 0);
-  h = hashMixU32(h, avatarPose);
-  if (sim.avatarPoseAnchor) {
-    h = hashMixU32(h, 1);
-    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.x));
-    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.y));
-    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.z));
-    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.order));
-    h = hashMixU32(h, asU32Signed(sim.avatarPoseAnchor.type));
-  } else {
-    h = hashMixU32(h, 0);
-  }
-  const doorKeys = Object.keys(sim.doorOpenStates ?? {}).sort();
-  h = hashMixU32(h, doorKeys.length);
-  for (const k of doorKeys) {
-    for (let i = 0; i < k.length; i += 1) {
-      h = hashMixU32(h, k.charCodeAt(i));
-    }
-    h = hashMixU32(h, sim.doorOpenStates[k] ? 1 : 0);
-  }
-  const removedKeys = Object.keys(sim.removedObjectKeys ?? {}).sort();
-  h = hashMixU32(h, removedKeys.length);
-  for (const k of removedKeys) {
-    for (let i = 0; i < k.length; i += 1) {
-      h = hashMixU32(h, k.charCodeAt(i));
-    }
-    h = hashMixU32(h, sim.removedObjectKeys[k] ? 1 : 0);
-  }
-  const removedAtTick = sim.removedObjectAtTick ?? {};
-  h = hashMixU32(h, removedKeys.length);
-  for (const k of removedKeys) {
-    h = hashMixU32(h, Number(removedAtTick[k]) >>> 0);
-  }
-  h = hashMixU32(h, Number(sim.removedObjectCount) >>> 0);
-  const inventoryKeys = Object.keys(sim.inventory ?? {}).sort();
-  h = hashMixU32(h, inventoryKeys.length);
-  for (const k of inventoryKeys) {
-    for (let i = 0; i < k.length; i += 1) {
-      h = hashMixU32(h, k.charCodeAt(i));
-    }
-    h = hashMixU32(h, Number(sim.inventory[k]) >>> 0);
-  }
-  const spawned = Array.isArray(sim.spawnedWorldObjects) ? sim.spawnedWorldObjects : [];
-  h = hashMixU32(h, spawned.length);
-  for (const o of spawned) {
-    h = hashMixU32(h, asU32Signed(o?.x));
-    h = hashMixU32(h, asU32Signed(o?.y));
-    h = hashMixU32(h, asU32Signed(o?.z));
-    h = hashMixU32(h, asU32Signed(o?.type));
-    h = hashMixU32(h, asU32Signed(o?.frame));
-    h = hashMixU32(h, asU32Signed(o?.order));
-  }
-  h = hashMixU32(h, Number(sim.spawnedWorldSeq) >>> 0);
-  return h;
+  return simStateHashRuntime(sim, {
+    offset: HASH_OFFSET,
+    prime: HASH_PRIME,
+    mask: HASH_MASK
+  });
 }
 
 function hashHex(hashValue) {
-  return hashValue.toString(16).padStart(16, "0");
+  return hashHexRuntime(hashValue);
+}
+
+function hashMixU32(h, value) {
+  return hashMixU32Runtime(h, value, {
+    offset: HASH_OFFSET,
+    prime: HASH_PRIME,
+    mask: HASH_MASK
+  });
+}
+
+function asU32Signed(value) {
+  return asU32SignedRuntime(value);
 }
 
 function timeOfDayLabel(hour) {
