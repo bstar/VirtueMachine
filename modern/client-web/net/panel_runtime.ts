@@ -67,3 +67,15 @@ export function persistNetLoginSettings(
   saveNetPanelPref(keys.characterName, values.characterName);
   saveNetPanelPref(keys.email, values.email);
 }
+
+export function setModalOpenRuntime(
+  modal: HTMLElement | null | undefined,
+  open: boolean
+): void {
+  if (!modal) {
+    return;
+  }
+  const visible = !!open;
+  modal.classList.toggle("hidden", !visible);
+  modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}

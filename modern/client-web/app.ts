@@ -96,7 +96,7 @@ import {
   decodeSimSnapshotBase64Runtime,
   encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
-import { loadNetPanelPrefs, persistNetLoginSettings } from "./net/panel_runtime.ts";
+import { loadNetPanelPrefs, persistNetLoginSettings, setModalOpenRuntime } from "./net/panel_runtime.ts";
 import {
   applyNetPanelPrefsToControlsRuntime,
   bindAccountProfileSelectionRuntime,
@@ -4464,12 +4464,7 @@ async function netPollWorldClock() {
 }
 
 function setAccountModalOpen(open) {
-  if (!netAccountModal) {
-    return;
-  }
-  const visible = !!open;
-  netAccountModal.classList.toggle("hidden", !visible);
-  netAccountModal.setAttribute("aria-hidden", visible ? "false" : "true");
+  setModalOpenRuntime(netAccountModal, !!open);
 }
 
 function initNetPanel() {
