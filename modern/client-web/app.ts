@@ -6037,24 +6037,12 @@ function simStateHash(sim) {
   });
 }
 
-function hashHex(hashValue) {
-  return hashHexRuntime(hashValue);
-}
-
 function hashMixU32(h, value) {
   return hashMixU32Runtime(h, value, {
     offset: HASH_OFFSET,
     prime: HASH_PRIME,
     mask: HASH_MASK
   });
-}
-
-function asU32Signed(value) {
-  return asU32SignedRuntime(value);
-}
-
-function timeOfDayLabel(hour) {
-  return timeOfDayLabelRuntime(hour);
 }
 
 function appendCommandLog(cmd) {
@@ -7443,7 +7431,7 @@ function updateStats() {
   statClock.textContent = `${hh}:${mm}`;
   statDate.textContent = `${w.date_d} / ${w.date_m} / ${w.date_y}`;
   if (topTimeOfDay) {
-    topTimeOfDay.textContent = `${timeOfDayLabel(w.time_h)} (${hh}:${mm})`;
+    topTimeOfDay.textContent = `${timeOfDayLabelRuntime(w.time_h)} (${hh}:${mm})`;
   }
   if (topInputMode) {
     if (!state.sessionStarted) {
@@ -7491,7 +7479,7 @@ function updateStats() {
   if (statNpcOcclusionBlocks) {
     statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
   }
-  statHash.textContent = hashHex(simStateHash(state.sim));
+  statHash.textContent = hashHexRuntime(simStateHash(state.sim));
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
   }
@@ -7550,7 +7538,7 @@ function runReplayCheckpoints(commands, totalTicks, interval) {
     if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
       checkpoints.push({
         tick: sim.tick,
-        hash: hashHex(simStateHash(sim))
+        hash: hashHexRuntime(simStateHash(sim))
       });
     }
   }
@@ -7581,8 +7569,8 @@ function animationViewportHash(sim) {
     const wy = startY + gy;
     const rawTile = state.mapCtx.tileAt(wx, wy, wz);
     const animTile = resolveAnimatedTileAtTick(rawTile, tick);
-    h = hashMixU32(h, asU32Signed(wx));
-    h = hashMixU32(h, asU32Signed(wy));
+    h = hashMixU32(h, asU32SignedRuntime(wx));
+    h = hashMixU32(h, asU32SignedRuntime(wy));
     h = hashMixU32(h, animTile);
     if (state.objectLayer) {
       const overlays = state.objectLayer.objectsAt(wx, wy, wz);
@@ -7593,7 +7581,7 @@ function animationViewportHash(sim) {
       }
     }
   }
-  return hashHex(h);
+  return hashHexRuntime(h);
 }
 
 function runAnimationCheckpoints(commands, totalTicks, interval) {
