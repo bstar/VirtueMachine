@@ -36,3 +36,21 @@ export function handleBackgroundFailure(
   const suffix = args.err ? `: ${String((args.err as any).message || args.err)}` : "";
   args.setStatus("error", `${args.context} failed${suffix}`);
 }
+
+export function recordBackgroundFailureRuntime(
+  netState: {
+    backgroundFailCount: number;
+    firstBackgroundFailAtMs: number;
+    backgroundSyncPaused: boolean;
+  },
+  args: {
+    err: unknown;
+    context: string;
+    nowMs: number;
+    windowMs: number;
+    maxFailures: number;
+    setStatus: (level: string, text: string) => void;
+  }
+): void {
+  handleBackgroundFailure(netState, args);
+}

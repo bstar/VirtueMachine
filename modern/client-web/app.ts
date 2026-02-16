@@ -81,7 +81,10 @@ import {
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
 import { performNetLoginFlow } from "./net/auth_runtime.ts";
-import { handleBackgroundFailure, resetBackgroundFailureState } from "./net/failure_runtime.ts";
+import {
+  recordBackgroundFailureRuntime,
+  resetBackgroundFailureState
+} from "./net/failure_runtime.ts";
 import {
   applyNetProfileToControlsRuntime,
   countSavedProfilesRuntime,
@@ -4022,7 +4025,7 @@ function resetBackgroundNetFailures() {
 }
 
 function recordBackgroundNetFailure(err, context) {
-  handleBackgroundFailure(state.net, {
+  recordBackgroundFailureRuntime(state.net, {
     err,
     context,
     nowMs: Date.now(),
