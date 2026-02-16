@@ -70,6 +70,14 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 - Risk: status text/indicator update ordering may drift if future slices bypass `setNetStatus`.
 - Exit criteria: centralize all status writes through one path and add UI integration coverage for login/logout/error transitions.
 
+### 8) Transitional `app.ts` typing looseness to re-enable global typecheck
+
+- Status: `temporary`
+- Location: `modern/client-web/app.ts`
+- Note: to bring `app.ts` back into `tsconfig` checks, this slice introduced broad typing guards (`state: any`, generic `byId<T=any>()`, and permissive class field declarations for legacy runtime containers).
+- Risk: weakened compile-time guarantees inside orchestration-heavy code can hide shape regressions while refactor slices continue.
+- Exit criteria: replace broad `any` usage with shared interfaces (`AppState`, `UiProbe`, map/tile/object/entity layer contracts), then tighten helper return types and remove fallback casts.
+
 ## Canonical Guardrails
 
 For every new extraction slice:

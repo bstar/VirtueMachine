@@ -264,89 +264,93 @@ const WORLD_OBJECT_LOOKUP_DEPS = {
   isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
 };
 
-const canvas = document.getElementById("viewport");
-const ctx = canvas.getContext("2d");
-const legacyBackdropCanvas = document.getElementById("legacyBackdrop");
-const legacyViewportCanvas = document.getElementById("legacyViewport");
-const legacyWorldSurface = document.getElementById("legacyWorldSurface");
+function byId<T = any>(id: string): T {
+  return document.getElementById(id) as unknown as T;
+}
 
-const statTick = document.getElementById("statTick");
-const statPos = document.getElementById("statPos");
-const statClock = document.getElementById("statClock");
-const statDate = document.getElementById("statDate");
-const statTile = document.getElementById("statTile");
-const statObjects = document.getElementById("statObjects");
-const statEntities = document.getElementById("statEntities");
-const statRenderParity = document.getElementById("statRenderParity");
-const statAvatarState = document.getElementById("statAvatarState");
-const statNpcOcclusionBlocks = document.getElementById("statNpcOcclusionBlocks");
-const statQueued = document.getElementById("statQueued");
-const statSource = document.getElementById("statSource");
-const statHash = document.getElementById("statHash");
-const statReplay = document.getElementById("statReplay");
-const statPalettePhase = document.getElementById("statPalettePhase");
-const statCenterTiles = document.getElementById("statCenterTiles");
-const statCenterBand = document.getElementById("statCenterBand");
-const statNetSession = document.getElementById("statNetSession");
-const statNetPlayers = document.getElementById("statNetPlayers");
-const statCriticalRecoveries = document.getElementById("statCriticalRecoveries");
-const topTimeOfDay = document.getElementById("topTimeOfDay");
-const topNetStatus = document.getElementById("topNetStatus");
-const topNetIndicator = document.getElementById("topNetIndicator");
-const topInputMode = document.getElementById("topInputMode");
-const topCopyStatus = document.getElementById("topCopyStatus");
-const netQuickStatus = document.getElementById("netQuickStatus");
-const netAccountOpenButton = document.getElementById("netAccountOpenButton");
-const netAccountModal = document.getElementById("netAccountModal");
-const netAccountModalBackdrop = document.getElementById("netAccountModalBackdrop");
-const netAccountCloseButton = document.getElementById("netAccountCloseButton");
-const diagBox = document.getElementById("diagBox");
-const replayDownload = document.getElementById("replayDownload");
-const themeSelect = document.getElementById("themeSelect");
-const wikiLink = document.getElementById("wikiLink");
-const fontSelect = document.getElementById("fontSelect");
-const gridToggle = document.getElementById("gridToggle");
-const debugOverlayToggle = document.getElementById("debugOverlayToggle");
-const animationToggle = document.getElementById("animationToggle");
-const paletteFxToggle = document.getElementById("paletteFxToggle");
-const movementModeToggle = document.getElementById("movementModeToggle");
-const capturePreviewToggle = document.getElementById("capturePreviewToggle");
-const legacyScaleModeToggle = document.getElementById("legacyScaleModeToggle");
-const charStubCanvas = document.getElementById("charStubCanvas");
-const locationSelect = document.getElementById("locationSelect");
-const jumpButton = document.getElementById("jumpButton");
-const captureButton = document.getElementById("captureButton");
-const captureWorldHudButton = document.getElementById("captureWorldHudButton");
-const parityRadiusInput = document.getElementById("parityRadiusInput");
-const paritySnapshotButton = document.getElementById("paritySnapshotButton");
-const netApiBaseInput = document.getElementById("netApiBaseInput");
-const netAccountSelect = document.getElementById("netAccountSelect");
-const netUsernameInput = document.getElementById("netUsernameInput");
-const netPasswordInput = document.getElementById("netPasswordInput");
-const netPasswordToggleButton = document.getElementById("netPasswordToggleButton");
-const netNewPasswordInput = document.getElementById("netNewPasswordInput");
-const netChangePasswordButton = document.getElementById("netChangePasswordButton");
-const netCharacterNameInput = document.getElementById("netCharacterNameInput");
-const netEmailInput = document.getElementById("netEmailInput");
-const netEmailCodeInput = document.getElementById("netEmailCodeInput");
-const netLoginButton = document.getElementById("netLoginButton");
-const netAutoLoginCheckbox = document.getElementById("netAutoLoginCheckbox");
-const netRecoverButton = document.getElementById("netRecoverButton");
-const netSetEmailButton = document.getElementById("netSetEmailButton");
-const netSendVerifyButton = document.getElementById("netSendVerifyButton");
-const netVerifyEmailButton = document.getElementById("netVerifyEmailButton");
-const netSaveButton = document.getElementById("netSaveButton");
-const netLoadButton = document.getElementById("netLoadButton");
-const netMaintenanceToggle = document.getElementById("netMaintenanceToggle");
-const netMaintenanceButton = document.getElementById("netMaintenanceButton");
-const debugTabRuntime = document.getElementById("debugTabRuntime");
-const debugTabChat = document.getElementById("debugTabChat");
-const debugPanelRuntime = document.getElementById("debugPanelRuntime");
-const debugPanelChat = document.getElementById("debugPanelChat");
-const debugChatCount = document.getElementById("debugChatCount");
-const debugChatLedgerBody = document.getElementById("debugChatLedgerBody");
-const debugChatCopyButton = document.getElementById("debugChatCopyButton");
-const debugChatClearButton = document.getElementById("debugChatClearButton");
+const canvas = byId("viewport");
+const ctx = canvas.getContext("2d");
+const legacyBackdropCanvas = byId("legacyBackdrop");
+const legacyViewportCanvas = byId("legacyViewport");
+const legacyWorldSurface = byId("legacyWorldSurface");
+
+const statTick = byId("statTick");
+const statPos = byId("statPos");
+const statClock = byId("statClock");
+const statDate = byId("statDate");
+const statTile = byId("statTile");
+const statObjects = byId("statObjects");
+const statEntities = byId("statEntities");
+const statRenderParity = byId("statRenderParity");
+const statAvatarState = byId("statAvatarState");
+const statNpcOcclusionBlocks = byId("statNpcOcclusionBlocks");
+const statQueued = byId("statQueued");
+const statSource = byId("statSource");
+const statHash = byId("statHash");
+const statReplay = byId("statReplay");
+const statPalettePhase = byId("statPalettePhase");
+const statCenterTiles = byId("statCenterTiles");
+const statCenterBand = byId("statCenterBand");
+const statNetSession = byId("statNetSession");
+const statNetPlayers = byId("statNetPlayers");
+const statCriticalRecoveries = byId("statCriticalRecoveries");
+const topTimeOfDay = byId("topTimeOfDay");
+const topNetStatus = byId("topNetStatus");
+const topNetIndicator = byId("topNetIndicator");
+const topInputMode = byId("topInputMode");
+const topCopyStatus = byId("topCopyStatus");
+const netQuickStatus = byId("netQuickStatus");
+const netAccountOpenButton = byId("netAccountOpenButton");
+const netAccountModal = byId("netAccountModal");
+const netAccountModalBackdrop = byId("netAccountModalBackdrop");
+const netAccountCloseButton = byId("netAccountCloseButton");
+const diagBox = byId("diagBox");
+const replayDownload = byId("replayDownload");
+const themeSelect = byId("themeSelect");
+const wikiLink = byId("wikiLink");
+const fontSelect = byId("fontSelect");
+const gridToggle = byId("gridToggle");
+const debugOverlayToggle = byId("debugOverlayToggle");
+const animationToggle = byId("animationToggle");
+const paletteFxToggle = byId("paletteFxToggle");
+const movementModeToggle = byId("movementModeToggle");
+const capturePreviewToggle = byId("capturePreviewToggle");
+const legacyScaleModeToggle = byId("legacyScaleModeToggle");
+const charStubCanvas = byId("charStubCanvas");
+const locationSelect = byId("locationSelect");
+const jumpButton = byId("jumpButton");
+const captureButton = byId("captureButton");
+const captureWorldHudButton = byId("captureWorldHudButton");
+const parityRadiusInput = byId("parityRadiusInput");
+const paritySnapshotButton = byId("paritySnapshotButton");
+const netApiBaseInput = byId("netApiBaseInput");
+const netAccountSelect = byId("netAccountSelect");
+const netUsernameInput = byId("netUsernameInput");
+const netPasswordInput = byId("netPasswordInput");
+const netPasswordToggleButton = byId("netPasswordToggleButton");
+const netNewPasswordInput = byId("netNewPasswordInput");
+const netChangePasswordButton = byId("netChangePasswordButton");
+const netCharacterNameInput = byId("netCharacterNameInput");
+const netEmailInput = byId("netEmailInput");
+const netEmailCodeInput = byId("netEmailCodeInput");
+const netLoginButton = byId("netLoginButton");
+const netAutoLoginCheckbox = byId("netAutoLoginCheckbox");
+const netRecoverButton = byId("netRecoverButton");
+const netSetEmailButton = byId("netSetEmailButton");
+const netSendVerifyButton = byId("netSendVerifyButton");
+const netVerifyEmailButton = byId("netVerifyEmailButton");
+const netSaveButton = byId("netSaveButton");
+const netLoadButton = byId("netLoadButton");
+const netMaintenanceToggle = byId("netMaintenanceToggle");
+const netMaintenanceButton = byId("netMaintenanceButton");
+const debugTabRuntime = byId("debugTabRuntime");
+const debugTabChat = byId("debugTabChat");
+const debugPanelRuntime = byId("debugPanelRuntime");
+const debugPanelChat = byId("debugPanelChat");
+const debugChatCount = byId("debugChatCount");
+const debugChatLedgerBody = byId("debugChatLedgerBody");
+const debugChatCopyButton = byId("debugChatCopyButton");
+const debugChatClearButton = byId("debugChatClearButton");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -569,7 +573,7 @@ const INITIAL_WORLD = Object.freeze({
 
 const INITIAL_SEED = 0x12345678;
 
-const state = {
+const state: any = {
   sim: createInitialSimState(),
   queue: [],
   commandLog: [],
@@ -797,6 +801,10 @@ const CURSOR_ASPECT_X = 1.0;
 const CURSOR_ASPECT_Y = 1.2;
 
 class U6AnimDataJS {
+  entries: any[];
+  state: Uint8Array;
+  byBase: Map<number, number>;
+
   constructor(entries) {
     this.entries = entries;
     this.state = new Uint8Array(entries.length);
@@ -965,6 +973,12 @@ function getRenderPaletteKey() {
 }
 
 class U6MapJS {
+  map: Uint8Array;
+  chunks: Uint8Array;
+  window: Uint8Array;
+  loadedZ: number;
+  loadedMapId0: number;
+
   constructor(mapBytes, chunkBytes) {
     this.map = mapBytes;
     this.chunks = chunkBytes;
@@ -1036,6 +1050,13 @@ class U6MapJS {
 }
 
 class U6TileSetJS {
+  tileIndex: DataView;
+  maskType: Uint8Array;
+  tiles: Uint8Array;
+  cache: Map<any, any>;
+  pixelCache: Map<any, any>;
+  fxBandCache: Map<any, any>;
+
   constructor(tileIndexBytes, maskTypeBytes, mapTilesBytes, objTilesBytes) {
     this.tileIndex = new DataView(tileIndexBytes.buffer, tileIndexBytes.byteOffset, tileIndexBytes.byteLength);
     this.maskType = maskTypeBytes.slice(0, 2048);
@@ -1168,6 +1189,13 @@ class U6TileSetJS {
 }
 
 class U6ObjectLayerJS {
+  baseTiles: any;
+  byCoord: Map<string, any[]>;
+  entries: any[];
+  assocEntries: any[];
+  totalLoaded: number;
+  filesLoaded: number;
+
   constructor(baseTiles) {
     this.baseTiles = baseTiles;
     this.byCoord = new Map();
@@ -1437,6 +1465,11 @@ class U6ObjectLayerJS {
 }
 
 class U6EntityLayerJS {
+  baseTiles: any;
+  entries: any[];
+  assocEntries: any[];
+  totalLoaded: number;
+
   constructor(baseTiles) {
     this.baseTiles = baseTiles;
     this.entries = [];
@@ -2411,7 +2444,7 @@ function parseConversationRules(scriptBytes, mainPc) {
 function findConversationFirstKeyPc(scriptBytes, mainPc) {
   return findConversationFirstKeyPcImported(scriptBytes, mainPc, {
     KEY: CONV_OP_KEY
-  });
+  } as any);
 }
 
 function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
@@ -3162,8 +3195,8 @@ function renderLegacyHudStubOnBackdrop() {
   if (showVista) {
     drawLegacyVista();
   }
-  const probe = getUiProbeForRender();
-  const conversationPanel = probe.canonical_ui?.conversation_panel || {};
+  const probe: any = getUiProbeForRender();
+  const conversationPanel: any = probe.canonical_ui?.conversation_panel || {};
   const inTalkPanel = statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E;
   const panelShowEquipment = inTalkPanel
     ? (state.legacyConversationShowInventory !== false)
@@ -4032,7 +4065,7 @@ function updateCriticalRecoveryStat() {
 }
 
 async function netRequest(route, init = {}, auth = true) {
-  const enabledExtensions = runtimeExtensionsSummary();
+  const enabledExtensions = runtimeExtensionsSummary(state.runtimeExtensions);
   return performManagedNetRequest({
     apiBase: String(state.net.apiBase || ""),
     route: String(route || ""),
@@ -4232,10 +4265,10 @@ async function netLogoutAndPersist() {
     diagBox.className = "diag warn";
     const parts = [];
     if (saveErr) {
-      parts.push(`position save failed: ${String(saveErr.message || saveErr)}`);
+      parts.push(`position save failed: ${String((saveErr as any)?.message || saveErr)}`);
     }
     if (leaveErr) {
-      parts.push(`presence cleanup failed: ${String(leaveErr.message || leaveErr)}`);
+      parts.push(`presence cleanup failed: ${String((leaveErr as any)?.message || leaveErr)}`);
     }
     diagBox.textContent = `Logged out with warnings (${parts.join("; ")}).`;
   } else {
@@ -4284,7 +4317,7 @@ function collectWorldItemsForMaintenance() {
   return collectWorldItemsForMaintenanceFromLayer(state.objectLayer);
 }
 
-async function netRunCriticalMaintenance(opts = {}) {
+async function netRunCriticalMaintenance(opts: any = {}) {
   const { silent = false } = opts;
   if (state.net.maintenanceInFlight) {
     return [];
@@ -6645,7 +6678,7 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
 }
 
 function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
-  const base = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
+  const base: any = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
   base.debug = null;
   return base;
 }
@@ -8503,8 +8536,8 @@ function captureUiProbeHotkey() {
   });
   const digest = uiProbeDigest(probe);
   const filename = `virtuemachine-ui-probe-${state.sim.tick >>> 0}.json`;
-  window.__vmLastUiProbe = probe;
-  window.__vmLastUiProbeDigest = digest;
+  (window as any).__vmLastUiProbe = probe;
+  (window as any).__vmLastUiProbeDigest = digest;
   downloadJsonFile(filename, probe);
   if (topCopyStatus) {
     topCopyStatus.textContent = `probe ${digest}`;
@@ -8899,7 +8932,7 @@ function startupMenuIndexAtEvent(ev, surface) {
     ev.clientY,
     { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
     { width: s.width || 0, height: s.height || 0 },
-    STARTUP_MENU_HITBOX
+    STARTUP_MENU_HITBOX as any
   );
 }
 
@@ -9018,7 +9051,7 @@ function buildHoverReportText() {
   return lines.join("\n");
 }
 
-async function copyHoverReportToClipboard(options = {}) {
+async function copyHoverReportToClipboard(options: any = {}) {
   const enrich = options.enrich !== false;
   const report = buildHoverReportText();
   if (!report) {
@@ -9245,7 +9278,7 @@ window.addEventListener("resize", () => {
 
 loadRuntimeAssets().finally(() => {
   state.runtimeReady = true;
-  const extSummary = runtimeExtensionsSummary();
+  const extSummary = runtimeExtensionsSummary(state.runtimeExtensions);
   const runtimeModeText = extSummary.length
     ? `${state.runtimeProfile} + ${extSummary.join(",")}`
     : state.runtimeProfile;
