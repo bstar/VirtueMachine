@@ -156,7 +156,6 @@ import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 import {
   normalizeStartupMenuIndexRuntime,
   startupMenuItemEnabledRuntime,
-  startupMenuIndexAtLogicalPosRuntime,
   startupMenuIndexAtSurfacePointRuntime
 } from "./ui/startup_runtime.ts";
 import { isTypingContextRuntime } from "./ui/input_runtime.ts";
@@ -5490,16 +5489,12 @@ function isNetAuthenticated() {
   return !!(state.net && state.net.token && state.net.userId);
 }
 
-function startupMenuItemEnabled(item) {
-  return startupMenuItemEnabledRuntime(item, isNetAuthenticated());
-}
-
 function activateStartupMenuSelection() {
   if (!STARTUP_MENU.length) {
     return;
   }
   const selected = STARTUP_MENU[state.startupMenuIndex] || STARTUP_MENU[0];
-  if (!selected || !startupMenuItemEnabled(selected)) {
+  if (!selected || !startupMenuItemEnabledRuntime(selected, isNetAuthenticated())) {
     if (selected && selected.id === "journey" && !isNetAuthenticated()) {
       setNetStatus("idle", "Login required before Journey Onward.");
       diagBox.className = "diag warn";
@@ -8932,10 +8927,6 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
   }
 }, true);
-
-function startupMenuIndexAtLogicalPos(lx, ly) {
-  return startupMenuIndexAtLogicalPosRuntime(lx, ly, STARTUP_MENU_HITBOX);
-}
 
 function startupMenuIndexAtEvent(ev, surface) {
   const s = surface || canvas;
