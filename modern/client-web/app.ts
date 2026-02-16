@@ -4008,6 +4008,17 @@ function refreshNetAccountSelect() {
   return populateNetAccountSelectRuntime({ accountSelect: netAccountSelect, ...NET_PROFILE_STORAGE });
 }
 
+function netAccountSelectionBinding() {
+  return {
+    accountSelect: netAccountSelect,
+    loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey),
+    profileKey: profileKeyRuntime,
+    applyProfile: (profile) => {
+      applyProfileToNetControls(profile);
+    }
+  };
+}
+
 function resetBackgroundFailures() {
   resetBackgroundFailureState(state.net);
 }
@@ -4419,23 +4430,16 @@ function initNetPanel() {
     characterNameInput: netCharacterNameInput,
     autoLoginCheckbox: netAutoLoginCheckbox
   });
-  const netAccountSelectionBinding = {
-    accountSelect: netAccountSelect,
-    loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey),
-    profileKey: profileKeyRuntime,
-    applyProfile: (profile) => {
-      applyProfileToNetControls(profile);
-    }
-  };
+  const accountBinding = netAccountSelectionBinding();
   refreshNetAccountSelect();
-  applySelectedAccountProfileRuntime(netAccountSelectionBinding);
+  applySelectedAccountProfileRuntime(accountBinding);
   state.net.apiBase = prefs.apiBase;
   state.net.username = prefs.username;
   state.net.email = prefs.email;
   state.net.characterName = prefs.characterName;
   setNetStatus("idle", "Not logged in.");
 
-  bindAccountProfileSelectionRuntime(netAccountSelectionBinding);
+  bindAccountProfileSelectionRuntime(accountBinding);
   state.net.maintenanceAuto = prefs.maintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
