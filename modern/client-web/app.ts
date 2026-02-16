@@ -162,6 +162,7 @@ import {
   startupMenuIndexAtLogicalPosRuntime,
   startupMenuIndexAtSurfacePointRuntime
 } from "./ui/startup_runtime.ts";
+import { isTypingContextRuntime } from "./ui/input_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -4077,21 +4078,7 @@ function recordBackgroundNetFailure(err, context) {
 }
 
 function isTypingContext(target) {
-  if (!target) {
-    return false;
-  }
-  const el = target instanceof Element ? target : null;
-  if (!el) {
-    return false;
-  }
-  if (el.isContentEditable) {
-    return true;
-  }
-  const tag = el.tagName ? el.tagName.toLowerCase() : "";
-  if (tag === "input" || tag === "textarea" || tag === "select") {
-    return true;
-  }
-  return !!el.closest("input, textarea, select, [contenteditable=\"\"], [contenteditable=\"true\"]");
+  return isTypingContextRuntime(target);
 }
 
 function updateCriticalRecoveryStat() {
