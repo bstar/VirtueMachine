@@ -124,3 +124,24 @@ export function bindNetPanelPrefPersistenceRuntime(args: {
     });
   }
 }
+
+export function bindAccountProfileSelectionRuntime(args: {
+  accountSelect?: HTMLSelectElement | null;
+  loadProfiles: () => any[];
+  profileKey: (profile: any) => string;
+  applyProfile: (profile: any) => void;
+}): void {
+  if (!args.accountSelect) {
+    return;
+  }
+  args.accountSelect.addEventListener("change", () => {
+    const key = String(args.accountSelect?.value || "");
+    if (!key) {
+      return;
+    }
+    const profile = args.loadProfiles().find((row) => args.profileKey(row) === key);
+    if (profile) {
+      args.applyProfile(profile);
+    }
+  });
+}

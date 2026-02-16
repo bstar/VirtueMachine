@@ -99,6 +99,7 @@ import {
 import { loadNetPanelPrefs, persistNetLoginSettings } from "./net/panel_runtime.ts";
 import {
   applyNetPanelPrefsToControlsRuntime,
+  bindAccountProfileSelectionRuntime,
   bindNetPanelPrefPersistenceRuntime
 } from "./net/panel_bindings_runtime.ts";
 import {
@@ -4525,18 +4526,12 @@ function initNetPanel() {
   state.net.characterName = prefs.characterName;
   setNetStatus("idle", "Not logged in.");
 
-  if (netAccountSelect) {
-    netAccountSelect.addEventListener("change", () => {
-      const key = String(netAccountSelect.value || "");
-      if (!key) {
-        return;
-      }
-      const profile = loadNetProfiles().find((row) => profileKey(row) === key);
-      if (profile) {
-        applyNetProfile(profile);
-      }
-    });
-  }
+  bindAccountProfileSelectionRuntime({
+    accountSelect: netAccountSelect,
+    loadProfiles: loadNetProfiles,
+    profileKey,
+    applyProfile: applyNetProfile
+  });
   state.net.maintenanceAuto = prefs.maintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
