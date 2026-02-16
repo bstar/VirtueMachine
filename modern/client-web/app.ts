@@ -4032,24 +4032,12 @@ function recordBackgroundNetFailure(err, context) {
   });
 }
 
-function isTypingContext(target) {
-  return isTypingContextRuntime(target);
-}
-
 function updateCriticalRecoveryStat() {
   if (!statCriticalRecoveries) {
     return;
   }
   const suffix = state.net.lastMaintenanceTick >= 0 ? ` @${state.net.lastMaintenanceTick}` : "";
   statCriticalRecoveries.textContent = `${state.net.recoveryEventCount}${suffix}`;
-}
-
-function encodeSimSnapshotBase64(sim) {
-  return encodeSimSnapshotBase64Runtime(sim);
-}
-
-function decodeSimSnapshotBase64(snapshotBase64) {
-  return decodeSimSnapshotBase64Runtime(snapshotBase64);
 }
 
 async function netRequest(route, init = {}, auth = true) {
@@ -4098,7 +4086,7 @@ async function netLogin() {
       applyNetLoginState(state.net, login, username);
     },
     ensureCharacter: netEnsureCharacter,
-    decodeSnapshot: decodeSimSnapshotBase64,
+    decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
       state.sim = loaded;
       state.queue = [];
@@ -4271,7 +4259,7 @@ async function netSaveSnapshot() {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
     request: netRequest,
-    encodeSnapshot: () => encodeSimSnapshotBase64(state.sim),
+    encodeSnapshot: () => encodeSimSnapshotBase64Runtime(state.sim),
     currentTick: () => state.sim.tick >>> 0,
     onSavedTick: (tick) => {
       state.net.lastSavedTick = Number(tick) >>> 0;
@@ -4286,7 +4274,7 @@ async function netLoadSnapshot() {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
     request: netRequest,
-    decodeSnapshot: decodeSimSnapshotBase64,
+    decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
       state.sim = loaded;
       state.queue = [];
@@ -8918,7 +8906,7 @@ window.addEventListener("keydown", (ev) => {
     }
     return;
   }
-  if (isTypingContext(ev.target)) {
+  if (isTypingContextRuntime(ev.target)) {
     return;
   }
 
