@@ -5137,14 +5137,6 @@ function findObjectByAnchor(anchor) {
   return null;
 }
 
-function resolveLegacyFootprintTile(sim, obj) {
-  return resolveDoorTileIdRuntime(sim, obj);
-}
-
-function resolveDoorTileIdForVisibility(sim, obj) {
-  return resolveDoorTileIdRuntime(sim, obj);
-}
-
 function objectFootprintTiles(sim, o, ox, oy) {
   const wrap10 = (v) => v & 0x3ff;
   const sx = wrap10(ox);
@@ -5822,7 +5814,7 @@ async function captureParitySnapshotJson() {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
-    resolveFootprintTile: (obj) => resolveLegacyFootprintTile(state.sim, obj),
+    resolveFootprintTile: (obj) => resolveDoorTileIdRuntime(state.sim, obj),
     hasWallTerrain,
     injectLegacyOverlays: null,
     isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
@@ -6629,7 +6621,7 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
       if (animObjTile < 0) {
         return;
       }
-      const footprintTile = resolveLegacyFootprintTile(state.sim, o) & 0xffff;
+      const footprintTile = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
       applyBg(wx, wy, animObjTile, wx, wy);
       const tf = state.tileFlags ? (state.tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
       if (tf & 0x80) {
@@ -7124,7 +7116,7 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
-    resolveFootprintTile: (obj) => resolveLegacyFootprintTile(state.sim, obj),
+    resolveFootprintTile: (obj) => resolveDoorTileIdRuntime(state.sim, obj),
     hasWallTerrain,
     // Canonical-only path: no client-side synthetic overlay injection.
     injectLegacyOverlays: null,
