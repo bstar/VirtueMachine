@@ -135,13 +135,22 @@ export function bindAccountProfileSelectionRuntime(args: {
     return;
   }
   args.accountSelect.addEventListener("change", () => {
-    const key = String(args.accountSelect?.value || "");
-    if (!key) {
-      return;
-    }
-    const profile = args.loadProfiles().find((row) => args.profileKey(row) === key);
-    if (profile) {
-      args.applyProfile(profile);
-    }
+    applySelectedAccountProfileRuntime(args);
   });
+}
+
+export function applySelectedAccountProfileRuntime(args: {
+  accountSelect?: HTMLSelectElement | null;
+  loadProfiles: () => any[];
+  profileKey: (profile: any) => string;
+  applyProfile: (profile: any) => void;
+}): void {
+  const key = String(args.accountSelect?.value || "");
+  if (!key) {
+    return;
+  }
+  const profile = args.loadProfiles().find((row) => args.profileKey(row) === key);
+  if (profile) {
+    args.applyProfile(profile);
+  }
 }

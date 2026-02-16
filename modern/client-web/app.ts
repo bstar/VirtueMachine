@@ -99,6 +99,7 @@ import {
 } from "./net/snapshot_codec_runtime.ts";
 import { loadNetPanelPrefs, persistNetLoginSettings, setModalOpenRuntime } from "./net/panel_runtime.ts";
 import {
+  applySelectedAccountProfileRuntime,
   applyNetPanelPrefsToControlsRuntime,
   bindAccountProfileSelectionRuntime,
   bindNetPanelPrefPersistenceRuntime
@@ -4009,17 +4010,6 @@ function refreshNetAccountSelect() {
   return populateNetAccountSelectRuntime({ accountSelect: netAccountSelect, ...NET_PROFILE_STORAGE });
 }
 
-function applySelectedNetAccountProfile() {
-  if (!netAccountSelect || !netAccountSelect.value) {
-    return;
-  }
-  const key = netAccountSelect.value;
-  const profile = loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey).find((row) => profileKeyRuntime(row) === key);
-  if (profile) {
-    applyProfileToNetControls(profile);
-  }
-}
-
 function resetBackgroundFailures() {
   resetBackgroundFailureState(state.net);
 }
@@ -4431,22 +4421,23 @@ function initNetPanel() {
     characterNameInput: netCharacterNameInput,
     autoLoginCheckbox: netAutoLoginCheckbox
   });
-  refreshNetAccountSelect();
-  applySelectedNetAccountProfile();
-  state.net.apiBase = prefs.apiBase;
-  state.net.username = prefs.username;
-  state.net.email = prefs.email;
-  state.net.characterName = prefs.characterName;
-  setNetStatus("idle", "Not logged in.");
-
-  bindAccountProfileSelectionRuntime({
+  const netAccountSelectionBinding = {
     accountSelect: netAccountSelect,
     loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey),
     profileKey: profileKeyRuntime,
     applyProfile: (profile) => {
       applyProfileToNetControls(profile);
     }
-  });
+  };
+  refreshNetAccountSelect();
+  applySelectedAccountProfileRuntime(netAccountSelectionBinding);
+  state.net.apiBase = prefs.apiBase;
+  state.net.username = prefs.username;
+  state.net.email = prefs.email;
+  state.net.characterName = prefs.characterName;
+  setNetStatus("idle", "Not logged in.");
+
+  bindAccountProfileSelectionRuntime(netAccountSelectionBinding);
   state.net.maintenanceAuto = prefs.maintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
