@@ -4,7 +4,7 @@ import {
   isLegacyPixelTransparent,
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
-} from "../render_composition.js";
+} from "../render_composition.ts";
 import {
   compareLegacyObjectOrderStrict,
   compareLegacyObjectOrderStable

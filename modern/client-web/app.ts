@@ -3,7 +3,7 @@ import {
   isLegacyPixelTransparent,
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
-} from "./render_composition.js";
+} from "./render_composition.ts";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
 import {
