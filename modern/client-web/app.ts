@@ -96,7 +96,11 @@ import {
   decodeSimSnapshotBase64Runtime,
   encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
-import { loadNetPanelPrefs, persistNetLoginSettings, saveNetPanelPref } from "./net/panel_runtime.ts";
+import { loadNetPanelPrefs, persistNetLoginSettings } from "./net/panel_runtime.ts";
+import {
+  applyNetPanelPrefsToControlsRuntime,
+  bindNetPanelPrefPersistenceRuntime
+} from "./net/panel_bindings_runtime.ts";
 import {
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
@@ -4498,30 +4502,15 @@ function initNetPanel() {
     maintenance: "off",
     autoLogin: "off"
   });
-  if (netApiBaseInput) {
-    netApiBaseInput.value = prefs.apiBase;
-  }
-  if (netUsernameInput) {
-    netUsernameInput.value = prefs.username;
-  }
-  if (netPasswordInput) {
-    netPasswordInput.value = prefs.password;
-    netPasswordInput.type = prefs.passwordVisible === "on" ? "text" : "password";
-  }
-  if (netPasswordToggleButton) {
-    const isVisible = prefs.passwordVisible === "on";
-    netPasswordToggleButton.textContent = isVisible ? "Hide" : "Show";
-    netPasswordToggleButton.title = isVisible ? "Hide password" : "Show password";
-  }
-  if (netEmailInput) {
-    netEmailInput.value = prefs.email;
-  }
-  if (netCharacterNameInput) {
-    netCharacterNameInput.value = prefs.characterName;
-  }
-  if (netAutoLoginCheckbox) {
-    netAutoLoginCheckbox.checked = prefs.autoLogin === "on";
-  }
+  applyNetPanelPrefsToControlsRuntime(prefs, {
+    apiBaseInput: netApiBaseInput,
+    usernameInput: netUsernameInput,
+    passwordInput: netPasswordInput,
+    passwordToggleButton: netPasswordToggleButton,
+    emailInput: netEmailInput,
+    characterNameInput: netCharacterNameInput,
+    autoLoginCheckbox: netAutoLoginCheckbox
+  });
   populateNetAccountSelect();
   if (netAccountSelect && netAccountSelect.value) {
     const key = netAccountSelect.value;
@@ -4536,11 +4525,6 @@ function initNetPanel() {
   state.net.characterName = prefs.characterName;
   setNetStatus("idle", "Not logged in.");
 
-  if (netApiBaseInput) {
-    netApiBaseInput.addEventListener("input", () => {
-      saveNetPanelPref(NET_API_BASE_KEY, String(netApiBaseInput.value || ""));
-    });
-  }
   if (netAccountSelect) {
     netAccountSelect.addEventListener("change", () => {
       const key = String(netAccountSelect.value || "");
@@ -4553,53 +4537,37 @@ function initNetPanel() {
       }
     });
   }
-  if (netUsernameInput) {
-    netUsernameInput.addEventListener("input", () => {
-      saveNetPanelPref(NET_USERNAME_KEY, String(netUsernameInput.value || ""));
-    });
-  }
-  if (netPasswordInput) {
-    netPasswordInput.addEventListener("input", () => {
-      saveNetPanelPref(NET_PASSWORD_KEY, String(netPasswordInput.value || ""));
-    });
-  }
-  if (netCharacterNameInput) {
-    netCharacterNameInput.addEventListener("input", () => {
-      saveNetPanelPref(NET_CHARACTER_NAME_KEY, String(netCharacterNameInput.value || ""));
-    });
-  }
-  if (netEmailInput) {
-    netEmailInput.addEventListener("input", () => {
-      saveNetPanelPref(NET_EMAIL_KEY, String(netEmailInput.value || ""));
-    });
-  }
-  if (netPasswordToggleButton && netPasswordInput) {
-    netPasswordToggleButton.addEventListener("click", () => {
-      const show = netPasswordInput.type === "password";
-      netPasswordInput.type = show ? "text" : "password";
-      netPasswordToggleButton.textContent = show ? "Hide" : "Show";
-      netPasswordToggleButton.title = show ? "Hide password" : "Show password";
-      saveNetPanelPref(NET_PASSWORD_VISIBLE_KEY, show ? "on" : "off");
-    });
-  }
-  if (netAutoLoginCheckbox) {
-    netAutoLoginCheckbox.addEventListener("change", () => {
-      const enabled = !!netAutoLoginCheckbox.checked;
-      saveNetPanelPref(NET_AUTO_LOGIN_KEY, enabled ? "on" : "off");
-      if (enabled && !isNetAuthenticated()) {
-        setNetStatus("idle", "Auto-login enabled. It will run on next refresh.");
-      }
-    });
-  }
-
   state.net.maintenanceAuto = prefs.maintenance === "on";
   if (netMaintenanceToggle) {
     netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
-    netMaintenanceToggle.addEventListener("change", () => {
-      state.net.maintenanceAuto = netMaintenanceToggle.value === "on";
-      saveNetPanelPref(NET_MAINTENANCE_KEY, state.net.maintenanceAuto ? "on" : "off");
-    });
   }
+  bindNetPanelPrefPersistenceRuntime({
+    controls: {
+      apiBaseInput: netApiBaseInput,
+      usernameInput: netUsernameInput,
+      passwordInput: netPasswordInput,
+      passwordToggleButton: netPasswordToggleButton,
+      emailInput: netEmailInput,
+      characterNameInput: netCharacterNameInput,
+      autoLoginCheckbox: netAutoLoginCheckbox,
+      maintenanceToggle: netMaintenanceToggle
+    },
+    keys: {
+      apiBase: NET_API_BASE_KEY,
+      username: NET_USERNAME_KEY,
+      password: NET_PASSWORD_KEY,
+      email: NET_EMAIL_KEY,
+      passwordVisible: NET_PASSWORD_VISIBLE_KEY,
+      characterName: NET_CHARACTER_NAME_KEY,
+      autoLogin: NET_AUTO_LOGIN_KEY,
+      maintenance: NET_MAINTENANCE_KEY
+    },
+    isAuthenticated: isNetAuthenticated,
+    setStatus: setNetStatus,
+    setMaintenanceAuto: (enabled) => {
+      state.net.maintenanceAuto = !!enabled;
+    }
+  });
   updateNetSessionStat();
   updateCriticalRecoveryStat();
   updateNetAuthButton();

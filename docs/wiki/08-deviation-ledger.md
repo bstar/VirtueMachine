@@ -8,6 +8,10 @@ This ledger keeps architecture honest: every meaningful divergence is labeled, j
 
 It is also a planning tool: known gaps define where not to overfit visual fixes yet.
 
+For TypeScript/runtime extraction specific temporary deviations, see:
+
+- `docs/wiki/24-ts-refactor-non-canonical-tracker.md`
+
 Status tags:
 
 - `faithful`: behavior intended to match legacy semantics
