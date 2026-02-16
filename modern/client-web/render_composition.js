@@ -1,4 +1,4 @@
-import { compareLegacyObjectOrderStable } from "./legacy_object_order.js";
+import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 
 export function isLegacyPixelTransparent(mask, tileId, palIdx) {
   const zeroIsTransparent = tileId <= 0x01ff;

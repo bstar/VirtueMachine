@@ -8,7 +8,7 @@ import {
 import {
   compareLegacyObjectOrderStrict,
   compareLegacyObjectOrderStable
-} from "../legacy_object_order.js";
+} from "../legacy_object_order.ts";
 
 const VIEW_W = 5;
 const VIEW_H = 5;

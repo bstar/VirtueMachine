@@ -2,16 +2,28 @@ const OBJ_COORD_USE_LOCXYZ = 0x00;
 const OBJ_COORD_USE_CONTAINED = 0x08;
 const OBJ_STATUS_IS_0010 = 0x10;
 
-function coordUseOf(obj) {
+type LegacyObj = {
+  coordUse?: number;
+  status?: number;
+  assocObj?: LegacyObj | null;
+  y?: number;
+  x?: number;
+  z?: number;
+  sourceArea?: number;
+  sourceIndex?: number;
+  order?: number;
+} | null | undefined;
+
+function coordUseOf(obj: LegacyObj): number {
   return (obj && Number.isFinite(obj.coordUse)) ? (obj.coordUse & 0x18) : OBJ_COORD_USE_LOCXYZ;
 }
 
-function is0010(obj) {
+function is0010(obj: LegacyObj): boolean {
   const status = (obj && Number.isFinite(obj.status)) ? (obj.status | 0) : 0;
   return (status & OBJ_STATUS_IS_0010) !== 0;
 }
 
-function resolveAssoc(obj) {
+function resolveAssoc(obj: LegacyObj): LegacyObj {
   if (!obj) {
     return obj;
   }
@@ -21,7 +33,7 @@ function resolveAssoc(obj) {
   return obj;
 }
 
-function resolveContainedAnchor(obj) {
+function resolveContainedAnchor(obj: LegacyObj): LegacyObj {
   let cur = obj;
   const seen = new Set();
   while (cur && coordUseOf(cur) === OBJ_COORD_USE_CONTAINED && !seen.has(cur)) {

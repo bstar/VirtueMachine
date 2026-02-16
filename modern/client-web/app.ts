@@ -4,7 +4,7 @@ import {
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
 } from "./render_composition.js";
-import { compareLegacyObjectOrderStable } from "./legacy_object_order.js";
+import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.js";
 import {
   buildConversationVmContext as buildConversationVmContextImported,
