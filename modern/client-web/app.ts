@@ -256,6 +256,7 @@ function isImplicitSolidObjectTile(objType, tileId) {
 const HASH_OFFSET = 1469598103934665603n;
 const HASH_PRIME = 1099511628211n;
 const HASH_MASK = (1n << 64n) - 1n;
+const HASH_CFG = { offset: HASH_OFFSET, prime: HASH_PRIME, mask: HASH_MASK };
 
 const canvas = document.getElementById("viewport");
 const ctx = canvas.getContext("2d");
@@ -6013,22 +6014,6 @@ function stepSimTick(sim, queue) {
   return pending;
 }
 
-function simStateHash(sim) {
-  return simStateHashRuntime(sim, {
-    offset: HASH_OFFSET,
-    prime: HASH_PRIME,
-    mask: HASH_MASK
-  });
-}
-
-function hashMixU32(h, value) {
-  return hashMixU32Runtime(h, value, {
-    offset: HASH_OFFSET,
-    prime: HASH_PRIME,
-    mask: HASH_MASK
-  });
-}
-
 function appendCommandLog(cmd) {
   appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
 }
@@ -7463,7 +7448,7 @@ function updateStats() {
   if (statNpcOcclusionBlocks) {
     statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
   }
-  statHash.textContent = hashHexRuntime(simStateHash(state.sim));
+  statHash.textContent = hashHexRuntime(simStateHashRuntime(state.sim, HASH_CFG));
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
   }
@@ -7522,7 +7507,7 @@ function runReplayCheckpoints(commands, totalTicks, interval) {
     if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
       checkpoints.push({
         tick: sim.tick,
-        hash: hashHexRuntime(simStateHash(sim))
+        hash: hashHexRuntime(simStateHashRuntime(sim, HASH_CFG))
       });
     }
   }
@@ -7546,22 +7531,22 @@ function animationViewportHash(sim) {
     [VIEW_W - 1, VIEW_H - 1]
   ];
   let h = HASH_OFFSET;
-  h = hashMixU32(h, tick);
+  h = hashMixU32Runtime(h, tick, HASH_CFG);
 
   for (const [gx, gy] of samples) {
     const wx = startX + gx;
     const wy = startY + gy;
     const rawTile = state.mapCtx.tileAt(wx, wy, wz);
     const animTile = resolveAnimatedTileAtTick(rawTile, tick);
-    h = hashMixU32(h, asU32SignedRuntime(wx));
-    h = hashMixU32(h, asU32SignedRuntime(wy));
-    h = hashMixU32(h, animTile);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(wx), HASH_CFG);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(wy), HASH_CFG);
+    h = hashMixU32Runtime(h, animTile, HASH_CFG);
     if (state.objectLayer) {
       const overlays = state.objectLayer.objectsAt(wx, wy, wz);
-      h = hashMixU32(h, overlays.length);
+      h = hashMixU32Runtime(h, overlays.length, HASH_CFG);
       for (const o of overlays) {
         const animObjTile = resolveAnimatedObjectTileAtTick(o, tick);
-        h = hashMixU32(h, animObjTile);
+        h = hashMixU32Runtime(h, animObjTile, HASH_CFG);
       }
     }
   }
