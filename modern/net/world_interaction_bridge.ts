@@ -135,7 +135,7 @@ function applyCanonicalWorldInteractionCommand(input) {
     return { ok: false, ...mapBridgeCode(canonical.code) };
   }
 
-  const patch = {
+  const patch: any = {
     status: Number(canonical.status) & 0xff,
     holder_kind: String(canonical.holder_kind || "none")
   };

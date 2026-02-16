@@ -3,7 +3,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
-const crypto = require("node:crypto");
+const nodeCrypto = require("node:crypto");
 const net = require("node:net");
 const tls = require("node:tls");
 const {
@@ -120,7 +120,7 @@ function isValidEmail(raw) {
 
 function newUserId(state) {
   for (;;) {
-    const id = `usr_${crypto.randomBytes(8).toString("hex")}`;
+    const id = `usr_${nodeCrypto.randomBytes(8).toString("hex")}`;
     if (!state.users.find((u) => u.user_id === id)) {
       return id;
     }
@@ -502,14 +502,15 @@ function normalizeWorldObjectDeltas(raw) {
       if (!v || typeof v !== "object") {
         continue;
       }
+      const entry = v as any;
       out.moved[String(k)] = {
-        x: Number(v.x) | 0,
-        y: Number(v.y) | 0,
-        z: Number(v.z) | 0,
-        status: Number.isFinite(Number(v.status)) ? (Number(v.status) & 0xff) : null,
-        holder_kind: String(v.holder_kind || "none"),
-        holder_id: String(v.holder_id || ""),
-        holder_key: String(v.holder_key || "")
+        x: Number(entry.x) | 0,
+        y: Number(entry.y) | 0,
+        z: Number(entry.z) | 0,
+        status: Number.isFinite(Number(entry.status)) ? (Number(entry.status) & 0xff) : null,
+        holder_kind: String(entry.holder_kind || "none"),
+        holder_id: String(entry.holder_id || ""),
+        holder_key: String(entry.holder_key || "")
       };
     }
   }
@@ -744,7 +745,7 @@ function hashInteractionEvent(prevHash, event) {
     String(event.holder_id || ""),
     String(event.holder_key || "")
   ].join("|");
-  return crypto.createHash("sha256").update(stable, "utf8").digest("hex");
+  return nodeCrypto.createHash("sha256").update(stable, "utf8").digest("hex");
 }
 
 function recordWorldInteractionEvent(state, event) {
@@ -967,7 +968,7 @@ function requireUser(state, req, res) {
 }
 
 function issueToken(state, userId) {
-  const token = crypto.randomBytes(24).toString("hex");
+  const token = nodeCrypto.randomBytes(24).toString("hex");
   const ttlMs = 1000 * 60 * 60 * 24 * 7;
   state.tokens.push({
     token,
@@ -1128,7 +1129,7 @@ async function smtpDeliver(toEmail, subject, bodyText) {
     if (responses.length) {
       return responses.shift();
     }
-    const resp = await new Promise((resolve) => {
+    const resp = await new Promise<any>((resolve) => {
       waiters.push(resolve);
     });
     if (resp && resp.error) {
@@ -1216,7 +1217,7 @@ async function resendDeliver(toEmail, subject, bodyText) {
 }
 
 async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
-  const delivery = {
+  const delivery: any = {
     kind: "email_delivery",
     at: nowIso(),
     to: normalizeEmail(toEmail),
@@ -1268,7 +1269,7 @@ function listUserCharacters(state, userId) {
 }
 
 function computeSnapshotHash(snapshotBase64) {
-  return crypto.createHash("sha256").update(snapshotBase64 || "").digest("hex");
+  return nodeCrypto.createHash("sha256").update(snapshotBase64 || "").digest("hex");
 }
 
 function deterministicRecoveryTickLast(events, itemId) {
@@ -1658,7 +1659,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const c = {
-      character_id: crypto.randomUUID(),
+      character_id: nodeCrypto.randomUUID(),
       user_id: user.user_id,
       name,
       created_at: nowIso(),
