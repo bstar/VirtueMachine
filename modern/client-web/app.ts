@@ -123,6 +123,15 @@ import {
   shouldSuppressRepeatedMoveRuntime,
   upsertMoveCommandForTickRuntime
 } from "./sim/queue_runtime.ts";
+import {
+  doorStateKeyRuntime,
+  doorToggleMaskRuntime,
+  isDoorFrameOpenRuntime,
+  isDoorToggledRuntime,
+  resolveDoorTileIdRuntime,
+  resolvedDoorFrameRuntime,
+  toggleDoorStateRuntime
+} from "./sim/door_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -5372,60 +5381,31 @@ function findObjectByAnchor(anchor) {
 }
 
 function doorStateKey(obj) {
-  return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff}`;
+  return doorStateKeyRuntime(obj);
 }
 
 function doorToggleMask(obj) {
-  return obj && obj.type === 0x14e ? 1 : 4;
+  return doorToggleMaskRuntime(obj?.type);
 }
 
 function isDoorToggled(sim, obj) {
-  if (!isCloseableDoorObject(obj)) {
-    return false;
-  }
-  return !!(sim.doorOpenStates && sim.doorOpenStates[doorStateKey(obj)]);
+  return isDoorToggledRuntime(sim, obj);
 }
 
 function toggleDoorState(sim, obj) {
-  if (!isCloseableDoorObject(obj)) {
-    return false;
-  }
-  if (!sim.doorOpenStates) {
-    sim.doorOpenStates = {};
-  }
-  const key = doorStateKey(obj);
-  if (sim.doorOpenStates[key]) {
-    delete sim.doorOpenStates[key];
-    return false;
-  }
-  sim.doorOpenStates[key] = 1;
-  return true;
+  return toggleDoorStateRuntime(sim, obj);
 }
 
 function resolvedDoorFrame(sim, obj) {
-  const frame = obj.frame | 0;
-  if (!isCloseableDoorObject(obj)) {
-    return frame;
-  }
-  if (!isDoorToggled(sim, obj)) {
-    return frame;
-  }
-  return frame ^ doorToggleMask(obj);
+  return resolvedDoorFrameRuntime(sim, obj);
 }
 
 function isDoorFrameOpen(obj, frame) {
-  if (!isCloseableDoorObject(obj)) {
-    return false;
-  }
-  if (obj.type === 0x14e) {
-    return (frame & 1) !== 0;
-  }
-  return frame >= 0 && frame < 4;
+  return isDoorFrameOpenRuntime(obj?.type, frame);
 }
 
 function resolveDoorTileId(sim, obj) {
-  const base = obj.baseTile | 0;
-  return (base + resolvedDoorFrame(sim, obj)) & 0xffff;
+  return resolveDoorTileIdRuntime(sim, obj);
 }
 
 function resolveLegacyFootprintTile(sim, obj) {
