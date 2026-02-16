@@ -4886,10 +4886,6 @@ function topWorldObjectAtCell(sim, tx, ty, tz, opts = {}) {
   });
 }
 
-function nearestTalkTargetAtCell(sim, tx, ty, tz) {
-  return nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
-}
-
 function tryLookAtCell(sim, tx, ty) {
   if (!state.mapCtx) {
     return false;
@@ -4911,7 +4907,7 @@ function tryLookAtCell(sim, tx, ty) {
     diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
     return true;
   }
-  const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
+  const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   if (actor) {
     const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
     pushLedgerMessage(canonicalLookSentenceForTile(tileId));
@@ -4937,7 +4933,7 @@ function tryTalkAtCell(sim, tx, ty) {
     showLegacyLedgerPrompt();
     return false;
   }
-  const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
+  const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   if (!actor) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: nobody there at ${tx},${ty},${tz}.`;
@@ -5063,7 +5059,7 @@ function tryGetAtCell(sim, tx, ty) {
 
 function tryAttackAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
-  const actor = nearestTalkTargetAtCell(sim, tx, ty, tz);
+  const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   if (actor) {
     diagBox.className = "diag ok";
     diagBox.textContent = `Attack: target 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (combat resolution pending).`;
