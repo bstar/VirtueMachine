@@ -91,7 +91,7 @@ cleanup() {
     pkill -P "$NET_PID" 2>/dev/null || true
     kill "$NET_PID" 2>/dev/null || true
   fi
-  pkill -f "bunx --bun vite --config $ROOT_DIR/vite.config.mjs" 2>/dev/null || true
+  pkill -f "bunx --bun vite --config $ROOT_DIR/vite.config.ts" 2>/dev/null || true
   pkill -f "bun $ROOT_DIR/modern/net/server.ts" 2>/dev/null || true
   wait 2>/dev/null || true
   exit "$code"
@@ -111,7 +111,7 @@ if [[ "$DEV_WEB_SERVER" == "vite" ]]; then
     exit 1
   fi
   mkdir -p "$BUN_TMPDIR"
-  bash -lc "cd '$ROOT_DIR' && TMPDIR='$BUN_TMPDIR' bunx --bun vite --config '$ROOT_DIR/vite.config.mjs' --host '$DEV_WEB_BIND' --port '$DEV_WEB_PORT' --strictPort --clearScreen false 2>&1 | tee '$WEB_LOG' | sed 's/^/[web] /'" &
+  bash -lc "cd '$ROOT_DIR' && TMPDIR='$BUN_TMPDIR' bunx --bun vite --config '$ROOT_DIR/vite.config.ts' --host '$DEV_WEB_BIND' --port '$DEV_WEB_PORT' --strictPort --clearScreen false 2>&1 | tee '$WEB_LOG' | sed 's/^/[web] /'" &
   WEB_PID=$!
 else
   bash -lc "cd '$ROOT_DIR' && python3 '$ROOT_DIR/modern/tools/secure_web_server.py' --root '$ROOT_DIR' --bind '$DEV_WEB_BIND' --port '$DEV_WEB_PORT' 2>&1 | tee '$WEB_LOG' | sed 's/^/[web] /'" &

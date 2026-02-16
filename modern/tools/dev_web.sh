@@ -15,7 +15,7 @@ if [[ "$SERVER_MODE" == "vite" ]]; then
   fi
   mkdir -p "$BUN_TMPDIR"
   echo "Serving VirtueMachine web client (Vite HMR) at http://${BIND}:${PORT}/modern/client-web/index.html"
-  exec env TMPDIR="$BUN_TMPDIR" bunx --bun vite --config "$ROOT_DIR/vite.config.mjs" --host "$BIND" --port "$PORT" --strictPort
+  exec env TMPDIR="$BUN_TMPDIR" bunx --bun vite --config "$ROOT_DIR/vite.config.ts" --host "$BIND" --port "$PORT" --strictPort
 fi
 
 echo "Serving VirtueMachine web client (secure_web_server) at http://${BIND}:${PORT}/modern/client-web/"
