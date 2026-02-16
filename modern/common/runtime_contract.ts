@@ -21,7 +21,15 @@ export const DEFAULT_RUNTIME_EXTENSIONS = Object.freeze({
   farming: false
 });
 
-export function createDefaultRuntimeExtensions() {
+export type RuntimeExtensions = {
+  quest_system: boolean;
+  party_mmo: boolean;
+  housing: boolean;
+  crafting: boolean;
+  farming: boolean;
+};
+
+export function createDefaultRuntimeExtensions(): RuntimeExtensions {
   return {
     quest_system: false,
     party_mmo: false,
@@ -31,7 +39,7 @@ export function createDefaultRuntimeExtensions() {
   };
 }
 
-export function normalizeRuntimeProfile(raw) {
+export function normalizeRuntimeProfile(raw: unknown): string {
   const v = String(raw || "").trim().toLowerCase();
   if (RUNTIME_PROFILES.includes(v)) {
     return v;
@@ -39,7 +47,7 @@ export function normalizeRuntimeProfile(raw) {
   return RUNTIME_PROFILE_CANONICAL_STRICT;
 }
 
-export function sanitizeRuntimeExtensions(raw) {
+export function sanitizeRuntimeExtensions(raw: unknown): RuntimeExtensions {
   const out = createDefaultRuntimeExtensions();
   if (!raw || typeof raw !== "object") {
     return out;
@@ -51,7 +59,7 @@ export function sanitizeRuntimeExtensions(raw) {
   return out;
 }
 
-export function parseRuntimeExtensionsHeader(raw) {
+export function parseRuntimeExtensionsHeader(raw: unknown): string[] {
   const src = String(raw || "").trim().toLowerCase();
   if (!src || src === "none" || src === "off") {
     return [];
@@ -70,7 +78,7 @@ export function parseRuntimeExtensionsHeader(raw) {
   return out;
 }
 
-export function parseRuntimeExtensionListCsv(csv) {
+export function parseRuntimeExtensionListCsv(csv: unknown): RuntimeExtensions {
   const out = createDefaultRuntimeExtensions();
   const parsed = parseRuntimeExtensionsHeader(csv);
   for (const key of parsed) {
@@ -81,7 +89,7 @@ export function parseRuntimeExtensionListCsv(csv) {
   return out;
 }
 
-export function runtimeExtensionsSummary(extensions) {
+export function runtimeExtensionsSummary(extensions: unknown): string[] {
   const enabled = [];
   const src = sanitizeRuntimeExtensions(extensions);
   for (const [key, on] of Object.entries(src)) {

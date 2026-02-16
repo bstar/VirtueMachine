@@ -8,7 +8,7 @@ import {
   parseRuntimeExtensionsHeader,
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
-} from "../runtime_contract.mjs";
+} from "../runtime_contract.ts";
 
 function testProfiles() {
   assert.deepEqual(RUNTIME_PROFILES, ["canonical_strict", "canonical_plus"]);

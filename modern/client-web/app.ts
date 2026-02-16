@@ -55,7 +55,7 @@ import {
   parseRuntimeExtensionListCsv,
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
-} from "../common/runtime_contract.mjs";
+} from "../common/runtime_contract.ts";
 import { performManagedNetRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 import { performNetLoadSnapshot, performNetSaveSnapshot } from "./net/snapshot_runtime.ts";
