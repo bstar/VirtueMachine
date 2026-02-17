@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { conversationRunFromKeyCursor } from "../conversation/dialog_runtime.ts";
 
 const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const OP_KEY = 0xef;
@@ -10,6 +11,8 @@ const OP_DESC = 0xf1;
 const OP_MAIN = 0xf2;
 const OP_END = 0xff;
 const OP_JOIN = 0xca;
+const OP_ASKTOP = 0xf7;
+const OP_GET = 0xf8;
 
 function decompressU6Lzw(bytes) {
   if (!bytes || bytes.length < 4) return null;
@@ -335,6 +338,33 @@ function runTopic(scriptBytes, header, topic, ctx = {}) {
   return [];
 }
 
+function runTopicFromCursor(scriptBytes, header, topic, ctx = {}) {
+  const startPc = findFirstKeyPc(scriptBytes, header.mainPc);
+  assert.ok(startPc >= 0, "conversation cursor start pc missing");
+  const out = conversationRunFromKeyCursor({
+    scriptBytes,
+    startPc,
+    typed: topic,
+    vmContext: ctx,
+    opcodes: {
+      ASKTOP: OP_ASKTOP,
+      GET: OP_GET,
+      KEY: OP_KEY,
+      RES: OP_RES,
+      ENDRES: OP_ENDRES,
+      END: OP_END
+    },
+    keyMatchesInput,
+    renderMacros: (line) => renderConversationMacros(line, ctx),
+    decodeResponseOpcodeAware: (bytes, start, end) => ({
+      lines: decodeResponseOpcodeAware(bytes, start, end, { stopOnGoto: false, followGoto: true }),
+      stopOpcode: 0,
+      stopPc: end
+    })
+  });
+  return out;
+}
+
 const lbScript = loadConversationScript(5);
 const lbHeader = parseHeader(lbScript);
 assert.equal(lbHeader.name, "Lord British");
@@ -357,6 +387,10 @@ assert.equal(lbHeader.name, "Lord British");
   assert.ok(jobLines.length > 0, "LB job should produce response lines");
   assert.match(jobLines[0], /throne of Britannia/i, "LB job should mention throne/Britannia");
   assert.ok(jobLines.every((ln) => !String(ln).includes("@")), "LB job should not leak '@' keyword markers");
+  const cursorJob = runTopicFromCursor(lbScript, lbHeader, "job", { target: "Lord British" });
+  assert.equal(cursorJob.kind, "ok", "LB job cursor-path should resolve");
+  assert.ok(Array.isArray(cursorJob.lines) && cursorJob.lines.length > 0, "LB cursor job should return response lines");
+  assert.doesNotMatch(String(cursorJob.lines?.[0] || ""), /^No response\.?$/i, "LB cursor job should not fall back to no-response");
 }
 {
   const orbLines = runTopic(lbScript, lbHeader, "orb", { target: "Lord British" });
