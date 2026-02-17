@@ -2,6 +2,7 @@
   "name": "virtuemachine",
   "private": true,
   "scripts": {
+    "dev": "bash ./modern/tools/dev_stack.sh",
     "dev:web": "vite --host 0.0.0.0 --port 8080 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.net.json --noEmit"
   },

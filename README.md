@@ -182,6 +182,12 @@ Run the first web rendering prototype:
 Run full frontend+backend dev stack in one process (with Vite hot reload on frontend):
 
 ```bash
+bun run dev
+```
+
+Direct script form (equivalent):
+
+```bash
 ./modern/tools/dev_stack.sh
 ```
 
