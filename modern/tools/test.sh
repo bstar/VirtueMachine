@@ -24,6 +24,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_ui_panel_scope.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_target_resolver.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_mechanics_capability.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_ui_verb_capability.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_probe_fixture.sh"
 else
   echo "Skipping Bun contract tests: bun not found in PATH"

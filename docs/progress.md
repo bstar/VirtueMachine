@@ -241,7 +241,10 @@ Slices:
 - `[~]` U7: Mechanics Rollout Harness
   - capability contract baseline added in `modern/client-web/gameplay/mechanics_capability_runtime.ts`
   - probe contract now publishes mechanics capability summary/entries under `canonical_runtime.mechanics_capability`
+  - verb-to-capability contract added in `modern/client-web/gameplay/verb_capability_runtime.ts`
+  - probe contract now publishes verb binding summary/entries under `canonical_runtime.mechanics_capability.verb_bindings`
   - CI gate added for capability matrix invariants (`modern/client-web/tests/ui_mechanics_capability_runtime_test.ts`)
+  - CI gate added for verb capability matrix invariants (`modern/client-web/tests/ui_verb_capability_runtime_test.ts`)
   - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)
 
 Reference policy for U0-U7:

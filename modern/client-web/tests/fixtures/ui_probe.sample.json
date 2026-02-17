@@ -516,7 +516,68 @@
           "canonical": true,
           "note": "Quest progression beyond dialogue scaffolding is deferred."
         }
-      ]
+      ],
+      "verb_bindings": {
+        "summary": {
+          "total": 10,
+          "implemented": 7,
+          "partial": 1,
+          "planned": 2,
+          "unknown": 0
+        },
+        "entries": [
+          {
+            "verb": "a",
+            "capability_key": "combat_resolution",
+            "status": "planned"
+          },
+          {
+            "verb": "c",
+            "capability_key": "spellcasting_resolution",
+            "status": "planned"
+          },
+          {
+            "verb": "d",
+            "capability_key": "inventory_pickup_drop_baseline",
+            "status": "implemented"
+          },
+          {
+            "verb": "g",
+            "capability_key": "inventory_pickup_drop_baseline",
+            "status": "implemented"
+          },
+          {
+            "verb": "l",
+            "capability_key": "targeted_interaction_core",
+            "status": "implemented"
+          },
+          {
+            "verb": "m",
+            "capability_key": "targeted_interaction_core",
+            "status": "implemented"
+          },
+          {
+            "verb": "o",
+            "capability_key": "targeted_interaction_core",
+            "status": "implemented"
+          },
+          {
+            "verb": "s",
+            "capability_key": "targeted_interaction_core",
+            "status": "implemented"
+          },
+          {
+            "verb": "t",
+            "capability_key": "conversation_opcode_engine",
+            "status": "partial"
+          },
+          {
+            "verb": "u",
+            "capability_key": "targeted_interaction_core",
+            "status": "implemented"
+          }
+        ]
+      }
     }
   },
   "ui_scope": {

@@ -86,6 +86,11 @@ function runSampleProbeFixture() {
     { total: 8, implemented: 3, partial: 1, planned: 4 },
     "mechanics capability summary mismatch"
   );
+  assert.deepEqual(
+    probe.canonical_runtime.mechanics_capability.verb_bindings.summary,
+    { total: 10, implemented: 7, partial: 1, planned: 2, unknown: 0 },
+    "verb capability summary mismatch"
+  );
 }
 
 function runLiveProbeFixture() {
