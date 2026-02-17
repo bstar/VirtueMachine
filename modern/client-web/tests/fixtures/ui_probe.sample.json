@@ -459,12 +459,22 @@
         "partial": 1,
         "planned": 4
       },
+      "validation": {
+        "duplicate_keys": 0,
+        "missing_legacy_anchors": 0,
+        "missing_regression_gates": 0
+      },
       "entries": [
         {
           "key": "world_navigation",
           "status": "implemented",
           "category": "core",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/seg_0A33.c",
+          "regression_gates": [
+            "sim_core_replay_test",
+            "sim_core_replay_checkpoints_test"
+          ],
           "note": "Avatar movement/path input baseline is active."
         },
         {
@@ -472,6 +482,10 @@
           "status": "implemented",
           "category": "interaction",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/seg_27A1.c",
+          "regression_gates": [
+            "modern/tools/test_client_web_ui_target_resolver.sh"
+          ],
           "note": "Legacy-targeted verb cursor pipeline is active."
         },
         {
@@ -479,6 +493,11 @@
           "status": "implemented",
           "category": "interaction",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/seg_27A1.c",
+          "regression_gates": [
+            "modern/tools/test_client_web_ui_inventory_paperdoll.sh",
+            "modern/tools/test_client_web_ui_paperdoll_equipment.sh"
+          ],
           "note": "Get/drop baseline behavior and inventory projection are wired."
         },
         {
@@ -486,6 +505,10 @@
           "status": "partial",
           "category": "interaction",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/converse.c",
+          "regression_gates": [
+            "modern/tools/test_client_web_conversation.sh"
+          ],
           "note": "Conversation opcode path is active but not feature-complete."
         },
         {
@@ -493,6 +516,8 @@
           "status": "planned",
           "category": "systems",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/combat.c",
+          "regression_gates": [],
           "note": "Combat verbs route through placeholders pending full canonical resolution."
         },
         {
@@ -500,6 +525,8 @@
           "status": "planned",
           "category": "systems",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/magic.c",
+          "regression_gates": [],
           "note": "Cast command path exists; full spell resolution pending."
         },
         {
@@ -507,6 +534,8 @@
           "status": "planned",
           "category": "systems",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/npc.c",
+          "regression_gates": [],
           "note": "NPC schedule/pathing systems are deferred."
         },
         {
@@ -514,6 +543,8 @@
           "status": "planned",
           "category": "systems",
           "canonical": true,
+          "legacy_anchor": "legacy/u6-decompiled/SRC/converse.c",
+          "regression_gates": [],
           "note": "Quest progression beyond dialogue scaffolding is deferred."
         }
       ],

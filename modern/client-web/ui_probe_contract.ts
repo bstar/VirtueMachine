@@ -20,7 +20,8 @@ import { listPanelScopeRuntime } from "./ui/panel_scope_runtime.ts";
 import { buildTargetResolverRegressionProbesRuntime } from "./sim/target_runtime.ts";
 import {
   buildMechanicsCapabilityMatrixRuntime,
-  summarizeMechanicsCapabilitiesRuntime
+  summarizeMechanicsCapabilitiesRuntime,
+  validateMechanicsCapabilityMatrixRuntime
 } from "./gameplay/mechanics_capability_runtime.ts";
 import {
   buildVerbCapabilityBindingsRuntime,
@@ -231,6 +232,7 @@ export function buildUiProbeContract(opts: any = {}) {
   const targetResolverProbes = buildTargetResolverRegressionProbesRuntime();
   const mechanicsCapability = buildMechanicsCapabilityMatrixRuntime(src.runtime_extensions);
   const mechanicsSummary = summarizeMechanicsCapabilitiesRuntime(mechanicsCapability);
+  const mechanicsValidation = validateMechanicsCapabilityMatrixRuntime(mechanicsCapability);
   const verbBindings = buildVerbCapabilityBindingsRuntime(mechanicsCapability);
   const verbBindingSummary = summarizeVerbCapabilityBindingsRuntime(verbBindings);
   const panelScope = listPanelScopeRuntime();
@@ -338,6 +340,7 @@ export function buildUiProbeContract(opts: any = {}) {
       },
       mechanics_capability: {
         summary: mechanicsSummary,
+        validation: mechanicsValidation,
         entries: mechanicsCapability,
         verb_bindings: {
           summary: verbBindingSummary,

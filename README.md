@@ -95,6 +95,7 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 - deterministic overlap/talk target harness and CI gate implemented
 7. `U7` Mechanics Rollout On Harness (in progress)
 - capability contract baseline and probe summary now in place
+- capability validation now enforces legacy anchor + regression-gate evidence for active entries
 - verb-to-capability binding contract and regression gate now in place
 - NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons remain rollout targets
 - each mechanic must ship with panel and replay regression coverage

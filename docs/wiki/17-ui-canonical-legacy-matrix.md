@@ -177,6 +177,7 @@ U0 is considered active when all are true:
 
 - mechanics capability contract baseline is now explicit and probe-visible (`canonical_runtime.mechanics_capability`)
 - capability summary is CI-gated to prevent silent drift in implementation status claims
+- capability validation now enforces anchor/gate evidence (`legacy_anchor`, regression gates) for non-planned entries
 - verb-to-capability binding contract is now probe-visible (`canonical_runtime.mechanics_capability.verb_bindings`)
 - verb capability summary is CI-gated to prevent verb surface/status drift
 - remaining work: convert capability items from declared status into mechanic-specific canonical interaction/replay tests

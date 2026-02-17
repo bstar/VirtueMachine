@@ -87,6 +87,11 @@ function runSampleProbeFixture() {
     "mechanics capability summary mismatch"
   );
   assert.deepEqual(
+    probe.canonical_runtime.mechanics_capability.validation,
+    { duplicate_keys: 0, missing_legacy_anchors: 0, missing_regression_gates: 0 },
+    "mechanics capability validation mismatch"
+  );
+  assert.deepEqual(
     probe.canonical_runtime.mechanics_capability.verb_bindings.summary,
     { total: 10, implemented: 7, partial: 1, planned: 2, unknown: 0 },
     "verb capability summary mismatch"
@@ -130,6 +135,11 @@ function runLiveProbeFixture() {
     probe.canonical_runtime.mechanics_capability.summary.partial,
     2,
     "live mechanics capability partial count mismatch"
+  );
+  assert.equal(
+    probe.canonical_runtime.mechanics_capability.validation.missing_regression_gates,
+    1,
+    "live mechanics capability missing gate count mismatch"
   );
 }
 
