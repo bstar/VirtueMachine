@@ -248,6 +248,7 @@ Slices:
   - probe contract now publishes verb coverage integrity for active interaction capabilities
   - CI gate added for capability matrix invariants (`modern/client-web/tests/ui_mechanics_capability_runtime_test.ts`)
   - CI gate added for verb capability matrix invariants (`modern/client-web/tests/ui_verb_capability_runtime_test.ts`)
+  - conversation dialog runtime unit coverage added (`modern/client-web/tests/conversation_dialog_runtime_test.ts`)
   - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)
 
 Reference policy for U0-U7:

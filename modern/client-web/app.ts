@@ -2465,6 +2465,28 @@ function formatYouSeeLine(subject) {
 }
 
 function legacyConversationReply(targetName, typed) {
+  if (state.legacyConversationScript instanceof Uint8Array) {
+    const startPc = Number(state.legacyConversationPc) | 0;
+    if (startPc >= 0) {
+      const cursorReply = conversationRunFromKeyCursor(
+        state.legacyConversationScript,
+        startPc,
+        typed,
+        state.legacyConversationVmContext
+      );
+      if (cursorReply && cursorReply.kind === "ok") {
+        state.legacyConversationPc = Number(cursorReply.nextPc) | 0;
+        state.legacyConversationInputOpcode = Number(cursorReply.stopOpcode) | 0;
+        return {
+          kind: "ok",
+          lines: Array.isArray(cursorReply.lines) ? cursorReply.lines : []
+        };
+      }
+      if (cursorReply && cursorReply.kind === "no-match") {
+        return { kind: "no-match", lines: [] };
+      }
+    }
+  }
   return legacyConversationReplyImported({
     typed,
     rules: state.legacyConversationRules,
