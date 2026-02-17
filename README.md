@@ -79,6 +79,7 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 2. `U1` Inventory + Paperdoll Harness
 - slot/hitbox probes
 - drag/drop/equip regression probes + legacy-code-backed assertions
+  - baseline harness now implemented (`modern/client-web/ui/inventory_paperdoll_layout_runtime.ts`, `modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts`)
 3. `U2` Party + Message Log Harness
 - party ordering/selection semantics
 - scrollback/wrapping/event-order checks

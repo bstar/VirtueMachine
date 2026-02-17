@@ -1,3 +1,8 @@
+import {
+  buildInventoryEquipRegressionProbesRuntime,
+  buildLegacyInventoryPaperdollLayoutRuntime
+} from "./ui/inventory_paperdoll_layout_runtime.ts";
+
 const UI_PROBE_SCHEMA_VERSION = 1;
 
 const LEGACY_EQUIP_SLOTS = Object.freeze([
@@ -195,6 +200,12 @@ export function buildUiProbeContract(opts: any = {}) {
   const mode = String(opts.mode || "sample");
   const src = mode === "live" ? fromRuntime(opts.runtime || {}) : deterministicSample();
   const avatar = createCanonicalTestAvatar(src);
+  const cmd92Layout = buildLegacyInventoryPaperdollLayoutRuntime({
+    statusDisplay: 0x92,
+    talkStatusDisplay: 0x9e,
+    talkShowInventory: true
+  });
+  const cmd92ProbeMatrix = buildInventoryEquipRegressionProbesRuntime(cmd92Layout);
   return {
     schema_version: UI_PROBE_SCHEMA_VERSION,
     mode: src.mode,
@@ -203,13 +214,40 @@ export function buildUiProbeContract(opts: any = {}) {
     runtime_extensions: { ...(src.runtime_extensions || {}) },
     canonical_ui: {
       avatar_panel: {
-        avatar
+        avatar,
+        portrait_hitbox: {
+          x: cmd92Layout.portrait.x,
+          y: cmd92Layout.portrait.y,
+          w: cmd92Layout.portrait.w,
+          h: cmd92Layout.portrait.h
+        }
       },
       inventory_panel: {
-        entries: normalizeInventory(src.inventory)
+        entries: normalizeInventory(src.inventory),
+        hitboxes: cmd92Layout.inventoryCells.map((cell) => ({
+          index: cell.index,
+          x: cell.x,
+          y: cell.y,
+          w: cell.w,
+          h: cell.h,
+          source: cmd92Layout.anchors.inventory_hitbox
+        })),
+        regression_probe_counts: {
+          inventory_to_equip: cmd92ProbeMatrix.inventory_to_equip.length >>> 0,
+          equip_to_inventory: cmd92ProbeMatrix.equip_to_inventory.length >>> 0
+        }
       },
       paperdoll_panel: {
-        slots: normalizeEquipment(src.equipment)
+        slots: normalizeEquipment(src.equipment),
+        hitboxes: cmd92Layout.equipSlots.map((slot) => ({
+          slot: slot.slot,
+          key: slot.key,
+          x: slot.x,
+          y: slot.y,
+          w: slot.w,
+          h: slot.h,
+          source: cmd92Layout.anchors.equip_hitbox
+        }))
       },
       party_panel: {
         members: normalizeParty(src.party)
@@ -220,6 +258,8 @@ export function buildUiProbeContract(opts: any = {}) {
       conversation_panel: normalizeConversation(src.conversation)
     },
     canonical_contract_notes: {
+      inventory_and_paperdoll:
+        "Slot and hitbox probes are anchored to C_155D_1267/C_155D_130E with deterministic inventory<->equip probe counts.",
       conversation_panel:
         "C_27A1_02D9 / TALK_talkTo alignment surface. Live NPC equipment extraction pending; fields are canonicalized now."
     },

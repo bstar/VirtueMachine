@@ -28,7 +28,7 @@ UI/panel parity work to canonical routines before visual polish.
 EOF
 
 emit_section "Input, Command Dispatch, Party Controls" "SetPartyMode|PartyModeMsg|CMD_83|CMD_90|CMD_91|TALK_talkTo|ch >= '0' && ch <= '9'"
-emit_section "Inventory, Equipment, Character Panel" "display character's portrait/inventory|draw equipment|draw inventory|STAT_GetEquipSlot|InsertObj\\(|WeightInven|WeightEquip|EQUIP"
+emit_section "Inventory, Equipment, Character Panel" "display character's portrait/inventory|draw equipment|draw inventory|C_155D_08F4|C_155D_0CF5|C_155D_1267|C_155D_130E|STAT_GetEquipSlot|InsertObj\\(|WeightInven|WeightEquip|EQUIP"
 emit_section "Selection and Object Interaction Glue" "Selection\\.obj|GetCoordUse\\(|C_155D_1666|C_155D_16E7|SubMov\\("
 emit_section "UI Framing and Cursor-Adjacent Routines" "mouse cursor|draw frame|Button party|Cursor"
 emit_section "Core State Arrays/Globals (Party, Active, Selection)" "Party\\[|Active|StatusDisplay|D_04B3|D_2CC4"

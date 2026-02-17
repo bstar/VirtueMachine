@@ -210,10 +210,10 @@ Slices:
   - deterministic probe fixture committed: `modern/client-web/tests/fixtures/ui_probe.sample.json`
   - one-command parity workflow: `modern/tools/run_ui_parity_workflow.sh` (`--verify`/`--write`)
   - CI-required gate now includes legacy anchor guard + deterministic probe fixture verification
-- `[ ]` U1: Inventory Panel Canonical Harness
-  - slot layout/hitbox baselines
-  - drag/drop/equip target probes
-  - legacy-code-derived structural/layout assertions (pixel snapshots optional)
+- `[x]` U1: Inventory Panel Canonical Harness
+  - slot layout/hitbox baselines wired through shared runtime layout module (`modern/client-web/ui/inventory_paperdoll_layout_runtime.ts`)
+  - drag/drop/equip target probe matrix added (inventory<->equip deterministic probe counts)
+  - legacy-code-derived structural/layout assertions added in `modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts`
 - `[ ]` U2: Paperdoll + Equipment Harness
   - equip-region mapping and overlap rules
   - canonical slot occupancy semantics

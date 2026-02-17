@@ -17,7 +17,19 @@ function runSampleProbeFixture() {
   assert.equal(probe.canonical_ui.avatar_panel.avatar.id, 1, "sample avatar id mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.party_index, 0, "sample avatar active index mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.entries[0].key, "0x073:0", "inventory sort mismatch");
+  assert.equal(probe.canonical_ui.inventory_panel.hitboxes.length, 12, "inventory hitbox count mismatch");
+  assert.equal(
+    probe.canonical_ui.inventory_panel.regression_probe_counts.inventory_to_equip,
+    96,
+    "inventory->equip probe count mismatch"
+  );
+  assert.equal(
+    probe.canonical_ui.inventory_panel.regression_probe_counts.equip_to_inventory,
+    96,
+    "equip->inventory probe count mismatch"
+  );
   assert.equal(probe.canonical_ui.paperdoll_panel.slots.length, 10, "equip slots length mismatch");
+  assert.equal(probe.canonical_ui.paperdoll_panel.hitboxes.length, 8, "paperdoll hitbox count mismatch");
 }
 
 function runLiveProbeFixture() {

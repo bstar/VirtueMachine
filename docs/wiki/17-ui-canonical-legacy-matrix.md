@@ -92,6 +92,8 @@ Tooling added in this slice:
 - guard test: `modern/tools/test_legacy_ui_anchors.sh`
 - probe contract module: `modern/client-web/ui_probe_contract.ts`
 - probe regression test: `modern/client-web/tests/ui_probe_contract_test.ts`
+- inventory/paperdoll layout runtime: `modern/client-web/ui/inventory_paperdoll_layout_runtime.ts`
+- inventory/paperdoll layout regression test: `modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts`
 
 Purpose:
 
@@ -119,9 +121,15 @@ In-game verification hook:
 U0 is considered active when all are true:
 
 1. canonical routine anchors are documented and machine-extractable (`complete`)
-2. probe schema for panel-state evidence exists (`next`)
+2. probe schema for panel-state evidence exists (`complete`)
 3. deterministic sample-state generator exists (`complete`)
 4. CI gate blocks panel work that bypasses probe contracts (`complete`)
+
+## U1 Status (Completed)
+
+- slot/hitbox geometry and hit-testing now share one canonical layout runtime used by both renderer and click-selection flow
+- probe contract now emits inventory/paperdoll hitboxes and deterministic inventory<->equip probe-count signals
+- anchor guard now explicitly checks `C_155D_1267`, `C_155D_130E`, and `C_155D_0CF5`
 
 ## Deviations And Constraints
 

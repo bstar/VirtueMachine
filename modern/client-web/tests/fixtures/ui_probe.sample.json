@@ -14,6 +14,12 @@
         "map_y": 347,
         "map_z": 0,
         "source_process": "legacy_party_active_resolution"
+      },
+      "portrait_hitbox": {
+        "x": 272,
+        "y": 16,
+        "w": 16,
+        "h": 16
       }
     },
     "inventory_panel": {
@@ -30,7 +36,109 @@
           "key": "0x0fa:2",
           "count": 3
         }
-      ]
+      ],
+      "hitboxes": [
+        {
+          "index": 0,
+          "x": 248,
+          "y": 32,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 1,
+          "x": 264,
+          "y": 32,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 2,
+          "x": 280,
+          "y": 32,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 3,
+          "x": 296,
+          "y": 32,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 4,
+          "x": 248,
+          "y": 48,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 5,
+          "x": 264,
+          "y": 48,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 6,
+          "x": 280,
+          "y": 48,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 7,
+          "x": 296,
+          "y": 48,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 8,
+          "x": 248,
+          "y": 64,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 9,
+          "x": 264,
+          "y": 64,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 10,
+          "x": 280,
+          "y": 64,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        },
+        {
+          "index": 11,
+          "x": 296,
+          "y": 64,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_1267"
+        }
+      ],
+      "regression_probe_counts": {
+        "inventory_to_equip": 96,
+        "equip_to_inventory": 96
+      }
     },
     "paperdoll_panel": {
       "slots": [
@@ -106,6 +214,80 @@
           "legacy": "SLOT_RING",
           "object_key": null,
           "tile_hex": null
+        }
+      ],
+      "hitboxes": [
+        {
+          "slot": 0,
+          "key": "head",
+          "x": 200,
+          "y": 16,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 1,
+          "key": "neck",
+          "x": 176,
+          "y": 24,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 4,
+          "key": "chest",
+          "x": 224,
+          "y": 24,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 2,
+          "key": "right_hand",
+          "x": 176,
+          "y": 40,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 5,
+          "key": "left_hand",
+          "x": 224,
+          "y": 40,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 3,
+          "key": "right_finger",
+          "x": 176,
+          "y": 56,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 6,
+          "key": "left_finger",
+          "x": 224,
+          "y": 56,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
+        },
+        {
+          "slot": 7,
+          "key": "feet",
+          "x": 200,
+          "y": 64,
+          "w": 16,
+          "h": 16,
+          "source": "C_155D_130E"
         }
       ]
     },
@@ -234,6 +416,7 @@
     }
   },
   "canonical_contract_notes": {
+    "inventory_and_paperdoll": "Slot and hitbox probes are anchored to C_155D_1267/C_155D_130E with deterministic inventory<->equip probe counts.",
     "conversation_panel": "C_27A1_02D9 / TALK_talkTo alignment surface. Live NPC equipment extraction pending; fields are canonicalized now."
   },
   "modern_ui": {

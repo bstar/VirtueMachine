@@ -127,6 +127,7 @@ Run deterministic client composition fixtures:
 
 ```bash
 ./modern/tools/test_client_web_render_composition.sh
+./modern/tools/test_client_web_ui_inventory_paperdoll.sh
 ```
 
 Run the canonical UI parity workflow (legacy anchors + probe contracts + deterministic fixture verification):

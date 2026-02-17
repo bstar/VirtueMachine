@@ -161,6 +161,10 @@ import {
   startupMenuIndexAtSurfacePointRuntime
 } from "./ui/startup_runtime.ts";
 import { isTypingContextRuntime } from "./ui/input_runtime.ts";
+import {
+  buildLegacyInventoryPaperdollLayoutRuntime,
+  legacyInventoryPaperdollHitTestRuntime
+} from "./ui/inventory_paperdoll_layout_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -3207,11 +3211,15 @@ function renderLegacyHudStubOnBackdrop() {
   }
   const probe: any = getUiProbeForRender();
   const conversationPanel: any = probe.canonical_ui?.conversation_panel || {};
-  const inTalkPanel = statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E;
-  const panelShowEquipment = inTalkPanel
-    ? (state.legacyConversationShowInventory !== false)
-    : true;
-  const panelShowBagGrid = !inTalkPanel;
+  const panelLayout = buildLegacyInventoryPaperdollLayoutRuntime({
+    statusDisplay,
+    talkStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
+    talkShowInventory: state.legacyConversationShowInventory !== false
+  });
+  const inTalkPanel = panelLayout.inTalkPanel;
+  const panelShowEquipment = panelLayout.showEquipment;
+  const panelShowBagGrid = panelLayout.showBagGrid;
+  const equipmentOffsetY = panelLayout.equipOffsetY;
 
   /* C_155D_028A / C_155D_1065: centered name row only in CMD_90/CMD_92. */
   if (statusDisplay === LEGACY_STATUS_DISPLAY.CMD_90 || statusDisplay === LEGACY_STATUS_DISPLAY.CMD_92) {
@@ -3225,16 +3233,11 @@ function renderLegacyHudStubOnBackdrop() {
   }
 
   /* Canonical dynamic payload only: inventory/equipment/portrait cells on top of paper frame. */
-  let portraitSlotX = 272;
-  let portraitSlotY = 16;
-  let portraitW = 16;
-  let portraitH = 16;
-  const equipmentOffsetY = (inTalkPanel && panelShowEquipment) ? 8 : 0;
+  let portraitSlotX = panelLayout.portrait.x;
+  let portraitSlotY = panelLayout.portrait.y;
+  let portraitW = panelLayout.portrait.w;
+  let portraitH = panelLayout.portrait.h;
   if (inTalkPanel) {
-    portraitSlotX = panelShowEquipment ? 248 : 216;
-    portraitSlotY = 24;
-    portraitW = 56;
-    portraitH = 64;
     const portrait = conversationPortraitCanvas(conversationPanel);
     if (portrait) {
       g.drawImage(
@@ -3289,16 +3292,12 @@ function renderLegacyHudStubOnBackdrop() {
       slotByKey.set(slotKeyByIndex[slotIndex], s);
     }
   }
-  const equipSlots = [
-    { key: "head", index: 0, sx: 200, sy: 16 + equipmentOffsetY },
-    { key: "neck", index: 1, sx: 176, sy: 24 + equipmentOffsetY },
-    { key: "chest", index: 4, sx: 224, sy: 24 + equipmentOffsetY },
-    { key: "right_hand", index: 2, sx: 176, sy: 40 + equipmentOffsetY },
-    { key: "left_hand", index: 5, sx: 224, sy: 40 + equipmentOffsetY },
-    { key: "right_finger", index: 3, sx: 176, sy: 56 + equipmentOffsetY },
-    { key: "left_finger", index: 6, sx: 224, sy: 56 + equipmentOffsetY },
-    { key: "feet", index: 7, sx: 200, sy: 64 + equipmentOffsetY }
-  ];
+  const equipSlots = panelLayout.equipSlots.map((slot) => ({
+    key: slot.key,
+    index: slot.slot,
+    sx: slot.x,
+    sy: slot.y
+  }));
   if (panelShowEquipment) {
     for (const s of equipSlots) {
       drawTile(LEGACY_UI_TILE.SLOT_EMPTY, s.sx, s.sy);
@@ -3314,13 +3313,11 @@ function renderLegacyHudStubOnBackdrop() {
   /* Canonical inventory grid from C_155D_0CF5/C_155D_1267. */
   const invEntries = buildDisplayInventoryEntries();
   if (panelShowBagGrid) {
-    for (let i = 0; i < 12; i += 1) {
-      const col = i & 3;
-      const row = i >> 2;
-      const sx = 248 + (col * 16);
-      const sy = 32 + (row * 16);
+    for (const cell of panelLayout.inventoryCells) {
+      const sx = cell.x;
+      const sy = cell.y;
       drawTile(LEGACY_UI_TILE.SLOT_EMPTY, sx, sy);
-      const entry = invEntries[i];
+      const entry = invEntries[cell.index];
       if (!entry) {
         continue;
       }
@@ -3337,9 +3334,10 @@ function renderLegacyHudStubOnBackdrop() {
     g.lineWidth = Math.max(1, scale);
     const sel = state.legacyHudSelection;
     if (sel.kind === "inventory") {
-      const col = sel.index & 3;
-      const row = sel.index >> 2;
-      g.strokeRect(x(248 + (col * 16)) + 1, y(32 + (row * 16)) + 1, x(16) - 2, y(16) - 2);
+      const cell = panelLayout.inventoryCells.find((it) => (it.index | 0) === (sel.index | 0));
+      if (cell) {
+        g.strokeRect(x(cell.x) + 1, y(cell.y) + 1, x(cell.w) - 2, y(cell.h) - 2);
+      }
     } else if (sel.kind === "portrait") {
       g.strokeRect(x(portraitSlotX) + 1, y(portraitSlotY) + 1, x(portraitW) - 2, y(portraitH) - 2);
     } else if (sel.kind === "equip") {
@@ -7101,44 +7099,13 @@ function parseProbeTileHex(v) {
 }
 
 function uiProbeHitTest(logicalX, logicalY) {
-  const x = logicalX | 0;
-  const y = logicalY | 0;
   const statusDisplay = Number(state.legacyStatusDisplay) | 0;
-  const inTalkPanel = statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E;
-  const showEquipment = inTalkPanel
-    ? ((getUiProbeForRender().canonical_ui?.conversation_panel?.show_inventory) !== false)
-    : true;
-  const showBagGrid = !inTalkPanel;
-  const equipOffsetY = (inTalkPanel && showEquipment) ? 8 : 0;
-  const portraitX = inTalkPanel
-    ? (showEquipment ? 248 : 216)
-    : 272;
-  const portraitY = inTalkPanel ? 24 : 16;
-  const portraitW = inTalkPanel ? 56 : 16;
-  const portraitH = inTalkPanel ? 64 : 16;
-  /* C_155D_1267 inventory + portrait hitboxes. */
-  if (showBagGrid && x >= 248 && x < 312 && y >= 32 && y < 80) {
-    const col = Math.floor((x - 248) / 16);
-    const row = Math.floor((y - 32) / 16);
-    return { kind: "inventory", index: (row * 4) + col };
-  }
-  if (x >= portraitX && x < (portraitX + portraitW) && y >= portraitY && y < (portraitY + portraitH)) {
-    return { kind: "portrait", index: 0 };
-  }
-  /* C_155D_130E equipment hitboxes. */
-  if (showEquipment && x >= 200 && x < 216 && y >= (16 + equipOffsetY) && y < (32 + equipOffsetY)) {
-    return { kind: "equip", slot: 0 };
-  }
-  if (showEquipment && x >= 176 && x < 192 && y >= (24 + equipOffsetY) && y < (72 + equipOffsetY)) {
-    return { kind: "equip", slot: Math.floor((y - (24 + equipOffsetY)) / 16) + 1 };
-  }
-  if (showEquipment && x >= 224 && x < 240 && y >= (24 + equipOffsetY) && y < (72 + equipOffsetY)) {
-    return { kind: "equip", slot: Math.floor((y - (24 + equipOffsetY)) / 16) + 4 };
-  }
-  if (showEquipment && x >= 200 && x < 216 && y >= (64 + equipOffsetY) && y < (80 + equipOffsetY)) {
-    return { kind: "equip", slot: 7 };
-  }
-  return null;
+  const layout = buildLegacyInventoryPaperdollLayoutRuntime({
+    statusDisplay,
+    talkStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
+    talkShowInventory: (getUiProbeForRender().canonical_ui?.conversation_panel?.show_inventory) !== false
+  });
+  return legacyInventoryPaperdollHitTestRuntime(layout, logicalX | 0, logicalY | 0);
 }
 
 function buildOverlayCells(startX, startY, wz, viewCtx) {
