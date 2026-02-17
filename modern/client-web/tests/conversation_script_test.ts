@@ -211,7 +211,7 @@ function keyMatchesInput(pattern, input) {
   if (p === "*") return true;
   const words = splitWords(input);
   for (const w of words) {
-    if (p.length !== w.length) continue;
+    if (w.length < p.length) continue;
     let ok = true;
     for (let i = 0; i < p.length; i += 1) {
       if (p[i] !== "?" && p[i] !== w[i]) {
@@ -223,6 +223,9 @@ function keyMatchesInput(pattern, input) {
   }
   return false;
 }
+
+assert.equal(keyMatchesInput("end", "endurance"), true, "Canonical KEY matching is prefix-based");
+assert.equal(keyMatchesInput("orb", "or"), false, "Canonical KEY matching rejects shorter tokens");
 
 function decodeResponseQuotedOnly(responseBytes) {
   const lines = [];

@@ -267,6 +267,7 @@ Slices:
   - net API contract suite (`modern/tools/test_net_contracts.sh`) is now part of default and CI-required test runners
   - canonical conversation regression now hard-asserts no keyword-list spill/trailer bleed on LB `job`/`orb` and unresolved macro placeholder leakage in opener text
   - canonical Nystul opening regression now guards against unresolved macro/trailer-noise leakage across dynamic state branches
+  - conversation script harness now enforces canonical prefix KEY matching semantics (`end` matches `endurance`; shorter tokens rejected)
   - debug chat ledger regression now asserts actor/conv/type metadata formatting and plain-line fallback formatting
   - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)
 
