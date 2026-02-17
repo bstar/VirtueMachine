@@ -150,11 +150,12 @@ U0 is considered active when all are true:
 - digit-key party selection is no longer a placeholder; runtime path now resolves canonical slot mapping (`1..9` -> party index, `0` -> slot 10)
 - deterministic selection replay probes are emitted and CI-gated
 
-## U4 Status (In Progress)
+## U4 Status (Completed)
 
-- message log now has deterministic tail-window projection and line clipping in shared runtime
-- probe contract now carries message-window regression counts
-- remaining work: explicit scrollback/page boundaries and persistence/restore replay checks
+- message log now has deterministic tail-window projection, normalization, and clipping in shared runtime (`ui/message_log_runtime.ts`)
+- explicit scrollback command semantics are probe/test gated (`line_up`, `line_down`, `page_up`, `page_down`, `home`, `end`)
+- persistence/restore roundtrip coverage is included in regression probes and surfaced in `canonical_ui.message_log_panel.regression_probe_counts`
+- canonical-vs-modern boundary: canonical ledger projection is represented in `canonical_ui.message_log_panel`; debug chat telemetry remains a modern diagnostic surface
 
 ## Deviations And Constraints
 
@@ -165,6 +166,6 @@ U0 is considered active when all are true:
 ## Next Implementation Slice (Follow-On)
 
 1. keep deterministic fixture workflow green (`modern/tools/run_ui_parity_workflow.sh`)
-2. finish U4 scrollback/persistence harness (interaction + replay)
+2. execute U5 panel-scope partition enforcement (`canonical_ui` vs `modern_ui`) with CI guardrails
 3. add per-panel interaction fixtures tied to mechanics rollouts
 4. only then begin mechanic rollouts that depend on those panels

@@ -10,9 +10,12 @@ import {
   buildPartyMessageRegressionProbesRuntime,
   clampActivePartyIndexRuntime,
   normalizePartyMemberIdsRuntime,
-  projectMessageLogEntriesRuntime,
   projectPartyPanelMembersRuntime
 } from "./ui/party_message_runtime.ts";
+import {
+  buildMessageLogRegressionProbesRuntime,
+  computeMessageLogWindowRuntime
+} from "./ui/message_log_runtime.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
 
@@ -147,16 +150,17 @@ function fromRuntime(runtime: any) {
     activeIndex,
     nameById: runtime?.partyNameById || null
   });
-  const messageEntries = projectMessageLogEntriesRuntime({
+  const messageEntries = computeMessageLogWindowRuntime({
     entries: commandLog.map((c, i) => ({
       tick: toU32(c?.tick != null ? c.tick : i),
       level: "info",
       text: String(c?.kind || "command"),
       seq: i
     })),
-    maxEntries: 8,
+    windowSize: 8,
+    scrollOffset: 0,
     lineMaxChars: 64
-  });
+  }).entries;
   return {
     tick: toU32(sim.tick || 0),
     mode: "live",
@@ -213,6 +217,7 @@ export function buildUiProbeContract(opts: any = {}) {
   const cmd92ProbeMatrix = buildInventoryEquipRegressionProbesRuntime(cmd92Layout);
   const equipResolutionProbes = buildLegacyEquipmentResolutionRegressionProbesRuntime();
   const partyMessageProbes = buildPartyMessageRegressionProbesRuntime();
+  const messageLogProbes = buildMessageLogRegressionProbesRuntime();
   const equipResolutionDroppedTotal = equipResolutionProbes.cases
     .reduce((acc, cur) => acc + (Number(cur.dropped_count) | 0), 0) >>> 0;
   return {
@@ -273,17 +278,25 @@ export function buildUiProbeContract(opts: any = {}) {
         }
       },
       message_log_panel: {
-        entries: projectMessageLogEntriesRuntime({
+        entries: computeMessageLogWindowRuntime({
           entries: src.messages,
-          maxEntries: 8,
+          windowSize: 8,
+          scrollOffset: 0,
           lineMaxChars: 64
-        }).map((m) => ({
+        }).entries.map((m) => ({
           tick: m.tick,
           level: m.level,
           text: m.text
         })),
+        scrollback: {
+          window_size: 8,
+          scroll_offset: 0,
+          max_offset: Math.max(0, (Array.isArray(src.messages) ? src.messages.length : 0) - 8)
+        },
         regression_probe_counts: {
-          window_cases: partyMessageProbes.message_windows.length >>> 0
+          window_cases: messageLogProbes.window_cases.length >>> 0,
+          scroll_command_cases: messageLogProbes.scroll_command_cases.length >>> 0,
+          persistence_cases: messageLogProbes.persistence_cases.length >>> 0
         }
       },
       conversation_panel: normalizeConversation(src.conversation)

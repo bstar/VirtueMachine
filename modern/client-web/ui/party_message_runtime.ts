@@ -15,13 +15,6 @@ export type PartySwitchResolutionRuntime = {
   reason: "applied" | "same_index" | "out_of_range" | "invalid_digit";
 };
 
-export type MessageLogPanelEntryRuntime = {
-  tick: number;
-  level: string;
-  text: string;
-  seq: number;
-};
-
 function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
@@ -146,35 +139,12 @@ export function resolvePartySwitchDigitRuntime(input: {
   };
 }
 
-export function projectMessageLogEntriesRuntime(input: {
-  entries: unknown;
-  maxEntries?: number;
-  lineMaxChars?: number;
-}): MessageLogPanelEntryRuntime[] {
-  const maxEntries = Math.max(1, Number(input?.maxEntries) | 0) || 8;
-  const lineMaxChars = Math.max(8, Number(input?.lineMaxChars) | 0) || 64;
-  const src = Array.isArray(input?.entries) ? input.entries : [];
-  const out: MessageLogPanelEntryRuntime[] = src.map((row: any, seq: number) => ({
-    tick: toU32(row?.tick ?? seq),
-    level: String(row?.level || "info"),
-    text: String(row?.text || "").replace(/\s+/g, " ").trim().slice(0, lineMaxChars),
-    seq: toU32(row?.seq ?? seq)
-  }));
-  return out.slice(-maxEntries);
-}
-
 export function buildPartyMessageRegressionProbesRuntime(): {
   party_selection: Array<{
     id: string;
     changed: boolean;
     next_active_index: number;
     reason: string;
-  }>;
-  message_windows: Array<{
-    id: string;
-    count: number;
-    first_tick: number;
-    last_tick: number;
   }>;
 } {
   const party_selection = [
@@ -192,23 +162,7 @@ export function buildPartyMessageRegressionProbesRuntime(): {
     };
   });
 
-  const makeLog = (count: number) => Array.from({ length: count }, (_unused, i) => ({
-    tick: i + 100,
-    level: "info",
-    text: `entry_${i}`
-  }));
-  const message_windows = [
-    { id: "window_short", out: projectMessageLogEntriesRuntime({ entries: makeLog(3), maxEntries: 8 }) },
-    { id: "window_trim", out: projectMessageLogEntriesRuntime({ entries: makeLog(12), maxEntries: 8 }) }
-  ].map((row) => ({
-    id: row.id,
-    count: row.out.length >>> 0,
-    first_tick: row.out.length ? (row.out[0].tick >>> 0) : 0,
-    last_tick: row.out.length ? (row.out[row.out.length - 1].tick >>> 0) : 0
-  }));
-
   return {
-    party_selection,
-    message_windows
+    party_selection
   };
 }

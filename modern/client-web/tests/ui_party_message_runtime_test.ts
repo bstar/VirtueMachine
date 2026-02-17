@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import {
   buildPartyMessageRegressionProbesRuntime,
   normalizePartyMemberIdsRuntime,
-  projectMessageLogEntriesRuntime,
   projectPartyPanelMembersRuntime,
   resolvePartySwitchDigitRuntime
 } from "../ui/party_message_runtime.ts";
@@ -63,26 +62,9 @@ function testPartySwitchDigit() {
   assert.equal(outOfRange.reason, "out_of_range", "out-of-range reason mismatch");
 }
 
-function testMessageWindowProjection() {
-  const entries = projectMessageLogEntriesRuntime({
-    entries: Array.from({ length: 12 }, (_unused, i) => ({
-      tick: 100 + i,
-      level: "info",
-      text: `entry_${i}`,
-      seq: i
-    })),
-    maxEntries: 8,
-    lineMaxChars: 16
-  });
-  assert.equal(entries.length, 8, "message window length mismatch");
-  assert.equal(entries[0].tick, 104, "message window first tick mismatch");
-  assert.equal(entries[7].tick, 111, "message window last tick mismatch");
-}
-
 function testRegressionProbeMatrix() {
   const probes = buildPartyMessageRegressionProbesRuntime();
   assert.equal(probes.party_selection.length, 4, "party selection probe count mismatch");
-  assert.equal(probes.message_windows.length, 2, "message window probe count mismatch");
   assert.deepEqual(
     probes.party_selection[0],
     {
@@ -98,7 +80,6 @@ function testRegressionProbeMatrix() {
 testPartyMemberNormalization();
 testPartyProjection();
 testPartySwitchDigit();
-testMessageWindowProjection();
 testRegressionProbeMatrix();
 
 console.log("ui_party_message_runtime_test: ok");

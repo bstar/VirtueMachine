@@ -223,10 +223,11 @@ Slices:
   - canonical party ordering/selection extracted to shared runtime (`modern/client-web/ui/party_message_runtime.ts`)
   - digit-key party switch resolution now wired in runtime input path with deterministic rules
   - deterministic party selection replay probes emitted in `canonical_ui.party_panel.regression_probe_counts`
-- `[~]` U4: Message Log / Scrollback Harness
-  - deterministic message window clipping/order projection extracted and probe-count gated (`canonical_ui.message_log_panel.regression_probe_counts`)
-  - pending: explicit scrollback boundary interactions and persistence/restore coverage under replay
-  - pending: canonical-vs-modern message formatting boundary notes after scrollback wiring is complete
+- `[x]` U4: Message Log / Scrollback Harness
+  - deterministic message window clipping/order projection extracted to shared runtime (`modern/client-web/ui/message_log_runtime.ts`)
+  - explicit scrollback boundary command semantics and replay probes added (`line/page/home/end`)
+  - persistence/restore roundtrip probes added and surfaced in `canonical_ui.message_log_panel.regression_probe_counts`
+  - canonical-vs-modern formatting boundary documented as canonical ledger text projection + modern debug ledger telemetry separation
 - `[ ]` U5: Panel Scope Partition (Canonical vs Modern)
   - classify panels as `canonical_ui` or `modern_ui`
   - user/account management panel explicitly documented as modern-only

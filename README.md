@@ -83,10 +83,10 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 3. `U2` Paperdoll + Equipment Harness (complete)
 - canonical equip overlap semantics (`SLOT_2HND`/`SLOT_RING`) extracted to shared runtime
 - deterministic equipment-resolution probes + CI gating
-4. `U3` Party + Message Log Harness (party complete, log in progress)
+4. `U3/U4` Party + Message Log Harness (complete)
 - party ordering/selection semantics
 - party digit-key selection resolution wired and test-gated
-- message window projection/ordering checks implemented; full scrollback interactions still pending
+- message window projection, scrollback boundary commands, and persistence roundtrip probes implemented/test-gated
 5. `U4` Canonical Target Resolver
 - authoritative object target selection in sim-core for overlap cells
 - client uses server/sim-core target decisions

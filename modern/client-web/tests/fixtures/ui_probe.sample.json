@@ -341,8 +341,15 @@
           "text": "Awaiting command."
         }
       ],
+      "scrollback": {
+        "window_size": 8,
+        "scroll_offset": 0,
+        "max_offset": 0
+      },
       "regression_probe_counts": {
-        "window_cases": 2
+        "window_cases": 2,
+        "scroll_command_cases": 4,
+        "persistence_cases": 1
       }
     },
     "conversation_panel": {

@@ -51,6 +51,16 @@ function runSampleProbeFixture() {
     2,
     "message window probe count mismatch"
   );
+  assert.equal(
+    probe.canonical_ui.message_log_panel.regression_probe_counts.scroll_command_cases,
+    4,
+    "message scroll command probe count mismatch"
+  );
+  assert.equal(
+    probe.canonical_ui.message_log_panel.regression_probe_counts.persistence_cases,
+    1,
+    "message persistence probe count mismatch"
+  );
 }
 
 function runLiveProbeFixture() {
