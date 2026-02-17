@@ -17,6 +17,7 @@ import {
   computeMessageLogWindowRuntime
 } from "./ui/message_log_runtime.ts";
 import { listPanelScopeRuntime } from "./ui/panel_scope_runtime.ts";
+import { buildTargetResolverRegressionProbesRuntime } from "./sim/target_runtime.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
 
@@ -219,6 +220,7 @@ export function buildUiProbeContract(opts: any = {}) {
   const equipResolutionProbes = buildLegacyEquipmentResolutionRegressionProbesRuntime();
   const partyMessageProbes = buildPartyMessageRegressionProbesRuntime();
   const messageLogProbes = buildMessageLogRegressionProbesRuntime();
+  const targetResolverProbes = buildTargetResolverRegressionProbesRuntime();
   const panelScope = listPanelScopeRuntime();
   const equipResolutionDroppedTotal = equipResolutionProbes.cases
     .reduce((acc, cur) => acc + (Number(cur.dropped_count) | 0), 0) >>> 0;
@@ -313,6 +315,14 @@ export function buildUiProbeContract(opts: any = {}) {
       account_panel: {
         source: mode === "live" ? "runtime" : "sample",
         note: "Non-legacy account/auth controls are tracked separately from canonical gameplay UI."
+      }
+    },
+    canonical_runtime: {
+      target_resolver: {
+        regression_probe_counts: {
+          world_overlap_cases: targetResolverProbes.world_overlap_cases.length >>> 0,
+          talk_overlap_cases: targetResolverProbes.talk_overlap_cases.length >>> 0
+        }
       }
     },
     ui_scope: panelScope,

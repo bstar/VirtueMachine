@@ -71,6 +71,16 @@ function runSampleProbeFixture() {
     1,
     "message persistence probe count mismatch"
   );
+  assert.equal(
+    probe.canonical_runtime.target_resolver.regression_probe_counts.world_overlap_cases,
+    2,
+    "target resolver world overlap probe count mismatch"
+  );
+  assert.equal(
+    probe.canonical_runtime.target_resolver.regression_probe_counts.talk_overlap_cases,
+    2,
+    "target resolver talk overlap probe count mismatch"
+  );
 }
 
 function runLiveProbeFixture() {

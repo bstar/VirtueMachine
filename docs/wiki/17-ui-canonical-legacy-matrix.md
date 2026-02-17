@@ -165,6 +165,14 @@ U0 is considered active when all are true:
 - probe contract now exports `ui_scope` metadata for scope auditing
 - CI now blocks panel-surface drift by validating missing/unclassified/duplicate scope keys
 
+## U6 Status (Completed)
+
+- canonical overlap-target harness is now explicit and test-gated:
+  - world object target resolution uses deterministic ordering over overlap stacks
+  - talk target resolution excludes avatar and applies deterministic overlap tie-break ordering
+- probe contract now surfaces resolver regression counts in `canonical_runtime.target_resolver`
+- CI/parity workflow includes dedicated target resolver gate
+
 ## Deviations And Constraints
 
 - If modern UI behavior differs, the reason must be logged in `docs/wiki/08-deviation-ledger.md`.
@@ -175,5 +183,5 @@ U0 is considered active when all are true:
 
 1. keep deterministic fixture workflow green (`modern/tools/run_ui_parity_workflow.sh`)
 2. add per-panel interaction fixtures tied to mechanics rollouts
-3. execute canonical target resolver harness (U4 in README numbering) for overlap-cell authority
-4. only then begin mechanic rollouts that depend on those panels
+3. begin U7 mechanics rollout harness slices (dialogue/quest/combat/magic/schedules) behind existing probe gates
+4. keep canonical-vs-modern boundary enforcement active while mechanics surfaces expand

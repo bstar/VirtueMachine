@@ -90,9 +90,9 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 5. `U5` Panel Scope Partition (complete)
 - explicit `canonical_ui` vs `modern_ui` classification contract
 - CI/parity guard rejects unclassified panel-surface drift
-6. `U6` Canonical Target Resolver
+6. `U6` Canonical Target Resolver (complete)
 - authoritative object target selection in sim-core for overlap cells
-- client uses server/sim-core target decisions
+- deterministic overlap/talk target harness and CI gate implemented
 7. `U7` Mechanics Rollout On Harness
 - NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons
 - each mechanic must ship with panel and replay regression coverage

@@ -233,6 +233,11 @@ Slices:
   - `ui_probe_contract` now emits `ui_scope` classification metadata
   - user/account management panel remains explicitly `modern_ui` (`account_panel`)
   - CI/parity workflow gate added to fail unclassified or duplicate panel scopes
+- `[x]` U6: Canonical Target Resolver Harness
+  - overlap-cell world target resolution now uses deterministic order semantics (`legacyOrder/order/index`)
+  - talk target overlap selection now excludes avatar and applies deterministic tie-break ordering
+  - regression probes/test gate added (`modern/client-web/tests/ui_target_runtime_test.ts`)
+  - probe contract now publishes target resolver probe counts under `canonical_runtime.target_resolver`
 
 Reference policy for U0-U5:
 

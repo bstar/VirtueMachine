@@ -445,6 +445,14 @@
       "note": "Non-legacy account/auth controls are tracked separately from canonical gameplay UI."
     }
   },
+  "canonical_runtime": {
+    "target_resolver": {
+      "regression_probe_counts": {
+        "world_overlap_cases": 2,
+        "talk_overlap_cases": 2
+      }
+    }
+  },
   "ui_scope": {
     "canonical_ui": [
       "avatar_panel",
