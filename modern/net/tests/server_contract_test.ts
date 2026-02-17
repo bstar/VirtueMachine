@@ -331,6 +331,21 @@ async function main() {
       assert.equal(equip.status, 200);
       assert.equal(coordUseOfStatus(equip.body?.target?.status), OBJ_COORD_USE_EQUIP);
 
+      const talkUnsupported = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "talk",
+          target_key: targetKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(talkUnsupported.status, 400);
+      assert.equal(String(talkUnsupported.body?.error?.code || ""), "bad_verb");
+
       const putCycle = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,

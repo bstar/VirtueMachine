@@ -253,6 +253,7 @@ Slices:
   - talk-start path now enters canonical conversation shell even when script validation fails (fallback greeting + normal prompt flow, no "Not implemented" ledger leak)
   - parity workflow now runs canonical conversation regression suite as part of `run_ui_parity_workflow.sh`
   - guard test added to block reintroduction of user-facing `Not implemented:` text in client-web conversation flow
+  - net contract now asserts unsupported `/api/world/objects/interact` talk verb returns deterministic `bad_verb` until talk is promoted into bridge contract
   - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)
 
 Reference policy for U0-U7:
