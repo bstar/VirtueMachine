@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   buildMechanicsCapabilityMatrixRuntime,
   summarizeMechanicsCapabilitiesRuntime,
@@ -10,7 +12,7 @@ function testDefaultMatrix() {
   assert.equal(matrix.length, 8, "default mechanics capability count mismatch");
   const targeted = matrix.find((m) => m.key === "targeted_interaction_core");
   assert.ok(targeted, "targeted interaction capability missing");
-  assert.equal(targeted!.legacy_anchor, "legacy/u6-decompiled/SRC/seg_27A1.c", "targeted legacy anchor mismatch");
+  assert.equal(targeted!.legacy_anchor, "legacy/u6-decompiled/SRC/seg_27a1.c", "targeted legacy anchor mismatch");
   assert.equal(targeted!.regression_gates.length, 1, "targeted regression gate count mismatch");
   const summary = summarizeMechanicsCapabilitiesRuntime(matrix);
   assert.deepEqual(
@@ -39,7 +41,29 @@ function testQuestExtensionPromotion() {
   );
 }
 
+function testCapabilityEvidencePathsExist() {
+  const matrix = buildMechanicsCapabilityMatrixRuntime({});
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../..");
+  for (const entry of matrix) {
+    const anchor = path.resolve(root, entry.legacy_anchor);
+    assert.equal(
+      fs.existsSync(anchor),
+      true,
+      `missing legacy anchor file for ${entry.key}: ${entry.legacy_anchor}`
+    );
+    for (const gate of entry.regression_gates) {
+      const gatePath = path.resolve(root, gate);
+      assert.equal(
+        fs.existsSync(gatePath),
+        true,
+        `missing regression gate path for ${entry.key}: ${gate}`
+      );
+    }
+  }
+}
+
 testDefaultMatrix();
 testQuestExtensionPromotion();
+testCapabilityEvidencePathsExist();
 
 console.log("ui_mechanics_capability_runtime_test: ok");

@@ -17,7 +17,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     category: "core",
     canonical: true,
     legacy_anchor: "legacy/u6-decompiled/SRC/seg_0A33.c",
-    regression_gates: ["sim_core_replay_test", "sim_core_replay_checkpoints_test"],
+    regression_gates: ["modern/tools/ci_required_tests.sh"],
     note: "Avatar movement/path input baseline is active."
   },
   {
@@ -25,7 +25,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "implemented",
     category: "interaction",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/seg_27A1.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_27a1.c",
     regression_gates: ["modern/tools/test_client_web_ui_target_resolver.sh"],
     note: "Legacy-targeted verb cursor pipeline is active."
   },
@@ -34,7 +34,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "implemented",
     category: "interaction",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/seg_27A1.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_27a1.c",
     regression_gates: [
       "modern/tools/test_client_web_ui_inventory_paperdoll.sh",
       "modern/tools/test_client_web_ui_paperdoll_equipment.sh"
@@ -46,7 +46,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "partial",
     category: "interaction",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/converse.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_16E1.c",
     regression_gates: ["modern/tools/test_client_web_conversation.sh"],
     note: "Conversation opcode path is active but not feature-complete."
   },
@@ -55,7 +55,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "planned",
     category: "systems",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/combat.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_2337.c",
     regression_gates: [],
     note: "Combat verbs route through placeholders pending full canonical resolution."
   },
@@ -64,7 +64,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "planned",
     category: "systems",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/magic.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_1944.c",
     regression_gates: [],
     note: "Cast command path exists; full spell resolution pending."
   },
@@ -73,7 +73,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "planned",
     category: "systems",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/npc.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_0C9C.c",
     regression_gates: [],
     note: "NPC schedule/pathing systems are deferred."
   },
@@ -82,7 +82,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
     status: "planned",
     category: "systems",
     canonical: true,
-    legacy_anchor: "legacy/u6-decompiled/SRC/converse.c",
+    legacy_anchor: "legacy/u6-decompiled/SRC/seg_1703.c",
     regression_gates: [],
     note: "Quest progression beyond dialogue scaffolding is deferred."
   }

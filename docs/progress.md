@@ -242,6 +242,7 @@ Slices:
   - capability contract baseline added in `modern/client-web/gameplay/mechanics_capability_runtime.ts`
   - probe contract now publishes mechanics capability summary/entries under `canonical_runtime.mechanics_capability`
   - mechanics capability validation now enforces `legacy_anchor` and regression-gate coverage for non-planned entries
+  - CI now validates that declared `legacy_anchor` and regression gate paths exist in-repo
   - verb-to-capability contract added in `modern/client-web/gameplay/verb_capability_runtime.ts`
   - probe contract now publishes verb binding summary/entries under `canonical_runtime.mechanics_capability.verb_bindings`
   - CI gate added for capability matrix invariants (`modern/client-web/tests/ui_mechanics_capability_runtime_test.ts`)
