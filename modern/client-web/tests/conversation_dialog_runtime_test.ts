@@ -16,6 +16,7 @@ const OP = {
 const SCRIPT = Uint8Array.from([
   OP.ASKTOP,
   OP.KEY, 0x6a, 0x6f, 0x62, OP.RES, 0x22, 0x48, 0x69, 0x22, OP.ENDRES,
+  OP.KEY, 0x6e, 0x61, 0x6d, 0x65, OP.RES, 0x22, 0x41, 0x76, 0x61, 0x74, 0x61, 0x72, 0x22, OP.ENDRES,
   OP.END
 ]);
 
@@ -42,13 +43,14 @@ function testConversationRunFromKeyCursor() {
   });
   assert.equal(out.kind, "ok", "cursor reply should match job");
   assert.deepEqual(out.lines, ["Hi"], "cursor reply lines mismatch");
+  assert.ok((out.nextPc | 0) > 0, "cursor reply should advance nextPc");
 }
 
 function testConversationRunFromKeyCursorNoMatch() {
   const out = conversationRunFromKeyCursor({
     scriptBytes: SCRIPT,
     startPc: 0,
-    typed: "name",
+    typed: "orb",
     vmContext: null,
     opcodes: OP,
     keyMatchesInput,
@@ -59,7 +61,7 @@ function testConversationRunFromKeyCursorNoMatch() {
       stopPc: -1
     })
   });
-  assert.equal(out.kind, "no-match", "cursor reply should not match name");
+  assert.equal(out.kind, "no-match", "cursor reply should not match unknown topic");
 }
 
 function testLegacyConversationReplyFallbackKinds() {
@@ -87,8 +89,43 @@ function testLegacyConversationReplyFallbackKinds() {
   assert.equal(unimplemented.kind, "unimplemented", "legacy reply should expose unimplemented decode path");
 }
 
+function testConversationRunFromKeyCursorSequentialTopics() {
+  const first = conversationRunFromKeyCursor({
+    scriptBytes: SCRIPT,
+    startPc: 0,
+    typed: "job",
+    vmContext: null,
+    opcodes: OP,
+    keyMatchesInput,
+    renderMacros: (line: string) => line,
+    decodeResponseOpcodeAware: () => ({
+      lines: ["Hi"],
+      stopOpcode: 0,
+      stopPc: -1
+    })
+  });
+  assert.equal(first.kind, "ok", "first cursor reply should match job");
+  const second = conversationRunFromKeyCursor({
+    scriptBytes: SCRIPT,
+    startPc: Number(first.nextPc) | 0,
+    typed: "name",
+    vmContext: null,
+    opcodes: OP,
+    keyMatchesInput,
+    renderMacros: (line: string) => line,
+    decodeResponseOpcodeAware: () => ({
+      lines: ["Avatar"],
+      stopOpcode: 0,
+      stopPc: -1
+    })
+  });
+  assert.equal(second.kind, "ok", "second cursor reply should match name from advanced pc");
+  assert.deepEqual(second.lines, ["Avatar"], "second cursor reply lines mismatch");
+}
+
 testConversationRunFromKeyCursor();
 testConversationRunFromKeyCursorNoMatch();
 testLegacyConversationReplyFallbackKinds();
+testConversationRunFromKeyCursorSequentialTopics();
 
 console.log("conversation_dialog_runtime_test: ok");
