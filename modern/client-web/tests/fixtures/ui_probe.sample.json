@@ -555,6 +555,12 @@
           "planned": 2,
           "unknown": 0
         },
+        "coverage": {
+          "interaction_capabilities": 3,
+          "mapped_interaction_capabilities": 3,
+          "unmapped_interaction_capability_keys": [],
+          "unknown_binding_verbs": []
+        },
         "entries": [
           {
             "verb": "a",
