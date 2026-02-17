@@ -228,10 +228,11 @@ Slices:
   - explicit scrollback boundary command semantics and replay probes added (`line/page/home/end`)
   - persistence/restore roundtrip probes added and surfaced in `canonical_ui.message_log_panel.regression_probe_counts`
   - canonical-vs-modern formatting boundary documented as canonical ledger text projection + modern debug ledger telemetry separation
-- `[ ]` U5: Panel Scope Partition (Canonical vs Modern)
-  - classify panels as `canonical_ui` or `modern_ui`
-  - user/account management panel explicitly documented as modern-only
-  - CI checks that prevent untagged panel behavior changes
+- `[x]` U5: Panel Scope Partition (Canonical vs Modern)
+  - explicit panel scope contract added (`modern/client-web/ui/panel_scope_runtime.ts`)
+  - `ui_probe_contract` now emits `ui_scope` classification metadata
+  - user/account management panel remains explicitly `modern_ui` (`account_panel`)
+  - CI/parity workflow gate added to fail unclassified or duplicate panel scopes
 
 Reference policy for U0-U5:
 

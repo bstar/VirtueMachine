@@ -30,6 +30,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_ui_paperdoll_equipment.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_party_message.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_message_log.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_ui_panel_scope.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_probe_fixture.sh"
 else
   echo "Skipping Bun contract tests: bun not found in PATH"

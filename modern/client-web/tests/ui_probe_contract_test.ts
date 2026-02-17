@@ -16,6 +16,16 @@ function runSampleProbeFixture() {
   assert.deepEqual(probe.runtime_extensions, {}, "sample runtime extensions mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.id, 1, "sample avatar id mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.party_index, 0, "sample avatar active index mismatch");
+  assert.deepEqual(
+    probe.ui_scope.canonical_ui,
+    ["avatar_panel", "inventory_panel", "paperdoll_panel", "party_panel", "message_log_panel", "conversation_panel"],
+    "canonical ui scope mismatch"
+  );
+  assert.deepEqual(
+    probe.ui_scope.modern_ui,
+    ["account_panel"],
+    "modern ui scope mismatch"
+  );
   assert.equal(probe.canonical_ui.inventory_panel.entries[0].key, "0x073:0", "inventory sort mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.hitboxes.length, 12, "inventory hitbox count mismatch");
   assert.equal(

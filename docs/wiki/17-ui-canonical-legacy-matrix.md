@@ -157,6 +157,14 @@ U0 is considered active when all are true:
 - persistence/restore roundtrip coverage is included in regression probes and surfaced in `canonical_ui.message_log_panel.regression_probe_counts`
 - canonical-vs-modern boundary: canonical ledger projection is represented in `canonical_ui.message_log_panel`; debug chat telemetry remains a modern diagnostic surface
 
+## U5 Status (Completed)
+
+- panel scope classification is now explicit and machine-validated:
+  - `canonical_ui`: gameplay-faithful panel surfaces
+  - `modern_ui`: non-legacy account/auth/control surfaces
+- probe contract now exports `ui_scope` metadata for scope auditing
+- CI now blocks panel-surface drift by validating missing/unclassified/duplicate scope keys
+
 ## Deviations And Constraints
 
 - If modern UI behavior differs, the reason must be logged in `docs/wiki/08-deviation-ledger.md`.
@@ -166,6 +174,6 @@ U0 is considered active when all are true:
 ## Next Implementation Slice (Follow-On)
 
 1. keep deterministic fixture workflow green (`modern/tools/run_ui_parity_workflow.sh`)
-2. execute U5 panel-scope partition enforcement (`canonical_ui` vs `modern_ui`) with CI guardrails
-3. add per-panel interaction fixtures tied to mechanics rollouts
+2. add per-panel interaction fixtures tied to mechanics rollouts
+3. execute canonical target resolver harness (U4 in README numbering) for overlap-cell authority
 4. only then begin mechanic rollouts that depend on those panels

@@ -445,6 +445,19 @@
       "note": "Non-legacy account/auth controls are tracked separately from canonical gameplay UI."
     }
   },
+  "ui_scope": {
+    "canonical_ui": [
+      "avatar_panel",
+      "inventory_panel",
+      "paperdoll_panel",
+      "party_panel",
+      "message_log_panel",
+      "conversation_panel"
+    ],
+    "modern_ui": [
+      "account_panel"
+    ]
+  },
   "legacy_anchors": {
     "command_loop": "legacy/u6-decompiled/SRC/seg_0A33.c",
     "inventory_and_equipment": "legacy/u6-decompiled/SRC/seg_27a1.c",

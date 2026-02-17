@@ -87,13 +87,16 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 - party ordering/selection semantics
 - party digit-key selection resolution wired and test-gated
 - message window projection, scrollback boundary commands, and persistence roundtrip probes implemented/test-gated
-5. `U4` Canonical Target Resolver
+5. `U5` Panel Scope Partition (complete)
+- explicit `canonical_ui` vs `modern_ui` classification contract
+- CI/parity guard rejects unclassified panel-surface drift
+6. `U6` Canonical Target Resolver
 - authoritative object target selection in sim-core for overlap cells
 - client uses server/sim-core target decisions
-6. `U5` Mechanics Rollout On Harness
+7. `U7` Mechanics Rollout On Harness
 - NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons
 - each mechanic must ship with panel and replay regression coverage
-7. `U6` Story Gate Compatibility Bridge (deferred)
+8. `U8` Story Gate Compatibility Bridge (deferred)
 - add canonical progression gate keys for early LB intro/battle sequencing
 - no story-flow implementation until combat/script compatibility slices are complete
 

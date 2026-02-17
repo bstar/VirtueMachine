@@ -16,6 +16,7 @@ import {
   buildMessageLogRegressionProbesRuntime,
   computeMessageLogWindowRuntime
 } from "./ui/message_log_runtime.ts";
+import { listPanelScopeRuntime } from "./ui/panel_scope_runtime.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
 
@@ -218,6 +219,7 @@ export function buildUiProbeContract(opts: any = {}) {
   const equipResolutionProbes = buildLegacyEquipmentResolutionRegressionProbesRuntime();
   const partyMessageProbes = buildPartyMessageRegressionProbesRuntime();
   const messageLogProbes = buildMessageLogRegressionProbesRuntime();
+  const panelScope = listPanelScopeRuntime();
   const equipResolutionDroppedTotal = equipResolutionProbes.cases
     .reduce((acc, cur) => acc + (Number(cur.dropped_count) | 0), 0) >>> 0;
   return {
@@ -313,6 +315,7 @@ export function buildUiProbeContract(opts: any = {}) {
         note: "Non-legacy account/auth controls are tracked separately from canonical gameplay UI."
       }
     },
+    ui_scope: panelScope,
     legacy_anchors: {
       command_loop: "legacy/u6-decompiled/SRC/seg_0A33.c",
       inventory_and_equipment: "legacy/u6-decompiled/SRC/seg_27a1.c",
