@@ -214,18 +214,19 @@ Slices:
   - slot layout/hitbox baselines wired through shared runtime layout module (`modern/client-web/ui/inventory_paperdoll_layout_runtime.ts`)
   - drag/drop/equip target probe matrix added (inventory<->equip deterministic probe counts)
   - legacy-code-derived structural/layout assertions added in `modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts`
-- `[ ]` U2: Paperdoll + Equipment Harness
-  - equip-region mapping and overlap rules
-  - canonical slot occupancy semantics
-  - deterministic replay probes for equip/unequip
-- `[ ]` U3: Party Management Harness
-  - party list ordering and selection rules
-  - command affordance coverage
-  - UI state transitions under deterministic replay
-- `[ ]` U4: Message Log / Scrollback Harness
-  - wrap/clip/scroll boundaries
-  - event ordering and feed persistence checks
-  - canonical-vs-modern message formatting boundaries documented
+- `[x]` U2: Paperdoll + Equipment Harness
+  - canonical slot occupancy semantics extracted to shared runtime (`modern/client-web/ui/paperdoll_equipment_runtime.ts`)
+  - pseudo-slot overlap resolution (`SLOT_2HND`, `SLOT_RING`) now renderer/probe/test unified
+  - deterministic equipment resolution replay probes added and emitted in `canonical_ui.paperdoll_panel.regression_probe_counts`
+  - CI/UI parity workflow now gates paperdoll occupancy via `modern/tools/test_client_web_ui_paperdoll_equipment.sh`
+- `[x]` U3: Party Management Harness
+  - canonical party ordering/selection extracted to shared runtime (`modern/client-web/ui/party_message_runtime.ts`)
+  - digit-key party switch resolution now wired in runtime input path with deterministic rules
+  - deterministic party selection replay probes emitted in `canonical_ui.party_panel.regression_probe_counts`
+- `[~]` U4: Message Log / Scrollback Harness
+  - deterministic message window clipping/order projection extracted and probe-count gated (`canonical_ui.message_log_panel.regression_probe_counts`)
+  - pending: explicit scrollback boundary interactions and persistence/restore coverage under replay
+  - pending: canonical-vs-modern message formatting boundary notes after scrollback wiring is complete
 - `[ ]` U5: Panel Scope Partition (Canonical vs Modern)
   - classify panels as `canonical_ui` or `modern_ui`
   - user/account management panel explicitly documented as modern-only

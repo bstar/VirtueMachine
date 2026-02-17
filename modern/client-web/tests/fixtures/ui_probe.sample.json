@@ -162,7 +162,7 @@
           "legacy": "SLOT_RHND",
           "slot": 2,
           "object_key": "0x12c:1",
-          "tile_hex": "0x431"
+          "tile_hex": "0x220"
         },
         {
           "index": 3,
@@ -177,7 +177,7 @@
           "legacy": "SLOT_CHST",
           "slot": 4,
           "object_key": "0x090:0",
-          "tile_hex": "0x2a8"
+          "tile_hex": "0x210"
         },
         {
           "index": 5,
@@ -199,7 +199,7 @@
           "legacy": "SLOT_FEET",
           "slot": 7,
           "object_key": "0x0b0:1",
-          "tile_hex": "0x2e1"
+          "tile_hex": "0x21a"
         },
         {
           "index": 8,
@@ -289,7 +289,11 @@
           "h": 16,
           "source": "C_155D_130E"
         }
-      ]
+      ],
+      "regression_probe_counts": {
+        "equip_resolution_cases": 6,
+        "equip_resolution_dropped_total": 2
+      }
     },
     "party_panel": {
       "members": [
@@ -297,21 +301,27 @@
           "id": 1,
           "name": "Avatar",
           "in_party": true,
-          "active": true
+          "active": true,
+          "party_index": 0
         },
         {
           "id": 12,
           "name": "Iolo",
           "in_party": true,
-          "active": false
+          "active": false,
+          "party_index": 1
         },
         {
           "id": 23,
           "name": "Shamino",
           "in_party": true,
-          "active": false
+          "active": false,
+          "party_index": 2
         }
-      ]
+      ],
+      "regression_probe_counts": {
+        "selection_cases": 4
+      }
     },
     "message_log_panel": {
       "entries": [
@@ -330,7 +340,10 @@
           "level": "info",
           "text": "Awaiting command."
         }
-      ]
+      ],
+      "regression_probe_counts": {
+        "window_cases": 2
+      }
     },
     "conversation_panel": {
       "active": false,
@@ -360,7 +373,7 @@
           "legacy": "SLOT_RHND",
           "slot": 2,
           "object_key": "0x12c:1",
-          "tile_hex": "0x431"
+          "tile_hex": "0x220"
         },
         {
           "index": 3,
@@ -382,7 +395,7 @@
           "legacy": "SLOT_LHND",
           "slot": 5,
           "object_key": "0x12e:1",
-          "tile_hex": "0x44d"
+          "tile_hex": "0x208"
         },
         {
           "index": 6,

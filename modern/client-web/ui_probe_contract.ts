@@ -2,6 +2,17 @@ import {
   buildInventoryEquipRegressionProbesRuntime,
   buildLegacyInventoryPaperdollLayoutRuntime
 } from "./ui/inventory_paperdoll_layout_runtime.ts";
+import {
+  buildLegacyEquipmentResolutionRegressionProbesRuntime,
+  projectLegacyEquipmentSlotsRuntime
+} from "./ui/paperdoll_equipment_runtime.ts";
+import {
+  buildPartyMessageRegressionProbesRuntime,
+  clampActivePartyIndexRuntime,
+  normalizePartyMemberIdsRuntime,
+  projectMessageLogEntriesRuntime,
+  projectPartyPanelMembersRuntime
+} from "./ui/party_message_runtime.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
 
@@ -34,30 +45,13 @@ function normalizeInventory(inventory: Record<string, unknown> | null | undefine
   return out;
 }
 
-function normalizeParty(party: unknown) {
-  const out = Array.isArray(party) ? party.slice() : [];
-  out.sort((a, b) => (toU32(a.id) - toU32(b.id)));
-  return out.map((m) => ({
-    id: toU32(m.id),
-    name: String(m.name || `NPC_${toU32(m.id)}`),
-    in_party: !!m.in_party,
-    active: !!m.active
-  }));
-}
-
-function normalizeMessages(messages: unknown) {
-  const out = Array.isArray(messages) ? messages.slice() : [];
-  out.sort((a, b) => (toU32(a.tick) - toU32(b.tick)) || (String(a.text || "").localeCompare(String(b.text || ""))));
-  return out.map((m) => ({
-    tick: toU32(m.tick),
-    level: String(m.level || "info"),
-    text: String(m.text || "")
-  }));
-}
-
 function normalizeEquipment(equipment: unknown) {
+  const projected = projectLegacyEquipmentSlotsRuntime((Array.isArray(equipment) ? equipment : []).map((e: any) => ({
+    tileId: toU32(e.tile_id != null ? e.tile_id : e.tile_hex),
+    object_key: e.object_key == null ? "" : String(e.object_key)
+  })));
   const byIndex = new Map();
-  for (const e of (Array.isArray(equipment) ? equipment : [])) {
+  for (const e of projected) {
     const idx = toU32(e.slot);
     byIndex.set(idx, {
       slot: idx,
@@ -112,9 +106,9 @@ function deterministicSample() {
       "0x0fa:2": 3
     },
     equipment: [
-      { slot: 2, object_key: "0x12c:1", tile_hex: "0x431" },
-      { slot: 4, object_key: "0x090:0", tile_hex: "0x2a8" },
-      { slot: 7, object_key: "0x0b0:1", tile_hex: "0x2e1" }
+      { tile_id: 0x220, object_key: "0x12c:1" },
+      { tile_id: 0x210, object_key: "0x090:0" },
+      { tile_id: 0x21a, object_key: "0x0b0:1" }
     ],
     party: [
       { id: 1, name: "Avatar", in_party: true, active: true },
@@ -134,8 +128,8 @@ function deterministicSample() {
       portrait_tile_hex: null,
       show_inventory: true,
       equipment: [
-        { slot: 2, object_key: "0x12c:1", tile_hex: "0x431" },
-        { slot: 5, object_key: "0x12e:1", tile_hex: "0x44d" }
+        { tile_id: 0x220, object_key: "0x12c:1" },
+        { tile_id: 0x208, object_key: "0x12e:1" }
       ]
     }
   };
@@ -145,9 +139,24 @@ function fromRuntime(runtime: any) {
   const sim = runtime && runtime.sim ? runtime.sim : {};
   const world = sim.world || {};
   const commandLog = Array.isArray(runtime && runtime.commandLog) ? runtime.commandLog : [];
-  const activeIndex = toU32(world.active || 0);
-  const partyMembers = Array.isArray(runtime && runtime.partyMembers) ? runtime.partyMembers.map((v) => toU32(v)) : [1];
+  const partyMembers = normalizePartyMemberIdsRuntime(runtime?.partyMembers, 1);
+  const activeIndex = clampActivePartyIndexRuntime(world.active || 0, partyMembers.length);
   const activeId = partyMembers[activeIndex] || partyMembers[0] || 1;
+  const partyPanelMembers = projectPartyPanelMembersRuntime({
+    partyMembers,
+    activeIndex,
+    nameById: runtime?.partyNameById || null
+  });
+  const messageEntries = projectMessageLogEntriesRuntime({
+    entries: commandLog.map((c, i) => ({
+      tick: toU32(c?.tick != null ? c.tick : i),
+      level: "info",
+      text: String(c?.kind || "command"),
+      seq: i
+    })),
+    maxEntries: 8,
+    lineMaxChars: 64
+  });
   return {
     tick: toU32(sim.tick || 0),
     mode: "live",
@@ -162,14 +171,10 @@ function fromRuntime(runtime: any) {
     active_party_index: activeIndex,
     inventory: { ...(sim.inventory || {}) },
     equipment: [], // pending canonical equip-state bridge
-    party: [
-      { id: activeId || 1, name: activeId ? `Actor_${activeId}` : "Avatar", in_party: true, active: true }
-    ],
-    messages: commandLog.slice(-8).map((c, i) => ({
-      tick: toU32(c.tick != null ? c.tick : i),
-      level: "info",
-      text: String(c.kind || "command")
-    })),
+    party: partyPanelMembers.length
+      ? partyPanelMembers
+      : [{ id: activeId || 1, name: activeId ? `Actor_${activeId}` : "Avatar", in_party: true, active: true, party_index: 0 }],
+    messages: messageEntries,
     conversation: normalizeConversation(runtime.conversation)
   };
 }
@@ -181,8 +186,8 @@ function fromRuntime(runtime: any) {
  3) Anchor panel location to current world map coords.
 */
 export function createCanonicalTestAvatar(snapshot: any = {}) {
-  const partyMembers = Array.isArray(snapshot.party_members) ? snapshot.party_members.map((v) => toU32(v)) : [1];
-  const activeIndex = toU32(snapshot.active_party_index || 0);
+  const partyMembers = normalizePartyMemberIdsRuntime(snapshot.party_members, 1);
+  const activeIndex = clampActivePartyIndexRuntime(snapshot.active_party_index || 0, partyMembers.length);
   const resolvedId = partyMembers[activeIndex] || partyMembers[0] || 1;
   const world = snapshot.world || {};
   return {
@@ -206,6 +211,10 @@ export function buildUiProbeContract(opts: any = {}) {
     talkShowInventory: true
   });
   const cmd92ProbeMatrix = buildInventoryEquipRegressionProbesRuntime(cmd92Layout);
+  const equipResolutionProbes = buildLegacyEquipmentResolutionRegressionProbesRuntime();
+  const partyMessageProbes = buildPartyMessageRegressionProbesRuntime();
+  const equipResolutionDroppedTotal = equipResolutionProbes.cases
+    .reduce((acc, cur) => acc + (Number(cur.dropped_count) | 0), 0) >>> 0;
   return {
     schema_version: UI_PROBE_SCHEMA_VERSION,
     mode: src.mode,
@@ -247,13 +256,35 @@ export function buildUiProbeContract(opts: any = {}) {
           w: slot.w,
           h: slot.h,
           source: cmd92Layout.anchors.equip_hitbox
-        }))
+        })),
+        regression_probe_counts: {
+          equip_resolution_cases: equipResolutionProbes.cases.length >>> 0,
+          equip_resolution_dropped_total: equipResolutionDroppedTotal
+        }
       },
       party_panel: {
-        members: normalizeParty(src.party)
+        members: projectPartyPanelMembersRuntime({
+          partyMembers: src.party_members,
+          activeIndex: src.active_party_index,
+          nameById: Object.fromEntries((Array.isArray(src.party) ? src.party : []).map((m: any) => [String(m.id), String(m.name || "")]))
+        }),
+        regression_probe_counts: {
+          selection_cases: partyMessageProbes.party_selection.length >>> 0
+        }
       },
       message_log_panel: {
-        entries: normalizeMessages(src.messages)
+        entries: projectMessageLogEntriesRuntime({
+          entries: src.messages,
+          maxEntries: 8,
+          lineMaxChars: 64
+        }).map((m) => ({
+          tick: m.tick,
+          level: m.level,
+          text: m.text
+        })),
+        regression_probe_counts: {
+          window_cases: partyMessageProbes.message_windows.length >>> 0
+        }
       },
       conversation_panel: normalizeConversation(src.conversation)
     },

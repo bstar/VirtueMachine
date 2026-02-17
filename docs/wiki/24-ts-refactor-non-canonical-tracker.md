@@ -78,6 +78,14 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 - Risk: weakened compile-time guarantees inside orchestration-heavy code can hide shape regressions while refactor slices continue.
 - Exit criteria: replace broad `any` usage with shared interfaces (`AppState`, `UiProbe`, map/tile/object/entity layer contracts), then tighten helper return types and remove fallback casts.
 
+### 9) Party roster authority fallback remains client-local
+
+- Status: `temporary`
+- Location: `modern/client-web/app.ts`, `modern/client-web/ui/party_message_runtime.ts`, `modern/client-web/ui_probe_contract.ts`
+- Note: U3 harness now has canonical party ordering/selection runtime logic, but live roster authority still falls back to client-local `state.partyMembers` until server/sim-core provides authoritative party arrays.
+- Risk: digit-key selection semantics are correct, but roster composition may not match canonical party contents in all live sessions.
+- Exit criteria: bridge authoritative party membership/state from sim-core/net payload into probe/render/input paths and remove local fallback ownership.
+
 ## Canonical Guardrails
 
 For every new extraction slice:

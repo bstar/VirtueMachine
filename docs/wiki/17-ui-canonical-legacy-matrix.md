@@ -94,6 +94,8 @@ Tooling added in this slice:
 - probe regression test: `modern/client-web/tests/ui_probe_contract_test.ts`
 - inventory/paperdoll layout runtime: `modern/client-web/ui/inventory_paperdoll_layout_runtime.ts`
 - inventory/paperdoll layout regression test: `modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts`
+- paperdoll occupancy/runtime slot resolver: `modern/client-web/ui/paperdoll_equipment_runtime.ts`
+- paperdoll occupancy regression test: `modern/client-web/tests/ui_paperdoll_equipment_runtime_test.ts`
 
 Purpose:
 
@@ -131,6 +133,29 @@ U0 is considered active when all are true:
 - probe contract now emits inventory/paperdoll hitboxes and deterministic inventory<->equip probe-count signals
 - anchor guard now explicitly checks `C_155D_1267`, `C_155D_130E`, and `C_155D_0CF5`
 
+## U2 Status (Completed)
+
+- equipment slot resolution is now centralized in one runtime module and consumed by:
+  - in-game talk/paperdoll equipment extraction path (`legacyEquipmentSlotsForTalkActor(...)` call site)
+  - probe-contract canonical payload normalization (`canonical_ui.paperdoll_panel`)
+- overlap semantics are explicitly test-gated for:
+  - right/left hand spill rules
+  - two-handed pseudo-slot fallback behavior
+  - ring pseudo-slot finger spill behavior
+- deterministic replay probe scenarios now guard occupancy semantics and are surfaced in probe counts for CI drift detection
+
+## U3 Status (Completed)
+
+- party panel projection now runs through shared runtime ordering rules (party-order preserved; active index clamped)
+- digit-key party selection is no longer a placeholder; runtime path now resolves canonical slot mapping (`1..9` -> party index, `0` -> slot 10)
+- deterministic selection replay probes are emitted and CI-gated
+
+## U4 Status (In Progress)
+
+- message log now has deterministic tail-window projection and line clipping in shared runtime
+- probe contract now carries message-window regression counts
+- remaining work: explicit scrollback/page boundaries and persistence/restore replay checks
+
 ## Deviations And Constraints
 
 - If modern UI behavior differs, the reason must be logged in `docs/wiki/08-deviation-ledger.md`.
@@ -140,6 +165,6 @@ U0 is considered active when all are true:
 ## Next Implementation Slice (Follow-On)
 
 1. keep deterministic fixture workflow green (`modern/tools/run_ui_parity_workflow.sh`)
-2. expand canonical panel fixtures beyond the current sample baseline
+2. finish U4 scrollback/persistence harness (interaction + replay)
 3. add per-panel interaction fixtures tied to mechanics rollouts
 4. only then begin mechanic rollouts that depend on those panels

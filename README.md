@@ -80,16 +80,20 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 - slot/hitbox probes
 - drag/drop/equip regression probes + legacy-code-backed assertions
   - baseline harness now implemented (`modern/client-web/ui/inventory_paperdoll_layout_runtime.ts`, `modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts`)
-3. `U2` Party + Message Log Harness
+3. `U2` Paperdoll + Equipment Harness (complete)
+- canonical equip overlap semantics (`SLOT_2HND`/`SLOT_RING`) extracted to shared runtime
+- deterministic equipment-resolution probes + CI gating
+4. `U3` Party + Message Log Harness (party complete, log in progress)
 - party ordering/selection semantics
-- scrollback/wrapping/event-order checks
-4. `U3` Canonical Target Resolver
+- party digit-key selection resolution wired and test-gated
+- message window projection/ordering checks implemented; full scrollback interactions still pending
+5. `U4` Canonical Target Resolver
 - authoritative object target selection in sim-core for overlap cells
 - client uses server/sim-core target decisions
-5. `U4` Mechanics Rollout On Harness
+6. `U5` Mechanics Rollout On Harness
 - NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons
 - each mechanic must ship with panel and replay regression coverage
-6. `U5` Story Gate Compatibility Bridge (deferred)
+7. `U6` Story Gate Compatibility Bridge (deferred)
 - add canonical progression gate keys for early LB intro/battle sequencing
 - no story-flow implementation until combat/script compatibility slices are complete
 

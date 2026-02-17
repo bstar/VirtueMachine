@@ -165,6 +165,11 @@ import {
   buildLegacyInventoryPaperdollLayoutRuntime,
   legacyInventoryPaperdollHitTestRuntime
 } from "./ui/inventory_paperdoll_layout_runtime.ts";
+import { projectLegacyEquipmentSlotsRuntime } from "./ui/paperdoll_equipment_runtime.ts";
+import {
+  normalizePartyMemberIdsRuntime,
+  resolvePartySwitchDigitRuntime
+} from "./ui/party_message_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -584,6 +589,8 @@ const state: any = {
   sim: createInitialSimState(),
   queue: [],
   commandLog: [],
+  partyMembers: [1],
+  partyNameById: { "1": "Avatar" },
   mapCtx: null,
   tileSet: null,
   objectLayer: null,
@@ -1900,25 +1907,6 @@ function areaIdForWorldXY(x, y) {
   return ((ay << 3) | ax) & 0x3f;
 }
 
-function legacyEquipSlotForTile(tileId) {
-  const t = Number(tileId) & 0xffff;
-  if (t === 0x21a || t === 0x21b) return 7; /* SLOT_FEET */
-  if (t === 0x258 || (t >= 0x37d && t <= 0x37f)) return 9; /* SLOT_RING pseudo */
-  if (t === 0x219 || (t >= 0x250 && t <= 0x252) || t === 0x217 || t === 0x101) return 1; /* SLOT_NECK */
-  if (t >= 0x200 && t <= 0x207) return 0; /* SLOT_HEAD */
-  if ((t >= 0x210 && t <= 0x216) || t === 0x218 || t === 0x219 || t === 0x28c || t === 0x28e || t === 0x29d || t === 0x257) return 4; /* SLOT_CHST */
-  if (t === 0x228 || t === 0x229 || t === 0x231 || t === 0x235 || (t >= 0x22b && t <= 0x22e)) return 8; /* SLOT_2HND pseudo */
-  if ((t >= 0x208 && t <= 0x20f) || t === 0x222) return 5; /* SLOT_LHND */
-  if (
-    t === 0x220 || t === 0x221 || t === 0x223 || t === 0x224 || t === 0x225 || t === 0x226 || t === 0x227 || t === 0x22a
-    || t === 0x22f || t === 0x230 || t === 0x238 || t === 0x254 || t === 0x256 || t === 0x255 || t === 0x259 || t === 0x262
-    || t === 0x263 || t === 0x264 || t === 0x270 || t === 0x271 || t === 0x272 || t === 0x273 || t === 0x274 || t === 0x275
-    || t === 0x279 || t === 0x27d || t === 0x27e || t === 0x27f || t === 0x280 || t === 0x281 || t === 0x2a2 || t === 0x2a3
-    || t === 0x2b9
-  ) return 2; /* SLOT_RHND */
-  return -1;
-}
-
 function legacyEquipmentSlotsForTalkActor(actor) {
   if (!actor) {
     return [];
@@ -1990,41 +1978,10 @@ function legacyEquipmentSlotsForTalkActor(actor) {
   if (!equipRows.length) {
     return [];
   }
-  const occupied = new Array(8).fill(null);
-  for (const row of equipRows) {
-    let slot = legacyEquipSlotForTile(row.tileId);
-    if (slot < 0) {
-      continue;
-    }
-    if (slot === 8) { /* SLOT_2HND */
-      if (occupied[2]) {
-        slot = occupied[5] ? -1 : 5;
-      } else {
-        slot = 2;
-      }
-    } else if (slot === 2 && occupied[2] && !occupied[5]) {
-      slot = 5;
-    } else if (slot === 5 && occupied[5] && !occupied[2]) {
-      slot = 2;
-    } else if (slot === 9) { /* SLOT_RING */
-      slot = occupied[3] ? 6 : 3;
-    }
-    if (slot < 0 || slot > 7 || occupied[slot]) {
-      continue;
-    }
-    occupied[slot] = row;
-  }
-  const out = [];
-  for (let slot = 0; slot < 8; slot += 1) {
-    const row = occupied[slot];
-    if (!row) continue;
-    out.push({
-      slot,
-      object_key: `objblk:${Number(row.sourceArea) | 0}:${Number(row.index) | 0}`,
-      tile_hex: `0x${(Number(row.tileId) & 0xffff).toString(16)}`
-    });
-  }
-  return out;
+  return projectLegacyEquipmentSlotsRuntime(equipRows.map((row) => ({
+    tileId: Number(row.tileId) & 0xffff,
+    object_key: `objblk:${Number(row.sourceArea) | 0}:${Number(row.index) | 0}`
+  })));
 }
 
 function endLegacyConversation() {
@@ -3720,6 +3677,7 @@ function createInitialSimState() {
     avatarPose: "stand",
     avatarPoseSetTick: -1,
     avatarPoseAnchor: null,
+    partySize: 1,
     world: { ...INITIAL_WORLD }
   };
 }
@@ -8524,7 +8482,18 @@ function loadWorldSnapshotHotkey() {
   });
 }
 
+function runtimePartyMembersForUiProbe() {
+  const members = normalizePartyMemberIdsRuntime(state.partyMembers, 1);
+  state.partyMembers = members.slice();
+  state.sim.partySize = members.length >>> 0;
+  if ((state.sim.world.active | 0) >= members.length) {
+    state.sim.world.active = 0;
+  }
+  return members;
+}
+
 function captureUiProbeHotkey() {
+  const partyMembers = runtimePartyMembersForUiProbe();
   const probe = buildUiProbeContract({
     mode: state.uiProbeMode === "sample" ? "sample" : "live",
     runtime: {
@@ -8545,8 +8514,8 @@ function captureUiProbeHotkey() {
           ? state.legacyConversationEquipmentSlots
           : []
       },
-      // Canonical party array bridge is still pending in runtime; use avatar fallback.
-      partyMembers: [1]
+      partyMembers,
+      partyNameById: { ...(state.partyNameById || {}) }
     }
   });
   const digest = uiProbeDigest(probe);
@@ -8576,6 +8545,7 @@ function toggleLegacyHudLayer() {
 }
 
 function getUiProbeForRender() {
+  const partyMembers = runtimePartyMembersForUiProbe();
   return buildUiProbeContract({
     mode: state.uiProbeMode === "sample" ? "sample" : "live",
     runtime: {
@@ -8596,7 +8566,8 @@ function getUiProbeForRender() {
           ? state.legacyConversationEquipmentSlots
           : []
       },
-      partyMembers: [1]
+      partyMembers,
+      partyNameById: { ...(state.partyNameById || {}) }
     }
   });
 }
@@ -8925,8 +8896,28 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
   if ((ev.code.startsWith("Digit") || ev.code.startsWith("Numpad")) && k >= "0" && k <= "9") {
+    const resolution = resolvePartySwitchDigitRuntime({
+      digitKey: k,
+      partyMembers: state.partyMembers,
+      activeIndex: state.sim.world.active
+    });
+    state.partyMembers = normalizePartyMemberIdsRuntime(state.partyMembers, 1);
+    state.sim.partySize = state.partyMembers.length >>> 0;
+    if (resolution.changed) {
+      state.sim.world.active = resolution.next_active_index | 0;
+      diagBox.className = "diag ok";
+      diagBox.textContent = `Party switch ${k}: active index ${resolution.next_active_index}.`;
+      ev.preventDefault();
+      return;
+    }
     diagBox.className = "diag ok";
-    diagBox.textContent = `Party switch ${k}: legacy key mapped; full party command mode pending.`;
+    if (resolution.reason === "same_index") {
+      diagBox.textContent = `Party switch ${k}: already active.`;
+    } else if (resolution.reason === "out_of_range") {
+      diagBox.textContent = `Party switch ${k}: no party member at that slot.`;
+    } else {
+      diagBox.textContent = `Party switch ${k}: ignored.`;
+    }
     ev.preventDefault();
     return;
   }

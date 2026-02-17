@@ -30,6 +30,27 @@ function runSampleProbeFixture() {
   );
   assert.equal(probe.canonical_ui.paperdoll_panel.slots.length, 10, "equip slots length mismatch");
   assert.equal(probe.canonical_ui.paperdoll_panel.hitboxes.length, 8, "paperdoll hitbox count mismatch");
+  assert.equal(
+    probe.canonical_ui.paperdoll_panel.regression_probe_counts.equip_resolution_cases,
+    6,
+    "paperdoll equip-resolution case count mismatch"
+  );
+  assert.equal(
+    probe.canonical_ui.paperdoll_panel.regression_probe_counts.equip_resolution_dropped_total,
+    2,
+    "paperdoll equip-resolution dropped total mismatch"
+  );
+  assert.equal(probe.canonical_ui.party_panel.members.length, 3, "sample party member count mismatch");
+  assert.equal(
+    probe.canonical_ui.party_panel.regression_probe_counts.selection_cases,
+    4,
+    "party selection probe count mismatch"
+  );
+  assert.equal(
+    probe.canonical_ui.message_log_panel.regression_probe_counts.window_cases,
+    2,
+    "message window probe count mismatch"
+  );
 }
 
 function runLiveProbeFixture() {
@@ -60,6 +81,9 @@ function runLiveProbeFixture() {
   assert.equal(probe.runtime_extensions.housing, true, "live runtime housing extension mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.id, 77, "live avatar resolution mismatch");
   assert.equal(probe.canonical_ui.avatar_panel.avatar.map_x, 400, "live avatar map_x mismatch");
+  assert.equal(probe.canonical_ui.party_panel.members.length, 3, "live party member projection mismatch");
+  assert.equal(probe.canonical_ui.party_panel.members[1].id, 77, "live active party member id mismatch");
+  assert.equal(probe.canonical_ui.party_panel.members[1].active, true, "live active party member flag mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.entries.length, 2, "live inventory entries mismatch");
   assert.equal(probe.canonical_ui.message_log_panel.entries.length, 2, "live message projection mismatch");
 }
