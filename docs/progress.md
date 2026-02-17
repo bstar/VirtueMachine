@@ -187,6 +187,9 @@ This checklist is intentionally mutable.
 - `[x]` Harden one-command local dev stack teardown/startup reliability:
   - added `modern/tools/stop_dev_stack.sh` for deterministic stale-process cleanup (Vite/web/net)
   - integrated stop helper into `modern/tools/hard_reset_world_state.sh`
+- `[x]` Harden Vite dev runtime for binary savegame assets:
+  - explicit asset/watch exclusions for `modern/assets/{pristine,runtime}/savegame/**`
+  - module MIME mapping now includes `.cjs`/`.ts`/`.tsx` to avoid strict module-type failures
 - `[ ]` Add environmental object collision pass (chairs, beds, tables, furniture)
 - `[ ]` Add seated/lying interaction states:
   - avatar can sit in chairs and lie/sleep in beds

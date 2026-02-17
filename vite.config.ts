@@ -13,6 +13,9 @@ function contentTypeFor(filePath) {
     case ".html": return "text/html; charset=utf-8";
     case ".js":
     case ".mjs": return "application/javascript; charset=utf-8";
+    case ".cjs": return "application/javascript; charset=utf-8";
+    case ".ts":
+    case ".tsx": return "application/javascript; charset=utf-8";
     case ".css": return "text/css; charset=utf-8";
     case ".json": return "application/json; charset=utf-8";
     case ".png": return "image/png";
@@ -84,10 +87,20 @@ function rootRedirectPlugin() {
 
 export default defineConfig({
   appType: "spa",
+  assetsInclude: [
+    "**/modern/assets/pristine/savegame/**",
+    "**/modern/assets/runtime/savegame/**"
+  ],
   server: {
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    watch: {
+      ignored: [
+        "**/modern/assets/pristine/savegame/**",
+        "**/modern/assets/runtime/savegame/**"
+      ]
+    },
     fs: {
       allow: [ROOT_DIR]
     }
