@@ -358,6 +358,17 @@ assert.equal(lbHeader.name, "Lord British");
   assert.match(jobLines[0], /throne of Britannia/i, "LB job should mention throne/Britannia");
   assert.ok(jobLines.every((ln) => !String(ln).includes("@")), "LB job should not leak '@' keyword markers");
 }
+{
+  const orbLines = runTopic(lbScript, lbHeader, "orb", { target: "Lord British" });
+  assert.ok(orbLines.length > 0, "LB orb should produce response lines");
+  const all = orbLines.join(" ").toLowerCase();
+  assert.match(all, /\bopen a gate\b/i, "LB orb response should include gate usage guidance");
+}
+{
+  const gargLines = runTopic(lbScript, lbHeader, "garg", { target: "Lord British" });
+  assert.ok(gargLines.length > 0, "LB garg should produce response lines");
+  assert.match(gargLines.join(" "), /vile creatures/i, "LB garg response should include canonical threat phrasing");
+}
 
 const nystulScript = loadConversationScript(6);
 const nystulHeader = parseHeader(nystulScript);
@@ -365,6 +376,11 @@ assert.equal(nystulHeader.name, "Nystul");
 {
   const introLines = runTopic(nystulScript, nystulHeader, "n", { target: "Nystul" });
   assert.ok(introLines.length > 0, "Nystul intro path should produce response lines");
+}
+{
+  const nameLines = runTopic(nystulScript, nystulHeader, "name", { target: "Nystul" });
+  assert.ok(nameLines.length > 0, "Nystul name should produce response lines");
+  assert.doesNotMatch(nameLines.join(" "), /^No response\.?$/i, "Nystul name should not resolve to fallback no-response");
 }
 
 const dupreScript = loadConversationScript(2);
