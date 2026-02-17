@@ -373,6 +373,9 @@ assert.equal(lbHeader.name, "Lord British");
   const opener = opening.join(" ").toLowerCase();
   assert.ok(Array.isArray(opening), "LB opening decode should return line array");
   assert.match(opener, /what wouldst thou speak of/, "LB opening should ask what subject to discuss");
+  assert.ok(opening.length > 0, "LB opening should include at least one line");
+  assert.match(String(opening[0] || ""), /good/i, "LB opening should include canonical time-of-day greeting");
+  assert.doesNotMatch(opener, /\$[0-9a-z]/i, "LB opening should not leak unresolved macro placeholders");
 }
 {
   const nameLines = runTopic(lbScript, lbHeader, "name", { target: "Lord British" });
@@ -387,6 +390,8 @@ assert.equal(lbHeader.name, "Lord British");
   assert.ok(jobLines.length > 0, "LB job should produce response lines");
   assert.match(jobLines[0], /throne of Britannia/i, "LB job should mention throne/Britannia");
   assert.ok(jobLines.every((ln) => !String(ln).includes("@")), "LB job should not leak '@' keyword markers");
+  assert.doesNotMatch(jobLines.join(" ").toLowerCase(), /\bcomp\b/, "LB job should not spill into keyword list trailer");
+  assert.doesNotMatch(jobLines.join(" ").toLowerCase(), /\bbye\b/, "LB job should not spill into fallback branch");
   const cursorJob = runTopicFromCursor(lbScript, lbHeader, "job", { target: "Lord British" });
   assert.equal(cursorJob.kind, "ok", "LB job cursor-path should resolve");
   assert.ok(Array.isArray(cursorJob.lines) && cursorJob.lines.length > 0, "LB cursor job should return response lines");
@@ -397,6 +402,8 @@ assert.equal(lbHeader.name, "Lord British");
   assert.ok(orbLines.length > 0, "LB orb should produce response lines");
   const all = orbLines.join(" ").toLowerCase();
   assert.match(all, /\bopen a gate\b/i, "LB orb response should include gate usage guidance");
+  assert.doesNotMatch(all, /\bcomp\b/, "LB orb should not include keyword list trailer noise");
+  assert.doesNotMatch(all, /\bbye\b/, "LB orb should not include fallback branch keyword");
 }
 {
   const gargLines = runTopic(lbScript, lbHeader, "garg", { target: "Lord British" });
@@ -407,6 +414,13 @@ assert.equal(lbHeader.name, "Lord British");
 const nystulScript = loadConversationScript(6);
 const nystulHeader = parseHeader(nystulScript);
 assert.equal(nystulHeader.name, "Nystul");
+{
+  const opening = decodeOpeningLines(nystulScript, nystulHeader.mainPc).map((ln) => renderConversationMacros(ln, { player: "avatar", target: "Nystul", timeWord: "morning" }));
+  assert.ok(opening.length > 0, "Nystul opening decode should return line array");
+  const opener = opening.join(" ").toLowerCase();
+  assert.doesNotMatch(opener, /\$[0-9a-z]/i, "Nystul opening should not leak unresolved macro placeholders");
+  assert.doesNotMatch(opener, /\bcomp\b/, "Nystul opening should not leak keyword-list trailer noise");
+}
 {
   const introLines = runTopic(nystulScript, nystulHeader, "n", { target: "Nystul" });
   assert.ok(introLines.length > 0, "Nystul intro path should produce response lines");
