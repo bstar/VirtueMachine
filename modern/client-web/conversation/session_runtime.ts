@@ -263,7 +263,8 @@ export function submitLegacyConversationInput(state: any, deps: any = {}) {
       if (msg) pushLedgerMessageFn(msg);
     }
   } else if (reply && reply.kind === "unimplemented") {
-    pushLedgerMessageFn("Not implemented: canonical conversation opcode path for this topic.");
+    const fallbackText = String(deps.unimplementedFallbackText || "No response.").trim() || "No response.";
+    pushLedgerMessageFn(fallbackText);
   } else {
     pushLedgerMessageFn("No response.");
   }
