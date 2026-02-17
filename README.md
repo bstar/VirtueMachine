@@ -74,7 +74,8 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 
 1. `U0` Deterministic UI Parity Mode
 - fixed-frame capture mode + scripted panel states
-- one-command probe workflow (capture+diff optional)
+- one-command probe workflow (capture+diff optional): `./modern/tools/run_ui_parity_workflow.sh`
+- deterministic sample fixture guard: `modern/client-web/tests/fixtures/ui_probe.sample.json`
 2. `U1` Inventory + Paperdoll Harness
 - slot/hitbox probes
 - drag/drop/equip regression probes + legacy-code-backed assertions

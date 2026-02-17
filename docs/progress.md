@@ -1,6 +1,6 @@
 # Project Progress Checklist
 
-Last Updated: 2026-02-14
+Last Updated: 2026-02-17
 
 ## Milestone Status
 
@@ -201,12 +201,15 @@ Status legend for this section:
 
 Slices:
 
-- `[~]` U0: Deterministic UI Parity Mode
+- `[x]` U0: Deterministic UI Parity Mode
   - fixed camera/frame capture mode
   - deterministic sample-state loader (inventory, party, paperdoll, messages)
   - one-command probe runner for panel states (screenshot capture optional)
   - legacy-code-first UI anchor matrix documented and test-guarded (`docs/wiki/17-ui-canonical-legacy-matrix.md`, `modern/tools/extract_legacy_ui_anchors.sh`, `modern/tools/test_legacy_ui_anchors.sh`)
-  - canonical avatar probe process added (`Party[active]` with `Party[0]` fallback) in `modern/client-web/ui_probe_contract.js`
+  - canonical avatar probe process added (`Party[active]` with `Party[0]` fallback) in `modern/client-web/ui_probe_contract.ts`
+  - deterministic probe fixture committed: `modern/client-web/tests/fixtures/ui_probe.sample.json`
+  - one-command parity workflow: `modern/tools/run_ui_parity_workflow.sh` (`--verify`/`--write`)
+  - CI-required gate now includes legacy anchor guard + deterministic probe fixture verification
 - `[ ]` U1: Inventory Panel Canonical Harness
   - slot layout/hitbox baselines
   - drag/drop/equip target probes

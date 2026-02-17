@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   UI_PROBE_SCHEMA_VERSION,
   buildUiProbeContract,
@@ -71,9 +73,21 @@ function runDigestFixture() {
   assert.equal(a, b, "sample digest must be deterministic");
 }
 
+function runSampleSnapshotFixture() {
+  const fixturePath = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname),
+    "fixtures",
+    "ui_probe.sample.json"
+  );
+  const expected = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const actual = buildUiProbeContract({ mode: "sample" });
+  assert.deepEqual(actual, expected, "sample probe fixture drift");
+}
+
 runSampleProbeFixture();
 runLiveProbeFixture();
 runAvatarProcessFixture();
 runDigestFixture();
+runSampleSnapshotFixture();
 
 console.log("ui_probe_contract_test: ok");

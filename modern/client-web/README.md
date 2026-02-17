@@ -129,6 +129,12 @@ Run deterministic client composition fixtures:
 ./modern/tools/test_client_web_render_composition.sh
 ```
 
+Run the canonical UI parity workflow (legacy anchors + probe contracts + deterministic fixture verification):
+
+```bash
+./modern/tools/run_ui_parity_workflow.sh --verify
+```
+
 ## Layout Variants
 
 - `Classic Right Rail`

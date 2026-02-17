@@ -90,7 +90,7 @@ Tooling added in this slice:
 
 - extractor: `modern/tools/extract_legacy_ui_anchors.sh`
 - guard test: `modern/tools/test_legacy_ui_anchors.sh`
-- probe contract module: `modern/client-web/ui_probe_contract.js`
+- probe contract module: `modern/client-web/ui_probe_contract.ts`
 - probe regression test: `modern/client-web/tests/ui_probe_contract_test.ts`
 
 Purpose:
@@ -114,14 +114,14 @@ In-game verification hook:
 - `Shift+J` captures a live UI probe contract
 - output is available as `window.__vmLastUiProbe` and digest in `window.__vmLastUiProbeDigest`
 
-## U0 Entry Criteria (Now In Progress)
+## U0 Entry Criteria (Completed)
 
 U0 is considered active when all are true:
 
 1. canonical routine anchors are documented and machine-extractable (`complete`)
 2. probe schema for panel-state evidence exists (`next`)
-3. deterministic sample-state generator exists (`next`)
-4. CI gate blocks panel work that bypasses probe contracts (`next`)
+3. deterministic sample-state generator exists (`complete`)
+4. CI gate blocks panel work that bypasses probe contracts (`complete`)
 
 ## Deviations And Constraints
 
@@ -131,7 +131,7 @@ U0 is considered active when all are true:
 
 ## Next Implementation Slice (Follow-On)
 
-1. add `ui_probe_contract` module in `modern/client-web` for panel-state snapshots
-2. generate deterministic JSON probe artifacts per panel (inventory/paperdoll/party/log)
-3. add tests that assert canonical structure/order semantics from legacy anchors
+1. keep deterministic fixture workflow green (`modern/tools/run_ui_parity_workflow.sh`)
+2. expand canonical panel fixtures beyond the current sample baseline
+3. add per-panel interaction fixtures tied to mechanics rollouts
 4. only then begin mechanic rollouts that depend on those panels

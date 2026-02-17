@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "mode": "sample",
+  "tick": 4242,
+  "runtime_profile": "canonical_strict",
+  "runtime_extensions": {},
+  "canonical_ui": {
+    "avatar_panel": {
+      "avatar": {
+        "id": 1,
+        "party_index": 0,
+        "party_count": 3,
+        "map_x": 307,
+        "map_y": 347,
+        "map_z": 0,
+        "source_process": "legacy_party_active_resolution"
+      }
+    },
+    "inventory_panel": {
+      "entries": [
+        {
+          "key": "0x073:0",
+          "count": 1
+        },
+        {
+          "key": "0x097:0",
+          "count": 1
+        },
+        {
+          "key": "0x0fa:2",
+          "count": 3
+        }
+      ]
+    },
+    "paperdoll_panel": {
+      "slots": [
+        {
+          "index": 0,
+          "key": "head",
+          "legacy": "SLOT_HEAD",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 1,
+          "key": "neck",
+          "legacy": "SLOT_NECK",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 2,
+          "key": "right_hand",
+          "legacy": "SLOT_RHND",
+          "slot": 2,
+          "object_key": "0x12c:1",
+          "tile_hex": "0x431"
+        },
+        {
+          "index": 3,
+          "key": "right_finger",
+          "legacy": "SLOT_RFNG",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 4,
+          "key": "chest",
+          "legacy": "SLOT_CHST",
+          "slot": 4,
+          "object_key": "0x090:0",
+          "tile_hex": "0x2a8"
+        },
+        {
+          "index": 5,
+          "key": "left_hand",
+          "legacy": "SLOT_LHND",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 6,
+          "key": "left_finger",
+          "legacy": "SLOT_LFNG",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 7,
+          "key": "feet",
+          "legacy": "SLOT_FEET",
+          "slot": 7,
+          "object_key": "0x0b0:1",
+          "tile_hex": "0x2e1"
+        },
+        {
+          "index": 8,
+          "key": "two_handed",
+          "legacy": "SLOT_2HND",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 9,
+          "key": "ring",
+          "legacy": "SLOT_RING",
+          "object_key": null,
+          "tile_hex": null
+        }
+      ]
+    },
+    "party_panel": {
+      "members": [
+        {
+          "id": 1,
+          "name": "Avatar",
+          "in_party": true,
+          "active": true
+        },
+        {
+          "id": 12,
+          "name": "Iolo",
+          "in_party": true,
+          "active": false
+        },
+        {
+          "id": 23,
+          "name": "Shamino",
+          "in_party": true,
+          "active": false
+        }
+      ]
+    },
+    "message_log_panel": {
+      "entries": [
+        {
+          "tick": 4239,
+          "level": "info",
+          "text": "Party mode ready."
+        },
+        {
+          "tick": 4240,
+          "level": "system",
+          "text": "Inventory refresh complete."
+        },
+        {
+          "tick": 4241,
+          "level": "info",
+          "text": "Awaiting command."
+        }
+      ]
+    },
+    "conversation_panel": {
+      "active": false,
+      "target_name": "",
+      "target_obj_num": 0,
+      "target_obj_type": 0,
+      "portrait_tile_hex": null,
+      "show_inventory": true,
+      "equipment_slots": [
+        {
+          "index": 0,
+          "key": "head",
+          "legacy": "SLOT_HEAD",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 1,
+          "key": "neck",
+          "legacy": "SLOT_NECK",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 2,
+          "key": "right_hand",
+          "legacy": "SLOT_RHND",
+          "slot": 2,
+          "object_key": "0x12c:1",
+          "tile_hex": "0x431"
+        },
+        {
+          "index": 3,
+          "key": "right_finger",
+          "legacy": "SLOT_RFNG",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 4,
+          "key": "chest",
+          "legacy": "SLOT_CHST",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 5,
+          "key": "left_hand",
+          "legacy": "SLOT_LHND",
+          "slot": 5,
+          "object_key": "0x12e:1",
+          "tile_hex": "0x44d"
+        },
+        {
+          "index": 6,
+          "key": "left_finger",
+          "legacy": "SLOT_LFNG",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 7,
+          "key": "feet",
+          "legacy": "SLOT_FEET",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 8,
+          "key": "two_handed",
+          "legacy": "SLOT_2HND",
+          "object_key": null,
+          "tile_hex": null
+        },
+        {
+          "index": 9,
+          "key": "ring",
+          "legacy": "SLOT_RING",
+          "object_key": null,
+          "tile_hex": null
+        }
+      ]
+    }
+  },
+  "canonical_contract_notes": {
+    "conversation_panel": "C_27A1_02D9 / TALK_talkTo alignment surface. Live NPC equipment extraction pending; fields are canonicalized now."
+  },
+  "modern_ui": {
+    "account_panel": {
+      "source": "sample",
+      "note": "Non-legacy account/auth controls are tracked separately from canonical gameplay UI."
+    }
+  },
+  "legacy_anchors": {
+    "command_loop": "legacy/u6-decompiled/SRC/seg_0A33.c",
+    "inventory_and_equipment": "legacy/u6-decompiled/SRC/seg_27a1.c",
+    "equip_slot_layout": "legacy/u6-decompiled/SRC/seg_155D.c",
+    "slot_constants": "legacy/u6-decompiled/SRC/u6.h"
+  }
+}
