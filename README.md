@@ -93,8 +93,9 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 6. `U6` Canonical Target Resolver (complete)
 - authoritative object target selection in sim-core for overlap cells
 - deterministic overlap/talk target harness and CI gate implemented
-7. `U7` Mechanics Rollout On Harness
-- NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons
+7. `U7` Mechanics Rollout On Harness (in progress)
+- capability contract baseline and probe summary now in place
+- NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons remain rollout targets
 - each mechanic must ship with panel and replay regression coverage
 8. `U8` Story Gate Compatibility Bridge (deferred)
 - add canonical progression gate keys for early LB intro/battle sequencing

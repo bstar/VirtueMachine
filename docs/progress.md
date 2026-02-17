@@ -238,8 +238,13 @@ Slices:
   - talk target overlap selection now excludes avatar and applies deterministic tie-break ordering
   - regression probes/test gate added (`modern/client-web/tests/ui_target_runtime_test.ts`)
   - probe contract now publishes target resolver probe counts under `canonical_runtime.target_resolver`
+- `[~]` U7: Mechanics Rollout Harness
+  - capability contract baseline added in `modern/client-web/gameplay/mechanics_capability_runtime.ts`
+  - probe contract now publishes mechanics capability summary/entries under `canonical_runtime.mechanics_capability`
+  - CI gate added for capability matrix invariants (`modern/client-web/tests/ui_mechanics_capability_runtime_test.ts`)
+  - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)
 
-Reference policy for U0-U5:
+Reference policy for U0-U7:
 
 - canonical authority: legacy decompiled code + verified runtime data semantics
 - required evidence: symbol/routine anchors, deterministic probe output, contract assertions

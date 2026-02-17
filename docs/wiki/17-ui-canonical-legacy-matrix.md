@@ -173,6 +173,12 @@ U0 is considered active when all are true:
 - probe contract now surfaces resolver regression counts in `canonical_runtime.target_resolver`
 - CI/parity workflow includes dedicated target resolver gate
 
+## U7 Status (In Progress)
+
+- mechanics capability contract baseline is now explicit and probe-visible (`canonical_runtime.mechanics_capability`)
+- capability summary is CI-gated to prevent silent drift in implementation status claims
+- remaining work: convert capability items from declared status into mechanic-specific canonical interaction/replay tests
+
 ## Deviations And Constraints
 
 - If modern UI behavior differs, the reason must be logged in `docs/wiki/08-deviation-ledger.md`.
@@ -183,5 +189,5 @@ U0 is considered active when all are true:
 
 1. keep deterministic fixture workflow green (`modern/tools/run_ui_parity_workflow.sh`)
 2. add per-panel interaction fixtures tied to mechanics rollouts
-3. begin U7 mechanics rollout harness slices (dialogue/quest/combat/magic/schedules) behind existing probe gates
+3. execute U7 mechanic-specific canonical tests (combat/spell/schedule/quest) against declared capability matrix
 4. keep canonical-vs-modern boundary enforcement active while mechanics surfaces expand

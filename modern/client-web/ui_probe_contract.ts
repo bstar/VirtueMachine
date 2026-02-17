@@ -18,6 +18,10 @@ import {
 } from "./ui/message_log_runtime.ts";
 import { listPanelScopeRuntime } from "./ui/panel_scope_runtime.ts";
 import { buildTargetResolverRegressionProbesRuntime } from "./sim/target_runtime.ts";
+import {
+  buildMechanicsCapabilityMatrixRuntime,
+  summarizeMechanicsCapabilitiesRuntime
+} from "./gameplay/mechanics_capability_runtime.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
 
@@ -221,6 +225,8 @@ export function buildUiProbeContract(opts: any = {}) {
   const partyMessageProbes = buildPartyMessageRegressionProbesRuntime();
   const messageLogProbes = buildMessageLogRegressionProbesRuntime();
   const targetResolverProbes = buildTargetResolverRegressionProbesRuntime();
+  const mechanicsCapability = buildMechanicsCapabilityMatrixRuntime(src.runtime_extensions);
+  const mechanicsSummary = summarizeMechanicsCapabilitiesRuntime(mechanicsCapability);
   const panelScope = listPanelScopeRuntime();
   const equipResolutionDroppedTotal = equipResolutionProbes.cases
     .reduce((acc, cur) => acc + (Number(cur.dropped_count) | 0), 0) >>> 0;
@@ -323,6 +329,10 @@ export function buildUiProbeContract(opts: any = {}) {
           world_overlap_cases: targetResolverProbes.world_overlap_cases.length >>> 0,
           talk_overlap_cases: targetResolverProbes.talk_overlap_cases.length >>> 0
         }
+      },
+      mechanics_capability: {
+        summary: mechanicsSummary,
+        entries: mechanicsCapability
       }
     },
     ui_scope: panelScope,

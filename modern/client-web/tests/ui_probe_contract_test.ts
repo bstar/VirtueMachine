@@ -81,6 +81,11 @@ function runSampleProbeFixture() {
     2,
     "target resolver talk overlap probe count mismatch"
   );
+  assert.deepEqual(
+    probe.canonical_runtime.mechanics_capability.summary,
+    { total: 8, implemented: 3, partial: 1, planned: 4 },
+    "mechanics capability summary mismatch"
+  );
 }
 
 function runLiveProbeFixture() {
@@ -116,6 +121,11 @@ function runLiveProbeFixture() {
   assert.equal(probe.canonical_ui.party_panel.members[1].active, true, "live active party member flag mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.entries.length, 2, "live inventory entries mismatch");
   assert.equal(probe.canonical_ui.message_log_panel.entries.length, 2, "live message projection mismatch");
+  assert.equal(
+    probe.canonical_runtime.mechanics_capability.summary.partial,
+    2,
+    "live mechanics capability partial count mismatch"
+  );
 }
 
 function runAvatarProcessFixture() {

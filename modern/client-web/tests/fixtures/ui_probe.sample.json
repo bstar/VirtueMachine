@@ -451,6 +451,72 @@
         "world_overlap_cases": 2,
         "talk_overlap_cases": 2
       }
+    },
+    "mechanics_capability": {
+      "summary": {
+        "total": 8,
+        "implemented": 3,
+        "partial": 1,
+        "planned": 4
+      },
+      "entries": [
+        {
+          "key": "world_navigation",
+          "status": "implemented",
+          "category": "core",
+          "canonical": true,
+          "note": "Avatar movement/path input baseline is active."
+        },
+        {
+          "key": "targeted_interaction_core",
+          "status": "implemented",
+          "category": "interaction",
+          "canonical": true,
+          "note": "Legacy-targeted verb cursor pipeline is active."
+        },
+        {
+          "key": "inventory_pickup_drop_baseline",
+          "status": "implemented",
+          "category": "interaction",
+          "canonical": true,
+          "note": "Get/drop baseline behavior and inventory projection are wired."
+        },
+        {
+          "key": "conversation_opcode_engine",
+          "status": "partial",
+          "category": "interaction",
+          "canonical": true,
+          "note": "Conversation opcode path is active but not feature-complete."
+        },
+        {
+          "key": "combat_resolution",
+          "status": "planned",
+          "category": "systems",
+          "canonical": true,
+          "note": "Combat verbs route through placeholders pending full canonical resolution."
+        },
+        {
+          "key": "spellcasting_resolution",
+          "status": "planned",
+          "category": "systems",
+          "canonical": true,
+          "note": "Cast command path exists; full spell resolution pending."
+        },
+        {
+          "key": "npc_schedule_pathing",
+          "status": "planned",
+          "category": "systems",
+          "canonical": true,
+          "note": "NPC schedule/pathing systems are deferred."
+        },
+        {
+          "key": "quest_state_progression",
+          "status": "planned",
+          "category": "systems",
+          "canonical": true,
+          "note": "Quest progression beyond dialogue scaffolding is deferred."
+        }
+      ]
     }
   },
   "ui_scope": {
