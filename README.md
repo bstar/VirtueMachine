@@ -205,6 +205,12 @@ Direct script form (equivalent):
 ./modern/tools/dev_stack.sh
 ```
 
+Force-stop stale frontend/backend dev processes (useful after a stuck Vite/esbuild run):
+
+```bash
+./modern/tools/stop_dev_stack.sh
+```
+
 Set up Bun/Vite/TypeScript toolchain for the gradual migration lane:
 
 ```bash

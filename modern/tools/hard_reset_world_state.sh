@@ -10,8 +10,7 @@ USER_PASS="${4:-boob}"
 cd "$ROOT_DIR"
 
 echo "[1/5] Stopping running local servers (if any)..."
-pkill -f "modern/net/server.ts" >/dev/null 2>&1 || true
-pkill -f "modern/tools/secure_web_server.py" >/dev/null 2>&1 || true
+"$ROOT_DIR/modern/tools/stop_dev_stack.sh" >/dev/null 2>&1 || true
 
 echo "[2/5] Activating pristine baseline profile: $PROFILE_NAME"
 ./modern/tools/activate_baseline_profile.sh "$PROFILE_NAME"

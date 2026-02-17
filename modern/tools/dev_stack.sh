@@ -81,18 +81,28 @@ kill_listener_port() {
 kill_listener_port "$DEV_WEB_PORT"
 kill_listener_port "$VM_NET_PORT"
 
+terminate_pid_if_running() {
+  local pid="$1"
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+  fi
+}
+
 cleanup() {
   local code=$?
-  if [[ -n "${WEB_PID:-}" ]] && kill -0 "$WEB_PID" 2>/dev/null; then
+  if [[ -n "${WEB_PID:-}" ]]; then
     pkill -P "$WEB_PID" 2>/dev/null || true
-    kill "$WEB_PID" 2>/dev/null || true
+    terminate_pid_if_running "$WEB_PID"
   fi
-  if [[ -n "${NET_PID:-}" ]] && kill -0 "$NET_PID" 2>/dev/null; then
+  if [[ -n "${NET_PID:-}" ]]; then
     pkill -P "$NET_PID" 2>/dev/null || true
-    kill "$NET_PID" 2>/dev/null || true
+    terminate_pid_if_running "$NET_PID"
   fi
   pkill -f "bunx --bun vite --config $ROOT_DIR/vite.config.ts" 2>/dev/null || true
+  pkill -f "python3 $ROOT_DIR/modern/tools/secure_web_server.py" 2>/dev/null || true
   pkill -f "bun $ROOT_DIR/modern/net/server.ts" 2>/dev/null || true
+  kill_listener_port "$DEV_WEB_PORT"
+  kill_listener_port "$VM_NET_PORT"
   wait 2>/dev/null || true
   exit "$code"
 }

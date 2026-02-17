@@ -184,6 +184,9 @@ This checklist is intentionally mutable.
   - next: broaden nested containment fixtures beyond current Virtue room/British study hotspot set
 - `[ ]` Capture and archive startup/menu parity screenshot pair (R5)
 - `[~]` Start M5 contracts slice (auth + remote saves + critical item recovery policy)
+- `[x]` Harden one-command local dev stack teardown/startup reliability:
+  - added `modern/tools/stop_dev_stack.sh` for deterministic stale-process cleanup (Vite/web/net)
+  - integrated stop helper into `modern/tools/hard_reset_world_state.sh`
 - `[ ]` Add environmental object collision pass (chairs, beds, tables, furniture)
 - `[ ]` Add seated/lying interaction states:
   - avatar can sit in chairs and lie/sleep in beds
