@@ -4962,33 +4962,36 @@ function tryTalkAtCell(sim, tx, ty) {
   const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
   const actorId = Number(actor.id) | 0;
   const resolvedConversation = resolveConversationScriptForActor(actor, tileId);
-  if (!resolvedConversation.valid || !(resolvedConversation.script instanceof Uint8Array)) {
-    const summary = debugConversationResolutionSummary(actor, tileId);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Talk unavailable: ${summary}`;
-    pushLedgerMessage("Not implemented: canonical conversation script unavailable for this actor.");
-    pushLedgerMessage(`Talk diag: ${summary}`);
-    showLegacyLedgerPrompt();
-    return false;
-  }
-  const script = resolvedConversation.script;
-  const header = resolvedConversation.header;
+  const scriptAvailable = !!(resolvedConversation.valid && (resolvedConversation.script instanceof Uint8Array));
+  const script = scriptAvailable ? resolvedConversation.script : null;
+  const header = scriptAvailable
+    ? resolvedConversation.header
+    : { name: "", desc: "", mainPc: 0 };
   const knownName = state.legacyConversationKnownNames[String(actorId)] || "";
   const scriptName = String(header.name || "").trim();
   const speakerRaw = knownName || scriptName || canonicalTalkSpeakerForTile(tileId);
   const speaker = sanitizeLegacyHudLabelText(speakerRaw) || "Unknown";
+  const fallbackHintObjNum = canonicalConversationHintIdFromSpeaker(speaker);
+  const talkObjNum = (scriptAvailable
+    ? (Number(resolvedConversation.objNum) | 0)
+    : ((fallbackHintObjNum >= 0) ? fallbackHintObjNum : actorId));
   const fallbackDesc = String(legacyLookupTileString(tileId) || "").trim();
   const desc = sanitizeLegacyHudLabelText(String(header.desc || "").trim() || fallbackDesc);
-  const rules = resolvedConversation.valid ? parseConversationRules(script, header.mainPc) : [];
+  const rules = scriptAvailable ? parseConversationRules(script, header.mainPc) : [];
   const vmContext = conversationVmContextForSession({
     targetName: speaker,
-    objNum: Number(resolvedConversation.objNum) | 0
+    objNum: talkObjNum
   });
-  const openingResult = resolvedConversation.valid
+  const openingResult = scriptAvailable
     ? decodeConversationOpeningResult(script, header.mainPc, vmContext)
     : { lines: [], stopOpcode: 0, stopPc: -1, nextPc: -1 };
   const openingLinesRaw = openingResult.lines;
-  const openingLines = canonicalizeOpeningLines(resolvedConversation.objNum, openingLinesRaw);
+  const openingLines = canonicalizeOpeningLines(talkObjNum, openingLinesRaw);
+  if (!scriptAvailable) {
+    const summary = debugConversationResolutionSummary(actor, tileId);
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Talk fallback: ${summary}`;
+  }
   /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
   state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
   state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
@@ -4997,15 +5000,15 @@ function tryTalkAtCell(sim, tx, ty) {
   state.legacyConversationTargetName = speaker;
   state.legacyConversationActorEntityId = actorId;
   state.legacyConversationPortraitTile = tileId;
-  state.legacyConversationTargetObjNum = Number(resolvedConversation.objNum) | 0;
+  state.legacyConversationTargetObjNum = talkObjNum;
   state.legacyConversationTargetObjType = Number(actor.type) | 0;
   state.legacyConversationNpcKey = "";
   state.legacyConversationPendingPrompt = "";
-  state.legacyConversationScript = script;
+  state.legacyConversationScript = scriptAvailable ? script : null;
   state.legacyConversationDescText = desc;
   state.legacyConversationRules = rules;
-  state.legacyConversationPc = Number(openingResult.stopPc) | 0;
-  state.legacyConversationInputOpcode = Number(openingResult.stopOpcode) | 0;
+  state.legacyConversationPc = scriptAvailable ? (Number(openingResult.stopPc) | 0) : -1;
+  state.legacyConversationInputOpcode = scriptAvailable ? (Number(openingResult.stopOpcode) | 0) : 0;
   state.legacyConversationVmContext = vmContext;
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
   /*

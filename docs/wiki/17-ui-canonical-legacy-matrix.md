@@ -184,6 +184,7 @@ U0 is considered active when all are true:
 - verb coverage now verifies active interaction capability keys are reachable from canonical verb bindings
 - conversation dialog runtime now has dedicated unit coverage for cursor-path + fallback-kind behavior
 - session runtime fallback now maps unimplemented topic decode to canonical `No response.` ledger output
+- talk-start flow now degrades missing/invalid script resolution into canonical conversation shell fallback instead of aborting with a ledger-level "Not implemented" message
 - remaining work: convert capability items from declared status into mechanic-specific canonical interaction/replay tests
 
 ## Deviations And Constraints
