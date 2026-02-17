@@ -111,8 +111,9 @@ trap cleanup INT TERM EXIT
 cd "$ROOT_DIR"
 
 if [[ ! -x "$VM_SIM_CORE_INTERACT_BIN" ]]; then
-  cmake -S "$ROOT_DIR" -B "${U6M_BUILD_DIR:-$ROOT_DIR/build}" -G Ninja >/dev/null
-  cmake --build "${U6M_BUILD_DIR:-$ROOT_DIR/build}" --target sim_core_world_interact_bridge >/dev/null
+  BUILD_DIR="${U6M_BUILD_DIR:-$ROOT_DIR/build}"
+  "$ROOT_DIR/modern/tools/cmake_configure.sh" "$ROOT_DIR" "$BUILD_DIR" >/dev/null
+  cmake --build "$BUILD_DIR" --target sim_core_world_interact_bridge >/dev/null
 fi
 
 if [[ "$DEV_WEB_SERVER" == "vite" ]]; then
