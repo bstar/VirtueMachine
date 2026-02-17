@@ -261,8 +261,9 @@ Slices:
   - guard test added to block reintroduction of user-facing `Not implemented:` text in client-web conversation flow
   - net contract now asserts unsupported `/api/world/objects/interact` talk verb returns deterministic `bad_verb` until talk is promoted into bridge contract
   - net API contract suite (`modern/tools/test_net_contracts.sh`) is now part of default and CI-required test runners
-  - canonical conversation regression now hard-asserts no keyword-list spill/trailer bleed on LB `job`/`orb` and validates quoted opener framing
-  - canonical Nystul intro greeting assertion added (`Hail to thee ...`) to catch fallback/noise regressions
+  - canonical conversation regression now hard-asserts no keyword-list spill/trailer bleed on LB `job`/`orb` and unresolved macro placeholder leakage in opener text
+  - canonical Nystul opening regression now guards against unresolved macro/trailer-noise leakage across dynamic state branches
+  - debug chat ledger regression now asserts actor/conv/type metadata formatting and plain-line fallback formatting
   - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)
 
 Reference policy for U0-U7:

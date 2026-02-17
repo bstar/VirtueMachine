@@ -96,17 +96,18 @@ export function pushLedgerMessage(state: any, text: any, opts: any = {}) {
 export function buildDebugChatLedgerText(entries: any) {
   const lines = [];
   const src = Array.isArray(entries) ? entries : [];
+  const hasMetaNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0);
   for (const entry of src) {
     const tick = Number(entry.tick) >>> 0;
     const msg = String(entry.line || "");
-    const actorId = Number(entry.actorId);
-    const convId = Number(entry.convId);
-    const objType = Number(entry.objType);
-    const hasMeta = Number.isFinite(actorId) && actorId >= 0
-      && Number.isFinite(convId) && convId >= 0
-      && Number.isFinite(objType) && objType >= 0;
+    const actorId = entry?.actorId;
+    const convId = entry?.convId;
+    const objType = entry?.objType;
+    const hasMeta = hasMetaNumber(actorId)
+      && hasMetaNumber(convId)
+      && hasMetaNumber(objType);
     if (hasMeta) {
-      lines.push(`[${String(tick).padStart(7, "0")}] ${msg} {actor=${actorId} conv=${convId} type=0x${(objType & 0x03ff).toString(16)}}`);
+      lines.push(`[${String(tick).padStart(7, "0")}] ${msg} {actor=${Number(actorId)} conv=${Number(convId)} type=0x${(Number(objType) & 0x03ff).toString(16)}}`);
     } else {
       lines.push(`[${String(tick).padStart(7, "0")}] ${msg}`);
     }
