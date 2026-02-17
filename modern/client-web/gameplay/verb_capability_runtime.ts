@@ -67,3 +67,32 @@ export function summarizeVerbCapabilityBindingsRuntime(
     unknown: unknown >>> 0
   };
 }
+
+export function summarizeVerbCapabilityCoverageRuntime(
+  capabilities: MechanicsCapabilityEntryRuntime[],
+  bindings: VerbCapabilityBindingRuntime[]
+): {
+  interaction_capabilities: number;
+  mapped_interaction_capabilities: number;
+  unmapped_interaction_capability_keys: string[];
+  unknown_binding_verbs: string[];
+} {
+  const capabilitySrc = Array.isArray(capabilities) ? capabilities : [];
+  const bindingSrc = Array.isArray(bindings) ? bindings : [];
+  const interactionCaps = capabilitySrc.filter((cap) => cap.category === "interaction" && cap.status !== "planned");
+  const mappedKeys = new Set<string>(bindingSrc.map((binding) => String(binding.capability_key)));
+  const unmapped = interactionCaps
+    .map((cap) => String(cap.key))
+    .filter((key) => !mappedKeys.has(key))
+    .sort((a, b) => a.localeCompare(b));
+  const unknownVerbs = bindingSrc
+    .filter((binding) => binding.status === "unknown")
+    .map((binding) => String(binding.verb))
+    .sort((a, b) => a.localeCompare(b));
+  return {
+    interaction_capabilities: interactionCaps.length >>> 0,
+    mapped_interaction_capabilities: (interactionCaps.length - unmapped.length) >>> 0,
+    unmapped_interaction_capability_keys: unmapped,
+    unknown_binding_verbs: unknownVerbs
+  };
+}

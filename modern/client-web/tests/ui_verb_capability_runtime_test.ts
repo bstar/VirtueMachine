@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { buildMechanicsCapabilityMatrixRuntime } from "../gameplay/mechanics_capability_runtime.ts";
 import {
   buildVerbCapabilityBindingsRuntime,
-  summarizeVerbCapabilityBindingsRuntime
+  summarizeVerbCapabilityBindingsRuntime,
+  summarizeVerbCapabilityCoverageRuntime
 } from "../gameplay/verb_capability_runtime.ts";
 
 function testVerbCapabilityBindings() {
@@ -26,7 +27,24 @@ function testVerbCapabilitySummary() {
   );
 }
 
+function testVerbCapabilityCoverage() {
+  const capabilities = buildMechanicsCapabilityMatrixRuntime({});
+  const bindings = buildVerbCapabilityBindingsRuntime(capabilities);
+  const coverage = summarizeVerbCapabilityCoverageRuntime(capabilities, bindings);
+  assert.deepEqual(
+    coverage,
+    {
+      interaction_capabilities: 3,
+      mapped_interaction_capabilities: 3,
+      unmapped_interaction_capability_keys: [],
+      unknown_binding_verbs: []
+    },
+    "verb capability coverage mismatch"
+  );
+}
+
 testVerbCapabilityBindings();
 testVerbCapabilitySummary();
+testVerbCapabilityCoverage();
 
 console.log("ui_verb_capability_runtime_test: ok");

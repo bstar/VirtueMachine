@@ -96,6 +96,16 @@ function runSampleProbeFixture() {
     { total: 10, implemented: 7, partial: 1, planned: 2, unknown: 0 },
     "verb capability summary mismatch"
   );
+  assert.deepEqual(
+    probe.canonical_runtime.mechanics_capability.verb_bindings.coverage,
+    {
+      interaction_capabilities: 3,
+      mapped_interaction_capabilities: 3,
+      unmapped_interaction_capability_keys: [],
+      unknown_binding_verbs: []
+    },
+    "verb capability coverage mismatch"
+  );
 }
 
 function runLiveProbeFixture() {

@@ -245,6 +245,7 @@ Slices:
   - CI now validates that declared `legacy_anchor` and regression gate paths exist in-repo
   - verb-to-capability contract added in `modern/client-web/gameplay/verb_capability_runtime.ts`
   - probe contract now publishes verb binding summary/entries under `canonical_runtime.mechanics_capability.verb_bindings`
+  - probe contract now publishes verb coverage integrity for active interaction capabilities
   - CI gate added for capability matrix invariants (`modern/client-web/tests/ui_mechanics_capability_runtime_test.ts`)
   - CI gate added for verb capability matrix invariants (`modern/client-web/tests/ui_verb_capability_runtime_test.ts`)
   - pending: mechanic-by-mechanic canonical rollout tests (combat, spell resolution, schedule/pathing, quest state progression)

@@ -98,6 +98,7 @@ These slices are intentionally larger than prior micro-fixes, but each remains t
 - capability validation now enforces legacy anchor + regression-gate evidence for active entries
 - capability CI now verifies those evidence paths exist in-repo
 - verb-to-capability binding contract and regression gate now in place
+- verb coverage now verifies active interaction capability keys are reachable from canonical verbs
 - NPC dialogue, quests, combat, magic, schedules, vehicles, dungeons remain rollout targets
 - each mechanic must ship with panel and replay regression coverage
 8. `U8` Story Gate Compatibility Bridge (deferred)

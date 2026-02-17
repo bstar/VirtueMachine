@@ -25,7 +25,8 @@ import {
 } from "./gameplay/mechanics_capability_runtime.ts";
 import {
   buildVerbCapabilityBindingsRuntime,
-  summarizeVerbCapabilityBindingsRuntime
+  summarizeVerbCapabilityBindingsRuntime,
+  summarizeVerbCapabilityCoverageRuntime
 } from "./gameplay/verb_capability_runtime.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
@@ -235,6 +236,7 @@ export function buildUiProbeContract(opts: any = {}) {
   const mechanicsValidation = validateMechanicsCapabilityMatrixRuntime(mechanicsCapability);
   const verbBindings = buildVerbCapabilityBindingsRuntime(mechanicsCapability);
   const verbBindingSummary = summarizeVerbCapabilityBindingsRuntime(verbBindings);
+  const verbBindingCoverage = summarizeVerbCapabilityCoverageRuntime(mechanicsCapability, verbBindings);
   const panelScope = listPanelScopeRuntime();
   const equipResolutionDroppedTotal = equipResolutionProbes.cases
     .reduce((acc, cur) => acc + (Number(cur.dropped_count) | 0), 0) >>> 0;
@@ -344,6 +346,7 @@ export function buildUiProbeContract(opts: any = {}) {
         entries: mechanicsCapability,
         verb_bindings: {
           summary: verbBindingSummary,
+          coverage: verbBindingCoverage,
           entries: verbBindings
         }
       }
