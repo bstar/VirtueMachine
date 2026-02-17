@@ -186,6 +186,7 @@ U0 is considered active when all are true:
 - session runtime fallback now maps unimplemented topic decode to canonical `No response.` ledger output
 - talk-start flow now degrades missing/invalid script resolution into canonical conversation shell fallback instead of aborting with a ledger-level "Not implemented" message
 - UI parity workflow now includes canonical conversation regression suite (`modern/tools/test_client_web_conversation.sh`) before probe/layout checks
+- conversation suite now includes a hard guard against user-facing `Not implemented:` conversation text leaks
 - remaining work: convert capability items from declared status into mechanic-specific canonical interaction/replay tests
 
 ## Deviations And Constraints
