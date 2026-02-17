@@ -188,6 +188,7 @@ This checklist is intentionally mutable.
   - added `modern/tools/stop_dev_stack.sh` for deterministic stale-process cleanup (Vite/web/net)
   - integrated stop helper into `modern/tools/hard_reset_world_state.sh`
   - added package-script alias `bun run dev:stop` for unified dev workflow
+  - added explicit `bun` preflight in `modern/tools/dev_stack.sh` so missing-runtime failures are immediate and clear
 - `[x]` Harden Vite dev runtime for binary savegame assets:
   - explicit asset/watch exclusions for `modern/assets/{pristine,runtime}/savegame/**`
   - module MIME mapping now includes `.cjs`/`.ts`/`.tsx` to avoid strict module-type failures

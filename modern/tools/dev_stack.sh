@@ -110,6 +110,11 @@ trap cleanup INT TERM EXIT
 
 cd "$ROOT_DIR"
 
+if ! command -v bun >/dev/null 2>&1; then
+  echo "dev_stack.sh requires bun in PATH (net server runtime)." >&2
+  exit 1
+fi
+
 if [[ ! -x "$VM_SIM_CORE_INTERACT_BIN" ]]; then
   BUILD_DIR="${U6M_BUILD_DIR:-$ROOT_DIR/build}"
   "$ROOT_DIR/modern/tools/cmake_configure.sh" "$ROOT_DIR" "$BUILD_DIR" >/dev/null
@@ -117,10 +122,6 @@ if [[ ! -x "$VM_SIM_CORE_INTERACT_BIN" ]]; then
 fi
 
 if [[ "$DEV_WEB_SERVER" == "vite" ]]; then
-  if ! command -v bun >/dev/null 2>&1; then
-    echo "DEV_WEB_SERVER=vite requires bun in PATH. Set DEV_WEB_SERVER=secure to use secure_web_server." >&2
-    exit 1
-  fi
   mkdir -p "$BUN_TMPDIR"
   bash -lc "cd '$ROOT_DIR' && TMPDIR='$BUN_TMPDIR' bunx --bun vite --config '$ROOT_DIR/vite.config.ts' --host '$DEV_WEB_BIND' --port '$DEV_WEB_PORT' --strictPort --clearScreen false 2>&1 | tee '$WEB_LOG' | sed 's/^/[web] /'" &
   WEB_PID=$!
