@@ -209,6 +209,8 @@ Force-stop stale frontend/backend dev processes (useful after a stuck Vite/esbui
 
 ```bash
 ./modern/tools/stop_dev_stack.sh
+# or
+bun run dev:stop
 ```
 
 Set up Bun/Vite/TypeScript toolchain for the gradual migration lane:
