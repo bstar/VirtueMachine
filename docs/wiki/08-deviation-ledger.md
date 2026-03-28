@@ -115,6 +115,14 @@ Observed impact archetype:
 - Why acceptable now: early-story dialogue state is at least authoritative and testable instead of being silently faked in the browser
 - Retirement/revision condition: remove this bridge once the canonical intro/start-game sequence mutates the same talk/world state directly
 
+### Conversation Presentation Fidelity
+
+- Status: `known-gap`
+- Legacy intent: dialogue correctness includes not just branch choice but also the message-window transcript shape the player reads
+- Modern: branch authority is now server-owned and several runtime bugs were fixed, but player-facing presentation still needs transcript-level parity for wrapping, blank lines, prompt timing, paging boundaries, and exact `No response.` behavior
+- Why acceptable now: authority and talk-state correctness were the higher-risk prerequisite, and those are now materially stronger than before
+- Retirement/revision condition: retire this entry when conversation transcript captures for key NPCs match canonical output closely enough to stop carrying presentation-specific exceptions
+
 ### NPC Schedule Execution Scope
 
 - Status: `known-gap`

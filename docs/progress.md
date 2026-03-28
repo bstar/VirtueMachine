@@ -1,6 +1,6 @@
 # Project Progress Checklist
 
-Last Updated: 2026-03-07
+Last Updated: 2026-03-28
 
 ## Milestone Status
 
@@ -65,6 +65,7 @@ This checklist is intentionally mutable.
 - `[~]` NPC communication/dialogue system
   - server-authoritative `talk` sessions and NPC talk-flag mutation are active on the net path
   - player-facing message log formatting still needs transcript-level refinement for key early-story conversations
+  - checkpoint/status handoff is recorded in `docs/wiki/19-conversation-parity-checkpoint.md`
 - `[ ]` Quest mechanics/progression systems
 - `[ ]` Magic/casting systems
 - `[ ]` Combat systems
@@ -210,6 +211,9 @@ This checklist is intentionally mutable.
 - `[~]` Refine canonical conversation presentation:
   - authoritative opening/response lines are now server-sourced
   - remaining work is transcript-quality wrapping/paging/blank-line alignment for Lord British, Nystul, and Dupre
+- `[x]` Archive a conversation parity checkpoint before pausing this area:
+  - `docs/wiki/19-conversation-parity-checkpoint.md` records what is now authoritative, what fidelity bugs were fixed, and what still blocks canonical parity
+  - checkpoint explicitly preserves the temporary nature of the `pre_intro` / `post_intro` bridge so it does not become accidental canon
 - `[x]` Harden test-runner CMake configure path for Nix/toolchain churn:
   - shared helper `modern/tools/cmake_configure.sh` now owns stale-cache/generator recovery
   - `modern/tools/test.sh`, `modern/tools/ci_required_tests.sh`, and `modern/tools/dev_stack.sh` now use the shared configure path

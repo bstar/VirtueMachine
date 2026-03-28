@@ -112,6 +112,7 @@ The result is a project that can now explain *why* a fix works, not just that it
 - [docs/wiki/16-ultima-vi-online-comparative-analysis.md](16-ultima-vi-online-comparative-analysis.md)
 - [docs/wiki/17-ui-canonical-legacy-matrix.md](17-ui-canonical-legacy-matrix.md)
 - [docs/wiki/18-in-game-ui-canonicalization.md](18-in-game-ui-canonicalization.md)
+- [docs/wiki/19-conversation-parity-checkpoint.md](19-conversation-parity-checkpoint.md)
 
 ## Human + AI Development Model
 
@@ -185,6 +186,7 @@ If you are new to this codebase, pick one track and follow it in order.
 16. [docs/wiki/16-ultima-vi-online-comparative-analysis.md](16-ultima-vi-online-comparative-analysis.md)
 17. [docs/wiki/17-ui-canonical-legacy-matrix.md](17-ui-canonical-legacy-matrix.md)
 18. [docs/wiki/18-in-game-ui-canonicalization.md](18-in-game-ui-canonicalization.md)
+19. [docs/wiki/19-conversation-parity-checkpoint.md](19-conversation-parity-checkpoint.md)
 
 ## Operating Principles
 
