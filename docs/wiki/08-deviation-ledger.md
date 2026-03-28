@@ -99,6 +99,30 @@ Observed impact archetype:
 - Modern: server baseline + deltas for multi-user environment
 - Rationale: consistent multiplayer state
 
+### Server-Authoritative Conversation Sessions
+
+- Status: `faithful`
+- Legacy intent: one runtime owns dialogue cursor advancement, talk flags, and branch selection
+- Modern: `talk` now starts a server-owned conversation session and topic responses advance against server-held VM/talk-flag state
+- Why acceptable now: this removes the prior client/server split on branch authority and makes conversation state deterministic for multiplayer
+- Retirement/revision condition: revisit only when the same authority path is moved from extracted JS runtime into the final sim-core/WASM bridge
+
+### Early-Story Intro Compatibility Bridge
+
+- Status: `known-gap`
+- Legacy relation: Lord British/Nystul/Dupre early branches depend on the original intro/start-game sequence reaching the right world state
+- Modern: client-owned intro shortcut flags were removed; the repo now uses an explicit server-side `intro_state` bridge (`pre_intro`/`post_intro`) because full intro combat/script parity is not complete
+- Why acceptable now: early-story dialogue state is at least authoritative and testable instead of being silently faked in the browser
+- Retirement/revision condition: remove this bridge once the canonical intro/start-game sequence mutates the same talk/world state directly
+
+### NPC Schedule Execution Scope
+
+- Status: `known-gap`
+- Legacy anchor: `schedule` pointer table + per-hour/day selection drive NPC day routines across the world
+- Modern: the server parses the legacy `schedule` asset and applies legacy selection rules, but only a castle pilot NPC set currently receives projected overrides and these are direct placement updates rather than full path/action execution
+- Why acceptable now: it proves the original data/routine path can drive visible browser NPC behavior without inventing a client-local schedule system
+- Retirement/revision condition: replace pilot-only direct overrides with full authoritative schedule/path execution and expand coverage town-by-town
+
 ## Open Gaps Requiring Deep Legacy Pass
 
 - full chain-association and contained/inventory relationship effects in render ordering edge cases

@@ -1,6 +1,6 @@
 # Project Progress Checklist
 
-Last Updated: 2026-02-17
+Last Updated: 2026-03-07
 
 ## Milestone Status
 
@@ -62,11 +62,15 @@ This checklist is intentionally mutable.
 - `[x]` Playable deterministic walkaround demo
 - `[~]` Object interaction system parity (container/world/use flows)
 - `[~]` Inventory/equipment UX and item transfer rules parity
-- `[ ]` NPC communication/dialogue system
+- `[~]` NPC communication/dialogue system
+  - server-authoritative `talk` sessions and NPC talk-flag mutation are active on the net path
+  - player-facing message log formatting still needs transcript-level refinement for key early-story conversations
 - `[ ]` Quest mechanics/progression systems
 - `[ ]` Magic/casting systems
 - `[ ]` Combat systems
-- `[ ]` NPC pathing and schedule behavior
+- `[~]` NPC pathing and schedule behavior
+  - legacy `schedule` asset parsing and hour/day selection are active for the first castle pilot NPC set
+  - full pathfinding/action execution parity is still pending beyond direct schedule-position overrides
 - `[ ]` Party control semantics and companion command behaviors
 - `[ ]` Character progression/stat effects and status-condition gameplay
 - `[ ]` Sleep/rest interactions and world-time side effects
@@ -192,6 +196,20 @@ This checklist is intentionally mutable.
 - `[x]` Harden Vite dev runtime for binary savegame assets:
   - explicit asset/watch exclusions for `modern/assets/{pristine,runtime}/savegame/**`
   - module MIME mapping now includes `.cjs`/`.ts`/`.tsx` to avoid strict module-type failures
+- `[x]` Move `talk` onto the authoritative net path:
+  - `POST /api/world/objects/interact` now starts server-owned conversation sessions for NPC talk
+  - `POST /api/world/conversation/respond` now advances topic selection on the server and persists talk-flag mutation
+  - client-owned intro conversation flags were removed from the browser runtime
+- `[x]` Add bounded server-side intro phase bridge for castle dialogue:
+  - `GET/PUT /api/world/intro-state` now switches authoritative early-story conversation mode between `pre_intro` and `post_intro`
+  - `pre_intro` uses intro-compatible talk state for Lord British/Nystul/Dupre without requiring combat/start-sequence parity first
+- `[~]` Start the first legacy-schedule pilot:
+  - server now parses the original `schedule` asset and selects entries by legacy hour/day rules
+  - castle pilot NPC overrides are exposed from the authoritative clock endpoint for browser projection
+  - full schedule action/path execution still needs deeper parity work
+- `[~]` Refine canonical conversation presentation:
+  - authoritative opening/response lines are now server-sourced
+  - remaining work is transcript-quality wrapping/paging/blank-line alignment for Lord British, Nystul, and Dupre
 - `[x]` Harden test-runner CMake configure path for Nix/toolchain churn:
   - shared helper `modern/tools/cmake_configure.sh` now owns stale-cache/generator recovery
   - `modern/tools/test.sh`, `modern/tools/ci_required_tests.sh`, and `modern/tools/dev_stack.sh` now use the shared configure path

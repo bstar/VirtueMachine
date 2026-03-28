@@ -258,7 +258,18 @@ Confidence: medium-high
 Impact on Port: startup/menu parity work must be anchored to real asset/routine sequencing from gameplay init, with separate investigation for missing title-menu text/art provenance before claiming pixel-faithful title flow.
 Next Validation Step: trace intro/title provenance (`intro.m`, auxiliary resources/binaries, and/or external startup executable path), then map exact menu draw coordinates and input state transitions into modern in-engine startup state.
 Related Symbols: SYM-0001, SYM-0006, SYM-0008
-Related Modern Docs: `../progress.md`, `../architecture/new/system-overview.md`
+
+Finding ID: FIND-0022
+Date: 2026-03-07
+Area: NPC Schedule File Layout and Selection Semantics
+Legacy Source Ref: `SRC/seg_0C9C.c` (`C_0C9C_042A`), `SRC/seg_1E0F.c`, `SRC/u6.h` (`struct tSchedule`), `SRC/ai.h`
+Summary: the legacy `schedule` asset is a compact pointer-table plus fixed-width record stream: 257 little-endian NPC offsets followed by 5-byte schedule entries (`time`, `action`, packed coord). Runtime selection scans an NPC's entries backward and chooses the last record whose hour matches `Time_H` and whose day bits are either zero or match the current weekday, then updates `SchedIndex` and pushes the NPC into `AI_FINDPATH`.
+Evidence: `C_0C9C_042A` reads `SchedPointer` for `0x101` entries and then bulk-loads `Schedule`; `u6.h` defines each record as `{ time, action, coord }`; `seg_1E0F.c` performs the reverse scan/match and sets `SchedIndex`/`NPCMode`; `ai.h` provides the action-code surface used by the selected entry.
+Confidence: high
+Impact on Port: schedule-driven NPC behavior is now an implementation task instead of a format-discovery problem, and the same asset can drive a server-authoritative browser pilot without inventing new data.
+Next Validation Step: port broader action execution/pathing semantics beyond the initial castle pilot and confirm visible transitions against captured in-game schedule locations.
+Related Symbols: SYM-0005, SYM-0008
+Related Modern Docs: `../progress.md`, `../wiki/08-deviation-ledger.md`
 
 Finding ID: FIND-0021
 Date: 2026-02-12

@@ -105,11 +105,14 @@ Authenticated (Bearer token):
 - `POST /api/world/presence/leave`
 - `GET /api/world/presence`
 - `GET /api/world/clock`
+- `GET /api/world/intro-state`
+- `PUT /api/world/intro-state`
 - `GET /api/world/critical-items/policy`
 - `PUT /api/world/critical-items/policy`
 - `POST /api/world/critical-items/maintenance`
 - `GET /api/world/objects` (server-authoritative world object query; supports `x,y,z,radius,limit,projection,include_footprint`; includes containment diagnostics: `assoc_chain`, `root_anchor_key`, `blocked_by`)
-- `POST /api/world/objects/interact` (authoritative object interaction mutations: `take`, `drop`, `put`, `equip`)
+- `POST /api/world/objects/interact` (authoritative object interaction mutations: `take`, `drop`, `put`, `equip`, `talk`; `talk` returns a server-owned `conversation_session`)
+- `POST /api/world/conversation/respond` (authoritative conversation topic submission for an active `conversation_session`)
 - `POST /api/world/objects/reset` (reset world object deltas to baseline)
 - `POST /api/world/objects/reload-baseline` (reload immutable baseline from `VM_NET_OBJECT_BASELINE_DIR` and clear deltas)
 
@@ -129,6 +132,8 @@ Current behavior:
 Clock note:
 - `/api/world/clock` is authoritative server time/tick.
 - connected clients are expected to sync local world time/date from this endpoint.
+- `/api/world/clock` includes `intro_state` so clients/debug tools can see whether early-story conversation bridging is in `pre_intro` or `post_intro`.
+- `/api/world/clock` now also carries `npc_overrides` for the current schedule pilot so browser NPC projection follows server-selected day-schedule positions.
 
 World object authority note:
 - server loads baseline world objects from `VM_NET_OBJECT_BASELINE_DIR` (`objblk??` + `objlist`) and uses runtime `basetile` for tile mapping
@@ -140,6 +145,16 @@ World object authority note:
 - `GET /api/world/objects` query selection (`projection`, `radius`, `limit`, canonical ordering) is produced by sim-core world-query bridge (no net-side JS selector)
  - `projection=anchor` filters by legacy anchor cells
  - `projection=footprint` filters by occupied footprint cells (double-width/height expansion)
+
+Conversation authority note:
+- `talk` no longer relies on client-owned topic flags or browser-side branch authority.
+- the server loads conversation archives, opens a session keyed by `session_id`, and owns `talkFlags` mutation for the active save/runtime state.
+- `POST /api/world/conversation/respond` advances the same session cursor and returns canonical response lines plus the next cursor metadata.
+- `PUT /api/world/intro-state` provides the bounded early-story compatibility bridge: `pre_intro` forces Lord British/Nystul/Dupre conversation sessions to read intro-compatible talk state without mutating the persisted save talk flags; `post_intro` resumes the normal saved-world branch.
+
+NPC runtime note:
+- the server now loads legacy NPC runtime arrays from `savegame/objlist` and the original `schedule` asset.
+- current schedule coverage is intentionally narrow: a castle pilot set receives authoritative `npc_overrides` based on legacy hour/day schedule selection.
 
 ## Contracts
 

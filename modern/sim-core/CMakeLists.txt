@@ -7,6 +7,7 @@ add_library(sim_core STATIC
   src/u6_world_interact_bridge.c
   src/u6_objblk.c
   src/u6_objlist.c
+  src/u6_schedule.c
   src/u6_map.c
 )
 
@@ -127,6 +128,14 @@ target_link_libraries(sim_core_interaction_test PRIVATE sim_core)
 
 add_test(NAME sim_core_interaction_test COMMAND sim_core_interaction_test)
 
+add_executable(sim_core_u6_schedule_test
+  tests/test_u6_schedule.c
+)
+
+target_link_libraries(sim_core_u6_schedule_test PRIVATE sim_core)
+
+add_test(NAME sim_core_u6_schedule_test COMMAND sim_core_u6_schedule_test)
+
 add_executable(sim_core_world_interact_bridge
   tools/world_interact_bridge_cli.c
 )
@@ -150,3 +159,9 @@ add_executable(sim_core_world_objects_query_bridge
 )
 
 target_link_libraries(sim_core_world_objects_query_bridge PRIVATE sim_core)
+
+add_executable(sim_core_schedule_bridge
+  tools/schedule_bridge_cli.c
+)
+
+target_link_libraries(sim_core_schedule_bridge PRIVATE sim_core)
