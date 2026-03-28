@@ -189,6 +189,8 @@ export function advanceLegacyConversationPagination(state: any, onEndPrompt: any
 
 export function endLegacyConversation(state: any) {
   state.legacyConversationActive = false;
+  state.legacyConversationAuthoritative = false;
+  state.legacyConversationSessionId = "";
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = "";
   state.legacyConversationActorEntityId = 0;

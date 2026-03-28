@@ -299,11 +299,13 @@ const statQueued = byId("statQueued");
 const statSource = byId("statSource");
 const statHash = byId("statHash");
 const statLoopHealth = byId("statLoopHealth");
+const statSimLoop = byId("statSimLoop");
 const statReplay = byId("statReplay");
 const statPalettePhase = byId("statPalettePhase");
 const statCenterTiles = byId("statCenterTiles");
 const statCenterBand = byId("statCenterBand");
 const statNetSession = byId("statNetSession");
+const statIntroPhase = byId("statIntroPhase");
 const statNetPlayers = byId("statNetPlayers");
 const statCriticalRecoveries = byId("statCriticalRecoveries");
 const topTimeOfDay = byId("topTimeOfDay");
@@ -333,6 +335,7 @@ const locationSelect = byId("locationSelect");
 const jumpButton = byId("jumpButton");
 const captureButton = byId("captureButton");
 const captureWorldHudButton = byId("captureWorldHudButton");
+const pauseLoopButton = byId("pauseLoopButton");
 const parityRadiusInput = byId("parityRadiusInput");
 const paritySnapshotButton = byId("paritySnapshotButton");
 const netApiBaseInput = byId("netApiBaseInput");
@@ -354,6 +357,8 @@ const netVerifyEmailButton = byId("netVerifyEmailButton");
 const netSaveButton = byId("netSaveButton");
 const netLoadButton = byId("netLoadButton");
 const netMaintenanceToggle = byId("netMaintenanceToggle");
+const netIntroPhaseSelect = byId("netIntroPhaseSelect");
+const netIntroPhaseButton = byId("netIntroPhaseButton");
 const netMaintenanceButton = byId("netMaintenanceButton");
 const debugTabRuntime = byId("debugTabRuntime");
 const debugTabChat = byId("debugTabChat");
@@ -631,17 +636,11 @@ const state: any = {
   legacyConversationPaging: false,
   legacyConversationPages: [],
   legacyConversationKnownNames: {},
+  legacyConversationAuthoritative: false,
+  legacyConversationSessionId: "",
   legacyConversationVmContext: null,
   legacyConversationNpcKey: "",
   legacyConversationPendingPrompt: "",
-  legacyConversationTopicState: {
-    assume_intro_complete: true,
-    talked_to_british_intro: true,
-    nystul_quest_offered: false,
-    nystul_quest_accepted: false,
-    dupre_quest_offered: false,
-    dupre_quest_accepted: false
-  },
   legacyConversationPrevStatus: LEGACY_STATUS_DISPLAY.CMD_92,
   useCursorX: 0,
   useCursorY: 0,
@@ -672,6 +671,7 @@ const state: any = {
     visibilityResets: 0,
     frameErrors: 0
   },
+  simPaused: false,
   replayUrl: null,
   legacyPaperPixmap: null,
   lookStringEntries: null,
@@ -732,6 +732,7 @@ const state: any = {
     lastMaintenanceTick: -1,
     recoveryEventCount: 0,
     resumeFromSnapshot: false,
+    introPhase: "post_intro",
     statusLevel: "idle",
     statusText: "Not logged in."
   }
@@ -1580,6 +1581,7 @@ class U6EntityLayerJS {
     for (const e of this.entries) {
       e.homeX = e.x;
       e.homeY = e.y;
+      e.authoritative = false;
       e.patrolPhase = e.id & 0x03;
       e.patrolRadius = 2;
       e.movable = (
@@ -1653,7 +1655,7 @@ class U6EntityLayerJS {
     let blockedByOcclusion = 0;
     const phase = (tick >> 3) & 0xff;
     for (const e of this.entries) {
-      if (!e.movable || e.z !== 0) {
+      if (e.authoritative || !e.movable || e.z !== 0) {
         continue;
       }
       const baseDir = (phase + e.patrolPhase) & 0x03;
@@ -2536,7 +2538,55 @@ function submitLegacyConversationInput() {
   }
 }
 
+async function submitAuthoritativeConversationInput() {
+  const typed = String(state.legacyConversationInput || "").trim();
+  state.legacyConversationInput = "";
+  state.legacyLedgerPrompt = false;
+  if (!typed) {
+    pushLegacyConversationPrompt();
+    return;
+  }
+  pushLedgerMessage(typed);
+  const out = await netReplyConversation(typed);
+  const lines = Array.isArray(out?.lines)
+    ? out.lines.map((line) => String(line || "").trim()).filter(Boolean)
+    : [];
+  if (String(out?.kind || "") === "ended" || !!out?.ended) {
+    for (const line of lines) {
+      pushLedgerMessage(line);
+    }
+    endLegacyConversation();
+    diagBox.className = "diag ok";
+    diagBox.textContent = "Conversation ended.";
+    return;
+  }
+  if (typeof out?.next_pc === "number") {
+    state.legacyConversationPc = Number(out.next_pc) | 0;
+  }
+  if (typeof out?.stop_opcode === "number") {
+    state.legacyConversationInputOpcode = Number(out.stop_opcode) | 0;
+  }
+  if (startLegacyConversationPagination(lines)) {
+    return;
+  }
+  if (lines.length > 0) {
+    for (const line of lines) {
+      pushLedgerMessage(line);
+    }
+  }
+  pushLegacyConversationPrompt();
+}
+
 function handleLegacyConversationKeydown(ev) {
+  if (state.legacyConversationAuthoritative && !state.legacyConversationPaging && String(ev?.key || "") === "Enter") {
+    submitAuthoritativeConversationInput().catch((err) => {
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Conversation reply failed: ${String((err as any)?.message || err)}`;
+      pushLedgerMessage("No response.");
+      pushLegacyConversationPrompt();
+    });
+    return true;
+  }
   const out = handleLegacyConversationKeydownImported(state, ev, {
     endConversation: endLegacyConversation,
     advancePagination: advanceLegacyConversationPagination,
@@ -3957,6 +4007,41 @@ function updateNetSessionStat() {
     username: state.net.username,
     characterName: state.net.characterName
   });
+  updateIntroPhaseUi();
+}
+
+function updatePauseLoopUi() {
+  const paused = !!state.simPaused;
+  if (pauseLoopButton) {
+    pauseLoopButton.textContent = paused ? "Resume Loop" : "Pause Loop";
+  }
+  if (statSimLoop) {
+    statSimLoop.textContent = paused ? "paused" : "running";
+  }
+}
+
+function setSimPaused(paused, reason = "") {
+  state.simPaused = !!paused;
+  state.net.backgroundSyncPaused = !!paused;
+  state.accMs = 0;
+  state.lastTs = performance.now();
+  updatePauseLoopUi();
+  if (reason) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = reason;
+  }
+}
+
+function updateIntroPhaseUi() {
+  const phase = String(state.net.introPhase || "post_intro").trim().toLowerCase();
+  const normalized = phase === "pre_intro" ? "pre_intro" : "post_intro";
+  state.net.introPhase = normalized;
+  if (statIntroPhase) {
+    statIntroPhase.textContent = normalized;
+  }
+  if (netIntroPhaseSelect) {
+    netIntroPhaseSelect.value = normalized;
+  }
 }
 
 function updateNetAuthButton() {
@@ -4066,10 +4151,32 @@ async function netRequest(route, init = {}, auth = true) {
     onPulse: pulseNetIndicator,
     onUnauthorized: () => {
       clearNetSessionState(state.net);
+      state.net.introPhase = "post_intro";
       updateNetSessionStat();
       setNetStatus("idle", "Session expired. Please log in.");
     }
   });
+}
+
+async function netGetIntroPhase() {
+  const out = await netRequest("/api/world/intro-state", { method: "GET" }, true);
+  state.net.introPhase = String(out?.intro_state?.phase || state.net.introPhase || "post_intro");
+  updateIntroPhaseUi();
+  return out;
+}
+
+async function netSetIntroPhase(phase) {
+  const next = String(phase || "").trim().toLowerCase() === "pre_intro" ? "pre_intro" : "post_intro";
+  const out = await netRequest("/api/world/intro-state", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      phase: next
+    })
+  }, true);
+  state.net.introPhase = String(out?.intro_state?.phase || next);
+  updateIntroPhaseUi();
+  return out;
 }
 
 async function netEnsureCharacter() {
@@ -4082,7 +4189,7 @@ async function netEnsureCharacter() {
 }
 
 async function netLogin() {
-  return performNetLoginFlow({
+  const out = await performNetLoginFlow({
     apiBaseInput: String(netApiBaseInput?.value || ""),
     usernameInput: String(netUsernameInput?.value || ""),
     passwordInput: String(netPasswordInput?.value || "")
@@ -4139,6 +4246,12 @@ async function netLogin() {
     },
     onProfileUpdated: upsertNetProfileFromInputs
   });
+  try {
+    await netGetIntroPhase();
+  } catch (_err) {
+    // Clock sync will refresh intro phase shortly even if this fetch fails.
+  }
+  return out;
 }
 
 async function netSetEmail() {
@@ -4243,6 +4356,7 @@ async function netLogoutAndPersist() {
     leavePresence: netLeavePresence
   });
   clearNetSessionState(state.net);
+  state.net.introPhase = "post_intro";
   if (state.sessionStarted) {
     returnToTitleMenu();
   } else {
@@ -4394,6 +4508,27 @@ async function netPollPresence() {
   });
 }
 
+function applyAuthoritativeNpcOverrides(overrides) {
+  if (!state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
+    return;
+  }
+  const rows = Array.isArray(overrides) ? overrides : [];
+  const byId = new Map(rows.map((row) => [Number(row?.npc_id) | 0, row]));
+  for (const e of state.entityLayer.entries) {
+    const row = byId.get(Number(e.id) | 0);
+    if (!row) {
+      continue;
+    }
+    e.x = Number(row.x) | 0;
+    e.y = Number(row.y) | 0;
+    e.z = Number(row.z) | 0;
+    e.homeX = e.x;
+    e.homeY = e.y;
+    e.authoritative = true;
+    e.movable = false;
+  }
+}
+
 function applyAuthoritativeWorldClock(clock) {
   applyAuthoritativeWorldClockToSim(clock, (next) => {
     state.sim.tick = next.tick;
@@ -4404,6 +4539,9 @@ function applyAuthoritativeWorldClock(clock) {
     w.date_m = next.date_m;
     w.date_y = next.date_y;
   });
+  state.net.introPhase = String(clock?.intro_state?.phase || state.net.introPhase || "post_intro");
+  updateIntroPhaseUi();
+  applyAuthoritativeNpcOverrides(clock?.npc_overrides);
 }
 
 async function netPollWorldClock() {
@@ -4417,6 +4555,84 @@ async function netPollWorldClock() {
     },
     applyClock: applyAuthoritativeWorldClock
   });
+}
+
+function startAuthoritativeConversationFromPayload(payload, actor, tileId) {
+  const sessionId = String(payload?.session_id || "").trim();
+  const targetName = sanitizeLegacyHudLabelText(String(payload?.target_name || canonicalTalkSpeakerForTile(tileId) || "Unknown")) || "Unknown";
+  const desc = sanitizeLegacyHudLabelText(String(payload?.desc || "").trim() || targetName);
+  const openingLines = Array.isArray(payload?.opening_lines)
+    ? payload.opening_lines.map((line) => String(line || "").trim()).filter(Boolean)
+    : [];
+  state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
+  state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
+  state.legacyConversationActive = true;
+  state.legacyConversationAuthoritative = true;
+  state.legacyConversationSessionId = sessionId;
+  state.legacyConversationInput = "";
+  state.legacyConversationTargetName = targetName;
+  state.legacyConversationActorEntityId = Number(actor?.id) | 0;
+  state.legacyConversationPortraitTile = tileId;
+  state.legacyConversationTargetObjNum = Number(payload?.npc_id) | 0;
+  state.legacyConversationTargetObjType = Number(actor?.type) | 0;
+  state.legacyConversationNpcKey = "";
+  state.legacyConversationPendingPrompt = "";
+  state.legacyConversationScript = null;
+  state.legacyConversationDescText = desc;
+  state.legacyConversationRules = [];
+  state.legacyConversationPc = Number(payload?.next_pc) | 0;
+  state.legacyConversationInputOpcode = Number(payload?.stop_opcode) | 0;
+  state.legacyConversationVmContext = null;
+  const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
+  state.legacyConversationShowInventory = equipSlots.length > 0;
+  state.legacyConversationEquipmentSlots = equipSlots;
+  const openingBlock = [formatYouSeeLine(desc || targetName)];
+  if (openingLines.length > 0) {
+    openingBlock.push("");
+    for (const line of openingLines) {
+      openingBlock.push(String(line || ""));
+    }
+    openingBlock.push("");
+  }
+  const pagedOpening = startLegacyConversationPagination(openingBlock);
+  if (!pagedOpening) {
+    for (const line of openingBlock) {
+      pushLedgerMessage(line);
+    }
+    pushLegacyConversationPrompt();
+  }
+}
+
+async function netStartConversation(actor, tx, ty, tz) {
+  const tileId = ((Number(actor?.baseTile) | 0) + (Number(actor?.frame) | 0)) & 0xffff;
+  const out = await netRequest("/api/world/objects/interact", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      verb: "talk",
+      npc_id: Number(actor?.id) | 0,
+      actor_id: String(state.net.characterId || state.net.userId || "Avatar"),
+      actor_x: state.sim.world.map_x | 0,
+      actor_y: state.sim.world.map_y | 0,
+      actor_z: state.sim.world.map_z | 0,
+      player_name: String(state.net.characterName || "Avatar")
+    })
+  }, true);
+  startAuthoritativeConversationFromPayload(out?.conversation_session || {}, actor, tileId);
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Talk: ${String(out?.conversation_session?.target_name || "NPC")} (authoritative) at ${tx},${ty},${tz}.`;
+}
+
+async function netReplyConversation(typed) {
+  const out = await netRequest("/api/world/conversation/respond", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      session_id: String(state.legacyConversationSessionId || ""),
+      typed: String(typed || "")
+    })
+  }, true);
+  return out;
 }
 
 function setAccountModalOpen(open) {
@@ -4496,6 +4712,8 @@ function initNetPanel() {
   updateNetSessionStat();
   updateCriticalRecoveryStat();
   updateNetAuthButton();
+  updateIntroPhaseUi();
+  updatePauseLoopUi();
   if (netAccountOpenButton) {
     netAccountOpenButton.addEventListener("click", () => {
       refreshNetAccountSelect();
@@ -4658,6 +4876,35 @@ function initNetPanel() {
         setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
         diagBox.className = "diag warn";
         diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
+      }
+    });
+  }
+  if (pauseLoopButton) {
+    pauseLoopButton.addEventListener("click", () => {
+      const next = !state.simPaused;
+      setSimPaused(
+        next,
+        next
+          ? "Simulation loop paused. Background polling disabled."
+          : "Simulation loop resumed. Background polling enabled."
+      );
+    });
+  }
+  if (netIntroPhaseButton) {
+    netIntroPhaseButton.addEventListener("click", async () => {
+      try {
+        if (!isNetAuthenticated()) {
+          throw new Error("Login required");
+        }
+        const requested = String(netIntroPhaseSelect?.value || state.net.introPhase || "post_intro");
+        const out = await netSetIntroPhase(requested);
+        diagBox.className = "diag ok";
+        diagBox.textContent = `Intro phase set to ${String(out?.intro_state?.phase || state.net.introPhase)}.`;
+        setNetStatus("online", `Intro phase: ${String(out?.intro_state?.phase || state.net.introPhase)}`);
+      } catch (err) {
+        setNetStatus("error", `Intro phase update failed: ${String((err as any)?.message || err)}`);
+        diagBox.className = "diag warn";
+        diagBox.textContent = `Intro phase update failed: ${String((err as any)?.message || err)}`;
       }
     });
   }
@@ -4957,6 +5204,17 @@ function tryTalkAtCell(sim, tx, ty) {
     pushLedgerMessage("No one responds.");
     showLegacyLedgerPrompt();
     return false;
+  }
+  if (isNetAuthenticated()) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Talk: contacting authoritative conversation service for actor ${Number(actor.id) | 0}...`;
+    netStartConversation(actor, tx, ty, tz).catch((err) => {
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Talk failed: ${String((err as any)?.message || err)}`;
+      pushLedgerMessage("No one responds.");
+      showLegacyLedgerPrompt();
+    });
+    return true;
   }
   const haveConverse = (state.converseArchiveA instanceof Uint8Array) || (state.converseArchiveB instanceof Uint8Array);
   const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
@@ -7454,11 +7712,15 @@ function updateStats() {
     statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
   }
   statHash.textContent = hashHexRuntime(simStateHashRuntime(state.sim, HASH_CFG));
+  if (statSimLoop) {
+    statSimLoop.textContent = state.simPaused ? "paused" : "running";
+  }
   if (statLoopHealth) {
     const lh = state.loopHealth;
     const last = Math.round(Math.max(0, Number(lh.lastDtMs) || 0));
     const max = Math.round(Math.max(0, Number(lh.maxDtMs) || 0));
-    statLoopHealth.textContent = `dt ${last}ms / max ${max}ms | drop ${lh.backlogDrops | 0} | vis ${lh.visibilityResets | 0} | err ${lh.frameErrors | 0}`;
+    const prefix = state.simPaused ? "paused | " : "";
+    statLoopHealth.textContent = `${prefix}dt ${last}ms / max ${max}ms | drop ${lh.backlogDrops | 0} | vis ${lh.visibilityResets | 0} | err ${lh.frameErrors | 0}`;
   }
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
@@ -7678,13 +7940,13 @@ function tickLoop(ts) {
       legacyViewportCanvas.style.pointerEvents = "none";
     }
 
-    if (!state.sessionStarted) {
+    if (!state.sessionStarted || state.simPaused) {
       // Avoid stale backlog while sitting in title/login mode.
       state.accMs = 0;
     }
 
     let catchupSteps = 0;
-    while (state.sessionStarted && state.accMs >= TICK_MS) {
+    while (state.sessionStarted && !state.simPaused && state.accMs >= TICK_MS) {
       if (catchupSteps >= LOOP_MAX_CATCHUP_STEPS) {
         // Drop stale backlog caused by tab throttling/long pauses.
         state.loopHealth.backlogDrops += 1;

@@ -38,7 +38,8 @@ function testConversationRunFromKeyCursor() {
     decodeResponseOpcodeAware: () => ({
       lines: ["Hi"],
       stopOpcode: 0,
-      stopPc: -1
+      stopPc: -1,
+      nextPc: 11
     })
   });
   assert.equal(out.kind, "ok", "cursor reply should match job");
@@ -58,7 +59,8 @@ function testConversationRunFromKeyCursorNoMatch() {
     decodeResponseOpcodeAware: () => ({
       lines: [],
       stopOpcode: 0,
-      stopPc: -1
+      stopPc: -1,
+      nextPc: 11
     })
   });
   assert.equal(out.kind, "no-match", "cursor reply should not match unknown topic");
@@ -101,7 +103,8 @@ function testConversationRunFromKeyCursorSequentialTopics() {
     decodeResponseOpcodeAware: () => ({
       lines: ["Hi"],
       stopOpcode: 0,
-      stopPc: -1
+      stopPc: -1,
+      nextPc: 11
     })
   });
   assert.equal(first.kind, "ok", "first cursor reply should match job");
@@ -116,7 +119,8 @@ function testConversationRunFromKeyCursorSequentialTopics() {
     decodeResponseOpcodeAware: () => ({
       lines: ["Avatar"],
       stopOpcode: 0,
-      stopPc: -1
+      stopPc: -1,
+      nextPc: 25
     })
   });
   assert.equal(second.kind, "ok", "second cursor reply should match name from advanced pc");

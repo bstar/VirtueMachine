@@ -22,6 +22,16 @@ const {
 } = require("./world_interaction_bridge.ts");
 const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge.ts");
 const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.ts");
+const {
+  loadNpcBaselineRuntime,
+  loadScheduleRuntime,
+  buildCastlePilotNpcOverrides
+} = require("./npc_runtime.ts");
+const {
+  ensureConversationRuntimeState,
+  startAuthoritativeConversation,
+  replyAuthoritativeConversation
+} = require("./conversation_runtime.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -56,11 +66,14 @@ const FILES = {
   emailOutbox: path.join(DATA_DIR, "email_outbox.log"),
   presence: path.join(DATA_DIR, "presence.json"),
   worldClock: path.join(DATA_DIR, "world_clock.json"),
+  npcRuntime: path.join(DATA_DIR, "world_npc_runtime.json"),
   criticalPolicy: path.join(DATA_DIR, "critical_item_policy.json"),
   recoveriesLog: path.join(DATA_DIR, "critical_item_recoveries.log"),
   worldObjectDeltas: path.join(DATA_DIR, "world_object_deltas.json"),
   worldInteractionLog: path.join(DATA_DIR, "world_interaction_log.json")
 };
+const INTRO_PHASE_PRE = "pre_intro";
+const INTRO_PHASE_POST = "post_intro";
 
 function nowIso() {
   return new Date().toISOString();
@@ -250,6 +263,58 @@ function defaultWorldClock() {
     date_m: 1,
     date_y: 1,
     last_advanced_at_ms: Date.now()
+  };
+}
+
+function defaultNpcRuntimeState(baseline) {
+  return {
+    intro_phase: INTRO_PHASE_POST,
+    talk_flags: Array.isArray(baseline?.talkFlags) ? baseline.talkFlags.slice(0, 0x100) : new Array(0x100).fill(0)
+  };
+}
+
+function normalizeNpcRuntimeState(raw, baseline) {
+  const out = defaultNpcRuntimeState(baseline);
+  if (raw && typeof raw === "object") {
+    const phase = String(raw.intro_phase || "").trim().toLowerCase();
+    if (phase === INTRO_PHASE_PRE || phase === INTRO_PHASE_POST) {
+      out.intro_phase = phase;
+    }
+    if (Array.isArray(raw.talk_flags)) {
+      for (let i = 0; i < 0x100; i += 1) {
+        out.talk_flags[i] = Number(raw.talk_flags[i]) & 0xff;
+      }
+    }
+  }
+  return out;
+}
+
+function rebuildNpcRuntimeState(state) {
+  const introPhase = String(state?.npcRuntimePersist?.intro_phase || INTRO_PHASE_POST).trim().toLowerCase() === INTRO_PHASE_PRE
+    ? INTRO_PHASE_PRE
+    : INTRO_PHASE_POST;
+  const talkFlags = Array.isArray(state?.npcRuntimePersist?.talk_flags)
+    ? state.npcRuntimePersist.talk_flags.slice(0, 0x100)
+    : defaultNpcRuntimeState(state.npcBaseline).talk_flags;
+  state.introState = {
+    phase: introPhase
+  };
+  state.npcRuntime = {
+    ...state.npcBaseline,
+    talkFlags
+  };
+  state.npcRuntimeById = new Map();
+  for (const entry of state.npcRuntime.entries) {
+    state.npcRuntimeById.set(Number(entry.id) | 0, entry);
+  }
+  state.npcPilot = buildCastlePilotNpcOverrides(state.npcRuntime, state.scheduleRuntime, state.worldClock);
+  state.npcPilotById = new Map();
+  for (const row of state.npcPilot) {
+    state.npcPilotById.set(Number(row.npc_id) | 0, row);
+  }
+  state.npcRuntimePersist = {
+    intro_phase: introPhase,
+    talk_flags: state.npcRuntime.talkFlags
   };
 }
 
@@ -826,6 +891,7 @@ function updateAuthoritativeClock(state) {
     }
   }
   clock.last_advanced_at_ms = nowMs - (deltaMs % SERVER_TICK_MS);
+  rebuildNpcRuntimeState(state);
   return clock;
 }
 
@@ -859,6 +925,8 @@ function loadState() {
   ensureDataDir();
   const rawWorldObjectDeltas = readJson(FILES.worldObjectDeltas, null);
   const worldObjects = buildWorldObjectState(RUNTIME_DIR, rawWorldObjectDeltas);
+  const npcBaseline = loadNpcBaselineRuntime(RUNTIME_DIR);
+  const scheduleRuntime = loadScheduleRuntime(RUNTIME_DIR);
   const state = {
     users: readJson(FILES.users, []),
     tokens: readJson(FILES.tokens, []),
@@ -875,6 +943,18 @@ function loadState() {
     }),
     presence: normalizePresenceRows(readJson(FILES.presence, [])),
     worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
+    npcBaseline,
+    scheduleRuntime,
+    npcRuntimePersist: normalizeNpcRuntimeState(readJson(FILES.npcRuntime, null), npcBaseline),
+    introState: {
+      phase: INTRO_PHASE_POST
+    },
+    npcRuntime: null,
+    npcRuntimeById: new Map(),
+    npcPilot: [],
+    npcPilotById: new Map(),
+    conversationArchives: null,
+    conversationSessions: Object.create(null),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
     worldObjects,
     worldInteractionLog: normalizeWorldInteractionLog(readJson(FILES.worldInteractionLog, defaultWorldInteractionLog()))
@@ -914,6 +994,8 @@ function loadState() {
   if (!state.worldSnapshot.updated_at) {
     state.worldSnapshot.updated_at = nowIso();
   }
+  rebuildNpcRuntimeState(state);
+  ensureConversationRuntimeState(state, RUNTIME_DIR);
   return state;
 }
 
@@ -924,6 +1006,7 @@ function persistState(state) {
   writeJson(FILES.worldSnapshot, state.worldSnapshot);
   writeJson(FILES.presence, state.presence);
   writeJson(FILES.worldClock, state.worldClock);
+  writeJson(FILES.npcRuntime, state.npcRuntimePersist || defaultNpcRuntimeState(state.npcBaseline));
   writeJson(FILES.criticalPolicy, state.criticalPolicy);
   writeJson(FILES.worldObjectDeltas, state.worldObjects.deltas);
   writeJson(FILES.worldInteractionLog, state.worldInteractionLog || defaultWorldInteractionLog());
@@ -1797,7 +1880,42 @@ const server = http.createServer(async (req, res) => {
       date_d: clock.date_d >>> 0,
       date_m: clock.date_m >>> 0,
       date_y: clock.date_y >>> 0,
+      intro_state: state.introState,
+      npc_overrides: Array.isArray(state.npcPilot) ? state.npcPilot : [],
       runtime_contract: runtimeContract
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/world/intro-state") {
+    sendJson(res, 200, {
+      intro_state: state.introState
+    });
+    return;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/world/intro-state") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const phase = String(body && body.phase || "").trim().toLowerCase();
+    if (phase !== INTRO_PHASE_PRE && phase !== INTRO_PHASE_POST) {
+      sendError(res, 400, "bad_intro_phase", "phase must be one of: pre_intro, post_intro");
+      return;
+    }
+    state.npcRuntimePersist = {
+      ...state.npcRuntimePersist,
+      intro_phase: phase
+    };
+    rebuildNpcRuntimeState(state);
+    persistState(state);
+    sendJson(res, 200, {
+      ok: true,
+      intro_state: state.introState
     });
     return;
   }
@@ -1925,9 +2043,33 @@ const server = http.createServer(async (req, res) => {
     const targetKey = String(body && body.target_key || "").trim();
     const containerKey = String(body && body.container_key || "").trim();
     const actorId = String(body && body.actor_id || user.user_id || "").trim();
+    const npcId = Number(body && body.npc_id) | 0;
     const actorX = Number.isFinite(Number(body && body.actor_x)) ? (Number(body.actor_x) | 0) : null;
     const actorY = Number.isFinite(Number(body && body.actor_y)) ? (Number(body.actor_y) | 0) : null;
     const actorZ = Number.isFinite(Number(body && body.actor_z)) ? (Number(body.actor_z) | 0) : null;
+    if (verb === "talk") {
+      const start = startAuthoritativeConversation(state, {
+        npcId,
+        actorPos: {
+          x: actorX === null ? 0 : actorX,
+          y: actorY === null ? 0 : actorY,
+          z: actorZ === null ? 0 : actorZ
+        },
+        playerName: String(body && body.player_name || user.username || "Avatar")
+      });
+      if (!start.ok) {
+        sendError(res, Number(start.http) || 409, String(start.code || "talk_failed"), String(start.message || "talk failed"));
+        return;
+      }
+      persistState(state);
+      sendJson(res, 200, {
+        ok: true,
+        verb,
+        conversation_session: start.payload,
+        runtime_contract: runtimeContract
+      });
+      return;
+    }
     const target = findActiveObjectByKey(state, targetKey);
     if (!target) {
       sendError(res, 404, "object_not_found", "target_key not found");
@@ -2058,6 +2200,27 @@ const server = http.createServer(async (req, res) => {
       },
       meta: worldObjectMeta(state)
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/world/conversation/respond") {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      sendError(res, 400, "bad_json", String(err.message || err));
+      return;
+    }
+    const replied = replyAuthoritativeConversation(state, {
+      sessionId: String(body && body.session_id || ""),
+      typed: String(body && body.typed || "")
+    });
+    if (!replied.ok) {
+      sendError(res, Number(replied.http) || 404, String(replied.code || "conversation_failed"), String(replied.message || "conversation failed"));
+      return;
+    }
+    persistState(state);
+    sendJson(res, 200, replied.payload);
     return;
   }
 

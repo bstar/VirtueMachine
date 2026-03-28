@@ -18,6 +18,7 @@ Minimal browser client prototype:
 - live multiplayer presence preview (multiple tabs/users visible in world view)
 - server-authoritative clock sync (authenticated clients poll net clock for tick/time/date)
 - critical-item maintenance controls (manual run + optional auto cadence)
+- intro-phase control for authoritative early-story dialogue bridging (`pre_intro` / `post_intro`)
 - runtime asset-backed map/chunk tile reads with synthetic fallback
 - static object overlay layer for expanded world props (doors, beds, throne, desks, fireplaces, shelves, tables, food)
 - first-pass legacy entity/NPC overlay layer from `savegame/objlist` actor records
@@ -103,6 +104,7 @@ If missing/unavailable, it renders a deterministic synthetic fallback grid.
 - `Shift+K`: hide/show legacy HUD layer on parchment frame (deviation mode toggle)
 - `Shift+L`: toggle canonical UI probe mode (`live`/`sample`) for HUD payload stubs
 - `Shift+N`: run critical-item maintenance now
+- use the right-rail `Intro Phase` control while logged in to flip Lord British/Nystul/Dupre between fresh-game intro state and castle post-intro state
 - `Shift+G`: jump to selected canonical capture preset
 - `Shift+P`: capture viewport PNG
 - `Shift+Alt+P`: capture world+HUD PNG

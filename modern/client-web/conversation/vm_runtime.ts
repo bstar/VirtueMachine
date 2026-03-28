@@ -16,6 +16,8 @@ const CONV_OP_PRINTSTR = 0xb5;
 const CONV_OP_IF = 0xa1;
 const CONV_OP_ENDIF = 0xa2;
 const CONV_OP_ELSE = 0xa3;
+const CONV_OP_SET = 0xa4;
+const CONV_OP_CLR = 0xa5;
 const CONV_OP_LET = 0xa6;
 const CONV_OP_END_OF_FACTOR = 0xa7;
 const CONV_OP_LET_VALUE = 0xa8;
@@ -114,6 +116,21 @@ function conversationVmWriteVarStr(vmContext, idx, value) {
   const dst = Array.isArray(vmContext?.varStr) ? vmContext.varStr : null;
   if (!dst || i < 0 || i >= dst.length) return;
   dst[i] = String(value || "");
+}
+
+function conversationVmWriteTalkFlag(vmContext, objNumRaw, bitRaw, enabled) {
+  const objNum = ((Number(objNumRaw) | 0) === CONV_OP_NPC)
+    ? (Number(vmContext?.objNum) | 0)
+    : (Number(objNumRaw) | 0);
+  const bit = Number(bitRaw) & 0x1f;
+  if (!vmContext || typeof vmContext !== "object") {
+    return;
+  }
+  if (!vmContext.talkFlags || typeof vmContext.talkFlags !== "object") {
+    vmContext.talkFlags = Object.create(null);
+  }
+  const cur = Number(vmContext.talkFlags[objNum]) | 0;
+  vmContext.talkFlags[objNum] = enabled ? (cur | (1 << bit)) : (cur & ~(1 << bit));
 }
 
 function conversationVmEvalFactor(scriptBytes, startPc, vmContext, endPc) {
@@ -321,6 +338,7 @@ export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endP
     if (steps > maxSteps) {
       break;
     }
+    const opPc = pc;
     const op = scriptBytes[pc] & 0xff;
     pc += 1;
     if (op < 0x80) {
@@ -371,6 +389,8 @@ export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endP
         break;
       }
       if (stopOnGoto) {
+        stopOpcode = op;
+        stopPc = opPc;
         break;
       }
       if (followGoto && target < scriptBytes.length) {
@@ -408,6 +428,14 @@ export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endP
       continue;
     }
     if (op === CONV_OP_ENDIF) {
+      continue;
+    }
+    if (op === CONV_OP_SET || op === CONV_OP_CLR) {
+      const npcOut = conversationVmEvalFactor(scriptBytes, pc, vmContext, end);
+      pc = npcOut.nextPc;
+      const bitOut = conversationVmEvalFactor(scriptBytes, pc, vmContext, end);
+      pc = bitOut.nextPc;
+      conversationVmWriteTalkFlag(vmContext, npcOut.value, bitOut.value, op === CONV_OP_SET);
       continue;
     }
     if (op === CONV_OP_LET) {
@@ -480,7 +508,7 @@ export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endP
       continue;
     }
   }
-  const out = lines.map((s) => String(s || "").replace(/\s+/g, " ").trim()).filter((v, idx, arr) => {
+  const out = lines.map((s) => String(s || "").replace(/\*/g, " ").replace(/\s+/g, " ").trim()).filter((v, idx, arr) => {
     if (v) return true;
     return idx > 0 && idx < (arr.length - 1);
   });

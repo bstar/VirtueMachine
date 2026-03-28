@@ -121,11 +121,27 @@ export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {})
     }
 
     const responseStartPc = pc;
-    while (pc < scriptBytes.length && (scriptBytes[pc] & 0xff) !== OP_ENDRES) {
-      pc += 1;
-    }
-    const responseEndPc = pc;
-    const afterResponsePc = (pc < scriptBytes.length) ? (pc + 1) : pc;
+    const boundary = decodeResponseOpcodeAware
+      ? decodeResponseOpcodeAware(
+        scriptBytes,
+        responseStartPc,
+        scriptBytes.length,
+        {
+          stopOnGoto: true,
+          followGoto: false,
+          stopOnInput: true,
+          vmContext: opts.vmContext || null
+        }
+      )
+      : { lines: [], stopOpcode: 0, stopPc: -1, nextPc: responseStartPc + 1 };
+    const boundaryStopOpcode = Number(boundary?.stopOpcode) & 0xff;
+    const boundaryStopPc = Number(boundary?.stopPc) | 0;
+    const responseEndPc = (boundaryStopOpcode === OP_KEY)
+      ? boundaryStopPc
+      : Math.max(responseStartPc, Number(boundary?.nextPc) | 0);
+    const afterResponsePc = (boundaryStopOpcode === OP_KEY)
+      ? Math.max(responseStartPc, boundaryStopPc)
+      : Math.max(responseStartPc, Number(boundary?.nextPc) | 0);
 
     let matched = false;
     for (const key of keys) {
@@ -139,7 +155,7 @@ export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {})
         ? decodeResponseOpcodeAware(
           scriptBytes,
           responseStartPc,
-          responseEndPc,
+          scriptBytes.length,
           {
             stopOnGoto: false,
             followGoto: true,

@@ -331,20 +331,108 @@ async function main() {
       assert.equal(equip.status, 200);
       assert.equal(coordUseOfStatus(equip.body?.target?.status), OBJ_COORD_USE_EQUIP);
 
-      const talkUnsupported = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+      const clockForNpcTalk = await jsonFetch(baseUrl, "/api/world/clock", {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(clockForNpcTalk.status, 200);
+      assert.ok(Array.isArray(clockForNpcTalk.body?.npc_overrides));
+      assert.equal(String(clockForNpcTalk.body?.intro_state?.phase || ""), "post_intro");
+      const lbNpc = (clockForNpcTalk.body?.npc_overrides || []).find((row: any) => Number(row?.npc_id) === 5);
+      assert.ok(lbNpc, "expected Lord British npc override in clock response");
+
+      const introStateGet = await jsonFetch(baseUrl, "/api/world/intro-state", {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(introStateGet.status, 200);
+      assert.equal(String(introStateGet.body?.intro_state?.phase || ""), "post_intro");
+
+      const introStatePre = await jsonFetch(baseUrl, "/api/world/intro-state", {
+        method: "PUT",
+        headers: authHeaders,
+        body: JSON.stringify({
+          phase: "pre_intro"
+        })
+      });
+      assert.equal(introStatePre.status, 200);
+      assert.equal(String(introStatePre.body?.intro_state?.phase || ""), "pre_intro");
+
+      const talkStartIntro = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
           verb: "talk",
-          target_key: targetKey,
+          npc_id: 5,
           actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
+          actor_x: Number(lbNpc.x) | 0,
+          actor_y: Number(lbNpc.y) | 0,
+          actor_z: Number(lbNpc.z) | 0,
+          player_name: "Avatar"
         })
       });
-      assert.equal(talkUnsupported.status, 400);
-      assert.equal(String(talkUnsupported.body?.error?.code || ""), "bad_verb");
+      assert.equal(talkStartIntro.status, 200);
+      assert.match(
+        String((talkStartIntro.body?.conversation_session?.opening_lines || []).join(" ")),
+        /Compendium/i,
+        "pre-intro LB opening should expose the Compendium challenge"
+      );
+
+      const introStatePost = await jsonFetch(baseUrl, "/api/world/intro-state", {
+        method: "PUT",
+        headers: authHeaders,
+        body: JSON.stringify({
+          phase: "post_intro"
+        })
+      });
+      assert.equal(introStatePost.status, 200);
+      assert.equal(String(introStatePost.body?.intro_state?.phase || ""), "post_intro");
+
+      const talkStart = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "talk",
+          npc_id: 5,
+          actor_id: "contract-avatar",
+          actor_x: Number(lbNpc.x) | 0,
+          actor_y: Number(lbNpc.y) | 0,
+          actor_z: Number(lbNpc.z) | 0,
+          player_name: "Avatar"
+        })
+      });
+      assert.equal(talkStart.status, 200);
+      assert.equal(String(talkStart.body?.conversation_session?.target_name || ""), "Lord British");
+      assert.ok(Array.isArray(talkStart.body?.conversation_session?.opening_lines));
+      assert.ok(String(talkStart.body?.conversation_session?.session_id || "").length > 0);
+      assert.doesNotMatch(
+        String((talkStart.body?.conversation_session?.opening_lines || []).join(" ")),
+        /\*/,
+        "authoritative opening lines should not leak legacy asterisk control markers"
+      );
+
+      const talkReplyName = await jsonFetch(baseUrl, "/api/world/conversation/respond", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          session_id: String(talkStart.body?.conversation_session?.session_id || ""),
+          typed: "name"
+        })
+      });
+      assert.equal(talkReplyName.status, 200);
+      assert.ok(Array.isArray(talkReplyName.body?.lines));
+      assert.match(String((talkReplyName.body?.lines || []).join(" ")), /I am Lord British/i);
+
+      const talkReplyJob = await jsonFetch(baseUrl, "/api/world/conversation/respond", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          session_id: String(talkStart.body?.conversation_session?.session_id || ""),
+          typed: "job"
+        })
+      });
+      assert.equal(talkReplyJob.status, 200);
+      assert.match(String((talkReplyJob.body?.lines || []).join(" ")), /throne of Britannia/i);
 
       const putCycle = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
