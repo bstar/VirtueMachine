@@ -1,0 +1,4 @@
+#pragma once
+
+#define SCUMM_LITTLE_ENDIAN 1
+#define SCUMM_FLOAT_WORD_LITTLE_ENDIAN 1

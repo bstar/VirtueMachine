@@ -1,14 +1,25 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(ultima6_modern C)
+project(ultima6_modern C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 enable_testing()
 
 add_subdirectory(modern/sim-core)
+
+add_executable(opl_register_render
+  modern/tools/opl_register_render.cpp
+  legacy/scummvm/engines/ultima/nuvie/sound/adplug/fm_opl.cpp
+)
+target_include_directories(opl_register_render PRIVATE modern/tools/scummvm_standalone legacy/scummvm legacy/scummvm/engines)
+target_compile_definitions(opl_register_render PRIVATE HAVE_CONFIG_H)
 
 find_program(BASH_PROGRAM bash)
 if(BASH_PROGRAM)

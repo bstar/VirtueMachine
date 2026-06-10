@@ -199,6 +199,18 @@ Run full frontend+backend dev stack in one process (with Vite hot reload on fron
 bun run dev
 ```
 
+For local intro/audio parity testing, launch Chrome/Chromium with autoplay explicitly allowed. This matches Nuvie/ScummVM's native mixer behavior more closely than a normal browser tab, where refresh-time audio is blocked until a user gesture:
+
+```bash
+bun run dev:browser:autoplay
+```
+
+If refresh-time audio still does not start, verify the browser policy separately from the game:
+
+```bash
+bun run dev:browser:autoplay probe
+```
+
 Direct script form (equivalent):
 
 ```bash

@@ -547,6 +547,16 @@ select.control-input optgroup {
   background: color-mix(in srgb, var(--vm-input-top) 78%, white 22%);
 }
 
+.control-btn.is-active {
+  border-color: #9f463a;
+  background: #52231f;
+  color: #ffe1d8;
+}
+
+.control-btn.is-active:hover {
+  background: #68302a;
+}
+
 .control-btn--login {
   border-color: #2f7a54;
   background: #184d35;

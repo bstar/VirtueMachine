@@ -358,6 +358,7 @@ const locationSelect = byId("locationSelect");
 const jumpButton = byId("jumpButton");
 const captureButton = byId("captureButton");
 const captureWorldHudButton = byId("captureWorldHudButton");
+const audioMuteButton = byId("audioMuteButton");
 const pauseLoopButton = byId("pauseLoopButton");
 const parityRadiusInput = byId("parityRadiusInput");
 const paritySnapshotButton = byId("paritySnapshotButton");
@@ -5678,6 +5679,7 @@ function initNetPanel() {
   updateNetAuthButton();
   updateIntroPhaseUi();
   updatePauseLoopUi();
+  updateAudioMuteUi();
   if (netAccountOpenButton) {
     netAccountOpenButton.addEventListener("click", () => {
       refreshNetAccountSelect();
@@ -5852,6 +5854,11 @@ function initNetPanel() {
           ? "Simulation loop paused. Background polling disabled."
           : "Simulation loop resumed. Background polling enabled."
       );
+    });
+  }
+  if (audioMuteButton) {
+    audioMuteButton.addEventListener("click", () => {
+      toggleAudioMute();
     });
   }
   if (netIntroPhaseButton) {
@@ -7332,6 +7339,31 @@ function setAudioEnabledFromWorldFlag() {
     return;
   }
   state.audio.setEnabled(!!state.sim.world.sound_enabled);
+  updateAudioMuteUi();
+}
+
+function updateAudioMuteUi() {
+  if (!audioMuteButton) {
+    return;
+  }
+  const muted = !!state.audio?.status?.().muted;
+  audioMuteButton.textContent = muted ? "Unmute Audio" : "Mute Audio";
+  audioMuteButton.setAttribute("aria-pressed", muted ? "true" : "false");
+  audioMuteButton.classList.toggle("is-active", muted);
+}
+
+function toggleAudioMute(reason = "") {
+  if (!state.audio) {
+    return;
+  }
+  const nextMuted = !state.audio.status().muted;
+  state.audio.setMuted(nextMuted);
+  updateAudioMuteUi();
+  if (!nextMuted) {
+    primeAudioFromUserGesture();
+  }
+  diagBox.className = "diag ok";
+  diagBox.textContent = reason || (nextMuted ? "Audio muted." : "Audio unmuted.");
 }
 
 function startBootIntroMusic() {
@@ -7339,10 +7371,19 @@ function startBootIntroMusic() {
     if (!state.audio || !state.sim?.world?.sound_enabled) {
       return false;
     }
+    state.audio.setBackendMode("adlib");
     state.audio.setMusicEnabled(true);
-    return state.audio.playMusic("intro.m");
+    return state.audio.playMusic("bootup.m");
   } catch (err) {
     console.warn("intro music failed", err);
+    return false;
+  }
+}
+
+function bootIntroMusicAwaitingGesture() {
+  try {
+    return !!(state.bootIntro?.active && state.audio?.status?.().musicAwaitingGesture);
+  } catch (_err) {
     return false;
   }
 }
@@ -8829,9 +8870,12 @@ function updateStats() {
   }
   if (statAudio && state.audio) {
     const audio = state.audio.status();
-    const muted = state.sim.world.sound_enabled ? "" : " muted";
+    const muted = state.sim.world.sound_enabled ? "" : " sound-off";
+    const outputMuted = audio.muted ? " output-muted" : "";
     const err = audio.lastError ? ` err:${audio.lastError}` : "";
-    statAudio.textContent = `${audio.backendMode}${muted} ambient:${state.audioAmbientTriggerCount | 0} ${state.audioAmbientLastSfx || "-"}${err}`;
+    const music = audio.musicAwaitingGesture ? ` gesture:${audio.musicSong}` : audio.musicLoading ? ` load:${audio.musicSong}` : audio.musicPlaying ? ` music:${audio.musicSong}` : "";
+    statAudio.textContent = `${audio.backendMode}${muted}${outputMuted}${music} ambient:${state.audioAmbientTriggerCount | 0} ${state.audioAmbientLastSfx || "-"}${err}`;
+    updateAudioMuteUi();
   }
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
@@ -9416,6 +9460,9 @@ async function loadRuntimeAssets() {
   const missing = [];
 
   try {
+    if (!state.sessionStarted && !state.bootIntro?.played) {
+      startBootIntroMusic();
+    }
     state.cornerVariantCache.clear();
     for (const name of required) {
       const res = await fetch(`../assets/runtime/${name}`);
@@ -9567,7 +9614,6 @@ async function loadRuntimeAssets() {
     state.bootIntroCanvasCache.clear();
     if (state.bootIntroBanks && state.bootIntroPalettes && !state.bootIntro.played && !state.sessionStarted) {
       startBootIntroRuntime(state.bootIntro);
-      startBootIntroMusic();
     }
     if (cursorRes.ok && cursorBuf.byteLength > 12) {
       state.cursorPixmaps = decodeU6CursorPtr(new Uint8Array(cursorBuf));
@@ -10257,6 +10303,10 @@ window.addEventListener("keydown", (ev) => {
   }
   if (!state.sessionStarted) {
     if (state.bootIntro && state.bootIntro.active) {
+      if (bootIntroMusicAwaitingGesture()) {
+        ev.preventDefault();
+        return;
+      }
       if (k === "escape") {
         abortBootIntroRuntime(state.bootIntro);
         ev.preventDefault();
@@ -10667,6 +10717,10 @@ canvas.addEventListener("click", (ev) => {
     return;
   }
   if (state.bootIntro && state.bootIntro.active) {
+    if (bootIntroMusicAwaitingGesture()) {
+      ev.preventDefault();
+      return;
+    }
     if (advanceBootIntroInputRuntime(state.bootIntro)) {
       return;
     }
@@ -10710,6 +10764,10 @@ if (legacyBackdropCanvas) {
       return;
     }
     if (state.bootIntro && state.bootIntro.active) {
+      if (bootIntroMusicAwaitingGesture()) {
+        ev.preventDefault();
+        return;
+      }
       if (advanceBootIntroInputRuntime(state.bootIntro)) {
         return;
       }

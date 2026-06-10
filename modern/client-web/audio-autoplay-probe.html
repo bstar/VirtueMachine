@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Ultima VI Audio Autoplay Probe</title>
+<body style="font-family: sans-serif; padding: 2rem">
+  <h1>Audio Autoplay Probe</h1>
+  <pre id="status">starting...</pre>
+  <script>
+    const statusEl = document.getElementById("status");
+    function log(line) {
+      statusEl.textContent += "\n" + line;
+    }
+    statusEl.textContent = `location: ${location.href}`;
+    const audio = new Audio("../assets/runtime/audio/adlib/bootup.m.wav");
+    audio.volume = 0.8;
+    audio.loop = true;
+    audio.play().then(() => {
+      log("HTMLAudioElement autoplay: allowed");
+      log(`currentTime: ${audio.currentTime.toFixed(3)}`);
+    }).catch((err) => {
+      log(`HTMLAudioElement autoplay: blocked (${err && (err.name || err.message || err)})`);
+    });
+  </script>
+</body>
