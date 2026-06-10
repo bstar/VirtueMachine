@@ -156,6 +156,16 @@ import {
 import { nearestTalkTargetAtCellRuntime, topWorldObjectAtCellRuntime } from "./sim/target_runtime.ts";
 import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 import {
+  BOOT_INTRO_SCENES,
+  abortBootIntroRuntime,
+  advanceBootIntroInputRuntime,
+  advanceBootIntroRuntime,
+  bootIntroOverlayAlphaRuntime,
+  createBootIntroRuntimeState,
+  currentBootIntroSceneRuntime,
+  startBootIntroRuntime
+} from "./ui/boot_intro_runtime.ts";
+import {
   normalizeStartupMenuIndexRuntime,
   startupMenuItemEnabledRuntime,
   startupMenuIndexAtSurfacePointRuntime
@@ -700,6 +710,12 @@ const state: any = {
   startupTitlePixmaps: null,
   startupMenuPixmap: null,
   startupCanvasCache: new Map(),
+  bootIntro: createBootIntroRuntimeState(),
+  bootIntroBanks: null,
+  bootIntroBlocks: null,
+  bootIntroPalettes: null,
+  bootIntroFont: null,
+  bootIntroCanvasCache: new Map(),
   runtimeProfile: RUNTIME_PROFILE_CANONICAL_STRICT,
   runtimeExtensions: createDefaultRuntimeExtensions(),
   cursorPixmaps: null,
@@ -2956,6 +2972,77 @@ function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
   }
 }
 
+function u6GlyphSpan(code) {
+  if (!state.u6MainFont) {
+    return { left: 0, right: 7, advance: 8 };
+  }
+  const ch = Number(code) & 0xff;
+  if (ch === 32) {
+    return { left: 0, right: 2, advance: 3 };
+  }
+  const off = ch * 8;
+  let left = 8;
+  let right = -1;
+  for (let row = 0; row < 8; row += 1) {
+    const bits = state.u6MainFont[off + row] ?? 0;
+    for (let col = 0; col < 8; col += 1) {
+      if (bits & (0x80 >> col)) {
+        if (col < left) left = col;
+        if (col > right) right = col;
+      }
+    }
+  }
+  if (right < left) {
+    return { left: 0, right: 2, advance: 3 };
+  }
+  return {
+    left,
+    right,
+    advance: Math.max(1, (right - left + 1))
+  };
+}
+
+function measureU6TextWidth(text, compact = false) {
+  const msg = String(text || "");
+  if (!compact || !state.u6MainFont) {
+    return msg.length * 8;
+  }
+  let width = 0;
+  for (let i = 0; i < msg.length; i += 1) {
+    width += u6GlyphSpan(msg.charCodeAt(i)).advance;
+  }
+  return width;
+}
+
+function drawU6CompactText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
+  if (!state.u6MainFont) {
+    drawU6MainText(g, text, sx, sy, scale, color);
+    return;
+  }
+  const msg = String(text || "");
+  g.fillStyle = color;
+  let cursor = 0;
+  for (let i = 0; i < msg.length; i += 1) {
+    const code = msg.charCodeAt(i) & 0xff;
+    const off = code * 8;
+    const glyph = u6GlyphSpan(code);
+    for (let row = 0; row < 8; row += 1) {
+      const bits = state.u6MainFont[off + row] ?? 0;
+      for (let col = glyph.left; col <= glyph.right; col += 1) {
+        if (bits & (0x80 >> col)) {
+          g.fillRect(
+            sx + ((cursor + (col - glyph.left)) * scale),
+            sy + (row * scale),
+            scale,
+            scale
+          );
+        }
+      }
+    }
+    cursor += glyph.advance;
+  }
+}
+
 function drawLegacyContinueArrow(g, sx, sy, scale = 1, color = "#e7dcc0") {
   /*
     Canonical pager cue from `u6.ch`: glyph codepoint 1 (thick down-arrow).
@@ -3572,9 +3659,865 @@ function buildStartupPaletteForMenu() {
   return palette;
 }
 
+function bootIntroScenePaletteIndex(scene) {
+  if (!scene || typeof scene !== "object") {
+    return 0;
+  }
+  if (scene.kind === "lounge") {
+    return 1;
+  }
+  if (scene.kind === "window") {
+    return 2;
+  }
+  if (scene.kind === "stones") {
+    return 3;
+  }
+  return 0;
+}
+
+function buildPackedIntroPalettes(bytes) {
+  const stride = 0x240;
+  const count = Math.floor((bytes?.length || 0) / stride);
+  const out = new Array(count);
+  for (let idx = 0; idx < count; idx += 1) {
+    const palette = new Array(256);
+    const srcOff = idx * stride;
+    for (let i = 0; i < 256; i += 1) {
+      const rgb = [0, 0, 0];
+      for (let j = 0; j < 3; j += 1) {
+        const bitPos = (i * 3 * 6) + (j * 6);
+        const bytePos = srcOff + (bitPos >> 3);
+        const shift = bitPos & 7;
+        const lo = bytes[bytePos] ?? 0;
+        const hi = bytes[bytePos + 1] ?? 0;
+        const color = ((lo | (hi << 8)) >> shift) & 0x3f;
+        rgb[j] = Math.min(255, color << 2);
+      }
+      palette[i] = rgb;
+    }
+    out[idx] = palette;
+  }
+  return out;
+}
+
+function bootIntroStonesPaletteShift(scene = null) {
+  if (scene?.kind !== "stones") {
+    return 0;
+  }
+  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+  return Math.floor(elapsed / 125) & 0x0f;
+}
+
+function rotatePaletteRangeInPlace(palette, pos, length, count) {
+  const start = Number(pos) | 0;
+  const len = Math.max(0, Number(length) | 0);
+  const steps = ((Number(count) | 0) % len + len) % len;
+  if (!palette || len <= 1 || steps <= 0) {
+    return;
+  }
+  for (let s = 0; s < steps; s += 1) {
+    const last = palette[start + len - 1];
+    for (let i = len - 1; i > 0; i -= 1) {
+      palette[start + i] = palette[start + i - 1];
+    }
+    palette[start] = last;
+  }
+}
+
+function activeTitleIntroPalette(scene = null) {
+  const idx = bootIntroScenePaletteIndex(scene);
+  const paletteSrc = state.bootIntroPalettes?.[idx] || state.basePalette || buildStartupPaletteForMenu();
+  if (!paletteSrc || paletteSrc.length < 256) {
+    return null;
+  }
+  const palette = paletteSrc.map((rgb) => [rgb[0] | 0, rgb[1] | 0, rgb[2] | 0]);
+  if (scene?.kind === "window") {
+    const hot = scene.id === "window_lightning" || scene.id === "window_strike" || scene.id === "window_pan";
+    if (hot) {
+      palette[0x58] = [0x40, 0x94, 0xfc];
+      palette[0x5a] = [0x40, 0x94, 0xfc];
+      palette[0x5c] = [0x40, 0x94, 0xfc];
+    }
+  }
+  if (scene?.id === "stones_enter") {
+    palette[0x19] = [0, 0, 0];
+  }
+  if (scene?.kind === "stones") {
+    rotatePaletteRangeInPlace(palette, 0x90, 16, bootIntroStonesPaletteShift(scene));
+  }
+  return palette;
+}
+
+function bootIntroPaletteCacheKey(scene = null) {
+  const idx = bootIntroScenePaletteIndex(scene);
+  let suffix = "";
+  if (scene?.kind === "window" && (scene.id === "window_lightning" || scene.id === "window_strike" || scene.id === "window_pan")) {
+    suffix = ":storm";
+  } else if (scene?.kind === "stones") {
+    suffix = `${scene?.id === "stones_enter" ? ":enter" : ""}:r${bootIntroStonesPaletteShift(scene)}`;
+  }
+  return `p${idx}${suffix}`;
+}
+
+function bootIntroSceneSpriteCanvas(bankName, frameIdx, scene = null) {
+  const banks = state.bootIntroBanks;
+  const bank = banks && typeof banks === "object" ? banks[bankName] : null;
+  const pixmap = Array.isArray(bank) ? bank[frameIdx] : null;
+  const pal = activeTitleIntroPalette(scene);
+  if (!pixmap || !pal) {
+    return null;
+  }
+  const cacheKey = `${bankName}:${frameIdx}:${bootIntroPaletteCacheKey(scene)}`;
+  let sprite = state.bootIntroCanvasCache.get(cacheKey);
+  if (!sprite) {
+    sprite = canvasFromIndexedPixels(pixmap, pal, 0xff);
+    if (sprite) {
+      state.bootIntroCanvasCache.set(cacheKey, sprite);
+    }
+  }
+  return sprite || null;
+}
+
+function bootIntroBlockSpriteCanvas(frameIdx, scene = null) {
+  const bank = state.bootIntroBlocks;
+  const pixmap = Array.isArray(bank) ? bank[frameIdx] : null;
+  const pal = activeTitleIntroPalette(scene);
+  if (!pixmap || !pal) {
+    return null;
+  }
+  const cacheKey = `blocks:${frameIdx}:${bootIntroPaletteCacheKey(scene)}`;
+  let sprite = state.bootIntroCanvasCache.get(cacheKey);
+  if (!sprite) {
+    sprite = canvasFromIndexedPixels(pixmap, pal, 0xff);
+    if (sprite) {
+      state.bootIntroCanvasCache.set(cacheKey, sprite);
+    }
+  }
+  return sprite || null;
+}
+
+function drawBootIntroSprite(g, bankName, frameIdx, lx, ly, scale, scene = null, sw = null, sh = null, alpha = 1) {
+  const sprite = bootIntroSceneSpriteCanvas(bankName, frameIdx, scene);
+  if (!sprite) {
+    return;
+  }
+  const prevAlpha = g.globalAlpha;
+  g.globalAlpha = Math.max(0, Math.min(1, alpha));
+  const sx = Math.round((Number(lx) || 0) * scale);
+  const sy = Math.round((Number(ly) || 0) * scale);
+  const dw = Math.round((sw == null ? sprite.width : sw) * scale);
+  const dh = Math.round((sh == null ? sprite.height : sh) * scale);
+  g.drawImage(
+    sprite,
+    sx,
+    sy,
+    dw,
+    dh
+  );
+  g.globalAlpha = prevAlpha;
+}
+
+const BOOT_INTRO_TV_PROGRAMS = Object.freeze([
+  Object.freeze([0x82, 0x82, 0x80, 0x03, 0x02, 0x8a, 0x02, 0x8a, 0x01, 0x8a, 0x01, 0x8a, 0x00, 0x8a, 0x00, 0x8a, 0x01, 0x8a, 0x01, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x28, 0x03, 0x8b, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x04, 0x04, 0x81, 0x80, 0x04, 0x08, 0x81, 0x80, 0x04, 0x09, 0x81, 0x80, 0x04, 0x0a, 0x81, 0x80, 0x04, 0x0b, 0x81, 0x80, 0x04, 0x0c, 0x81]),
+  Object.freeze([0x82, 0x82, 0x87, 0x80, 0x46, 0x0f, 0x86, 0x84, 0x09, 0x10, 0x10, 0x10, 0x11, 0x11, 0x11, 0x12, 0x12, 0x12, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x32, 0x83, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x05, 0x27, 0x8a, 0x28, 0x8a, 0x29, 0x81, 0x80, 0x06, 0x2a, 0x8a, 0x2a, 0x8a, 0x2b, 0x8a, 0x2b, 0x8a, 0x2c, 0x8a, 0x2c, 0x8a, 0x2d, 0x8a, 0x2d, 0x81, 0x80, 0x0a, 0x2e, 0x8a, 0x2f, 0x8a, 0x30, 0x8a, 0x84, 0x09, 0x2e, 0x2e, 0x2e, 0x2f, 0x2f, 0x2f, 0x30, 0x30, 0x30, 0x8a, 0x2e, 0x8a, 0x2f, 0x8a, 0x30, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x55, 0x16, 0x17, 0x84, 0x0c, 0x13, 0x13, 0x13, 0x13, 0x14, 0x14, 0x14, 0x14, 0x15, 0x15, 0x15, 0x15, 0x88, 0x81, 0x80, 0x0f, 0x16, 0x84, 0x02, 0x1a, 0x1b, 0x89, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1a, 0x89, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1c, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1d, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1e, 0x88, 0x81, 0x80, 0x03, 0x16, 0x23, 0x88, 0x81, 0x80, 0x03, 0x16, 0x24, 0x88, 0x81, 0x80, 0x32, 0x16, 0x88, 0x81])
+]);
+
+const BOOT_INTRO_TV_X_OFF = Object.freeze([
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x1f, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x1f,
+  0x00, 0x09, 0x09, 0x09, 0x0c, 0x0c, 0x0c, 0x00, 0x04, 0x1f, 0x1f, 0x04, 0x00, 0x04,
+  0x04, 0x04, 0x1f, 0x1f, 0x00, 0x00, 0x06, 0x06, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+]);
+
+const BOOT_INTRO_TV_Y_OFF = Object.freeze([
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x07, 0x07,
+  0x07, 0x03, 0x03, 0x03, 0x00, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x03,
+  0x08, 0x1d, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+]);
+
+const BOOT_INTRO_TV_NEWS_IMAGES = Object.freeze([0x05, 0x06, 0x07, 0x0d, 0x0e, 0x18, 0x19, 0x1f, 0x20]);
+
+function bootIntroTvRand(ctx, min, max) {
+  ctx.seed = ((ctx.seed * 1664525) + 1013904223) >>> 0;
+  const lo = Math.min(min | 0, max | 0);
+  const hi = Math.max(min | 0, max | 0);
+  return lo + (ctx.seed % ((hi - lo) + 1));
+}
+
+function createBootIntroTvMachine() {
+  return {
+    program: 2,
+    pos: 0,
+    loopPos: 0,
+    loopCnt: 0,
+    newsImage: 0,
+    pledgeCounter: 0,
+    pledgeImage: 37,
+    roadOffset: 0x0e,
+    seed: 0x6d2b79f5,
+    sprites: [],
+    fingerVisible: false,
+    staticVisible: false
+  };
+}
+
+function bootIntroTvAddSprite(ctx, imageNum, yOverride = null) {
+  if (ctx.sprites.length >= 5) {
+    return;
+  }
+  const num = Math.max(0, Number(imageNum) | 0);
+  ctx.sprites.push({
+    frame: 0x10 + num,
+    xOff: BOOT_INTRO_TV_X_OFF[num] || 0,
+    yOff: yOverride == null ? (BOOT_INTRO_TV_Y_OFF[num] || 0) : yOverride
+  });
+}
+
+function bootIntroTvDisplay(ctx) {
+  ctx.sprites = [];
+  ctx.fingerVisible = false;
+  ctx.staticVisible = false;
+  let shouldExit = false;
+  let guard = 0;
+  while (!shouldExit && guard < 80) {
+    guard += 1;
+    const program = BOOT_INTRO_TV_PROGRAMS[ctx.program] || BOOT_INTRO_TV_PROGRAMS[0];
+    const item = program[ctx.pos] ?? 0x81;
+    if (item < 0x80) {
+      bootIntroTvAddSprite(ctx, item);
+    } else if (item === 0x82) {
+      ctx.staticVisible = true;
+      ctx.fingerVisible = true;
+      shouldExit = true;
+    } else if (item === 0x80) {
+      ctx.pos += 1;
+      ctx.loopCnt = program[ctx.pos] || 0;
+      ctx.loopPos = ctx.pos;
+    } else if (item === 0x81) {
+      if (ctx.loopCnt > 0) {
+        ctx.pos = ctx.loopPos;
+        ctx.loopCnt -= 1;
+      }
+      shouldExit = true;
+    } else if (item === 0x83) {
+      ctx.roadOffset -= 1;
+      if (ctx.roadOffset === 0) ctx.roadOffset = 0x0e;
+      bootIntroTvAddSprite(ctx, 0x22, 0x15 - ctx.roadOffset);
+      bootIntroTvAddSprite(ctx, 0x22, 0x24 - ctx.roadOffset);
+      bootIntroTvAddSprite(ctx, 0x21);
+    } else if (item === 0x84) {
+      const randLen = program[ctx.pos + 1] || 0;
+      const choice = bootIntroTvRand(ctx, 1, Math.max(1, randLen));
+      bootIntroTvAddSprite(ctx, program[ctx.pos + choice + 1] || 0);
+      ctx.pos += 1 + randLen;
+    } else if (item === 0x86) {
+      bootIntroTvAddSprite(ctx, ctx.newsImage);
+    } else if (item === 0x87) {
+      ctx.newsImage = BOOT_INTRO_TV_NEWS_IMAGES[bootIntroTvRand(ctx, 0, BOOT_INTRO_TV_NEWS_IMAGES.length - 1)] || 0;
+    } else if (item === 0x88) {
+      ctx.pledgeCounter += 1;
+      if ((ctx.pledgeCounter % 4) === 0) {
+        bootIntroTvAddSprite(ctx, ctx.pledgeImage);
+      }
+      if (ctx.pledgeCounter === 16) {
+        ctx.pledgeImage = ctx.pledgeImage === 37 ? 38 : 37;
+        ctx.pledgeCounter = 0;
+      }
+    } else if (item === 0x89) {
+      bootIntroTvAddSprite(ctx, bootIntroTvRand(ctx, 50, 52));
+    } else if (item === 0x8a) {
+      shouldExit = true;
+    }
+    ctx.pos += 1;
+    const currentProgram = BOOT_INTRO_TV_PROGRAMS[ctx.program] || BOOT_INTRO_TV_PROGRAMS[0];
+    if (ctx.pos >= currentProgram.length) {
+      ctx.program += 1;
+      ctx.pos = 0;
+      if (ctx.program >= BOOT_INTRO_TV_PROGRAMS.length) {
+        ctx.program = 0;
+      }
+    }
+  }
+}
+
+function bootIntroTvStateAt(updateCount) {
+  const ctx = createBootIntroTvMachine();
+  const count = Math.max(0, Math.min(2400, Number(updateCount) | 0));
+  for (let i = 0; i <= count; i += 1) {
+    bootIntroTvDisplay(ctx);
+  }
+  return ctx;
+}
+
+function drawBootIntroClippedSprite(g, bankName, frameIdx, lx, ly, scale, scene, clipX, clipY, clipW, clipH) {
+  g.save();
+  g.beginPath();
+  g.rect(Math.round(clipX * scale), Math.round(clipY * scale), Math.round(clipW * scale), Math.round(clipH * scale));
+  g.clip();
+  drawBootIntroSprite(g, bankName, frameIdx, lx, ly, scale, scene);
+  g.restore();
+}
+
+function drawBootIntroTvStatic(g, x, y, scale, seed) {
+  const pal = activeTitleIntroPalette({ kind: "lounge" }) || [];
+  let s = seed >>> 0;
+  const w = 57;
+  const h = 37;
+  const cell = Math.max(1, scale | 0);
+  for (let py = 0; py < h; py += 1) {
+    for (let px = 0; px < w; px += 1) {
+      s = ((s * 1103515245) + 12345) >>> 0;
+      const idx = ((s >>> 16) & 1) ? 0x3e : 0x00;
+      const rgb = pal[idx] || (idx ? [230, 209, 160] : [0, 0, 0]);
+      g.fillStyle = `rgb(${rgb[0] | 0}, ${rgb[1] | 0}, ${rgb[2] | 0})`;
+      g.fillRect(Math.round((x + px) * scale), Math.round((y + py) * scale), cell, cell);
+    }
+  }
+}
+
+function decodeBootIntroWouFont(bytes) {
+  const decoded = decompressU6Lzw(bytes);
+  if (!decoded || decoded.length < 0x304) {
+    return null;
+  }
+  const height = decoded[0] | 0;
+  const pixelChar = decoded[2] & 0xff;
+  if (height <= 0 || height > 32) {
+    return null;
+  }
+  return { bytes: decoded, height, pixelChar };
+}
+
+function bootIntroWouCharWidth(font, code) {
+  if (!font || !font.bytes) {
+    return 0;
+  }
+  return font.bytes[0x04 + (code & 0xff)] || 0;
+}
+
+function measureBootIntroTextWidth(text) {
+  const font = state.bootIntroFont;
+  if (!font) {
+    return measureU6TextWidth(text, true);
+  }
+  const msg = String(text || "");
+  let width = 0;
+  for (let i = 0; i < msg.length; i += 1) {
+    width += bootIntroWouCharWidth(font, msg.charCodeAt(i));
+  }
+  return width;
+}
+
+function drawBootIntroWouText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
+  const font = state.bootIntroFont;
+  if (!font) {
+    drawU6CompactText(g, text, sx, sy, scale, color);
+    return sx + measureU6TextWidth(text, true) * scale;
+  }
+  const msg = String(text || "");
+  const bytes = font.bytes;
+  const height = font.height | 0;
+  const pixelChar = font.pixelChar & 0xff;
+  let cursor = 0;
+  g.fillStyle = color;
+  for (let i = 0; i < msg.length; i += 1) {
+    const code = msg.charCodeAt(i) & 0xff;
+    const width = bytes[0x04 + code] || 0;
+    const glyphOff = ((bytes[0x204 + code] || 0) << 8) + (bytes[0x104 + code] || 0);
+    if (width > 0 && glyphOff > 0 && glyphOff + (width * height) <= bytes.length) {
+      for (let row = 0; row < height; row += 1) {
+        const rowOff = glyphOff + (row * width);
+        for (let col = 0; col < width; col += 1) {
+          if ((bytes[rowOff + col] & 0xff) === pixelChar) {
+            g.fillRect(
+              sx + ((cursor + col) * scale),
+              sy + (row * scale),
+              scale,
+              scale
+            );
+          }
+        }
+      }
+    }
+    cursor += width;
+  }
+  return sx + cursor * scale;
+}
+
+function drawBootIntroTextRun(g, text, x, y, scale, color) {
+  const endX = drawBootIntroWouText(g, text, Math.round(x * scale), Math.round(y * scale), Math.max(1, scale), color);
+  return Math.round(endX / Math.max(1, scale));
+}
+
+function bootIntroPrintText(g, text, startX, width, x, y, scale, color) {
+  const font = state.bootIntroFont;
+  const src = String(text || "");
+  const spaceWidth = font ? bootIntroWouCharWidth(font, 32) : measureU6TextWidth(" ", true);
+  let cursorX = Math.max(0, Number(x) | 0);
+  let cursorY = Math.max(0, Number(y) | 0);
+  let len = cursorX - (Number(startX) | 0);
+  const tokens = [];
+  let start = 0;
+  let found = src.indexOf(" ", start);
+  while (found !== -1) {
+    const token = src.slice(start, found);
+    const tokenLen = measureBootIntroTextWidth(token);
+    if (len + tokenLen + spaceWidth > width) {
+      let newSpace = 0;
+      if (tokens.length > 1) {
+        newSpace = Math.floor((width - (len - spaceWidth * (tokens.length - 1))) / (tokens.length - 1));
+      }
+      for (const item of tokens) {
+        cursorX = drawBootIntroTextRun(g, item, cursorX, cursorY, scale, color);
+        cursorX += newSpace;
+      }
+      cursorY += 8;
+      cursorX = startX;
+      len = tokenLen + spaceWidth;
+      tokens.length = 0;
+      tokens.push(token);
+    } else {
+      tokens.push(token);
+      len += tokenLen + spaceWidth;
+    }
+    start = found + 1;
+    found = src.indexOf(" ", start);
+  }
+  for (const item of tokens) {
+    cursorX = drawBootIntroTextRun(g, item, cursorX, cursorY, scale, color);
+    cursorX += spaceWidth;
+  }
+  if (start < src.length) {
+    const token = src.slice(start);
+    if (len + measureBootIntroTextWidth(token) > width) {
+      cursorY += 8;
+      cursorX = startX;
+    }
+    cursorX = drawBootIntroTextRun(g, token, cursorX, cursorY, scale, color);
+  }
+  return { x: cursorX, y: cursorY };
+}
+
+function bootIntroPrintTextOnCard(g, cardX, cardY, text, startX, width, x, y, scale, color) {
+  const translated = {
+    fillStyle: g.fillStyle,
+    fillRect: (px, py, pw, ph) => {
+      g.fillStyle = translated.fillStyle;
+      g.fillRect(px + Math.round(cardX * scale), py + Math.round(cardY * scale), pw, ph);
+    }
+  };
+  return bootIntroPrintText(translated, text, startX, width, x, y, scale, color);
+}
+
+function bootIntroClockFrames(now = new Date()) {
+  let hour = now.getHours();
+  const minute = now.getMinutes();
+  if (hour > 12) {
+    hour -= 12;
+  }
+  const h1 = hour < 10 ? 12 : 3;
+  if (hour >= 10) {
+    hour -= 10;
+  }
+  return [
+    h1,
+    hour + 2,
+    Math.floor(minute / 10) + 2,
+    (minute % 10) + 2
+  ];
+}
+
+function drawBootIntroClock(g, scene, scale, scrollPx) {
+  const frames = bootIntroClockFrames();
+  const xOff = Math.floor(Number(scrollPx) || 0);
+  drawBootIntroSprite(g, "intro1", frames[0], 0xdd - xOff, 0x14, scale, scene);
+  drawBootIntroSprite(g, "intro1", frames[1], 0xe1 - xOff, 0x14, scale, scene);
+  drawBootIntroSprite(g, "intro1", frames[2], 0xe7 - xOff, 0x14, scale, scene);
+  drawBootIntroSprite(g, "intro1", frames[3], 0xeb - xOff, 0x14, scale, scene);
+}
+
+function bootIntroWindowRand(ctx, min, max) {
+  ctx.seed = ((ctx.seed * 1664525) + 1013904223) >>> 0;
+  const lo = Math.min(min | 0, max | 0);
+  const hi = Math.max(min | 0, max | 0);
+  return lo + (ctx.seed % ((hi - lo) + 1));
+}
+
+function bootIntroWindowSceneBase(sceneId) {
+  if (sceneId === "window_lightning") return 80;
+  if (sceneId === "window_strike") return 160;
+  if (sceneId === "window_pan") return 240;
+  if (sceneId === "window_door_open") return 405;
+  if (sceneId === "window_run") return 475;
+  return 20;
+}
+
+function bootIntroWindowStateAt(scene, updateCount, forceStrike) {
+  const ctx = {
+    seed: 0x51f15eED,
+    cloudX: -400,
+    clouds: [
+      { frame: 2, x: -216, y: 6 },
+      { frame: 3, x: -149, y: 18 },
+      { frame: 2, x: -88, y: 4 },
+      { frame: 3, x: 7, y: 23 },
+      { frame: 2, x: 58, y: 11 }
+    ],
+    lightningCounter: 0,
+    lightningFrame: 11,
+    lightningX: 0,
+    lightningY: 0,
+    lightningDrawX: 0,
+    lightningDrawY: 0,
+    lightningVisible: false,
+    strikeFrame: 19,
+    flash: 0,
+    windowFrame: 26,
+    rain: []
+  };
+  const count = Math.max(0, Math.min(1200, Number(updateCount) | 0));
+  for (let step = 0; step <= count; step += 1) {
+    for (const cloud of ctx.clouds) {
+      if (cloud.x > 320) {
+        cloud.x = bootIntroWindowRand(ctx, 0, 320) - 320;
+        cloud.y = bootIntroWindowRand(ctx, 0, 30);
+      }
+      cloud.x += 2;
+    }
+    ctx.cloudX += 1;
+    if (ctx.cloudX === 320) {
+      ctx.cloudX = 0;
+    }
+    if (bootIntroWindowRand(ctx, 0, 6) === 0 && ctx.lightningCounter === 0) {
+      ctx.lightningCounter = bootIntroWindowRand(ctx, 1, 4);
+      ctx.lightningFrame = bootIntroWindowRand(ctx, 11, 18);
+      ctx.lightningX = bootIntroWindowRand(ctx, -5, 320);
+      ctx.lightningY = bootIntroWindowRand(ctx, -5, 200);
+      ctx.lightningVisible = true;
+    }
+    if (ctx.lightningCounter > 0) {
+      ctx.lightningVisible = true;
+      ctx.lightningDrawX = ctx.lightningX + bootIntroWindowRand(ctx, 0, 3);
+      ctx.lightningDrawY = ctx.lightningY + bootIntroWindowRand(ctx, 0, 3);
+    } else {
+      ctx.lightningVisible = false;
+    }
+    if (bootIntroWindowRand(ctx, 0, 1) === 0) {
+      ctx.strikeFrame = bootIntroWindowRand(ctx, 19, 23);
+    }
+    if (ctx.flash > 0) {
+      ctx.flash -= 1;
+    } else if (bootIntroWindowRand(ctx, 0, 5) === 0 || forceStrike) {
+      ctx.windowFrame = 27;
+      ctx.flash = bootIntroWindowRand(ctx, 1, 5);
+    } else {
+      ctx.windowFrame = 26;
+    }
+    if (ctx.rain.length < 100 && bootIntroWindowRand(ctx, 0, Math.max(1, 20 - Math.floor(ctx.rain.length / 8))) === 0) {
+      ctx.rain.push({
+        frame: bootIntroWindowRand(ctx, 4, 7),
+        x: bootIntroWindowRand(ctx, 0, 320),
+        y: -4
+      });
+    }
+    for (const drop of ctx.rain) {
+      drop.x += 2;
+      drop.y += 8;
+      if (drop.x > 320 || drop.y > 200) {
+        drop.frame = bootIntroWindowRand(ctx, 4, 7);
+        drop.x = bootIntroWindowRand(ctx, 0, 320);
+        drop.y = -4;
+      }
+    }
+    if (ctx.lightningCounter > 0) {
+      ctx.lightningCounter -= 1;
+    }
+  }
+  return ctx;
+}
+
+function wrapBootIntroText(text, maxChars) {
+  const src = String(text || "").replace(/\s+/g, " ").trim();
+  if (!src) {
+    return [];
+  }
+  const words = src.split(" ");
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) {
+    lines.push(line);
+  }
+  return lines;
+}
+
+function wrapBootIntroTextPixels(text, maxWidthPx) {
+  const src = String(text || "").replace(/\s+/g, " ").trim();
+  if (!src) {
+    return [];
+  }
+  const limit = Math.max(8, Number(maxWidthPx) || 0);
+  const words = src.split(" ");
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && measureBootIntroTextWidth(next) > limit) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) {
+    lines.push(line);
+  }
+  return lines;
+}
+
+function renderBootIntroTextCard(g, scale, scene, card) {
+  if (!card || !card.text) {
+    return;
+  }
+  const panel = bootIntroBlockSpriteCanvas(Number(card.frame) | 0, scene);
+  const explicitLines = Array.isArray(card.lines)
+    ? card.lines.map((line) => String(line || "").trim()).filter(Boolean)
+    : null;
+  const textMaxWidth = Math.max(8, (Number(card.width) || 0) - (Number(card.textX) || 0) - 6);
+  const lines = explicitLines && explicitLines.length
+    ? explicitLines
+    : wrapBootIntroTextPixels(card.text, textMaxWidth);
+  const textColor = activeTitleIntroPalette(scene)?.[0x3e] || [0xe6, 0xd1, 0xa0];
+  if (panel) {
+    g.drawImage(
+      panel,
+      Math.round(card.x * scale),
+      Math.round(card.y * scale),
+      Math.round(panel.width * scale),
+      Math.round(panel.height * scale)
+    );
+  }
+  if (Array.isArray(card.printOps) && card.printOps.length) {
+    let last = { x: 0, y: 0 };
+    for (const op of card.printOps) {
+      const opX = (Number(op.x) | 0) >= 0 ? (Number(op.x) | 0) : last.x;
+      const opY = (Number(op.y) | 0) >= 0 ? (Number(op.y) | 0) : last.y;
+      last = bootIntroPrintTextOnCard(
+        g,
+        Number(card.x) || 0,
+        Number(card.y) || 0,
+        op.text,
+        Number(op.startX) || 0,
+        Number(op.width) || textMaxWidth,
+        opX,
+        opY,
+        Math.max(1, scale),
+        `rgb(${textColor[0] | 0}, ${textColor[1] | 0}, ${textColor[2] | 0})`
+      );
+    }
+    return;
+  }
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const baseX = ((Number(card.x) || 0) + (Number(card.textX) || 0));
+    const lineWidth = measureBootIntroTextWidth(line);
+    const drawX = card.align === "center"
+      ? Math.round((((Number(card.x) || 0) + (((Number(card.width) || 0) - lineWidth) / 2))) * scale)
+      : Math.round(baseX * scale);
+    drawBootIntroWouText(
+      g,
+      line,
+      drawX,
+      Math.round((((Number(card.y) || 0) + (Number(card.textY) || 0)) + (i * 8)) * scale),
+      Math.max(1, scale),
+      `rgb(${textColor[0] | 0}, ${textColor[1] | 0}, ${textColor[2] | 0})`
+    );
+  }
+}
+
+function renderBootIntroSplash(g, scene, scale) {
+  const frame = Number(scene?.splashFrame) | 0;
+  const sprite = bootIntroSceneSpriteCanvas("intro1", frame, scene);
+  g.fillStyle = "#000000";
+  g.fillRect(0, 0, 320 * scale, 200 * scale);
+  if (!sprite) {
+    return;
+  }
+  const sx = Math.floor(((320 * scale) - (sprite.width * scale)) / 2);
+  const sy = Math.floor(((200 * scale) - (sprite.height * scale)) / 2);
+  g.drawImage(sprite, sx, sy, sprite.width * scale, sprite.height * scale);
+}
+
+function renderBootIntroLounge(g, scene, scale) {
+  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+  const scrollPx = (scene?.id === "lounge_pan")
+    ? Math.min(319, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 319))
+    : 0;
+  const tvBaseX = 0xe5 - scrollPx;
+  const tvBaseY = 0x32;
+  const tvSceneBase = scene?.id === "lounge_reflection" ? 120 : (scene?.id === "lounge_pan" ? 240 : 0);
+  const tvUpdate = tvSceneBase + Math.floor(elapsed / 100);
+  const tvState = bootIntroTvStateAt(tvUpdate);
+  g.fillStyle = "#000000";
+  g.fillRect(0, 0, 320 * scale, 200 * scale);
+  drawBootIntroSprite(g, "intro1", 15, 210 - Math.max(0, scrollPx - 160), 0, scale, scene);
+  drawBootIntroSprite(g, "intro1", 0, -scrollPx, 0, scale, scene);
+  drawBootIntroSprite(g, "intro1", 1, 320 - scrollPx, 0, scale, scene);
+  drawBootIntroSprite(g, "intro1", 13, -Math.floor(scrollPx * 2), 63, scale, scene);
+  drawBootIntroSprite(g, "intro1", 14, 143 - Math.floor(scrollPx * 2), 91, scale, scene);
+  const clipX = Math.max(0, tvBaseX);
+  if (tvState.staticVisible) {
+    g.save();
+    g.beginPath();
+    g.rect(Math.round(clipX * scale), Math.round(tvBaseY * scale), Math.round(57 * scale), Math.round(37 * scale));
+    g.clip();
+    drawBootIntroTvStatic(g, tvBaseX, tvBaseY, scale, 0x9e3779b9 ^ tvUpdate);
+    g.restore();
+  }
+  for (const tvSprite of tvState.sprites) {
+    drawBootIntroClippedSprite(
+      g,
+      "intro1",
+      tvSprite.frame,
+      tvBaseX + tvSprite.xOff,
+      tvBaseY + tvSprite.yOff,
+      scale,
+      scene,
+      clipX,
+      tvBaseY,
+      57,
+      37
+    );
+  }
+  if (tvState.fingerVisible) {
+    drawBootIntroSprite(g, "intro1", 0x0e, 143 - Math.floor(scrollPx * 2), 91, scale, scene);
+  }
+  drawBootIntroClock(g, scene, scale, scrollPx);
+}
+
+function renderBootIntroWindow(g, scene, scale) {
+  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+  const panPx = (scene?.id === "window_pan")
+    ? Math.min(320, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 320))
+    : ((scene?.id === "window_door_open" || scene?.id === "window_run") ? 320 : 0);
+  const doorOpenPx = (scene?.id === "window_door_open")
+    ? Math.min(68, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 68))
+    : (scene?.id === "window_run" ? 68 : 0);
+  const strikeVisible = scene?.id === "window_strike"
+    || (scene?.id === "window_pan" && panPx <= 160);
+  const updateCount = bootIntroWindowSceneBase(scene?.id) + Math.floor(elapsed / 80);
+  const windowState = bootIntroWindowStateAt(scene, updateCount, strikeVisible);
+  g.fillStyle = "#000000";
+  g.fillRect(0, 0, 320 * scale, 200 * scale);
+  drawBootIntroSprite(g, "intro2", 1, 0, 0, scale, scene);
+  drawBootIntroSprite(g, "intro2", 0, windowState.cloudX, -5, scale, scene);
+  drawBootIntroSprite(g, "intro2", 0, windowState.cloudX - 320, -5, scale, scene);
+  drawBootIntroSprite(g, "intro2", 10, 0, 0x4c, scale, scene);
+  drawBootIntroSprite(g, "intro2", 8, 0, 0, scale, scene);
+  for (const cloud of windowState.clouds) {
+    drawBootIntroSprite(g, "intro2", cloud.frame, cloud.x, cloud.y, scale, scene);
+  }
+  if (windowState.lightningVisible) {
+    drawBootIntroSprite(g, "intro2", windowState.lightningFrame, windowState.lightningDrawX, windowState.lightningDrawY, scale, scene);
+  }
+  if (strikeVisible) {
+    drawBootIntroSprite(g, "intro2", windowState.strikeFrame, 158, 114, scale, scene);
+  }
+  for (const drop of windowState.rain) {
+    drawBootIntroSprite(g, "intro2", drop.frame, drop.x, drop.y, scale, scene);
+  }
+  drawBootIntroSprite(g, "intro2", 28, -panPx, 0, scale, scene);
+  drawBootIntroSprite(g, "intro2", windowState.windowFrame, 0x39 - panPx, 0, scale, scene);
+  drawBootIntroSprite(g, "intro2", 24, 320 - panPx - doorOpenPx, 0, scale, scene);
+  drawBootIntroSprite(g, "intro2", 25, 573 - panPx + doorOpenPx, 0, scale, scene);
+}
+
+function renderBootIntroStones(g, scene, scale) {
+  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+  const gateRisePx = (scene?.id === "stones_gate")
+    ? Math.max(5, 0x64 - Math.floor(elapsed / 25))
+    : ((scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") ? 5 : 0x64);
+  const gateSinkPx = (scene?.id === "stones_enter")
+    ? Math.min(0x64, 5 + Math.floor(elapsed / 25))
+    : gateRisePx;
+  const gateRiseDoneMs = (0x64 - 0x05) * 25;
+  const handY = (scene?.id === "stones_pickup")
+    ? Math.max(0x54, 0xc7 - Math.floor(elapsed / 18) * 2)
+    : (scene?.id === "stones_gate"
+      ? Math.min(0xc7, 0x54 + Math.max(0, Math.floor((elapsed - gateRiseDoneMs) / 25)) * 2)
+      : ((scene?.id === "stones_memory") ? 0x44 : 0xc7));
+  g.fillStyle = "#000000";
+  g.fillRect(0, 0, 320 * scale, 200 * scale);
+  const bgFrame = (scene?.id === "stones_gate" || scene?.id === "stones_memory" || scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") ? 5 : 0;
+  drawBootIntroSprite(g, "intro3", bgFrame, 0, 0, scale, scene);
+  if (scene?.id !== "stones_gate" && scene?.id !== "stones_memory" && scene?.id !== "stones_warning" && scene?.id !== "stones_sink" && scene?.id !== "stones_decision" && scene?.id !== "stones_enter") {
+    drawBootIntroSprite(g, "intro3", 3, 0x96, 0x64, scale, scene);
+  }
+  if (scene?.id === "stones_gate" || scene?.id === "stones_memory" || scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") {
+    drawBootIntroSprite(g, "intro3", 4, 0x5e, 0x66, scale, scene);
+  }
+  if (scene?.id === "stones_pickup" || scene?.id === "stones_gate" || scene?.id === "stones_memory") {
+    const handFrame = scene?.id === "stones_memory" ? 6 : 1;
+    const handX = scene?.id === "stones_memory" ? 0x9b : 0xbd;
+    drawBootIntroSprite(g, "intro3", handFrame, handX, handY, scale, scene);
+  }
+  if (scene?.id === "stones_gate" || scene?.id === "stones_memory" || scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") {
+    const shake = (scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter")
+      ? (Math.floor(elapsed / 80) % 2)
+      : 0;
+    const gateY = (scene?.id === "stones_enter") ? gateSinkPx : gateRisePx;
+    drawBootIntroClippedSprite(g, "intro3", 2, 0x7c + shake, gateY, scale, scene, 0, 0, 320, 0x66);
+  }
+  if (scene?.id === "stones_enter") {
+    const avatarFrame = 7 + Math.min(19, Math.floor(elapsed / 180));
+    const avatarAlpha = Math.max(0, 1 - Math.max(0, elapsed - 2400) / 1200);
+    drawBootIntroSprite(g, "intro3", avatarFrame, -2, Math.max(-20, 0x12 - Math.floor(elapsed / 60)), scale, scene, null, null, avatarAlpha);
+  }
+}
+
+function renderBootIntroLayer(g, scale) {
+  const scene = currentBootIntroSceneRuntime(state.bootIntro);
+  if (!scene) {
+    renderStartupMenuLayer(g, scale);
+    return;
+  }
+  if (scene.kind === "splash") {
+    renderBootIntroSplash(g, scene, scale);
+  } else if (scene.kind === "lounge") {
+    renderBootIntroLounge(g, scene, scale);
+  } else if (scene.kind === "window") {
+    renderBootIntroWindow(g, scene, scale);
+  } else {
+    renderBootIntroStones(g, scene, scale);
+  }
+  renderBootIntroTextCard(g, scale, scene, scene.textCard || null);
+  const overlayAlpha = bootIntroOverlayAlphaRuntime(state.bootIntro);
+  if (overlayAlpha > 0) {
+    g.fillStyle = `rgba(0,0,0,${Math.max(0, Math.min(1, overlayAlpha / 255))})`;
+    g.fillRect(0, 0, 320 * scale, 200 * scale);
+  }
+}
+
 function renderStartupScreen() {
   const mainScale = Math.max(1, Math.floor(canvas.width / 320));
-  renderStartupMenuLayer(ctx, mainScale);
+  if (state.bootIntro && state.bootIntro.active) {
+    renderBootIntroLayer(ctx, mainScale);
+  } else {
+    renderStartupMenuLayer(ctx, mainScale);
+  }
 
   const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
   if (!enabled || !legacyBackdropCanvas) {
@@ -3597,7 +4540,11 @@ function renderStartupScreen() {
     g.fillRect(0, 0, w, h);
   }
   const scale = Math.max(1, Math.floor(w / 320));
-  renderStartupMenuLayer(g, scale);
+  if (state.bootIntro && state.bootIntro.active) {
+    renderBootIntroLayer(g, scale);
+  } else {
+    renderStartupMenuLayer(g, scale);
+  }
 
   legacyViewportCanvas.width = 160;
   legacyViewportCanvas.height = 160;
@@ -7929,6 +8876,9 @@ function tickLoop(ts) {
         state.legacyPromptAnimPhase = ((state.legacyPromptAnimPhase + 1) & 3) | 0;
       }
     }
+    if (!state.sessionStarted && state.bootIntro && state.bootIntro.active) {
+      advanceBootIntroRuntime(state.bootIntro, dtMs);
+    }
     const useCustomCursor = !!(state.cursorPixmaps && state.cursorPixmaps.length > 0);
     canvas.style.cursor = useCustomCursor ? "none" : "default";
     if (legacyBackdropCanvas) {
@@ -8312,7 +9262,7 @@ async function loadRuntimeAssets() {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
-    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, cursorRes, lookRes, converseARes, converseBRes] = await Promise.all([
+    const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, intro1Res, intro2Res, intro3Res, introPaletteRes, introBlocksRes, introFontRes, cursorRes, lookRes, converseARes, converseBRes] = await Promise.all([
       fetch("../assets/runtime/map"),
       fetch("../assets/runtime/chunks"),
       fetch("../assets/runtime/u6pal"),
@@ -8329,12 +9279,18 @@ async function loadRuntimeAssets() {
       fetch("../assets/runtime/portrait.a"),
       fetch("../assets/runtime/titles.shp"),
       fetch("../assets/runtime/mainmenu.shp"),
+      fetch("../assets/runtime/intro_1.shp"),
+      fetch("../assets/runtime/intro_2.shp"),
+      fetch("../assets/runtime/intro_3.shp"),
+      fetch("../assets/runtime/palettes.int"),
+      fetch("../assets/runtime/blocks.shp"),
+      fetch("../assets/runtime/u6.set"),
       fetch("../assets/runtime/u6mcga.ptr"),
       fetch("../assets/runtime/look.lzd"),
       fetch("../assets/runtime/converse.a"),
       fetch("../assets/runtime/converse.b")
     ]);
-    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, cursorBuf, lookBuf, converseABuf, converseBBuf] = await Promise.all([
+    const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, intro1Buf, intro2Buf, intro3Buf, introPaletteBuf, introBlocksBuf, introFontBuf, cursorBuf, lookBuf, converseABuf, converseBBuf] = await Promise.all([
       mapRes.arrayBuffer(),
       chunksRes.arrayBuffer(),
       palRes.arrayBuffer(),
@@ -8351,6 +9307,12 @@ async function loadRuntimeAssets() {
       portraitARes.arrayBuffer(),
       titlesRes.arrayBuffer(),
       mainmenuRes.arrayBuffer(),
+      intro1Res.arrayBuffer(),
+      intro2Res.arrayBuffer(),
+      intro3Res.arrayBuffer(),
+      introPaletteRes.arrayBuffer(),
+      introBlocksRes.arrayBuffer(),
+      introFontRes.arrayBuffer(),
       cursorRes.arrayBuffer(),
       lookRes.arrayBuffer(),
       converseARes.arrayBuffer(),
@@ -8409,6 +9371,38 @@ async function loadRuntimeAssets() {
       state.startupMenuPixmap = null;
     }
     state.startupCanvasCache.clear();
+    if (intro1Res.ok && intro1Buf.byteLength > 8 && intro2Res.ok && intro2Buf.byteLength > 8 && intro3Res.ok && intro3Buf.byteLength > 8) {
+      const intro1 = decodeU6ShpArchive(new Uint8Array(intro1Buf));
+      const intro2 = decodeU6ShpArchive(new Uint8Array(intro2Buf));
+      const intro3 = decodeU6ShpArchive(new Uint8Array(intro3Buf));
+      if (intro1.length >= 71 && intro2.length >= 29 && intro3.length >= 27) {
+        state.bootIntroBanks = { intro1, intro2, intro3 };
+      } else {
+        state.bootIntroBanks = null;
+      }
+    } else {
+      state.bootIntroBanks = null;
+    }
+    if (introPaletteRes.ok && introPaletteBuf.byteLength >= 0x240) {
+      state.bootIntroPalettes = buildPackedIntroPalettes(new Uint8Array(introPaletteBuf));
+    } else {
+      state.bootIntroPalettes = null;
+    }
+    if (introBlocksRes.ok && introBlocksBuf.byteLength > 8) {
+      const blocks = decodeU6ShpArchive(new Uint8Array(introBlocksBuf));
+      state.bootIntroBlocks = blocks.length >= 4 ? blocks : null;
+    } else {
+      state.bootIntroBlocks = null;
+    }
+    if (introFontRes.ok && introFontBuf.byteLength > 8) {
+      state.bootIntroFont = decodeBootIntroWouFont(new Uint8Array(introFontBuf));
+    } else {
+      state.bootIntroFont = null;
+    }
+    state.bootIntroCanvasCache.clear();
+    if (state.bootIntroBanks && state.bootIntroPalettes && !state.bootIntro.played && !state.sessionStarted) {
+      startBootIntroRuntime(state.bootIntro);
+    }
     if (cursorRes.ok && cursorBuf.byteLength > 12) {
       state.cursorPixmaps = decodeU6CursorPtr(new Uint8Array(cursorBuf));
       state.cursorIndex = 0;
@@ -8576,6 +9570,12 @@ async function loadRuntimeAssets() {
     state.startupTitlePixmaps = null;
     state.startupMenuPixmap = null;
     state.startupCanvasCache.clear();
+    state.bootIntroBanks = null;
+    state.bootIntroBlocks = null;
+    state.bootIntroPalettes = null;
+    state.bootIntroFont = null;
+    state.bootIntroCanvasCache.clear();
+    state.bootIntro.active = false;
     state.cursorPixmaps = null;
     state.u6MainFont = null;
     state.legacyPaperPixmap = null;
@@ -9085,6 +10085,18 @@ window.addEventListener("keydown", (ev) => {
     }
   }
   if (!state.sessionStarted) {
+    if (state.bootIntro && state.bootIntro.active) {
+      if (k === "escape") {
+        abortBootIntroRuntime(state.bootIntro);
+        ev.preventDefault();
+        return;
+      }
+      if (advanceBootIntroInputRuntime(state.bootIntro)) {
+        ev.preventDefault();
+        return;
+      }
+      return;
+    }
     if (k === "arrowup") {
       setStartupMenuIndex(state.startupMenuIndex - 1);
     } else if (k === "arrowdown") {
@@ -9460,7 +10472,7 @@ function updateCanvasMouseFromEvent(ev, surface) {
 
 canvas.addEventListener("mousemove", (ev) => {
   updateCanvasMouseFromEvent(ev, canvas);
-  if (state.sessionStarted) {
+  if (state.sessionStarted || (state.bootIntro && state.bootIntro.active)) {
     return;
   }
   const idx = startupMenuIndexAtEvent(ev, canvas);
@@ -9482,6 +10494,12 @@ canvas.addEventListener("click", (ev) => {
   if (state.sessionStarted) {
     return;
   }
+  if (state.bootIntro && state.bootIntro.active) {
+    if (advanceBootIntroInputRuntime(state.bootIntro)) {
+      return;
+    }
+    return;
+  }
   const idx = startupMenuIndexAtEvent(ev, canvas);
   if (idx < 0) {
     return;
@@ -9501,7 +10519,7 @@ canvas.addEventListener("mouseleave", () => {
 if (legacyBackdropCanvas) {
   legacyBackdropCanvas.addEventListener("mousemove", (ev) => {
     updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
-    if (state.sessionStarted) {
+    if (state.sessionStarted || (state.bootIntro && state.bootIntro.active)) {
       return;
     }
     const idx = startupMenuIndexAtEvent(ev, legacyBackdropCanvas);
@@ -9514,6 +10532,12 @@ if (legacyBackdropCanvas) {
     updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
     if (state.sessionStarted) {
       if (handleLegacyHudClick(ev, legacyBackdropCanvas)) {
+        return;
+      }
+      return;
+    }
+    if (state.bootIntro && state.bootIntro.active) {
+      if (advanceBootIntroInputRuntime(state.bootIntro)) {
         return;
       }
       return;
