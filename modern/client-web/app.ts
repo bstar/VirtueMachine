@@ -4,6 +4,8 @@ import {
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
 } from "./render_composition.ts";
+import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
+import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
 import {
@@ -224,6 +226,16 @@ const OBJ_COORD_USE_MASK = 0x18;
 const OBJ_COORD_USE_LOCXYZ = 0x00;
 const OBJ_COORD_USE_EQUIP = 0x18;
 const OBJ_STATUS_INVISIBLE = 0x02;
+const OBJ_U6_CLOCK = 0x09f;
+const OBJ_U6_FIREPLACE = 0x0a4;
+const OBJ_U6_RUBBER_DUCKY = 169;
+const OBJ_U6_COOK_FIRE = 0x0c9;
+const OBJ_U6_FOUNTAIN = 0x0ea;
+const OBJ_U6_BELL = 236;
+const OBJ_U6_WATER_WHEEL = 0x11f;
+const OBJ_U6_FIRE_FIELD = 0x130;
+const OBJ_U6_FIRE = 0x13d;
+const OBJ_U6_PROTECTION_FIELD = 0x13f;
 const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
 const AVATAR_ENTITY_ID = 1;
@@ -311,6 +323,7 @@ const statHash = byId("statHash");
 const statLoopHealth = byId("statLoopHealth");
 const statSimLoop = byId("statSimLoop");
 const statReplay = byId("statReplay");
+const statAudio = byId("statAudio");
 const statPalettePhase = byId("statPalettePhase");
 const statCenterTiles = byId("statCenterTiles");
 const statCenterBand = byId("statCenterBand");
@@ -602,6 +615,10 @@ const INITIAL_SEED = 0x12345678;
 
 const state: any = {
   sim: createInitialSimState(),
+  audio: createU6AudioRuntime(),
+  audioAmbientLastTickBySfx: {},
+  audioAmbientLastSfx: "",
+  audioAmbientTriggerCount: 0,
   queue: [],
   commandLog: [],
   partyMembers: [1],
@@ -6294,6 +6311,7 @@ function tryAttackAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
   const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   if (actor) {
+    playSfx(U6_SFX.ATTACK_SWING);
     diagBox.className = "diag ok";
     diagBox.textContent = `Attack: target 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (combat resolution pending).`;
     return true;
@@ -6306,6 +6324,7 @@ function tryAttackAtCell(sim, tx, ty) {
 function tryCastAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
   /* CANONICAL STUB: legacy spellbook/reagent/mana flow is not wired yet; keep keyboard contract live. */
+  playSfx(U6_SFX.CASTING_MAGIC_P1);
   diagBox.className = "diag ok";
   diagBox.textContent = `Cast: target ${tx},${ty},${tz} accepted (spell system pending).`;
   return true;
@@ -6665,6 +6684,17 @@ function tryToggleDoorAtCell(sim, tx, ty, tz) {
 
 function tryInteractAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
+  if (state.objectLayer) {
+    const overlays = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
+    const obj = overlays.find((o) => {
+      const type = (Number(o?.type) | 0) & 0x3ff;
+      return type === OBJ_U6_BELL || type === OBJ_U6_RUBBER_DUCKY;
+    });
+    if (obj) {
+      const type = (Number(obj.type) | 0) & 0x3ff;
+      playSfx(type === OBJ_U6_BELL ? U6_SFX.BELL : U6_SFX.RUBBER_DUCK);
+    }
+  }
   if (tryToggleDoorAtCell(sim, tx, ty, tz)) {
     return true;
   }
@@ -7169,7 +7199,9 @@ function applyCommand(sim, cmd) {
         }
       } else {
         // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
-        tryInteractFurnitureObject(sim, furnitureAtCell(sim, nx, ny));
+        if (!tryInteractFurnitureObject(sim, furnitureAtCell(sim, nx, ny))) {
+          playSfx(U6_SFX.BLOCKED);
+        }
       }
     } else {
       sim.world.map_x = nx;
@@ -7257,6 +7289,132 @@ function stepSimTick(sim, queue) {
 
 function appendCommandLog(cmd) {
   appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
+}
+
+function primeAudioFromUserGesture() {
+  if (!state.audio || !state.sim?.world?.sound_enabled) {
+    return;
+  }
+  state.audio.primeFromUserGesture().catch((err) => {
+    console.warn("audio prime failed", err);
+  });
+}
+
+function playSfx(sfxId, options = {}) {
+  try {
+    if (!state.audio || !state.sim?.world?.sound_enabled) {
+      return false;
+    }
+    return state.audio.playSfx(sfxId, options);
+  } catch (err) {
+    console.warn("audio sfx failed", err);
+    return false;
+  }
+}
+
+function playAmbientSfx(sfxId, options = {}) {
+  try {
+    if (!state.audio || !state.sim?.world?.sound_enabled) {
+      return false;
+    }
+    if (typeof state.audio.playAmbientSfx === "function") {
+      return state.audio.playAmbientSfx(sfxId, options);
+    }
+    return state.audio.playSfx(sfxId, options);
+  } catch (err) {
+    console.warn("audio ambient sfx failed", err);
+    return false;
+  }
+}
+
+function setAudioEnabledFromWorldFlag() {
+  if (!state.audio) {
+    return;
+  }
+  state.audio.setEnabled(!!state.sim.world.sound_enabled);
+}
+
+function startBootIntroMusic() {
+  try {
+    if (!state.audio || !state.sim?.world?.sound_enabled) {
+      return false;
+    }
+    state.audio.setMusicEnabled(true);
+    return state.audio.playMusic("intro.m");
+  } catch (err) {
+    console.warn("intro music failed", err);
+    return false;
+  }
+}
+
+function ambientSfxForObjectType(type) {
+  switch ((Number(type) | 0) & 0x3ff) {
+    case OBJ_U6_CLOCK:
+      return U6_SFX.CLOCK;
+    case OBJ_U6_FOUNTAIN:
+      return U6_SFX.FOUNTAIN;
+    case OBJ_U6_FIREPLACE:
+    case OBJ_U6_COOK_FIRE:
+    case OBJ_U6_FIRE_FIELD:
+    case OBJ_U6_FIRE:
+      return U6_SFX.FIRE;
+    case OBJ_U6_PROTECTION_FIELD:
+      return U6_SFX.PROTECTION_FIELD;
+    case OBJ_U6_WATER_WHEEL:
+      return U6_SFX.WATER_WHEEL;
+    default:
+      return null;
+  }
+}
+
+function updateVisibleAmbientSfx() {
+  if (!state.sessionStarted || !state.objectLayer || !state.sim?.world?.sound_enabled) {
+    return;
+  }
+  const tick = state.sim.tick >>> 0;
+  const tickPhase = tick & 0xf;
+  const w = state.sim.world;
+  const startX = (w.map_x | 0) - (VIEW_W >> 1);
+  const startY = (w.map_y | 0) - (VIEW_H >> 1);
+  const visible = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W, VIEW_H, w.map_z | 0);
+  const candidates = [];
+  for (const obj of visible) {
+    const sfxId = ambientSfxForObjectType(obj?.type);
+    if (sfxId == null) {
+      continue;
+    }
+    const dist = Math.max(Math.abs((obj.x | 0) - (w.map_x | 0)), Math.abs((obj.y | 0) - (w.map_y | 0)));
+    candidates.push({
+      obj,
+      sfxId,
+      dist,
+      priority: sfxId === U6_SFX.FOUNTAIN ? 0 : 1
+    });
+  }
+  candidates.sort((a, b) => {
+    if (a.dist !== b.dist) return a.dist - b.dist;
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return (((Number(a.obj?.type) | 0) & 0x3ff) - ((Number(b.obj?.type) | 0) & 0x3ff));
+  });
+  for (const candidate of candidates) {
+    const { obj, sfxId, dist } = candidate;
+    const lastTick = Number(state.audioAmbientLastTickBySfx[String(sfxId)] || 0) >>> 0;
+    const cooldown =
+      sfxId === U6_SFX.CLOCK ? 8 :
+      (sfxId === U6_SFX.FOUNTAIN || sfxId === U6_SFX.WATER_WHEEL) ? 2 :
+      4;
+    if (tick - lastTick < cooldown) {
+      continue;
+    }
+    const volume = Math.max(0.35, Math.min(1, (9 - dist) / 8));
+    const seed = ((((tick | 0) * 1103515245) ^ (((obj.x | 0) & 0xff) << 16) ^ (((obj.y | 0) & 0xff) << 8) ^ ((Number(obj.type) | 0) & 0x3ff)) >>> 0);
+    if (playAmbientSfx(sfxId, { volume, distance: Math.min(7, dist), tickPhase, seed })) {
+      state.audioAmbientLastTickBySfx[String(sfxId)] = tick;
+      state.audioAmbientLastSfx = `0x${(((Number(obj.type) | 0) & 0x3ff)).toString(16)}:${sfxId}`;
+      state.audioAmbientTriggerCount = (Number(state.audioAmbientTriggerCount) + 1) >>> 0;
+      return;
+    }
+  }
 }
 
 function buildWireCommand(tick, type, arg0, arg1) {
@@ -8669,6 +8827,12 @@ function updateStats() {
     const prefix = state.simPaused ? "paused | " : "";
     statLoopHealth.textContent = `${prefix}dt ${last}ms / max ${max}ms | drop ${lh.backlogDrops | 0} | vis ${lh.visibilityResets | 0} | err ${lh.frameErrors | 0}`;
   }
+  if (statAudio && state.audio) {
+    const audio = state.audio.status();
+    const muted = state.sim.world.sound_enabled ? "" : " muted";
+    const err = audio.lastError ? ` err:${audio.lastError}` : "";
+    statAudio.textContent = `${audio.backendMode}${muted} ambient:${state.audioAmbientTriggerCount | 0} ${state.audioAmbientLastSfx || "-"}${err}`;
+  }
   if (statPalettePhase) {
     statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
   }
@@ -8906,6 +9070,7 @@ function tickLoop(ts) {
       catchupSteps += 1;
       state.accMs -= TICK_MS;
       state.queue = stepSimTick(state.sim, state.queue);
+      updateVisibleAmbientSfx();
       if (state.entityLayer) {
         const startX = state.sim.world.map_x - (VIEW_W >> 1);
         const startY = state.sim.world.map_y - (VIEW_H >> 1);
@@ -9402,6 +9567,7 @@ async function loadRuntimeAssets() {
     state.bootIntroCanvasCache.clear();
     if (state.bootIntroBanks && state.bootIntroPalettes && !state.bootIntro.played && !state.sessionStarted) {
       startBootIntroRuntime(state.bootIntro);
+      startBootIntroMusic();
     }
     if (cursorRes.ok && cursorBuf.byteLength > 12) {
       state.cursorPixmaps = decodeU6CursorPtr(new Uint8Array(cursorBuf));
@@ -9956,6 +10122,10 @@ function runDebugHotkeys(ev) {
   }
   if (ev.ctrlKey && k === "z") {
     state.sim.world.sound_enabled = state.sim.world.sound_enabled ? 0 : 1;
+    setAudioEnabledFromWorldFlag();
+    if (state.sim.world.sound_enabled) {
+      primeAudioFromUserGesture();
+    }
     diagBox.className = "diag ok";
     diagBox.textContent = state.sim.world.sound_enabled ? "Sound enabled." : "Sound disabled.";
     return true;
@@ -10065,6 +10235,7 @@ function runDebugHotkeys(ev) {
 }
 
 window.addEventListener("keydown", (ev) => {
+  primeAudioFromUserGesture();
   if (netAccountModal && !netAccountModal.classList.contains("hidden")) {
     if (ev.key === "Escape") {
       setAccountModalOpen(false);
@@ -10490,6 +10661,7 @@ canvas.addEventListener("mousedown", (ev) => {
 });
 
 canvas.addEventListener("click", (ev) => {
+  primeAudioFromUserGesture();
   updateCanvasMouseFromEvent(ev, canvas);
   if (state.sessionStarted) {
     return;
@@ -10529,6 +10701,7 @@ if (legacyBackdropCanvas) {
   });
 
   legacyBackdropCanvas.addEventListener("click", (ev) => {
+    primeAudioFromUserGesture();
     updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
     if (state.sessionStarted) {
       if (handleLegacyHudClick(ev, legacyBackdropCanvas)) {

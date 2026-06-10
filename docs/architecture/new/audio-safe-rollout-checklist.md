@@ -1,7 +1,7 @@
 # Audio Safe Rollout Checklist
 
-Last Updated: 2026-02-13
-Branch: `main` (audio work paused)
+Last Updated: 2026-06-10
+Branch: `main`
 
 ## Goal
 
@@ -13,61 +13,70 @@ music/SFX as closely as practical in browser constraints.
 
 ## Current Status
 
-Audio fidelity work is intentionally paused while interaction parity work is prioritized:
-- environmental collision completion
-- avatar/NPC sit/sleep state support
+Audio fidelity work has resumed with a browser-local safe runtime:
 
-Resume audio slices only after those interaction slices are stable and test-covered.
+- `modern/client-web/audio/audio_runtime.ts` owns lazy Web Audio initialization and fail-closed playback.
+- `modern/client-web/audio/sfx_ids_runtime.ts` records the Nuvie `NUVIE_SFX_*` numeric surface.
+- `modern/client-web/audio/pc_speaker_sfx_runtime.ts` implements the Nuvie-style procedural PC speaker SFX generator.
+- Ambient object SFX now use a separate parameterized path based on the original `MUS_0525` routine instead of static cached clips.
+- `modern/client-web/audio/u6m_music_runtime.ts` decodes original LZW-compressed `.m` songs and emits Nuvie-style AdLib register writes.
+- `Ctrl+Z` now toggles the audio runtime in addition to the legacy `sound_enabled` world flag.
+- The runtime debug panel now exposes backend/mute/error state and ambient trigger counters.
+- The boot intro calls `playMusic("intro.m")` through the audio facade, but the AdLib music backend is still pending.
+
+Nuvie finding: Ultima VI `native` SFX maps to PC speaker in Nuvie. AdLib is primarily the music fidelity path for U6; Nuvie's AdLib SFX manager only wires tick and explosion. Nuvie's PC speaker SFX manager does not synthesize U6 fountain/fire/clock/protection/water-wheel as fixed one-shots, so browser ambient playback should follow the original queued object routine in `seg_2F1A.c::MUS_0525`.
 
 ## Non-Negotiable Guardrails
 
 - Audio code must never throw into `tickLoop`.
 - If audio backend fails, auto-disable audio and continue running UI/render.
-- Audio backend initialization must be lazy (no load/init at page startup).
+- Audio backend initialization must be lazy and must require a user gesture.
 - Each slice must be reversible and independently testable.
-- Keep changes isolated to `modern/client-web/*` unless explicitly required.
+- Keep browser audio changes isolated to `modern/client-web/*` unless the contained GPL-derived AdLib component requires a dedicated source boundary.
 
 ## Slice Plan
 
-### Slice A: Safety Foundation (No Audio Behavior Change)
+### Slice A: Safety Foundation
 
-- [ ] Add `AudioBackend` interface + `NullAudioBackend` implementation.
-- [ ] Add feature flag plumbing (`audioBackendMode=off|opl_spike`) with default `off`.
-- [ ] Add diagnostics field for backend mode/status.
-- [ ] Ensure no new startup-time script loads.
+- [x] Add lazy browser audio facade with runtime status.
+- [x] Keep Web Audio initialization behind user gesture.
+- [x] Ensure backend failures disable audio instead of throwing into caller code.
+- [x] Preserve no startup-time external script loads.
+- [x] TypeScript typecheck passes.
+- [x] Add visible audio diagnostics for backend/status/last error.
+- [x] `ctest` parity suite remains green.
 
-Acceptance:
+### Slice B: PC Speaker SFX
 
-- [ ] UI/mouse/keyboard behavior identical to baseline.
-- [ ] `ctest` parity suite remains green.
+- [x] Port Nuvie SFX constants.
+- [x] Port core PC speaker tone, sweep, random, stutter, and queued composite generators.
+- [x] Wire initial events: blocked movement, attack swing, casting stub, bell, and rubber duck.
+- [ ] Wire remaining original event sites as gameplay systems come online: hit, glass, death, missile/explosion, corpsers, slug dissolve, Kal Lor, hail stone, earthquake.
+- [x] Add ambient object SFX for clock/fire/fountain/protection field/water wheel from visible map objects.
+- [x] Replace static ambient approximations with original-style distance/tick-dependent generation:
+  clock tick/tack phases, random-gated fire/protection, and distance-attenuated fountain/water-wheel noise.
+- [x] Add project-native automated test runner coverage for the audio test file.
 
-### Slice B: OPL Spike Behind Hard Gate
+### Slice C: OPL / AdLib Port Behind Hard Gate
 
+- [ ] Create contained GPL-derived Nuvie audio component for `OplClass`, `Cu6mPlayer`, and AdLib SFX stream behavior.
 - [ ] Lazy-load OPL runtime only after explicit music enable.
-- [ ] Route register writes through backend adapter.
-- [ ] Keep legacy parser and timing on main thread (initial spike).
-- [ ] Add hard failover to `off` mode on any backend exception.
+- [x] Decode `.m` song command streams and emit register writes at Nuvie's 60 Hz cadence.
+- [ ] Route `.m` song register writes through an OPL backend adapter.
+- [ ] Implement `playMusic("intro.m")`, `stopMusic`, and group song selection.
+- [ ] Implement Nuvie's limited AdLib SFX tick/explosion path.
+- [ ] Add hard failover to disabled audio on any backend exception.
 
-Acceptance:
-
-- [ ] Backend failures never impact world input/render.
-- [ ] Diagnostic status clearly reports fallback condition.
-
-### Slice C: Fidelity Tuning and Validation
+### Slice D: Fidelity Tuning and Validation
 
 - [ ] Verify song decode + command execution against known `intro.m` behavior.
 - [ ] Match sample-rate behavior to browser output rate.
 - [ ] Add A/B notes against ScummVM/Nuvie reference capture.
+- [ ] Tune PC speaker ambient timing/gain against captured reference; current formulas follow original control flow but still need ear-level capture comparison.
 - [ ] Tune mixer gain/headroom (avoid clipping/noise floor artifacts).
 - [ ] Validate pitch/key against reference (no transposition drift).
 - [ ] Validate tempo/tick cadence against reference (no timing drift).
 - [ ] Validate envelope/timbre class per instrument family against reference.
-
-Acceptance:
-
-- [ ] Title theme pitch and timing are within defined parity tolerances.
-- [ ] Instrument character is subjectively aligned with ScummVM/Nuvie reference.
-- [ ] No interaction regressions under extended runtime.
 
 ## Parity Criteria (ScummVM/Nuvie)
 
@@ -77,7 +86,7 @@ Acceptance:
 - Mix parity: relative channel balance should avoid dominant/flattened instruments.
 - Stability parity: enabling/disabling audio must never impact controls or render loop.
 
-### Slice D: Runtime Hardening
+### Slice E: Runtime Hardening
 
 - [ ] Move OPL rendering into `AudioWorklet` or equivalent isolated path.
 - [ ] Add reconnect/re-init logic on context suspend/resume.
