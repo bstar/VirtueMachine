@@ -39,14 +39,25 @@ class MockAudio {
 }
 
 (globalThis as any).Audio = MockAudio;
+(globalThis as any).fetch = async () => {
+  throw new Error("audio asset fetch disabled in mute test");
+};
 
 const audio = createU6AudioRuntime();
 audio.setBackendMode("adlib");
 audio.setMusicEnabled(true);
 
+async function waitForPendingPlay(): Promise<void> {
+  for (let i = 0; i < 20 && !pendingPlayResolve; i += 1) {
+    await Promise.resolve();
+  }
+  assert.ok(pendingPlayResolve, "rendered audio element should receive a play request");
+}
+
 assert.equal(audio.playMusic("bootup.m"), true, "music request should be accepted");
 assert.equal(audio.status().musicLoading, true, "music should enter loading state");
 
+await waitForPendingPlay();
 pendingPlayResolve?.();
 await Promise.resolve();
 await Promise.resolve();

@@ -6,6 +6,12 @@ export type U6MRegisterWrite = {
   readonly value: number;
 };
 
+export type U6MPlaybackTrace = {
+  readonly writes: U6MRegisterWrite[];
+  readonly loopStartTick: number | null;
+  readonly loopEndTick: number | null;
+};
+
 export type U6MDecodeResult = {
   readonly ok: boolean;
   readonly data: Uint8Array | null;
@@ -64,6 +70,8 @@ export class U6MRegisterSequencerRuntime {
   songEnd = false;
   songPos = 0;
   loopPosition = 0;
+  loopStartTick: number | null = null;
+  loopEndTick: number | null = null;
   readDelay = 0;
   readonly instrumentOffsets = new Int32Array(256);
   readonly vbCurrentValue = new Uint8Array(9);
@@ -89,6 +97,8 @@ export class U6MRegisterSequencerRuntime {
     this.songEnd = false;
     this.songPos = 0;
     this.loopPosition = 0;
+    this.loopStartTick = null;
+    this.loopEndTick = null;
     this.readDelay = 0;
     this.subsongStack.length = 0;
     this.vbCurrentValue.fill(0);
@@ -128,11 +138,19 @@ export class U6MRegisterSequencerRuntime {
   }
 
   collectRegisterWrites(maxTicks: number): U6MRegisterWrite[] {
+    return this.collectPlaybackTrace(maxTicks).writes;
+  }
+
+  collectPlaybackTrace(maxTicks: number): U6MPlaybackTrace {
     const writes = this.rewind();
     for (let i = 0; i < maxTicks && !this.songEnd; i += 1) {
       writes.push(...this.update());
     }
-    return writes;
+    return {
+      writes,
+      loopStartTick: this.loopStartTick,
+      loopEndTick: this.loopEndTick
+    };
   }
 
   private readByte(): number {
@@ -222,6 +240,7 @@ export class U6MRegisterSequencerRuntime {
           break;
         case 0xe:
           this.loopPosition = this.songPos;
+          this.loopStartTick = this.tick;
           break;
         case 0xf:
           this.commandReturn();
@@ -302,6 +321,7 @@ export class U6MRegisterSequencerRuntime {
         this.subsongStack.push({ ...top, repetitions });
       }
     } else {
+      this.loopEndTick = this.tick;
       this.songPos = this.loopPosition;
       this.songEnd = true;
     }
@@ -340,8 +360,11 @@ export class U6MRegisterSequencerRuntime {
 }
 
 export function collectU6MRegisterWritesRuntime(lzwSongBytes: Uint8Array, maxTicks: number): U6MRegisterWrite[] {
-  const decoded = decodeU6MSongRuntime(lzwSongBytes);
-  if (!decoded.ok || !decoded.data) return [];
-  return new U6MRegisterSequencerRuntime(decoded.data).collectRegisterWrites(maxTicks);
+  return collectU6MPlaybackTraceRuntime(lzwSongBytes, maxTicks).writes;
 }
 
+export function collectU6MPlaybackTraceRuntime(lzwSongBytes: Uint8Array, maxTicks: number): U6MPlaybackTrace {
+  const decoded = decodeU6MSongRuntime(lzwSongBytes);
+  if (!decoded.ok || !decoded.data) return { writes: [], loopStartTick: null, loopEndTick: null };
+  return new U6MRegisterSequencerRuntime(decoded.data).collectPlaybackTrace(maxTicks);
+}

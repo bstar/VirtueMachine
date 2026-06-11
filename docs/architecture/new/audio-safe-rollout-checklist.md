@@ -22,12 +22,14 @@ Audio fidelity work has resumed with a browser-local safe runtime:
 - `modern/client-web/audio/u6m_music_runtime.ts` decodes original LZW-compressed `.m` songs and emits Nuvie-style AdLib register writes.
 - `modern/client-web/audio/adlib_music_runtime.ts` provides an interim two-operator Web Audio AdLib-register synth so original `.m` songs are audible while the full YM3812 emulator port remains pending. It now interprets OPL-style waveform select, operator multipliers, carrier/modulator levels, simple ADSR envelope nibbles, and a bounded music bus filter/compressor.
 - `modern/tools/opl_register_render.cpp` contains the current real YM3812 path for music: it consumes U6M register writes and renders WAV through Nuvie's MAME-derived OPL emulator.
-- `modern/tools/prerender_u6m_adlib.ts` generates local runtime WAVs under `modern/assets/runtime/audio/adlib/*.wav`; those assets are ignored with the rest of `modern/assets/runtime` and must be regenerated from local original data.
+- `modern/tools/prerender_u6m_adlib.ts` generates local runtime WAVs and sidecar loop metadata under `modern/assets/runtime/audio/adlib/*.wav|*.json`; those assets are ignored with the rest of `modern/assets/runtime` and must be regenerated from local original data.
 - `Ctrl+Z` now toggles the audio runtime in addition to the legacy `sound_enabled` world flag.
 - The runtime debug panel now exposes backend/mute/error state and ambient trigger counters.
-- The boot/origin-logo intro switches to the AdLib backend and requests `playMusic("bootup.m")` at the start of runtime asset loading so playback is queued as early as browser audio policy allows. Browser playback prefers streaming pre-rendered YM3812 WAV assets first, then full-buffer decode, then the interim synth fallback. The later extended introduction should use `intro.m` once that menu flow is separated.
+- The startup music path now has explicit phases: Origin/title splash requests `bootup.m`, the following boot intro/cinematic requests `stones.m`, and the startup menu requests `ultima.m`. Browser playback prefers pre-rendered YM3812 WAV assets with sidecar loop/end metadata, then HTML audio fallback, then full-buffer decode, then the interim synth fallback. The later extended `Introduction` menu option should use `intro.m` once that menu flow is separated.
 
 Nuvie finding: Ultima VI `native` SFX maps to PC speaker in Nuvie. AdLib is primarily the music fidelity path for U6; Nuvie's AdLib SFX manager only wires tick and explosion. Nuvie's PC speaker SFX manager does not synthesize U6 fountain/fire/clock/protection/water-wheel as fixed one-shots, so browser ambient playback should follow the original queued object routine in `seg_2F1A.c::MUS_0525`.
+
+Nuvie/original music finding: original `seg_2F1A.c::MUS_091A` maps song indexes to native `.m` files (`ultima.m`, `bootup.m`, `intro.m`, `stones.m`, etc.) and `MUS_09A8` selects the travel music group from Stones/Ultima/Forest/Britannia on the surface. Nuvie restarts native music from its `g_MusicFinished` update path rather than exposing browser loop slices for these U6M files. The browser sidecar metadata therefore records the U6M replay/end tick and uses whole-song looping unless a real U6M loop-start marker is later found.
 
 ## Non-Negotiable Guardrails
 
@@ -66,8 +68,9 @@ Nuvie finding: Ultima VI `native` SFX maps to PC speaker in Nuvie. AdLib is prim
 - [ ] Lazy-load OPL runtime only after explicit music enable.
 - [x] Decode `.m` song command streams and emit register writes at Nuvie's 60 Hz cadence.
 - [x] Route `.m` song register writes through an interim two-operator Web Audio synth adapter.
-- [x] Implement `playMusic("bootup.m")`, `playMusic("intro.m")`, and `stopMusic` for the browser runtime.
+- [x] Implement `playMusic("bootup.m")`, `playMusic("intro.m")`, `playMusic("stones.m")`, `playMusic("ultima.m")`, and `stopMusic` for the browser runtime.
 - [x] Add a real YM3812 pre-render path for music WAV assets using Nuvie's OPL emulator.
+- [x] Add sidecar loop/end metadata and phase routing for boot splash, boot intro, and startup menu music.
 - [ ] Replace or supplement pre-rendered WAV playback with streaming YM3812/OPL2 emulation via WASM/AudioWorklet once Emscripten is available.
 - [ ] Implement group song selection.
 - [ ] Implement Nuvie's limited AdLib SFX tick/explosion path.

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { oplFnumToHzRuntime, oplTotalLevelToGainRuntime, U6_ADLIB_TICK_HZ } from "../audio/adlib_music_runtime.ts";
-import { collectU6MRegisterWritesRuntime, decodeU6MSongRuntime, U6MRegisterSequencerRuntime } from "../audio/u6m_music_runtime.ts";
+import { collectU6MPlaybackTraceRuntime, collectU6MRegisterWritesRuntime, decodeU6MSongRuntime, U6MRegisterSequencerRuntime } from "../audio/u6m_music_runtime.ts";
 
 const RUNTIME_ASSETS = path.resolve(import.meta.dirname, "../../assets/runtime");
 
@@ -30,6 +30,18 @@ assert.ok(introWrites.some((w) => w.reg >= 0x20 && w.reg <= 0xf5), "intro.m shou
 const ultimaWrites = collectU6MRegisterWritesRuntime(readRuntimeAsset("ultima.m"), 240);
 assert.ok(ultimaWrites.length > 100, "ultima.m should emit register writes");
 assert.ok(ultimaWrites.some((w) => w.tick > 0), "ultima.m writes should advance over ticks");
+
+const ultimaTrace = collectU6MPlaybackTraceRuntime(readRuntimeAsset("ultima.m"), 60 * 240);
+assert.ok(ultimaTrace.writes.length > 100, "ultima.m trace should emit register writes");
+assert.ok(ultimaTrace.loopEndTick !== null, "ultima.m should expose a U6M replay/end tick");
+assert.equal(ultimaTrace.loopStartTick, null, "ultima.m should whole-song repeat unless a U6M loop marker is present");
+assert.ok(ultimaTrace.loopEndTick > 0, "ultima.m replay/end tick should advance forward");
+
+const stonesTrace = collectU6MPlaybackTraceRuntime(readRuntimeAsset("stones.m"), 60 * 240);
+assert.ok(stonesTrace.writes.length > 100, "stones.m trace should emit register writes");
+assert.ok(stonesTrace.loopEndTick !== null, "stones.m should expose a U6M replay/end tick");
+assert.equal(stonesTrace.loopStartTick, null, "stones.m should whole-song repeat unless a U6M loop marker is present");
+assert.ok(stonesTrace.loopEndTick > 0, "stones.m replay/end tick should advance forward");
 
 const bootupWrites = collectU6MRegisterWritesRuntime(bootup, 180);
 assert.ok(bootupWrites.length > 50, "bootup.m should emit register writes for startup logo music");

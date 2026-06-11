@@ -617,6 +617,8 @@ const INITIAL_SEED = 0x12345678;
 const state: any = {
   sim: createInitialSimState(),
   audio: createU6AudioRuntime(),
+  musicPhase: "",
+  musicSong: "",
   audioAmbientLastTickBySfx: {},
   audioAmbientLastSfx: "",
   audioAmbientTriggerCount: 0,
@@ -6806,6 +6808,11 @@ function startSessionFromTitle() {
   state.loopHealth.maxDtMs = 0;
   state.queue.length = 0;
   state.sessionStarted = true;
+  if (state.audio) {
+    state.audio.stopMusic();
+    state.musicPhase = "";
+    state.musicSong = "";
+  }
   endLegacyConversation();
   state.legacyLedgerLines.length = 0;
   pushLedgerMessage(`${String(state.net.characterName || "Avatar")}:`);
@@ -6830,6 +6837,7 @@ function returnToTitleMenu() {
   state.legacyLedgerPrompt = false;
   state.sessionStarted = false;
   setStartupMenuIndex(0);
+  startStartupMenuMusic();
   diagBox.className = "diag ok";
   diagBox.textContent = "Returned to title menu.";
 }
@@ -7338,7 +7346,18 @@ function setAudioEnabledFromWorldFlag() {
   if (!state.audio) {
     return;
   }
-  state.audio.setEnabled(!!state.sim.world.sound_enabled);
+  const enabled = !!state.sim.world.sound_enabled;
+  state.audio.setEnabled(enabled);
+  if (!enabled) {
+    state.musicPhase = "";
+    state.musicSong = "";
+  } else if (!state.sessionStarted) {
+    if (state.bootIntro?.active) {
+      syncBootIntroMusicPhase();
+    } else {
+      startStartupMenuMusic();
+    }
+  }
   updateAudioMuteUi();
 }
 
@@ -7366,18 +7385,51 @@ function toggleAudioMute(reason = "") {
   diagBox.textContent = reason || (nextMuted ? "Audio muted." : "Audio unmuted.");
 }
 
-function startBootIntroMusic() {
+function playCanonicalMusicPhase(phase, songId) {
   try {
     if (!state.audio || !state.sim?.world?.sound_enabled) {
       return false;
     }
+    const nextPhase = String(phase || "");
+    const nextSong = String(songId || "");
+    if (!nextSong) {
+      return false;
+    }
+    if (state.musicPhase === nextPhase && state.musicSong === nextSong) {
+      return true;
+    }
     state.audio.setBackendMode("adlib");
     state.audio.setMusicEnabled(true);
-    return state.audio.playMusic("bootup.m");
+    const ok = state.audio.playMusic(nextSong);
+    if (ok) {
+      state.musicPhase = nextPhase;
+      state.musicSong = nextSong;
+    }
+    return ok;
   } catch (err) {
-    console.warn("intro music failed", err);
+    console.warn("music phase failed", err);
     return false;
   }
+}
+
+function startBootIntroMusic() {
+  return playCanonicalMusicPhase("boot_origin", "bootup.m");
+}
+
+function syncBootIntroMusicPhase() {
+  const scene = currentBootIntroSceneRuntime(state.bootIntro);
+  if (!scene) {
+    return;
+  }
+  if (scene.kind === "splash") {
+    playCanonicalMusicPhase("boot_origin", "bootup.m");
+  } else {
+    playCanonicalMusicPhase("boot_intro", "stones.m");
+  }
+}
+
+function startStartupMenuMusic() {
+  return playCanonicalMusicPhase("startup_menu", "ultima.m");
 }
 
 function bootIntroMusicAwaitingGesture() {
@@ -9085,7 +9137,12 @@ function tickLoop(ts) {
       }
     }
     if (!state.sessionStarted && state.bootIntro && state.bootIntro.active) {
-      advanceBootIntroRuntime(state.bootIntro, dtMs);
+      const bootAdvance = advanceBootIntroRuntime(state.bootIntro, dtMs);
+      if (state.bootIntro.active) {
+        syncBootIntroMusicPhase();
+      } else if (bootAdvance.becameInactive) {
+        startStartupMenuMusic();
+      }
     }
     const useCustomCursor = !!(state.cursorPixmaps && state.cursorPixmaps.length > 0);
     canvas.style.cursor = useCustomCursor ? "none" : "default";
@@ -9614,6 +9671,7 @@ async function loadRuntimeAssets() {
     state.bootIntroCanvasCache.clear();
     if (state.bootIntroBanks && state.bootIntroPalettes && !state.bootIntro.played && !state.sessionStarted) {
       startBootIntroRuntime(state.bootIntro);
+      syncBootIntroMusicPhase();
     }
     if (cursorRes.ok && cursorBuf.byteLength > 12) {
       state.cursorPixmaps = decodeU6CursorPtr(new Uint8Array(cursorBuf));
@@ -10313,6 +10371,11 @@ window.addEventListener("keydown", (ev) => {
         return;
       }
       if (advanceBootIntroInputRuntime(state.bootIntro)) {
+        if (state.bootIntro.active) {
+          syncBootIntroMusicPhase();
+        } else {
+          startStartupMenuMusic();
+        }
         ev.preventDefault();
         return;
       }
@@ -10722,6 +10785,11 @@ canvas.addEventListener("click", (ev) => {
       return;
     }
     if (advanceBootIntroInputRuntime(state.bootIntro)) {
+      if (state.bootIntro.active) {
+        syncBootIntroMusicPhase();
+      } else {
+        startStartupMenuMusic();
+      }
       return;
     }
     return;
@@ -10769,6 +10837,11 @@ if (legacyBackdropCanvas) {
         return;
       }
       if (advanceBootIntroInputRuntime(state.bootIntro)) {
+        if (state.bootIntro.active) {
+          syncBootIntroMusicPhase();
+        } else {
+          startStartupMenuMusic();
+        }
         return;
       }
       return;

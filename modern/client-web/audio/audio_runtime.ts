@@ -4,6 +4,13 @@ import { U6_SFX } from "./sfx_ids_runtime.ts";
 
 export type AudioBackendMode = "off" | "pcspeaker" | "adlib";
 
+type RenderedSongMetadata = {
+  readonly loopStartSeconds: number;
+  readonly loopEndSeconds: number;
+  readonly sampleRate?: number;
+  readonly tickHz?: number;
+};
+
 export type U6AudioRuntime = {
   setEnabled(enabled: boolean): void;
   setSfxEnabled(enabled: boolean): void;
@@ -128,6 +135,36 @@ export function createU6AudioRuntime(): U6AudioRuntime {
     ];
   }
 
+  function renderedSongMetadataCandidates(songId: string): string[] {
+    return renderedSongCandidates(songId).map((candidate) => candidate.replace(/\.wav$/, ".json"));
+  }
+
+  async function fetchRenderedSongMetadata(songId: string): Promise<RenderedSongMetadata | null> {
+    for (const path of renderedSongMetadataCandidates(songId)) {
+      try {
+        const res = await fetch(path, { cache: "no-store" });
+        if (!res.ok) continue;
+        const raw = await res.json();
+        const loopStartSeconds = Number(raw?.loopStartSeconds);
+        const loopEndSeconds = Number(raw?.loopEndSeconds);
+        if (
+          Number.isFinite(loopStartSeconds)
+          && Number.isFinite(loopEndSeconds)
+          && loopStartSeconds >= 0
+          && loopEndSeconds > loopStartSeconds
+        ) {
+          return {
+            loopStartSeconds,
+            loopEndSeconds,
+            sampleRate: Number(raw?.sampleRate) || undefined,
+            tickHz: Number(raw?.tickHz) || undefined
+          };
+        }
+      } catch {}
+    }
+    return null;
+  }
+
   function isAutoplayBlocked(err: unknown): boolean {
     const name = String((err as any)?.name || "");
     const message = String((err as any)?.message || err || "");
@@ -138,9 +175,17 @@ export function createU6AudioRuntime(): U6AudioRuntime {
     return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
   }
 
-  function renderedMusicOffsetSeconds(duration = 0): number {
+  function renderedMusicOffsetSeconds(duration = 0, metadata: RenderedSongMetadata | null = null): number {
     if (!renderedMusicIntendedStartMs) return 0;
     const elapsed = Math.max(0, (nowMs() - renderedMusicIntendedStartMs) / 1000);
+    if (metadata && Number.isFinite(metadata.loopEndSeconds) && Number.isFinite(metadata.loopStartSeconds)) {
+      const loopStart = Math.max(0, Math.min(duration || metadata.loopEndSeconds, metadata.loopStartSeconds));
+      const loopEnd = Math.max(loopStart + 0.001, Math.min(duration || metadata.loopEndSeconds, metadata.loopEndSeconds));
+      if (elapsed >= loopEnd) {
+        return loopStart + ((elapsed - loopStart) % Math.max(0.001, loopEnd - loopStart));
+      }
+      return Math.min(elapsed, Math.max(0, loopEnd - 0.001));
+    }
     return duration > 0 && Number.isFinite(duration) ? elapsed % duration : elapsed;
   }
 
@@ -205,7 +250,7 @@ export function createU6AudioRuntime(): U6AudioRuntime {
     }
   }
 
-  async function fetchRenderedSong(ctx: AudioContext, songId: string, serial: number) {
+  async function fetchRenderedSong(ctx: AudioContext, songId: string, serial: number, metadata: RenderedSongMetadata | null) {
     const candidates = renderedSongCandidates(songId);
     try {
       for (const path of candidates) {
@@ -220,12 +265,17 @@ export function createU6AudioRuntime(): U6AudioRuntime {
           gain.gain.value = effectiveVolume();
           source.buffer = audioBuffer;
           source.loop = true;
+          if (metadata) {
+            source.loopStart = Math.max(0, Math.min(audioBuffer.duration, metadata.loopStartSeconds));
+            source.loopEnd = Math.max(source.loopStart + 0.001, Math.min(audioBuffer.duration, metadata.loopEndSeconds));
+          }
           source.connect(gain);
           gain.connect(ctx.destination);
-          source.start(0, renderedMusicOffsetSeconds(audioBuffer.duration));
+          source.start(0, renderedMusicOffsetSeconds(audioBuffer.duration, metadata));
           renderedMusicSource = source;
           renderedMusicGain = gain;
           renderedMusicPlaying = true;
+          renderedMusicAwaitingGesture = ctx.state === "suspended";
           renderedMusicLoading = false;
           renderedMusicSong = songId;
           return true;
@@ -319,6 +369,10 @@ export function createU6AudioRuntime(): U6AudioRuntime {
       if (!ctx) return false;
       try {
         if (ctx.state === "suspended") await ctx.resume();
+        if (renderedMusicSource && renderedMusicAwaitingGesture) {
+          renderedMusicAwaitingGesture = false;
+          renderedMusicPlaying = true;
+        }
         if (renderedMusicElement && renderedMusicAwaitingGesture) {
           renderedMusicElement.muted = muted;
           renderedMusicElement.volume = effectiveVolume();
@@ -379,11 +433,20 @@ export function createU6AudioRuntime(): U6AudioRuntime {
           renderedMusicSong = songId;
           renderedMusicLoading = true;
           renderedMusicIntendedStartMs = nowMs();
-          void playRenderedSongElement(songId, serial).then((ok) => {
+          void fetchRenderedSongMetadata(songId).then((metadata) => {
+            if (serial !== musicRequestSerial) return true;
+            if (!metadata) return false;
+            const ctx = getContext();
+            if (!ctx) return false;
+            return fetchRenderedSong(ctx, songId, serial, metadata);
+          }).then((bufferOk) => {
+            if (bufferOk || serial !== musicRequestSerial) return true;
+            return playRenderedSongElement(songId, serial);
+          }).then((ok) => {
             if (ok || serial !== musicRequestSerial) return;
             const ctx = getContext();
             if (!ctx) return;
-            void fetchRenderedSong(ctx, songId, serial).then((bufferOk) => {
+            void fetchRenderedSong(ctx, songId, serial, null).then((bufferOk) => {
               if (bufferOk || serial !== musicRequestSerial) return;
               try {
                 getAdlibMusic(ctx).play(songId);
