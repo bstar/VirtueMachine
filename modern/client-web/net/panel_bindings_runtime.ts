@@ -1,4 +1,5 @@
 import { saveNetPanelPref } from "./panel_runtime.ts";
+import type { NetProfile } from "./profile_runtime.ts";
 
 export function applyNetPanelPrefsToControlsRuntime(
   prefs: {
@@ -127,9 +128,9 @@ export function bindNetPanelPrefPersistenceRuntime(args: {
 
 export function bindAccountProfileSelectionRuntime(args: {
   accountSelect?: HTMLSelectElement | null;
-  loadProfiles: () => any[];
-  profileKey: (profile: any) => string;
-  applyProfile: (profile: any) => void;
+  loadProfiles: () => NetProfile[];
+  profileKey: (profile: NetProfile) => string;
+  applyProfile: (profile: NetProfile) => void;
 }): void {
   if (!args.accountSelect) {
     return;
@@ -141,9 +142,9 @@ export function bindAccountProfileSelectionRuntime(args: {
 
 export function applySelectedAccountProfileRuntime(args: {
   accountSelect?: HTMLSelectElement | null;
-  loadProfiles: () => any[];
-  profileKey: (profile: any) => string;
-  applyProfile: (profile: any) => void;
+  loadProfiles: () => NetProfile[];
+  profileKey: (profile: NetProfile) => string;
+  applyProfile: (profile: NetProfile) => void;
 }): void {
   const key = String(args.accountSelect?.value || "");
   if (!key) {
