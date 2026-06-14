@@ -44,8 +44,14 @@ assert.deepEqual(normalizeServerUsersRuntime([
     },
     created_at: "created"
   },
+  {
+    user_id: "u2",
+    username: "BadVerification",
+    email_verification: ["bad"]
+  },
   { user_id: "u1", username: "duplicate" },
   { user_id: "", username: "missing" },
+  ["bad-array-row"],
   "bad"
 ]), [{
   user_id: "u1",
@@ -59,6 +65,13 @@ assert.deepEqual(normalizeServerUsersRuntime([
     expires_at_ms: 42
   },
   created_at: "created"
+}, {
+  user_id: "u2",
+  username: "badverification",
+  password_plaintext: "",
+  email: "",
+  email_verified: false,
+  email_verification: null
 }]);
 
 assert.deepEqual(normalizeServerTokensRuntime([
@@ -83,8 +96,15 @@ assert.deepEqual(normalizeServerCharactersRuntime([
     snapshot_meta: { saved_tick: 9 },
     snapshot_base64: "abc"
   },
+  {
+    character_id: "c2",
+    user_id: "u1",
+    name: "ArrayMeta",
+    snapshot_meta: ["bad"]
+  },
   { character_id: "c1", user_id: "u2", name: "duplicate" },
-  { character_id: "c2", user_id: "", name: "missing-user" }
+  { character_id: "c3", user_id: "", name: "missing-user" },
+  ["bad-array-row"]
 ]), [{
   character_id: "c1",
   user_id: "u1",
@@ -93,6 +113,14 @@ assert.deepEqual(normalizeServerCharactersRuntime([
   updated_at: "updated",
   snapshot_meta: { saved_tick: 9 },
   snapshot_base64: "abc"
+}, {
+  character_id: "c2",
+  user_id: "u1",
+  name: "ArrayMeta",
+  created_at: "",
+  updated_at: "",
+  snapshot_meta: null,
+  snapshot_base64: null
 }]);
 
 const legacyUser: ServerUserRuntime = { username: "Avatar" };

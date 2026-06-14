@@ -28,12 +28,69 @@ export type ServerTokenRuntime = {
   user_id?: unknown;
 };
 
-function recordOrNull(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+type ServerEmailVerificationSourceRuntime = {
+  code?: unknown;
+  expires_at_ms?: unknown;
+  issued_at?: unknown;
+};
+
+type ServerUserSourceRuntime = {
+  created_at?: unknown;
+  email?: unknown;
+  email_verified?: unknown;
+  email_verification?: unknown;
+  password_plaintext?: unknown;
+  user_id?: unknown;
+  username?: unknown;
+};
+
+type ServerTokenSourceRuntime = {
+  expires_at_ms?: unknown;
+  issued_at?: unknown;
+  token?: unknown;
+  user_id?: unknown;
+};
+
+type ServerSnapshotMetaSourceRuntime = {
+  [key: string]: unknown;
+};
+
+type ServerCharacterSourceRuntime = {
+  character_id?: unknown;
+  created_at?: unknown;
+  name?: unknown;
+  snapshot_base64?: unknown;
+  snapshot_meta?: unknown;
+  updated_at?: unknown;
+  user_id?: unknown;
+};
+
+function isObjectSourceRuntime(value: unknown): value is object {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function emailVerificationSourceOrNullRuntime(value: unknown): ServerEmailVerificationSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as ServerEmailVerificationSourceRuntime : null;
+}
+
+function userSourceOrNullRuntime(value: unknown): ServerUserSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as ServerUserSourceRuntime : null;
+}
+
+function tokenSourceOrNullRuntime(value: unknown): ServerTokenSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as ServerTokenSourceRuntime : null;
+}
+
+function snapshotMetaSourceOrNullRuntime(value: unknown): ServerSnapshotMetaSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as ServerSnapshotMetaSourceRuntime : null;
+}
+
+function characterSourceOrNullRuntime(value: unknown): ServerCharacterSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as ServerCharacterSourceRuntime : null;
 }
 
 function normalizeEmailVerificationRuntime(raw: unknown): ServerUserRuntime["email_verification"] {
-  const row = recordOrNull(raw);
+  const row = emailVerificationSourceOrNullRuntime(raw);
   if (!row) {
     return null;
   }
@@ -57,7 +114,7 @@ export function normalizeServerUsersRuntime(raw: unknown): ServerUserRuntime[] {
   const out: ServerUserRuntime[] = [];
   const seen = new Set<string>();
   for (const value of raw) {
-    const row = recordOrNull(value);
+    const row = userSourceOrNullRuntime(value);
     if (!row) {
       continue;
     }
@@ -90,7 +147,7 @@ export function normalizeServerTokensRuntime(raw: unknown): ServerTokenRuntime[]
   const out: ServerTokenRuntime[] = [];
   const seen = new Set<string>();
   for (const value of raw) {
-    const row = recordOrNull(value);
+    const row = tokenSourceOrNullRuntime(value);
     if (!row) {
       continue;
     }
@@ -118,7 +175,7 @@ export function normalizeServerCharactersRuntime(raw: unknown): ServerCharacterR
   const out: ServerCharacterRuntime[] = [];
   const seen = new Set<string>();
   for (const value of raw) {
-    const row = recordOrNull(value);
+    const row = characterSourceOrNullRuntime(value);
     if (!row) {
       continue;
     }
@@ -135,7 +192,7 @@ export function normalizeServerCharactersRuntime(raw: unknown): ServerCharacterR
       name,
       created_at: String(row.created_at || ""),
       updated_at: String(row.updated_at || ""),
-      snapshot_meta: recordOrNull(row.snapshot_meta) || null,
+      snapshot_meta: snapshotMetaSourceOrNullRuntime(row.snapshot_meta),
       snapshot_base64: row.snapshot_base64 == null ? null : String(row.snapshot_base64 || "")
     });
   }
