@@ -1,21 +1,48 @@
+export interface TargetWorldObjectRuntime {
+  key?: string;
+  type: number;
+  frame: number;
+  baseTile?: number;
+  renderable?: boolean;
+  legacyOrder?: number;
+  order?: number;
+  index?: number;
+}
+
+export interface TargetObjectLayerRuntime {
+  objectsAt: (x: number, y: number, z: number) => TargetWorldObjectRuntime[];
+}
+
+export interface TargetEntityRuntime {
+  id?: number;
+  type?: number;
+  frame?: number;
+  baseTile?: number;
+  x?: number;
+  y?: number;
+  z?: number;
+  legacyOrder?: number;
+  order?: number;
+}
+
 export function topWorldObjectAtCellRuntime(
-  objectLayer: { objectsAt: (x: number, y: number, z: number) => any[] } | null | undefined,
-  sim: any,
+  objectLayer: TargetObjectLayerRuntime | null | undefined,
+  sim: unknown,
   tx: number,
   ty: number,
   tz: number,
   opts: { pickupOnly?: boolean } | undefined,
   deps: {
-    isObjectRemoved: (sim: any, obj: any) => boolean;
+    isObjectRemoved: (sim: unknown, obj: TargetWorldObjectRuntime) => boolean;
     isLikelyPickupObjectType: (type: number) => boolean;
   }
-): any | null {
+): TargetWorldObjectRuntime | null {
   if (!objectLayer) {
     return null;
   }
   const pickupOnly = !!opts?.pickupOnly;
   const list = objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
-  const candidates = [];
+  const candidates: Array<{ obj: TargetWorldObjectRuntime; sortOrder: number; index: number }> = [];
   for (let i = 0; i < list.length; i += 1) {
     const o = list[i];
     if (!o || !o.renderable || deps.isObjectRemoved(sim, o)) {
@@ -41,16 +68,16 @@ export function topWorldObjectAtCellRuntime(
 }
 
 export function nearestTalkTargetAtCellRuntime(
-  entityEntries: any[] | null | undefined,
+  entityEntries: TargetEntityRuntime[] | null | undefined,
   tx: number,
   ty: number,
   tz: number,
   avatarEntityId: number
-): any | null {
+): TargetEntityRuntime | null {
   if (!Array.isArray(entityEntries)) {
     return null;
   }
-  const candidates = [];
+  const candidates: Array<{ entity: TargetEntityRuntime; sortOrder: number; index: number }> = [];
   let i = 0;
   for (const e of entityEntries) {
     const idx = i;
@@ -78,12 +105,12 @@ export function buildTargetResolverRegressionProbesRuntime(): {
   world_overlap_cases: Array<{ id: string; selected: string | null }>;
   talk_overlap_cases: Array<{ id: string; selected_id: number | null }>;
 } {
-  const makeLayer = (list: any[]) => ({
+  const makeLayer = (list: TargetWorldObjectRuntime[]): TargetObjectLayerRuntime => ({
     objectsAt: (_x: number, _y: number, _z: number) => list
   });
   const removedSet = new Set<string>();
   const deps = {
-    isObjectRemoved: (_sim: any, obj: any) => removedSet.has(String(obj?.key || "")),
+    isObjectRemoved: (_sim: unknown, obj: TargetWorldObjectRuntime) => removedSet.has(String(obj?.key || "")),
     isLikelyPickupObjectType: (type: number) => ((Number(type) & 0x3ff) !== 0x129)
   };
 
@@ -92,9 +119,9 @@ export function buildTargetResolverRegressionProbesRuntime(): {
       id: "highest_legacy_order_wins",
       selected: topWorldObjectAtCellRuntime(
         makeLayer([
-          { key: "a", renderable: true, legacyOrder: 10, order: 10, index: 1, type: 0x90 },
-          { key: "b", renderable: true, legacyOrder: 40, order: 40, index: 2, type: 0x91 }
-        ]) as any,
+          { key: "a", renderable: true, legacyOrder: 10, order: 10, index: 1, type: 0x90, frame: 0 },
+          { key: "b", renderable: true, legacyOrder: 40, order: 40, index: 2, type: 0x91, frame: 0 }
+        ]),
         {},
         0,
         0,
@@ -107,9 +134,9 @@ export function buildTargetResolverRegressionProbesRuntime(): {
       id: "pickup_filter_skips_non_pickup",
       selected: topWorldObjectAtCellRuntime(
         makeLayer([
-          { key: "door", renderable: true, legacyOrder: 99, order: 99, index: 1, type: 0x129 },
-          { key: "item", renderable: true, legacyOrder: 10, order: 10, index: 2, type: 0x090 }
-        ]) as any,
+          { key: "door", renderable: true, legacyOrder: 99, order: 99, index: 1, type: 0x129, frame: 0 },
+          { key: "item", renderable: true, legacyOrder: 10, order: 10, index: 2, type: 0x090, frame: 0 }
+        ]),
         {},
         0,
         0,

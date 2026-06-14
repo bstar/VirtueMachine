@@ -1,6 +1,16 @@
+export interface SimCommandRuntime {
+  type: number;
+  tick: number;
+  arg0?: number;
+  arg1?: number;
+  arg2?: number;
+  arg3?: number;
+  [key: string]: unknown;
+}
+
 export function appendCommandLogRuntime(
-  commandLog: Array<any>,
-  cmd: any,
+  commandLog: SimCommandRuntime[],
+  cmd: SimCommandRuntime,
   maxEntries: number
 ): void {
   commandLog.push({ ...cmd });
@@ -30,9 +40,9 @@ export function shouldSuppressRepeatedMoveRuntime(args: {
 }
 
 export function upsertMoveCommandForTickRuntime(args: {
-  queue: Array<any>;
-  commandLog: Array<any>;
-  cmd: any;
+  queue: SimCommandRuntime[];
+  commandLog: SimCommandRuntime[];
+  cmd: SimCommandRuntime;
   targetTick: number;
   moveType: number;
   commandLogMax: number;
@@ -64,9 +74,9 @@ export function upsertMoveCommandForTickRuntime(args: {
 }
 
 export function enqueueCommandRuntime(args: {
-  queue: Array<any>;
-  commandLog: Array<any>;
-  cmd: any;
+  queue: SimCommandRuntime[];
+  commandLog: SimCommandRuntime[];
+  cmd: SimCommandRuntime;
   commandLogMax: number;
 }): void {
   args.queue.push(args.cmd);

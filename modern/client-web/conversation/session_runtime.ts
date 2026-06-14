@@ -1,5 +1,89 @@
-export function wrapLegacyLedgerLines(text: any, maxChars: any) {
-  const out = [];
+export interface DebugChatLedgerEntry {
+  tick: number;
+  line: string;
+  ts?: number;
+  actorId?: number | null;
+  convId?: number | null;
+  objType?: number | null;
+}
+
+export interface LegacyConversationState {
+  debugChatLedger?: DebugChatLedgerEntry[];
+  legacyLedgerLines?: string[];
+  legacyLedgerPrompt?: boolean;
+  legacyPromptAnimMs?: number;
+  legacyPromptAnimPhase?: number;
+  legacyConversationActive?: boolean;
+  legacyConversationAuthoritative?: boolean;
+  legacyConversationSessionId?: string;
+  legacyConversationInput?: string;
+  legacyConversationTargetName?: string;
+  legacyConversationActorEntityId?: number;
+  legacyConversationPortraitTile?: number | null;
+  legacyConversationTargetObjNum?: number;
+  legacyConversationTargetObjType?: number;
+  legacyConversationNpcKey?: string;
+  legacyConversationPendingPrompt?: string;
+  legacyConversationShowInventory?: boolean;
+  legacyConversationEquipmentSlots?: unknown[];
+  legacyConversationPaging?: boolean;
+  legacyConversationPages?: string[][];
+  legacyConversationScript?: unknown;
+  legacyConversationDescText?: string;
+  legacyConversationRules?: unknown[];
+  legacyConversationPc?: number;
+  legacyConversationInputOpcode?: number;
+  legacyConversationVmContext?: unknown;
+  legacyConversationPrevStatus?: number;
+  legacyStatusDisplay?: number;
+}
+
+export interface PushLedgerOptions {
+  maxChars?: number;
+  maxLines?: number;
+  tick?: number;
+  nowMs?: number;
+}
+
+export interface ConversationPaginationOptions {
+  pageMaxLines?: number;
+  maxChars?: number;
+  tick?: number;
+  nowMs?: number;
+}
+
+export interface ConversationReply {
+  kind: string;
+  lines?: unknown[];
+}
+
+export interface SubmitConversationDeps {
+  pushLedgerMessage?: (line: string) => void;
+  pushPrompt?: () => void;
+  showPrompt?: () => void;
+  endConversation?: () => void;
+  formatYouSeeLine?: (text: string) => string;
+  reply?: (text: string) => ConversationReply;
+  startPagination?: (lines: string[]) => boolean;
+  unimplementedFallbackText?: string;
+}
+
+export interface ConversationKeyEvent {
+  key?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+}
+
+export interface ConversationKeydownDeps {
+  endConversation?: () => void;
+  advancePagination?: () => void;
+  submitInput?: () => unknown;
+  maxChars?: number;
+}
+
+export function wrapLegacyLedgerLines(text: unknown, maxChars: unknown): string[] {
+  const out: string[] = [];
   const limit = Math.max(1, Number(maxChars) | 0);
   const src = String(text || "").replace(/\s+/g, " ").trim();
   if (!src) {
@@ -40,7 +124,7 @@ export function wrapLegacyLedgerLines(text: any, maxChars: any) {
   return out;
 }
 
-export function showLegacyLedgerPrompt(state: any) {
+export function showLegacyLedgerPrompt(state: LegacyConversationState): void {
   if (!state?.legacyLedgerPrompt) {
     state.legacyPromptAnimMs = 0;
     state.legacyPromptAnimPhase = 0;
@@ -48,7 +132,7 @@ export function showLegacyLedgerPrompt(state: any) {
   state.legacyLedgerPrompt = true;
 }
 
-export function pushLedgerMessage(state: any, text: any, opts: any = {}) {
+export function pushLedgerMessage(state: LegacyConversationState, text: unknown, opts: PushLedgerOptions = {}): void {
   const maxChars = Math.max(1, Number(opts.maxChars) | 0);
   const maxLines = Math.max(1, Number(opts.maxLines) | 0);
   const tick = Number(opts.tick) >>> 0;
@@ -93,8 +177,8 @@ export function pushLedgerMessage(state: any, text: any, opts: any = {}) {
   }
 }
 
-export function buildDebugChatLedgerText(entries: any) {
-  const lines = [];
+export function buildDebugChatLedgerText(entries: unknown): string {
+  const lines: string[] = [];
   const src = Array.isArray(entries) ? entries : [];
   const hasMetaNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0);
   for (const entry of src) {
@@ -115,12 +199,12 @@ export function buildDebugChatLedgerText(entries: any) {
   return lines.join("\n");
 }
 
-export function paginateLedgerMessages(lines: any, maxLines: any, maxChars: any) {
+export function paginateLedgerMessages(lines: unknown, maxLines: unknown, maxChars: unknown): string[][] {
   const src = Array.isArray(lines) ? lines : [];
   const pageMax = Math.max(1, Number(maxLines) | 0);
   const lineMax = Math.max(1, Number(maxChars) | 0);
-  const pages = [];
-  let cur = [];
+  const pages: string[][] = [];
+  let cur: string[] = [];
   for (const item of src) {
     const wrapped = (item === "") ? [""] : wrapLegacyLedgerLines(item, lineMax);
     if (!wrapped.length) {
@@ -140,7 +224,11 @@ export function paginateLedgerMessages(lines: any, maxLines: any, maxChars: any)
   return pages;
 }
 
-export function startLegacyConversationPagination(state: any, lines: any, opts: any = {}) {
+export function startLegacyConversationPagination(
+  state: LegacyConversationState,
+  lines: unknown,
+  opts: ConversationPaginationOptions = {}
+): boolean {
   const pages = paginateLedgerMessages(lines, opts.pageMaxLines, opts.maxChars);
   if (!pages.length) {
     return false;
@@ -170,7 +258,7 @@ export function startLegacyConversationPagination(state: any, lines: any, opts: 
   return true;
 }
 
-export function advanceLegacyConversationPagination(state: any, onEndPrompt: any) {
+export function advanceLegacyConversationPagination(state: LegacyConversationState, onEndPrompt: unknown): boolean {
   if (!state.legacyConversationPaging) {
     return false;
   }
@@ -187,7 +275,7 @@ export function advanceLegacyConversationPagination(state: any, onEndPrompt: any
   return true;
 }
 
-export function endLegacyConversation(state: any) {
+export function endLegacyConversation(state: LegacyConversationState): void {
   state.legacyConversationActive = false;
   state.legacyConversationAuthoritative = false;
   state.legacyConversationSessionId = "";
@@ -215,7 +303,7 @@ export function endLegacyConversation(state: any) {
   state.legacyStatusDisplay = Number(state.legacyConversationPrevStatus) | 0;
 }
 
-export function submitLegacyConversationInput(state: any, deps: any = {}) {
+export function submitLegacyConversationInput(state: LegacyConversationState, deps: SubmitConversationDeps = {}) {
   const typed = String(state.legacyConversationInput || "").trim();
   state.legacyConversationInput = "";
   state.legacyLedgerPrompt = false;
@@ -245,7 +333,7 @@ export function submitLegacyConversationInput(state: any, deps: any = {}) {
     const desc = String(state.legacyConversationDescText || "").trim();
     const formatYouSeeLineFn = (typeof deps.formatYouSeeLine === "function")
       ? deps.formatYouSeeLine
-      : ((s) => `You see ${String(s || "").trim()}.`);
+      : ((s: string) => `You see ${String(s || "").trim()}.`);
     pushLedgerMessageFn(formatYouSeeLineFn(desc || state.legacyConversationTargetName || "someone"));
     pushPromptFn();
     return { kind: "look" };
@@ -275,7 +363,11 @@ export function submitLegacyConversationInput(state: any, deps: any = {}) {
   return { kind: "response" };
 }
 
-export function handleLegacyConversationKeydown(state: any, ev: any, deps: any = {}) {
+export function handleLegacyConversationKeydown(
+  state: LegacyConversationState,
+  ev: ConversationKeyEvent,
+  deps: ConversationKeydownDeps = {}
+) {
   const key = String(ev?.key || "");
   if (key === "Escape") {
     if (typeof deps.endConversation === "function") {
