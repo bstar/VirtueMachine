@@ -1,5 +1,9 @@
 "use strict";
 
+import type { IncomingMessage } from "node:http";
+import type { NetConnectOpts } from "node:net";
+import type { ConnectionOptions } from "node:tls";
+
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -176,31 +180,31 @@ function ensureDataDir() {
   ensureServerDataDirRuntime(DATA_DIR);
 }
 
-function readJsonValidated(filePath, fallback, validate) {
+function readJsonValidated<T>(filePath: string, fallback: T, validate: (raw: unknown) => T): T {
   return readJsonFileValidatedRuntime(filePath, fallback, validate);
 }
 
-function writeJson(filePath, value) {
+function writeJson(filePath: string, value: unknown): void {
   writeJsonFileRuntime(filePath, value);
 }
 
-function appendJsonLine(filePath, value) {
+function appendJsonLine(filePath: string, value: unknown): void {
   appendJsonLineRuntime(filePath, value);
 }
 
-function readJsonLines(filePath) {
+function readJsonLines(filePath: string): unknown[] {
   return readJsonLinesRuntime(filePath);
 }
 
-function normalizeUsername(raw) {
+function normalizeUsername(raw: unknown): string {
   return normalizeUsernameRuntime(raw);
 }
 
-function normalizeEmail(raw) {
+function normalizeEmail(raw: unknown): string {
   return normalizeEmailRuntime(raw);
 }
 
-function isValidEmail(raw) {
+function isValidEmail(raw: unknown): boolean {
   return isValidEmailRuntime(raw);
 }
 
@@ -216,18 +220,23 @@ function ensureUserSchema(user) {
   ensureUserSchemaRuntime(user);
 }
 
-function parseAuth(req) {
+function parseAuth(req: IncomingMessage): string {
   return parseAuthHeaderRuntime(req.headers.authorization || "");
 }
 
-function runtimeContractFromHeaders(req) {
+function runtimeContractFromHeaders(req: IncomingMessage): { extensions: string[]; profile: string } {
   return {
     profile: normalizeRuntimeProfile(req?.headers?.["x-vm-runtime-profile"]),
     extensions: parseRuntimeExtensionsHeader(req?.headers?.["x-vm-runtime-extensions"])
   };
 }
 
-function runtimeContractSpec() {
+function runtimeContractSpec(): {
+  default_profile: string;
+  extension_header_format: string;
+  notes: string[];
+  profiles: string[];
+} {
   return {
     profiles: [...RUNTIME_PROFILES].sort(),
     default_profile: RUNTIME_PROFILE_CANONICAL_STRICT,
@@ -239,8 +248,9 @@ function runtimeContractSpec() {
   };
 }
 
-function readBody(req) {
-  return readJsonBodyRuntime(req, MAX_BODY);
+async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const body = await readJsonBodyRuntime(req, MAX_BODY);
+  return body && typeof body === "object" ? body as Record<string, unknown> : {};
 }
 
 function defaultCriticalPolicy() {
@@ -324,19 +334,19 @@ function updateNpcScheduleStates(state, elapsedTicks) {
   rebuildNpcScheduleIndex(state);
 }
 
-function normalizeWorldClock(raw) {
+function normalizeWorldClock(raw: unknown) {
   return normalizeWorldClockRuntime(raw);
 }
 
-function clampInt(n, lo, hi) {
+function clampInt(n: unknown, lo: number, hi: number): number {
   return clampIntRuntime(n, lo, hi);
 }
 
-function queryIntOr(url, key, fallback) {
+function queryIntOr(url: URL, key: string, fallback: number): number {
   return queryIntOrRuntime(url, key, fallback);
 }
 
-function loadBaseTileMap(runtimeDir) {
+function loadBaseTileMap(runtimeDir: string): Uint16Array {
   const basetilePath = path.join(runtimeDir, "basetile");
   try {
     const buf = fs.readFileSync(basetilePath);
@@ -346,7 +356,7 @@ function loadBaseTileMap(runtimeDir) {
   }
 }
 
-function assertObjBaselineDir(dir) {
+function assertObjBaselineDir(dir: string): string {
   const names = fs.readdirSync(dir);
   const objblkCount = names.filter((name) => /^objblk[a-h][a-h]$/i.test(name)).length;
   if (objblkCount < 64) {
@@ -358,11 +368,11 @@ function assertObjBaselineDir(dir) {
   return dir;
 }
 
-function parseObjBlkRecords(bytes, areaId, baseTileMap) {
+function parseObjBlkRecords(bytes: Uint8Array | Buffer | null | undefined, areaId: number, baseTileMap: Uint16Array) {
   return parseObjBlkRecordsRuntime(bytes, areaId, baseTileMap);
 }
 
-function loadWorldObjectBaseline(runtimeDir) {
+function loadWorldObjectBaseline(runtimeDir: string) {
   const sourceDir = assertObjBaselineDir(OBJECT_BASELINE_DIR);
   const loadedAt = nowIso();
   const baseTileMap = loadBaseTileMap(runtimeDir);
@@ -398,7 +408,7 @@ function loadWorldObjectBaseline(runtimeDir) {
   };
 }
 
-function buildWorldObjectState(runtimeDir, rawDeltas) {
+function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown) {
   const baseline = loadWorldObjectBaseline(runtimeDir);
   const tileFlags = loadTileFlagMap(runtimeDir);
   const terrainType = loadTerrainTypeMap(runtimeDir);
@@ -420,11 +430,11 @@ function defaultWorldInteractionLog() {
   return defaultWorldInteractionLogRuntime();
 }
 
-function normalizeWorldInteractionLog(raw) {
+function normalizeWorldInteractionLog(raw: unknown) {
   return normalizeWorldInteractionLogRuntime(raw);
 }
 
-function hashInteractionEvent(prevHash, event) {
+function hashInteractionEvent(prevHash: unknown, event: Record<string, unknown>) {
   return hashInteractionEventRuntime(prevHash, event);
 }
 
@@ -440,7 +450,7 @@ function reloadWorldObjectBaseline(state) {
   writeJson(FILES.worldInteractionLog, state.worldInteractionLog);
 }
 
-function advanceWorldClockMinute(clock) {
+function advanceWorldClockMinute(clock: Parameters<typeof advanceWorldClockMinuteRuntime>[0]): void {
   advanceWorldClockMinuteRuntime(clock, {
     daysPerMonth: SERVER_DAYS_PER_MONTH,
     hoursPerDay: SERVER_HOURS_PER_DAY,
@@ -478,7 +488,7 @@ function updateAuthoritativeClock(state) {
   return clock;
 }
 
-function normalizePresenceRows(raw) {
+function normalizePresenceRows(raw: unknown) {
   return normalizePresenceRowsRuntime(raw);
 }
 
@@ -605,10 +615,10 @@ interface EmailDeliveryLog {
   [key: string]: unknown;
 }
 
-async function smtpDeliver(toEmail, subject, bodyText) {
+async function smtpDeliver(toEmail: string, subject: string, bodyText: string) {
   return smtpDeliverRuntime({
     bodyText,
-    connect: (options) => net.connect(options),
+    connect: (options: NetConnectOpts) => net.connect(options),
     fromEmail: EMAIL_FROM,
     helo: EMAIL_SMTP_HELO,
     host: EMAIL_SMTP_HOST,
@@ -618,13 +628,13 @@ async function smtpDeliver(toEmail, subject, bodyText) {
     secure: EMAIL_SMTP_SECURE,
     subject,
     timeoutMs: EMAIL_SMTP_TIMEOUT_MS,
-    tlsConnect: (options) => tls.connect(options),
+    tlsConnect: (options: ConnectionOptions) => tls.connect(options),
     toEmail,
     user: EMAIL_SMTP_USER
   });
 }
 
-async function resendDeliver(toEmail, subject, bodyText) {
+async function resendDeliver(toEmail: string, subject: string, bodyText: string) {
   return resendDeliverRuntime({
     apiKey: EMAIL_RESEND_API_KEY,
     baseUrl: EMAIL_RESEND_BASE_URL,
@@ -636,7 +646,7 @@ async function resendDeliver(toEmail, subject, bodyText) {
   });
 }
 
-async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
+async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknown, meta: Record<string, unknown> = {}) {
   const delivery: EmailDeliveryLog = {
     kind: "email_delivery",
     at: nowIso(),
@@ -681,7 +691,7 @@ function listUserCharacters(state, userId) {
   return listUserCharactersRuntime(state.characters, userId);
 }
 
-function computeSnapshotHash(snapshotBase64) {
+function computeSnapshotHash(snapshotBase64: unknown): string {
   return computeSnapshotHashRuntime(snapshotBase64);
 }
 
