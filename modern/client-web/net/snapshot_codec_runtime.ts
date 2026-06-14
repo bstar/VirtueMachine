@@ -24,7 +24,6 @@ export interface SnapshotWorldObjectRuntime {
   order?: number;
   renderable?: boolean;
   sourceKind?: string;
-  [key: string]: unknown;
 }
 
 export interface SnapshotAnchorRuntime {
