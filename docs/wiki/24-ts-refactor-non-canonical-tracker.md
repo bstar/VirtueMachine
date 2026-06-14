@@ -48,11 +48,11 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 ### 5) Net panel action wrapper abstraction
 
-- Status: `temporary`
+- Status: `verified`
 - Location: `modern/client-web/net/panel_actions_runtime.ts`
-- Note: repetitive account-action `try/catch` blocks now route through a generic action wrapper.
-- Risk: generic success/error formatting can accidentally override flow-specific messaging if used on paths that already produce canonicalized diagnostics.
-- Exit criteria: keep wrapper scoped to simple account actions only, or replace with per-action typed controllers once full UI canonicalization is complete.
+- Note: repetitive account-action `try/catch` blocks route through a generic action wrapper scoped to simple account actions, and runtime tests cover success callback formatting plus error status/diagnostic prefixes.
+- Risk: paths with already-canonicalized diagnostics should still avoid this wrapper unless they match the simple account-action contract.
+- Exit criteria: satisfied for current wrapper scope.
 
 ### 6) Saved-account profile UX remains modern-only
 
