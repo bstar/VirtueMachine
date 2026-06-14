@@ -297,7 +297,7 @@ import {
   isSolidEnvObjectRuntime
 } from "./sim/object_types_runtime.ts";
 import {
-  nearestTalkTargetAtCellRuntime,
+  resolveAttackTargetAtCellRuntime,
   resolveLookTargetAtCellRuntime,
   resolvePickupTargetAtCellRuntime,
   resolveTalkTargetAtCellRuntime,
@@ -5060,9 +5060,14 @@ function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
 
 function tryAttackAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const interactionState = state as unknown as GameplayInteractionStateView;
-  const tz = sim.world.map_z | 0;
-  const actor = nearestTalkTargetAtCellRuntime(interactionState.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
-  const result = legacyAttackVerbRuntime(actor, tx, ty, tz);
+  const target = resolveAttackTargetAtCellRuntime({
+    world: sim.world,
+    entityEntries: interactionState.entityLayer?.entries,
+    tx,
+    ty,
+    avatarEntityId: AVATAR_ENTITY_ID
+  });
+  const result = legacyAttackVerbRuntime(target.actor, target.x, target.y, target.z);
   if (result.playSfx === "attack_swing") {
     playSfx(U6_SFX.ATTACK_SWING);
   }

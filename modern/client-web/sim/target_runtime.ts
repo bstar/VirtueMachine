@@ -192,6 +192,31 @@ export function resolveTalkTargetAtCellRuntime(args: {
   return { actor, ok: true, x: tx, y: ty, z: tz };
 }
 
+export type AttackTargetResolutionRuntime = {
+  actor: TargetEntityRuntime | null;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export function resolveAttackTargetAtCellRuntime(args: {
+  world: TargetWorldRuntime;
+  entityEntries: TargetEntityRuntime[] | null | undefined;
+  tx: number;
+  ty: number;
+  avatarEntityId: number;
+}): AttackTargetResolutionRuntime {
+  const tx = Number(args.tx) | 0;
+  const ty = Number(args.ty) | 0;
+  const tz = targetZRuntime(args.world);
+  return {
+    actor: nearestTalkTargetAtCellRuntime(args.entityEntries, tx, ty, tz, args.avatarEntityId),
+    x: tx,
+    y: ty,
+    z: tz
+  };
+}
+
 export type PickupTargetResolutionRuntime = {
   object: null;
   ok: false;

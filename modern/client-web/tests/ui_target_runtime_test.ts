@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildTargetResolverRegressionProbesRuntime,
   nearestTalkTargetAtCellRuntime,
+  resolveAttackTargetAtCellRuntime,
   resolveLookTargetAtCellRuntime,
   resolvePickupTargetAtCellRuntime,
   resolveTalkTargetAtCellRuntime,
@@ -135,11 +136,38 @@ function testPickupTargetResolution() {
   }), { object: null, ok: false, reason: "no_object", x: 11, y: 10, z: 0 });
 }
 
+function testAttackTargetResolution() {
+  const result = resolveAttackTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 1 },
+    entityEntries: [
+      { id: 1, x: 12, y: 10, z: 1, legacyOrder: 999 },
+      { id: 2, x: 12, y: 10, z: 0, legacyOrder: 999 },
+      { id: 3, x: 12, y: 10, z: 1, legacyOrder: 5 },
+      { id: 4, x: 12, y: 10, z: 1, legacyOrder: 9 }
+    ],
+    tx: 12,
+    ty: 10,
+    avatarEntityId: 1
+  });
+  assert.equal(result.actor?.id, 4);
+  assert.deepEqual(
+    resolveAttackTargetAtCellRuntime({
+      world: { map_x: 10, map_y: 10, map_z: 1 },
+      entityEntries: [{ id: 1, x: 12, y: 10, z: 1, legacyOrder: 999 }],
+      tx: 12,
+      ty: 10,
+      avatarEntityId: 1
+    }),
+    { actor: null, x: 12, y: 10, z: 1 }
+  );
+}
+
 testTopWorldObjectSelection();
 testTalkTargetSelection();
 testRegressionProbes();
 testLookTargetResolution();
 testTalkTargetResolution();
 testPickupTargetResolution();
+testAttackTargetResolution();
 
 console.log("ui_target_runtime_test: ok");
