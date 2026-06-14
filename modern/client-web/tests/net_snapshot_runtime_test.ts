@@ -7,7 +7,8 @@ import {
 } from "../net/snapshot_codec_runtime.ts";
 import {
   performNetLoadSnapshot,
-  performNetSaveSnapshot
+  performNetSaveSnapshot,
+  shouldAutosaveSnapshotRuntime
 } from "../net/snapshot_runtime.ts";
 
 const sim: SimSnapshotRuntime = {
@@ -51,6 +52,57 @@ assert.equal(decoded?.inventory["0x088:0x00"], 2);
 assert.equal(decoded?.spawnedWorldObjects[0].type, 88);
 
 assert.equal(normalizeLoadedSimStateRuntime({}), null);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 0,
+  intervalTicks: 10,
+  isAuthenticated: true,
+  isSessionStarted: true,
+  lastSavedTick: 0
+}), false);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 9,
+  intervalTicks: 10,
+  isAuthenticated: true,
+  isSessionStarted: true,
+  lastSavedTick: 0
+}), false);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 10,
+  intervalTicks: 10,
+  isAuthenticated: true,
+  isSessionStarted: true,
+  lastSavedTick: 0
+}), true);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 20,
+  intervalTicks: 10,
+  isAuthenticated: false,
+  isSessionStarted: true,
+  lastSavedTick: 0
+}), false);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 20,
+  intervalTicks: 10,
+  isAuthenticated: true,
+  isSessionStarted: false,
+  lastSavedTick: 0
+}), false);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 20,
+  intervalTicks: 10,
+  isAuthenticated: true,
+  isInFlight: true,
+  isSessionStarted: true,
+  lastSavedTick: 0
+}), false);
+assert.equal(shouldAutosaveSnapshotRuntime({
+  currentTick: 20,
+  intervalTicks: 10,
+  isAuthenticated: true,
+  isSessionStarted: true,
+  lastSavedTick: 0,
+  syncPaused: true
+}), false);
 
 {
   const statuses: string[] = [];

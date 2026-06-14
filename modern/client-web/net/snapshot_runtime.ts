@@ -38,6 +38,27 @@ export type SnapshotLoadDeps = {
   setStatus: (level: string, text: string) => void;
 };
 
+export function shouldAutosaveSnapshotRuntime(args: {
+  currentTick: unknown;
+  intervalTicks: unknown;
+  isAuthenticated: boolean;
+  isInFlight?: boolean;
+  isSessionStarted: boolean;
+  lastSavedTick: unknown;
+  syncPaused?: boolean;
+}): boolean {
+  if (!args.isAuthenticated || !args.isSessionStarted || args.syncPaused || args.isInFlight) {
+    return false;
+  }
+  const currentTick = Number(args.currentTick) >>> 0;
+  const lastSavedTick = Number(args.lastSavedTick) >>> 0;
+  const intervalTicks = Math.max(1, Number(args.intervalTicks) >>> 0);
+  if (currentTick <= 0 || currentTick === lastSavedTick) {
+    return false;
+  }
+  return (currentTick - lastSavedTick) >= intervalTicks;
+}
+
 export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<SnapshotRuntimePayload> {
   deps.setStatus("sync", "Saving world snapshot...");
   if (!deps.isAuthenticated()) {

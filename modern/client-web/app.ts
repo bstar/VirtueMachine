@@ -127,6 +127,7 @@ import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.
 import {
   performNetLoadSnapshot,
   performNetSaveSnapshot,
+  shouldAutosaveSnapshotRuntime,
   type SnapshotRuntimePayload
 } from "./net/snapshot_runtime.ts";
 import {
@@ -406,6 +407,7 @@ const AVATAR_WALK_ANIM_WINDOW_MS = 280;
 const NET_PRESENCE_HEARTBEAT_TICKS = 4;
 const NET_PRESENCE_POLL_TICKS = 10;
 const NET_CLOCK_POLL_TICKS = 2;
+const NET_AUTOSAVE_TICKS = NET_PRESENCE_HEARTBEAT_TICKS * 15;
 const NET_BACKGROUND_FAIL_WINDOW_MS = 12000;
 const NET_BACKGROUND_FAIL_MAX = 6;
 const LOOP_MAX_CATCHUP_STEPS = 4;
@@ -696,6 +698,7 @@ type AppNetState = {
   remotePlayers: RemotePresencePlayer[];
   resumeFromSnapshot: boolean;
   sessionId: string;
+  snapshotSaveInFlight: boolean;
   statusLevel: string;
   statusText: string;
   token: string;
@@ -1256,6 +1259,7 @@ const state: AppState = {
     lastSavedTick: 0,
     maintenanceAuto: false,
     maintenanceInFlight: false,
+    snapshotSaveInFlight: false,
     lastMaintenanceTick: -1,
     recoveryEventCount: 0,
     resumeFromSnapshot: false,
@@ -4101,6 +4105,30 @@ async function netSaveSnapshot(): Promise<SnapshotRuntimePayload> {
     resetBackgroundFailures,
     setStatus: setNetStatus
   });
+}
+
+async function netAutosaveSnapshot(): Promise<void> {
+  if (state.net.snapshotSaveInFlight) {
+    return;
+  }
+  state.net.snapshotSaveInFlight = true;
+  try {
+    await performNetSaveSnapshot({
+      ensureAuth: netLogin,
+      isAuthenticated: () => !!state.net.token,
+      request: netRequest,
+      snapshotRoute: netSnapshotRoute,
+      encodeSnapshot: () => encodeSimSnapshotBase64Runtime(state.sim),
+      currentTick: () => state.sim.tick >>> 0,
+      onSavedTick: (tick) => {
+        state.net.lastSavedTick = Number(tick) >>> 0;
+      },
+      resetBackgroundFailures,
+      setStatus: () => {}
+    });
+  } finally {
+    state.net.snapshotSaveInFlight = false;
+  }
 }
 
 async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
@@ -7356,6 +7384,19 @@ function tickLoop(ts: number): void {
         state.net.lastPresenceHeartbeatTick = state.sim.tick >>> 0;
         netSendPresenceHeartbeat().catch((err) => {
           recordBackgroundNetFailure(err, "Presence heartbeat");
+        });
+      }
+      if (shouldAutosaveSnapshotRuntime({
+        currentTick: state.sim.tick,
+        intervalTicks: NET_AUTOSAVE_TICKS,
+        isAuthenticated: isNetAuthenticated(),
+        isInFlight: state.net.snapshotSaveInFlight,
+        isSessionStarted: state.sessionStarted,
+        lastSavedTick: state.net.lastSavedTick,
+        syncPaused: state.net.backgroundSyncPaused
+      })) {
+        void netAutosaveSnapshot().catch((err) => {
+          recordBackgroundNetFailure(err, "Snapshot autosave");
         });
       }
       if (
