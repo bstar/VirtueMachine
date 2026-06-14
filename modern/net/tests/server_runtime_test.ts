@@ -4,11 +4,16 @@ import {
   clampIntRuntime,
   computeSnapshotHashRuntime,
   decodePackedCoordRuntime,
+  defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
   deterministicRecoveryTickLastRuntime,
+  hashInteractionEventRuntime,
+  normalizePresenceRowsRuntime,
+  normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
   parseU16LERuntime,
-  queryIntOrRuntime
+  queryIntOrRuntime,
+  recordWorldInteractionEventRuntime
 } from "../server_runtime.ts";
 
 assert.deepEqual(defaultWorldClockRuntime(1234), {
@@ -86,5 +91,93 @@ assert.equal(deterministicRecoveryTickLastRuntime([
   { item_id: "a", tick: 20 }
 ], "a"), 20);
 assert.equal(deterministicRecoveryTickLastRuntime([{ item_id: "b", tick: 30 }], "a"), null);
+
+assert.deepEqual(defaultWorldInteractionLogRuntime(), {
+  schema_version: 1,
+  seq: 0,
+  checkpoint_hash: "",
+  events: []
+});
+
+const normalizedLog = normalizeWorldInteractionLogRuntime({
+  seq: -5,
+  checkpoint_hash: 123,
+  events: Array.from({ length: 514 }, (_v, i) => ({
+    seq: i,
+    verb: i === 513 ? "take" : "",
+    status: 0x1ff,
+    runtime_profile: i === 513 ? "canonical_plus" : "bad",
+    runtime_extensions: i === 513 ? ["housing", "bad_ext", "quest_system"] : ""
+  }))
+});
+assert.equal(normalizedLog.seq, 0);
+assert.equal(normalizedLog.checkpoint_hash, "123");
+assert.equal(normalizedLog.events.length, 512);
+assert.equal(normalizedLog.events[0].seq, 2);
+assert.equal(normalizedLog.events[511].verb, "take");
+assert.equal(normalizedLog.events[511].status, 0xff);
+assert.equal(normalizedLog.events[511].runtime_profile, "canonical_plus");
+assert.deepEqual(normalizedLog.events[511].runtime_extensions, ["bad_ext", "housing", "quest_system"]);
+
+const state = { worldInteractionLog: defaultWorldInteractionLogRuntime() };
+const firstEvent = recordWorldInteractionEventRuntime(state, {
+  verb: "take",
+  actor_id: "avatar",
+  target_key: "a01",
+  status: 0x101,
+  x: "307",
+  y: "347",
+  z: "0",
+  runtime_profile: "canonical_plus",
+  runtime_extensions: "quest_system,housing"
+});
+assert.equal(firstEvent.seq, 1);
+assert.equal(firstEvent.status, 1);
+assert.equal(state.worldInteractionLog.seq, 1);
+assert.deepEqual(firstEvent.runtime_extensions, ["housing", "quest_system"]);
+assert.equal(
+  state.worldInteractionLog.checkpoint_hash,
+  hashInteractionEventRuntime("", firstEvent)
+);
+
+for (let i = 0; i < 520; i += 1) {
+  recordWorldInteractionEventRuntime(state, { verb: "noop", target_key: `k${i}` });
+}
+assert.equal(state.worldInteractionLog.events.length, 512);
+assert.equal(state.worldInteractionLog.events[0].seq, 10);
+assert.equal(state.worldInteractionLog.seq, 521);
+
+assert.deepEqual(normalizePresenceRowsRuntime(null), []);
+assert.deepEqual(normalizePresenceRowsRuntime([{
+  user_id: 7,
+  username: "Avatar",
+  session_id: "s1",
+  character_name: "Dupre",
+  map_x: "10",
+  map_y: "20",
+  map_z: "1",
+  facing_dx: "-1",
+  facing_dy: "0",
+  tick: -1,
+  mode: "",
+  runtime_profile: "canonical_plus",
+  runtime_extensions: ["quest_system", "housing"],
+  updated_at_ms: "123"
+}]), [{
+  user_id: "7",
+  username: "Avatar",
+  session_id: "s1",
+  character_name: "Dupre",
+  map_x: 10,
+  map_y: 20,
+  map_z: 1,
+  facing_dx: -1,
+  facing_dy: 0,
+  tick: 0xffffffff,
+  mode: "avatar",
+  runtime_profile: "canonical_plus",
+  runtime_extensions: ["housing", "quest_system"],
+  updated_at_ms: 123
+}]);
 
 console.log("server_runtime_test: ok");

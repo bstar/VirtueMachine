@@ -1,4 +1,8 @@
 import nodeCrypto from "node:crypto";
+import {
+  normalizeRuntimeProfile,
+  parseRuntimeExtensionsHeader
+} from "../common/runtime_contract.ts";
 
 export type WorldClockRuntime = {
   date_d: number;
@@ -8,6 +12,47 @@ export type WorldClockRuntime = {
   tick: number;
   time_h: number;
   time_m: number;
+};
+
+export type WorldInteractionEventRuntime = {
+  actor_id: string;
+  container_key: string;
+  holder_id: string;
+  holder_key: string;
+  holder_kind: string;
+  runtime_extensions: string[];
+  runtime_profile: string;
+  seq: number;
+  status: number;
+  target_key: string;
+  verb: string;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type WorldInteractionLogRuntime = {
+  checkpoint_hash: string;
+  events: WorldInteractionEventRuntime[];
+  schema_version: 1;
+  seq: number;
+};
+
+export type PresenceRowRuntime = {
+  character_name: string;
+  facing_dx: number;
+  facing_dy: number;
+  map_x: number;
+  map_y: number;
+  map_z: number;
+  mode: string;
+  runtime_extensions: string[];
+  runtime_profile: string;
+  session_id: string;
+  tick: number;
+  updated_at_ms: number;
+  user_id: string;
+  username: string;
 };
 
 export function defaultWorldClockRuntime(nowMs = Date.now()): WorldClockRuntime {
@@ -105,4 +150,120 @@ export function deterministicRecoveryTickLastRuntime(
     .filter((tick) => Number.isFinite(tick))
     .sort((a, b) => b - a);
   return filtered.length ? filtered[0] : null;
+}
+
+function parseRuntimeExtensionsRuntime(raw: unknown): string[] {
+  return parseRuntimeExtensionsHeader(
+    Array.isArray(raw)
+      ? raw.join(",")
+      : raw
+  );
+}
+
+export function defaultWorldInteractionLogRuntime(): WorldInteractionLogRuntime {
+  return {
+    schema_version: 1,
+    seq: 0,
+    checkpoint_hash: "",
+    events: []
+  };
+}
+
+export function normalizeWorldInteractionLogRuntime(raw: unknown): WorldInteractionLogRuntime {
+  const base = defaultWorldInteractionLogRuntime();
+  if (!raw || typeof raw !== "object") {
+    return base;
+  }
+  const row = raw as {
+    checkpoint_hash?: unknown;
+    events?: unknown;
+    schema_version?: unknown;
+    seq?: unknown;
+  };
+  base.schema_version = Number(row.schema_version) === 1 ? 1 : 1;
+  base.seq = Math.max(0, Number(row.seq) | 0);
+  base.checkpoint_hash = String(row.checkpoint_hash || "");
+  if (Array.isArray(row.events)) {
+    base.events = row.events.slice(-512).map((e) => normalizeWorldInteractionEventRuntime(e, 0));
+  }
+  return base;
+}
+
+export function normalizeWorldInteractionEventRuntime(raw: unknown, seq: number): WorldInteractionEventRuntime {
+  const event = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  return {
+    seq: Number(seq || event.seq) | 0,
+    verb: String(event.verb || ""),
+    actor_id: String(event.actor_id || ""),
+    target_key: String(event.target_key || ""),
+    container_key: String(event.container_key || ""),
+    status: Number(event.status) & 0xff,
+    x: Number(event.x) | 0,
+    y: Number(event.y) | 0,
+    z: Number(event.z) | 0,
+    holder_kind: String(event.holder_kind || "none"),
+    holder_id: String(event.holder_id || ""),
+    holder_key: String(event.holder_key || ""),
+    runtime_profile: normalizeRuntimeProfile(event.runtime_profile),
+    runtime_extensions: parseRuntimeExtensionsRuntime(event.runtime_extensions)
+  };
+}
+
+export function hashInteractionEventRuntime(prevHash: unknown, event: Partial<WorldInteractionEventRuntime>): string {
+  const stable = [
+    String(prevHash || ""),
+    String(Number(event.seq) | 0),
+    String(event.verb || ""),
+    String(event.actor_id || ""),
+    String(event.target_key || ""),
+    String(event.container_key || ""),
+    String(Number(event.status) & 0xff),
+    String(Number(event.x) | 0),
+    String(Number(event.y) | 0),
+    String(Number(event.z) | 0),
+    String(event.holder_kind || "none"),
+    String(event.holder_id || ""),
+    String(event.holder_key || "")
+  ].join("|");
+  return nodeCrypto.createHash("sha256").update(stable, "utf8").digest("hex");
+}
+
+export function recordWorldInteractionEventRuntime(
+  state: { worldInteractionLog?: WorldInteractionLogRuntime | null },
+  event: unknown
+): WorldInteractionEventRuntime {
+  const log = state.worldInteractionLog || defaultWorldInteractionLogRuntime();
+  const nextSeq = (Number(log.seq) | 0) + 1;
+  const row = normalizeWorldInteractionEventRuntime(event, nextSeq);
+  log.checkpoint_hash = hashInteractionEventRuntime(log.checkpoint_hash, row);
+  log.seq = nextSeq | 0;
+  log.events = Array.isArray(log.events) ? log.events : [];
+  log.events.push(row);
+  if (log.events.length > 512) {
+    log.events = log.events.slice(log.events.length - 512);
+  }
+  state.worldInteractionLog = log;
+  return row;
+}
+
+export function normalizePresenceRowsRuntime(raw: unknown): PresenceRowRuntime[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((p) => ({
+    user_id: String(p?.user_id || ""),
+    username: String(p?.username || ""),
+    session_id: String(p?.session_id || ""),
+    character_name: String(p?.character_name || ""),
+    map_x: Number(p?.map_x) | 0,
+    map_y: Number(p?.map_y) | 0,
+    map_z: Number(p?.map_z) | 0,
+    facing_dx: Number(p?.facing_dx) | 0,
+    facing_dy: Number(p?.facing_dy) | 0,
+    tick: Number(p?.tick) >>> 0,
+    mode: String(p?.mode || "avatar"),
+    runtime_profile: normalizeRuntimeProfile(p?.runtime_profile),
+    runtime_extensions: parseRuntimeExtensionsRuntime(p?.runtime_extensions),
+    updated_at_ms: Number(p?.updated_at_ms || 0)
+  }));
 }

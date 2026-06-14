@@ -57,11 +57,16 @@ const {
   clampIntRuntime,
   computeSnapshotHashRuntime,
   decodePackedCoordRuntime,
+  defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
   deterministicRecoveryTickLastRuntime,
+  hashInteractionEventRuntime,
+  normalizePresenceRowsRuntime,
+  normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
   parseU16LERuntime,
-  queryIntOrRuntime
+  queryIntOrRuntime,
+  recordWorldInteractionEventRuntime
 } = require("./server_runtime.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
@@ -610,98 +615,19 @@ function worldObjectMeta(state) {
 }
 
 function defaultWorldInteractionLog() {
-  return {
-    schema_version: 1,
-    seq: 0,
-    checkpoint_hash: "",
-    events: []
-  };
+  return defaultWorldInteractionLogRuntime();
 }
 
 function normalizeWorldInteractionLog(raw) {
-  const base = defaultWorldInteractionLog();
-  if (!raw || typeof raw !== "object") {
-    return base;
-  }
-  base.schema_version = Number(raw.schema_version) === 1 ? 1 : 1;
-  base.seq = Math.max(0, Number(raw.seq) | 0);
-  base.checkpoint_hash = String(raw.checkpoint_hash || "");
-  if (Array.isArray(raw.events)) {
-    base.events = raw.events.slice(-512).map((e) => ({
-      seq: Number(e?.seq) | 0,
-      verb: String(e?.verb || ""),
-      actor_id: String(e?.actor_id || ""),
-      target_key: String(e?.target_key || ""),
-      container_key: String(e?.container_key || ""),
-      status: Number(e?.status) & 0xff,
-      x: Number(e?.x) | 0,
-      y: Number(e?.y) | 0,
-      z: Number(e?.z) | 0,
-      holder_kind: String(e?.holder_kind || "none"),
-      holder_id: String(e?.holder_id || ""),
-      holder_key: String(e?.holder_key || ""),
-      runtime_profile: normalizeRuntimeProfile(e?.runtime_profile),
-      runtime_extensions: parseRuntimeExtensionsHeader(
-        Array.isArray(e?.runtime_extensions)
-          ? e.runtime_extensions.join(",")
-          : e?.runtime_extensions
-      )
-    }));
-  }
-  return base;
+  return normalizeWorldInteractionLogRuntime(raw);
 }
 
 function hashInteractionEvent(prevHash, event) {
-  const stable = [
-    String(prevHash || ""),
-    String(event.seq | 0),
-    String(event.verb || ""),
-    String(event.actor_id || ""),
-    String(event.target_key || ""),
-    String(event.container_key || ""),
-    String(Number(event.status) & 0xff),
-    String(Number(event.x) | 0),
-    String(Number(event.y) | 0),
-    String(Number(event.z) | 0),
-    String(event.holder_kind || "none"),
-    String(event.holder_id || ""),
-    String(event.holder_key || "")
-  ].join("|");
-  return nodeCrypto.createHash("sha256").update(stable, "utf8").digest("hex");
+  return hashInteractionEventRuntime(prevHash, event);
 }
 
 function recordWorldInteractionEvent(state, event) {
-  const log = state.worldInteractionLog || defaultWorldInteractionLog();
-  const nextSeq = (Number(log.seq) | 0) + 1;
-  const row = {
-    seq: nextSeq | 0,
-    verb: String(event?.verb || ""),
-    actor_id: String(event?.actor_id || ""),
-    target_key: String(event?.target_key || ""),
-    container_key: String(event?.container_key || ""),
-    status: Number(event?.status) & 0xff,
-    x: Number(event?.x) | 0,
-    y: Number(event?.y) | 0,
-    z: Number(event?.z) | 0,
-    holder_kind: String(event?.holder_kind || "none"),
-    holder_id: String(event?.holder_id || ""),
-    holder_key: String(event?.holder_key || ""),
-    runtime_profile: normalizeRuntimeProfile(event?.runtime_profile),
-    runtime_extensions: parseRuntimeExtensionsHeader(
-      Array.isArray(event?.runtime_extensions)
-        ? event.runtime_extensions.join(",")
-        : event?.runtime_extensions
-    )
-  };
-  log.checkpoint_hash = hashInteractionEvent(log.checkpoint_hash, row);
-  log.seq = nextSeq | 0;
-  log.events = Array.isArray(log.events) ? log.events : [];
-  log.events.push(row);
-  if (log.events.length > 512) {
-    log.events = log.events.slice(log.events.length - 512);
-  }
-  state.worldInteractionLog = log;
-  return row;
+  return recordWorldInteractionEventRuntime(state, event);
 }
 
 function reloadWorldObjectBaseline(state) {
@@ -751,29 +677,7 @@ function updateAuthoritativeClock(state) {
 }
 
 function normalizePresenceRows(raw) {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.map((p) => ({
-    user_id: String(p?.user_id || ""),
-    username: String(p?.username || ""),
-    session_id: String(p?.session_id || ""),
-    character_name: String(p?.character_name || ""),
-    map_x: Number(p?.map_x) | 0,
-    map_y: Number(p?.map_y) | 0,
-    map_z: Number(p?.map_z) | 0,
-    facing_dx: Number(p?.facing_dx) | 0,
-    facing_dy: Number(p?.facing_dy) | 0,
-    tick: Number(p?.tick) >>> 0,
-    mode: String(p?.mode || "avatar"),
-    runtime_profile: normalizeRuntimeProfile(p?.runtime_profile),
-    runtime_extensions: parseRuntimeExtensionsHeader(
-      Array.isArray(p?.runtime_extensions)
-        ? p.runtime_extensions.join(",")
-        : p?.runtime_extensions
-    ),
-    updated_at_ms: Number(p?.updated_at_ms || 0)
-  }));
+  return normalizePresenceRowsRuntime(raw);
 }
 
 function loadState() {
