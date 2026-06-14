@@ -3,7 +3,7 @@ export const RUNTIME_PROFILE_CANONICAL_PLUS = "canonical_plus";
 export const RUNTIME_PROFILES = Object.freeze([
   RUNTIME_PROFILE_CANONICAL_STRICT,
   RUNTIME_PROFILE_CANONICAL_PLUS
-]);
+] as const);
 
 export const RUNTIME_EXTENSION_KEYS = Object.freeze([
   "quest_system",
@@ -11,9 +11,12 @@ export const RUNTIME_EXTENSION_KEYS = Object.freeze([
   "housing",
   "crafting",
   "farming"
-]);
+] as const);
 
-export const DEFAULT_RUNTIME_EXTENSIONS = Object.freeze({
+export type RuntimeProfile = typeof RUNTIME_PROFILES[number];
+export type RuntimeExtensionKey = typeof RUNTIME_EXTENSION_KEYS[number];
+
+export const DEFAULT_RUNTIME_EXTENSIONS: Readonly<RuntimeExtensions> = Object.freeze({
   quest_system: false,
   party_mmo: false,
   housing: false,
@@ -41,7 +44,7 @@ export function createDefaultRuntimeExtensions(): RuntimeExtensions {
 
 export function normalizeRuntimeProfile(raw: unknown): string {
   const v = String(raw || "").trim().toLowerCase();
-  if (RUNTIME_PROFILES.includes(v)) {
+  if ((RUNTIME_PROFILES as readonly string[]).includes(v)) {
     return v;
   }
   return RUNTIME_PROFILE_CANONICAL_STRICT;
@@ -52,7 +55,7 @@ export function sanitizeRuntimeExtensions(raw: unknown): RuntimeExtensions {
   if (!raw || typeof raw !== "object") {
     return out;
   }
-  const src = raw;
+  const src = raw as Partial<Record<RuntimeExtensionKey, unknown>>;
   for (const key of RUNTIME_EXTENSION_KEYS) {
     out[key] = !!src[key];
   }
@@ -64,8 +67,8 @@ export function parseRuntimeExtensionsHeader(raw: unknown): string[] {
   if (!src || src === "none" || src === "off") {
     return [];
   }
-  const out = [];
-  const seen = new Set();
+  const out: string[] = [];
+  const seen = new Set<string>();
   for (const token of src.split(",")) {
     const key = String(token || "").trim();
     if (!key) continue;
@@ -82,7 +85,7 @@ export function parseRuntimeExtensionListCsv(csv: unknown): RuntimeExtensions {
   const out = createDefaultRuntimeExtensions();
   const parsed = parseRuntimeExtensionsHeader(csv);
   for (const key of parsed) {
-    if (Object.prototype.hasOwnProperty.call(out, key)) {
+    if (isRuntimeExtensionKey(key)) {
       out[key] = true;
     }
   }
@@ -90,11 +93,15 @@ export function parseRuntimeExtensionListCsv(csv: unknown): RuntimeExtensions {
 }
 
 export function runtimeExtensionsSummary(extensions: unknown): string[] {
-  const enabled = [];
+  const enabled: string[] = [];
   const src = sanitizeRuntimeExtensions(extensions);
   for (const [key, on] of Object.entries(src)) {
     if (on) enabled.push(key);
   }
   enabled.sort();
   return enabled;
+}
+
+function isRuntimeExtensionKey(key: string): key is RuntimeExtensionKey {
+  return (RUNTIME_EXTENSION_KEYS as readonly string[]).includes(key);
 }
