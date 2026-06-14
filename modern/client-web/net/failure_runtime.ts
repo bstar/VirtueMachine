@@ -33,7 +33,10 @@ export function handleBackgroundFailure(
     args.setStatus("offline", "Server unreachable. Auto-sync paused; use Net Login to retry.");
     return;
   }
-  const suffix = args.err ? `: ${String((args.err as any).message || args.err)}` : "";
+  const errMessage = args.err && typeof args.err === "object" && "message" in args.err
+    ? (args.err as { message?: unknown }).message
+    : args.err;
+  const suffix = args.err ? `: ${String(errMessage || args.err)}` : "";
   args.setStatus("error", `${args.context} failed${suffix}`);
 }
 

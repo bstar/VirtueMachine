@@ -9,6 +9,10 @@ export type NetRuntimeRequestOptions = {
   onPulse?: () => void;
 };
 
+export interface NetJsonBody {
+  [key: string]: NetJsonBody;
+}
+
 /**
  * Build runtime contract headers for client->net requests.
  */
@@ -41,7 +45,7 @@ export function buildRuntimeContractHeaders(options: {
 export async function netJsonRequest(options: NetRuntimeRequestOptions): Promise<{
   status: number;
   ok: boolean;
-  body: any;
+  body: NetJsonBody | null;
   statusText: string;
 }> {
   const base = String(options?.apiBase || "").trim().replace(/\/+$/, "");
@@ -59,7 +63,7 @@ export async function netJsonRequest(options: NetRuntimeRequestOptions): Promise
   });
   const res = await fetch(`${base}${String(options?.route || "")}`, { ...init, headers });
   const text = await res.text();
-  const body = text.trim() ? JSON.parse(text) : null;
+  const body = text.trim() ? JSON.parse(text) as NetJsonBody : null;
   if (res.ok && typeof options?.onPulse === "function") {
     options.onPulse();
   }
@@ -81,7 +85,7 @@ export async function performManagedNetRequest(options: {
   runtimeExtensions?: string[];
   onPulse?: () => void;
   onUnauthorized?: () => void;
-}): Promise<any> {
+}): Promise<NetJsonBody> {
   const out = await netJsonRequest({
     apiBase: options.apiBase,
     route: options.route,
@@ -96,8 +100,9 @@ export async function performManagedNetRequest(options: {
     if (out.status === 401 && typeof options.onUnauthorized === "function") {
       options.onUnauthorized();
     }
-    const msg = out.body?.error?.message || `${out.status} ${out.statusText}`;
-    throw new Error(msg);
+    const body = out.body && typeof out.body === "object" ? out.body as { error?: { message?: unknown } } : {};
+    const msg = body.error?.message || `${out.status} ${out.statusText}`;
+    throw new Error(String(msg));
   }
-  return out.body;
+  return out.body || {};
 }

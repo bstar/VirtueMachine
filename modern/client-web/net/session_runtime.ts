@@ -15,6 +15,16 @@ export type NetSessionState = {
   firstBackgroundFailAtMs?: number;
 };
 
+export type NetLoginPayload = {
+  token?: unknown;
+  user?: {
+    user_id?: unknown;
+    username?: unknown;
+    email?: unknown;
+    email_verified?: unknown;
+  };
+};
+
 /**
  * Reset transient net polling/sync state.
  */
@@ -32,7 +42,7 @@ export function resetNetPollingState(netState: NetSessionState): void {
 /**
  * Apply login response fields to net session state.
  */
-export function applyNetLoginState(netState: NetSessionState, loginPayload: any, fallbackUsername: string): void {
+export function applyNetLoginState(netState: NetSessionState, loginPayload: NetLoginPayload | null | undefined, fallbackUsername: string): void {
   const login = loginPayload || {};
   netState.token = String(login?.token || "");
   netState.userId = String(login?.user?.user_id || "");
