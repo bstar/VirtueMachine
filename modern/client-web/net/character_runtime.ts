@@ -1,8 +1,19 @@
+export interface CharacterPayload {
+  character_id?: unknown;
+  name?: unknown;
+  [key: string]: unknown;
+}
+
+export interface CharacterListPayload {
+  characters?: CharacterPayload[];
+  [key: string]: unknown;
+}
+
 export type CharacterRuntimeRequest = (
   route: string,
   init?: RequestInit,
   auth?: boolean
-) => Promise<any>;
+) => Promise<CharacterListPayload | CharacterPayload>;
 
 export async function performNetEnsureCharacter(
   characterName: string,
@@ -12,7 +23,7 @@ export async function performNetEnsureCharacter(
   const list = await request("/api/characters", { method: "GET" }, true);
   const chars = Array.isArray(list?.characters) ? list.characters : [];
   let pick = chars.find(
-    (c: any) => String(c?.name || "").toLowerCase() === desiredName.toLowerCase()
+    (c) => String(c?.name || "").toLowerCase() === desiredName.toLowerCase()
   );
   if (!pick) {
     pick = await request("/api/characters", {

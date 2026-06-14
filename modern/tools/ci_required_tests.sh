@@ -33,6 +33,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_ui_party_message.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_message_log.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_panel_scope.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_net_account.sh"
   "$ROOT_DIR/modern/tools/test_client_web_net_world.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_target_resolver.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_mechanics_capability.sh"

@@ -1,12 +1,8 @@
-export interface NetPanelActionOutput {
-  [key: string]: NetPanelActionOutput;
-}
-
-export async function runNetPanelActionRuntime(args: {
-  run: () => Promise<NetPanelActionOutput>;
+export async function runNetPanelActionRuntime<TOutput = unknown>(args: {
+  run: () => Promise<TOutput>;
   setStatus: (level: string, text: string) => void;
   setDiag: (kind: "ok" | "warn", text: string) => void;
-  okText: string | ((out: NetPanelActionOutput) => string);
+  okText: string | ((out: TOutput) => string);
   errorStatusPrefix: string;
   errorDiagPrefix: string;
 }): Promise<void> {

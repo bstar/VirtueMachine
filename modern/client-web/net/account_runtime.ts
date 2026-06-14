@@ -1,7 +1,24 @@
+export interface NetAccountUserPayload {
+  username?: unknown;
+  email?: unknown;
+  email_verified?: unknown;
+}
+
+export interface NetAccountPayload {
+  user?: NetAccountUserPayload;
+  [key: string]: unknown;
+}
+
+export type NetAccountRequest = (
+  route: string,
+  init?: RequestInit,
+  auth?: boolean
+) => Promise<NetAccountPayload>;
+
 export type NetAccountCommonDeps = {
   ensureAuth: () => Promise<void>;
   isAuthenticated: () => boolean;
-  request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+  request: NetAccountRequest;
   setStatus: (level: string, text: string) => void;
 };
 
@@ -12,7 +29,7 @@ export async function performNetSetEmail(
     persistEmail: (email: string) => void;
     onProfileUpdated: () => void;
   }
-): Promise<any> {
+): Promise<NetAccountPayload> {
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
   }
@@ -35,7 +52,7 @@ export async function performNetSetEmail(
   return out;
 }
 
-export async function performNetSendEmailVerification(deps: NetAccountCommonDeps): Promise<any> {
+export async function performNetSendEmailVerification(deps: NetAccountCommonDeps): Promise<NetAccountPayload> {
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
   }
@@ -56,7 +73,7 @@ export async function performNetVerifyEmail(
     currentEmail: () => string;
     onVerified: (email: string) => void;
   }
-): Promise<any> {
+): Promise<NetAccountPayload> {
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
   }
@@ -83,11 +100,11 @@ export async function performNetRecoverPassword(
   usernameRaw: string,
   emailRaw: string,
   deps: {
-    request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+    request: NetAccountRequest;
     setApiBase: (base: string) => void;
     setStatus: (level: string, text: string) => void;
   }
-): Promise<any> {
+): Promise<NetAccountPayload> {
   const base = String(baseRaw || "").trim() || "http://127.0.0.1:8081";
   const username = String(usernameRaw || "").trim().toLowerCase();
   const email = String(emailRaw || "").trim().toLowerCase();
@@ -116,7 +133,7 @@ export async function performNetChangePassword(
     onPasswordChanged: (nextPassword: string) => void;
     onProfileUpdated: () => void;
   }
-): Promise<any> {
+): Promise<NetAccountPayload> {
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
   }
