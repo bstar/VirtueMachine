@@ -55,6 +55,40 @@ export function canTakeWorldObject(obj: Pick<WorldObject, "type"> | null | undef
   return !OBJECT_TYPES_NON_PICKUP.has(type);
 }
 
+export function canPersistSnapshotInventoryKey(key: unknown): boolean {
+  const match = String(key || "").trim().match(/^0x([0-9a-fA-F]+):0x[0-9a-fA-F]+$/);
+  if (!match) {
+    return true;
+  }
+  return canTakeWorldObject({ type: Number.parseInt(match[1], 16) });
+}
+
+export function sanitizeSnapshotInventoryBase64(snapshotBase64: string): string {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(Buffer.from(snapshotBase64, "base64").toString("utf8"));
+  } catch {
+    return snapshotBase64;
+  }
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+    return snapshotBase64;
+  }
+  const snapshot = decoded as { inventory?: unknown };
+  if (!snapshot.inventory || typeof snapshot.inventory !== "object" || Array.isArray(snapshot.inventory)) {
+    return snapshotBase64;
+  }
+
+  const inventory = snapshot.inventory as Record<string, unknown>;
+  let changed = false;
+  for (const key of Object.keys(inventory)) {
+    if (!canPersistSnapshotInventoryKey(key)) {
+      delete inventory[key];
+      changed = true;
+    }
+  }
+  return changed ? Buffer.from(JSON.stringify(snapshot), "utf8").toString("base64") : snapshotBase64;
+}
+
 export function isBaselineWorldObject(obj: Pick<WorldObject, "source_kind"> | null | undefined): boolean {
   const kind = String(obj?.source_kind || "baseline");
   return kind === "baseline" || kind === "baseline_moved" || kind === "";

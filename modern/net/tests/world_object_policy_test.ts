@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_PICKUP_RESPAWN_MS,
   LOOT_PICKUP_RESPAWN_MS,
+  canPersistSnapshotInventoryKey,
   canTakeWorldObject,
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
   pushSpawnedWorldObject,
+  sanitizeSnapshotInventoryBase64,
   worldObjectInteractionPayload,
   worldObjectInventoryPayload,
   worldObjectTakeInventoryPayload
@@ -31,6 +33,21 @@ assert.deepEqual(
 assert.equal(canTakeWorldObject({ type: 0x113 }), true, "potions should be takeable");
 assert.equal(canTakeWorldObject({ type: 0x117 }), false, "tables must not be takeable");
 assert.equal(canTakeWorldObject({ type: 0x104 }), false, "structural shadows must not be takeable");
+assert.equal(canPersistSnapshotInventoryKey("0x113:0x00"), true, "potion inventory keys should persist");
+assert.equal(canPersistSnapshotInventoryKey("0x117:0x04"), false, "table inventory keys should be scrubbed");
+assert.equal(canPersistSnapshotInventoryKey("not-a-type-key"), true, "unknown inventory key formats should be preserved");
+
+const dirtySnapshotBase64 = Buffer.from(JSON.stringify({
+  tick: 1,
+  inventory: {
+    "0x113:0x00": 1,
+    "0x117:0x04": 2,
+    "0x104:0x00": 1
+  }
+}), "utf8").toString("base64");
+const cleanSnapshot = JSON.parse(Buffer.from(sanitizeSnapshotInventoryBase64(dirtySnapshotBase64), "base64").toString("utf8"));
+assert.deepEqual(cleanSnapshot.inventory, { "0x113:0x00": 1 });
+assert.equal(sanitizeSnapshotInventoryBase64("not-json"), "not-json");
 
 assert.equal(isBaselineWorldObject({ source_kind: "baseline" }), true);
 assert.equal(isBaselineWorldObject({ source_kind: "baseline_moved" }), true);

@@ -66,6 +66,7 @@ const {
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
   pushSpawnedWorldObject,
+  sanitizeSnapshotInventoryBase64,
   worldObjectInteractionPayload,
   worldObjectInventoryPayload,
   worldObjectTakeInventoryPayload
@@ -1584,10 +1585,27 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     }
 
     if (req.method === "GET") {
+      const sanitizedSnapshotBase64 = character.snapshot_base64
+        ? sanitizeSnapshotInventoryBase64(String(character.snapshot_base64))
+        : character.snapshot_base64;
+      if (sanitizedSnapshotBase64 !== character.snapshot_base64) {
+        const snapshotMeta = character.snapshot_meta && typeof character.snapshot_meta === "object"
+          ? character.snapshot_meta as Record<string, unknown>
+          : {};
+        character.snapshot_base64 = sanitizedSnapshotBase64;
+        character.snapshot_meta = {
+          schema_version: Number(snapshotMeta.schema_version) || 1,
+          sim_core_version: String(snapshotMeta.sim_core_version || "unknown"),
+          saved_tick: Number(snapshotMeta.saved_tick) || 0,
+          snapshot_hash: computeSnapshotHash(sanitizedSnapshotBase64)
+        };
+        character.updated_at = nowIso();
+        persistState(state);
+      }
       sendJson(res, 200, {
         character_id: character.character_id,
         snapshot_meta: character.snapshot_meta,
-        snapshot_base64: character.snapshot_base64
+        snapshot_base64: sanitizedSnapshotBase64
       });
       return;
     }
@@ -1600,7 +1618,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
         sendError(res, 400, "bad_json", errorMessage(err));
         return;
       }
-      const snapshotBase64 = String(body && body.snapshot_base64 || "").trim();
+      const snapshotBase64 = sanitizeSnapshotInventoryBase64(String(body && body.snapshot_base64 || "").trim());
       if (!snapshotBase64) {
         sendError(res, 400, "bad_snapshot", "snapshot_base64 is required");
         return;

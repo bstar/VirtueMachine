@@ -707,7 +707,13 @@ async function main() {
         schema_version: 1,
         sim_core_version: "test",
         saved_tick: 42,
-        snapshot_base64: Buffer.from("vm-test-snapshot", "utf8").toString("base64")
+        snapshot_base64: Buffer.from(JSON.stringify({
+          tick: 42,
+          inventory: {
+            "0x113:0x00": 1,
+            "0x117:0x04": 2
+          }
+        }), "utf8").toString("base64")
       })
     });
     assert.equal(saveSnapshot.status, 200);
@@ -720,6 +726,10 @@ async function main() {
     });
     assert.equal(loadSnapshot.status, 200);
     assert.ok(loadSnapshot.body?.snapshot_base64);
+    assert.deepEqual(
+      JSON.parse(Buffer.from(String(loadSnapshot.body.snapshot_base64), "base64").toString("utf8")).inventory,
+      { "0x113:0x00": 1 }
+    );
 
     const heartbeat = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
       method: "POST",
