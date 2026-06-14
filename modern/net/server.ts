@@ -107,6 +107,11 @@ const {
   readJsonLinesRuntime,
   writeJsonFileRuntime
 } = require("./server_file_store.ts");
+const {
+  readJsonBodyRuntime,
+  sendErrorRuntime: sendError,
+  sendJsonRuntime: sendJson
+} = require("./server_http_runtime.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -223,58 +228,8 @@ function runtimeContractSpec() {
   };
 }
 
-function sendJson(res, status, value) {
-  const body = `${JSON.stringify(value)}\n`;
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store",
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-vm-runtime-profile,x-vm-runtime-extensions"
-  });
-  res.end(body);
-}
-
-function sendError(res, status, code, message) {
-  sendJson(res, status, {
-    error: {
-      code,
-      message
-    }
-  });
-}
-
 function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    req.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > MAX_BODY) {
-        reject(new Error("body too large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on("end", () => {
-      if (!chunks.length) {
-        resolve(null);
-        return;
-      }
-      const raw = Buffer.concat(chunks).toString("utf8").trim();
-      if (!raw) {
-        resolve(null);
-        return;
-      }
-      try {
-        resolve(JSON.parse(raw));
-      } catch (_err) {
-        reject(new Error("invalid json"));
-      }
-    });
-    req.on("error", reject);
-  });
+  return readJsonBodyRuntime(req, MAX_BODY);
 }
 
 function defaultCriticalPolicy() {
