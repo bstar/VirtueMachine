@@ -82,9 +82,9 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 - Status: `temporary`
 - Location: `modern/client-web/app.ts`, `modern/client-web/ui/party_message_runtime.ts`, `modern/client-web/ui_probe_contract.ts`
-- Note: U3 harness now has canonical party ordering/selection runtime logic, but live roster authority still falls back to client-local `state.partyMembers` until server/sim-core provides authoritative party arrays.
-- Risk: digit-key selection semantics are correct, but roster composition may not match canonical party contents in all live sessions.
-- Exit criteria: bridge authoritative party membership/state from sim-core/net payload into probe/render/input paths and remove local fallback ownership.
+- Note: U3 harness now has canonical party ordering/selection runtime logic, and live snapshots persist `sim.partyMembers` so render/probe/input paths no longer depend solely on client-local UI state.
+- Risk: party roster mutations are still not server/sim-core authored, so roster composition may drift once recruit/dismiss workflows exist.
+- Exit criteria: bridge party membership mutation from sim-core/net payloads, then remove the remaining `state.partyMembers` mirror.
 
 ## Canonical Guardrails
 

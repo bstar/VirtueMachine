@@ -47,6 +47,7 @@ export interface SimSnapshotRuntime {
   inventory: Record<string, number>;
   spawnedWorldObjects: SnapshotWorldObjectRuntime[];
   spawnedWorldSeq: number;
+  partyMembers: number[];
   avatarPose: string;
   avatarPoseSetTick: number;
   avatarPoseAnchor: SnapshotAnchorRuntime | null;
@@ -72,6 +73,9 @@ export function cloneSimStateRuntime(sim: SimSnapshotRuntime): SimSnapshotRuntim
       ? sim.spawnedWorldObjects.map((o) => ({ ...o }))
       : [],
     spawnedWorldSeq: Number(sim.spawnedWorldSeq) >>> 0,
+    partyMembers: Array.isArray(sim.partyMembers)
+      ? sim.partyMembers.map((id) => Number(id) >>> 0).filter((id) => id > 0).slice(0, 10)
+      : [1],
     avatarPose: String(sim.avatarPose || "stand"),
     avatarPoseSetTick: Number(sim.avatarPoseSetTick) | 0,
     avatarPoseAnchor: sim.avatarPoseAnchor ? { ...sim.avatarPoseAnchor } : null,
@@ -137,6 +141,9 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
       };
     })
     : [];
+  const normalizedPartyMembers = Array.isArray(src.partyMembers)
+    ? src.partyMembers.map((id) => Number(id) >>> 0).filter((id) => id > 0).slice(0, 10)
+    : [];
   const avatarPoseAnchor = asRecord(src.avatarPoseAnchor);
   return {
     tick: Number(src.tick) >>> 0,
@@ -150,6 +157,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     inventory: normalizedInventory,
     spawnedWorldObjects: normalizedSpawned,
     spawnedWorldSeq: Number(src.spawnedWorldSeq) >>> 0,
+    partyMembers: normalizedPartyMembers.length ? normalizedPartyMembers : [1],
     avatarPose: (src.avatarPose === "sit" || src.avatarPose === "sleep")
       ? String(src.avatarPose)
       : "stand",

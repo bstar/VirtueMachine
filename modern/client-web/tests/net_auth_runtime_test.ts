@@ -14,6 +14,7 @@ const loadedSnapshot = {
   inventory: {},
   spawnedWorldObjects: [],
   spawnedWorldSeq: 0,
+  partyMembers: [1, 12],
   avatarPose: "stand",
   avatarPoseSetTick: -1,
   avatarPoseAnchor: null,

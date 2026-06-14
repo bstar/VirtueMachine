@@ -2639,8 +2639,7 @@ function renderLegacyHudStubOnBackdrop(): void {
     const partyCountRaw = partyMembers.length > 0
       ? partyMembers.length
       : Math.max(1, Number(probe?.canonical_ui?.avatar_panel?.avatar?.party_count) | 0);
-    /* Runtime party bridge is pending; avoid dropping the "next member" icon in live mode scaffolding. */
-    const partyCount = (state.uiProbeMode === "live" && partyCountRaw === 1) ? 2 : partyCountRaw;
+    const partyCount = partyCountRaw;
     if (activePartyIndex > 0) {
       drawTile(LEGACY_POSTURE_ICONS[0], 176, 88);
     }
@@ -3918,6 +3917,8 @@ async function netLogin(): Promise<void> {
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
       state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
+      state.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
+      state.sim.partyMembers = state.partyMembers.slice();
       state.queue = [];
       state.commandLog = [];
       state.accMs = 0;
@@ -4140,6 +4141,8 @@ async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
       state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
+      state.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
+      state.sim.partyMembers = state.partyMembers.slice();
       state.queue = [];
       state.commandLog = [];
       state.accMs = 0;
@@ -8276,8 +8279,10 @@ function loadWorldSnapshotHotkey(): void {
 }
 
 function runtimePartyMembersForUiProbe(): number[] {
-  const members = normalizePartyMemberIdsRuntime(state.partyMembers, 1);
+  const source = Array.isArray(state.sim.partyMembers) ? state.sim.partyMembers : state.partyMembers;
+  const members = normalizePartyMemberIdsRuntime(source, 1);
   state.partyMembers = members.slice();
+  state.sim.partyMembers = members.slice();
   state.sim.partySize = members.length >>> 0;
   if ((state.sim.world.active | 0) >= members.length) {
     state.sim.world.active = 0;
@@ -8716,13 +8721,12 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
   if ((ev.code.startsWith("Digit") || ev.code.startsWith("Numpad")) && k >= "0" && k <= "9") {
+    const partyMembers = runtimePartyMembersForUiProbe();
     const resolution = resolvePartySwitchDigitRuntime({
       digitKey: k,
-      partyMembers: state.partyMembers,
+      partyMembers,
       activeIndex: state.sim.world.active
     });
-    state.partyMembers = normalizePartyMemberIdsRuntime(state.partyMembers, 1);
-    state.sim.partySize = state.partyMembers.length >>> 0;
     if (resolution.changed) {
       state.sim.world.active = resolution.next_active_index | 0;
       diagBox.className = "diag ok";

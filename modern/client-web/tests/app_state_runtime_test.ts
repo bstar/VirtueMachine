@@ -25,6 +25,7 @@ const world: SimSnapshotRuntime["world"] = {
 const initial = createInitialAppSimState(world, 0x12345678);
 assert.equal(initial.rngState, 0x12345678);
 assert.equal(initial.partySize, 1);
+assert.deepEqual(initial.partyMembers, [1]);
 assert.deepEqual(initial.doorOpenStates, {});
 initial.world.time_h = 9;
 assert.equal(world.time_h, 2);
@@ -45,6 +46,7 @@ const snapshot: SimSnapshotRuntime = {
   inventory: {},
   spawnedWorldObjects: [],
   spawnedWorldSeq: 0,
+  partyMembers: [1, 12, 23],
   avatarPose: "stand",
   avatarPoseSetTick: -1,
   avatarPoseAnchor: null,
@@ -53,12 +55,19 @@ const snapshot: SimSnapshotRuntime = {
 
 const adapted = toAppSimStateRuntime(snapshot, 4);
 assert.deepEqual(adapted.doorOpenStates, { open: 1, closed: 0, count: 3 });
+assert.deepEqual(adapted.partyMembers, [1, 12, 23]);
 assert.equal(adapted.partySize, 4);
 
 const partySnapshot = {
   ...snapshot,
   partySize: 2
 } as SimSnapshotRuntime & { partySize: number };
-assert.equal(toAppSimStateRuntime(partySnapshot, 4).partySize, 2);
+assert.equal(toAppSimStateRuntime(partySnapshot, 4).partySize, 3);
+
+const legacySnapshot = {
+  ...snapshot,
+  partyMembers: []
+};
+assert.deepEqual(toAppSimStateRuntime(legacySnapshot, 4).partyMembers, [1]);
 
 console.log("app_state_runtime_test: ok");

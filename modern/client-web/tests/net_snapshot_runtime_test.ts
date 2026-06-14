@@ -23,6 +23,7 @@ const sim: SimSnapshotRuntime = {
   inventory: { "0x088:0x00": 2 },
   spawnedWorldObjects: [{ x: 1, y: 2, z: 0, type: 88, frame: 0, order: 3, renderable: true }],
   spawnedWorldSeq: 7,
+  partyMembers: [1, 12, 23],
   avatarPose: "sit",
   avatarPoseSetTick: 9,
   avatarPoseAnchor: { x: 1, y: 2, z: 0, order: 3, type: 88 },
@@ -50,6 +51,7 @@ assert.equal(decoded?.tick, 10);
 assert.equal(decoded?.removedObjectAtTick.obj, 10);
 assert.equal(decoded?.inventory["0x088:0x00"], 2);
 assert.equal(decoded?.spawnedWorldObjects[0].type, 88);
+assert.deepEqual(decoded?.partyMembers, [1, 12, 23]);
 
 assert.equal(normalizeLoadedSimStateRuntime({}), null);
 assert.equal(shouldAutosaveSnapshotRuntime({

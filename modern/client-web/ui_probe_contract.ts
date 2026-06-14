@@ -66,6 +66,7 @@ interface ProbeRuntimeInput {
   sim?: {
     tick?: unknown;
     inventory?: Record<string, unknown>;
+    partyMembers?: unknown;
     world?: {
       active?: unknown;
       map_x?: unknown;
@@ -213,7 +214,7 @@ function fromRuntime(runtime: ProbeRuntimeInput) {
   const sim = runtime?.sim || {};
   const world = sim.world || {};
   const commandLog: Array<{ tick?: unknown; kind?: unknown }> = Array.isArray(runtime.commandLog) ? runtime.commandLog : [];
-  const partyMembers = normalizePartyMemberIdsRuntime(runtime?.partyMembers, 1);
+  const partyMembers = normalizePartyMemberIdsRuntime(runtime?.partyMembers || sim.partyMembers, 1);
   const activeIndex = clampActivePartyIndexRuntime(world.active || 0, partyMembers.length);
   const activeId = partyMembers[activeIndex] || partyMembers[0] || 1;
   const partyPanelMembers = projectPartyPanelMembersRuntime({
