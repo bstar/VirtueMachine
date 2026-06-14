@@ -118,7 +118,6 @@ const {
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
   defaultWorldSnapshotRuntime,
-  hashInteractionEventRuntime,
   normalizeCriticalPolicyRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
@@ -217,6 +216,33 @@ type ServerState = {
 
 type CreatedServerUser = ServerUserRuntime & { created_at: string };
 
+type ServerRequestBody = {
+  actor_id?: unknown;
+  actor_x?: unknown;
+  actor_y?: unknown;
+  actor_z?: unknown;
+  code?: unknown;
+  container_key?: unknown;
+  critical_item_policy?: unknown;
+  email?: unknown;
+  name?: unknown;
+  new_password?: unknown;
+  npc_id?: unknown;
+  old_password?: unknown;
+  password?: unknown;
+  phase?: unknown;
+  player_name?: unknown;
+  saved_tick?: unknown;
+  schema_version?: unknown;
+  session_id?: unknown;
+  sim_core_version?: unknown;
+  snapshot_base64?: unknown;
+  target_key?: unknown;
+  typed?: unknown;
+  username?: unknown;
+  verb?: unknown;
+};
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -297,9 +323,16 @@ function runtimeContractSpec(): {
   };
 }
 
-async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+function asServerRequestBody(raw: unknown): ServerRequestBody {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  return raw as ServerRequestBody;
+}
+
+async function readBody(req: IncomingMessage): Promise<ServerRequestBody> {
   const body = await readJsonBodyRuntime(req, MAX_BODY);
-  return body && typeof body === "object" ? body as Record<string, unknown> : {};
+  return asServerRequestBody(body);
 }
 
 function defaultCriticalPolicy(): CriticalItemPolicyRuntime[] {
@@ -489,10 +522,6 @@ function normalizeWorldInteractionLog(raw: unknown): WorldInteractionLogRuntime 
   return normalizeWorldInteractionLogRuntime(raw);
 }
 
-function hashInteractionEvent(prevHash: unknown, event: Record<string, unknown>): string {
-  return hashInteractionEventRuntime(prevHash, event);
-}
-
 function recordWorldInteractionEvent(state: Pick<ServerState, "worldInteractionLog">, event: unknown) {
   return recordWorldInteractionEventRuntime(state, event);
 }
@@ -667,8 +696,14 @@ interface EmailDeliveryLog {
   status: "queued" | "sent" | "failed" | "logged";
   error?: string;
   provider_id?: string;
-  [key: string]: unknown;
+  template?: string;
+  user_id?: string;
 }
+
+type EmailDeliveryMeta = {
+  template?: unknown;
+  user_id?: unknown;
+};
 
 async function smtpDeliver(toEmail: string, subject: string, bodyText: string) {
   return smtpDeliverRuntime({
@@ -701,7 +736,7 @@ async function resendDeliver(toEmail: string, subject: string, bodyText: string)
   });
 }
 
-async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknown, meta: Record<string, unknown> = {}) {
+async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknown, meta: EmailDeliveryMeta = {}) {
   const delivery: EmailDeliveryLog = {
     kind: "email_delivery",
     at: nowIso(),
@@ -710,7 +745,8 @@ async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknow
     body_text: String(bodyText || ""),
     mode: EMAIL_MODE,
     status: "queued",
-    ...meta
+    template: meta.template == null ? undefined : String(meta.template || ""),
+    user_id: meta.user_id == null ? undefined : String(meta.user_id || "")
   };
   if (EMAIL_MODE === "smtp") {
     try {
