@@ -59,11 +59,8 @@ const {
   replyAuthoritativeConversation
 } = require("./conversation_runtime.ts");
 const {
-  boolEnvOnRuntime,
-  parseSmtpLineBufferRuntime,
-  sanitizeEmailAddressRuntime,
-  sanitizeHeaderValueRuntime,
-  smtpTextMessageRuntime
+  resendDeliverRuntime,
+  smtpDeliverRuntime
 } = require("./email_runtime.ts");
 const {
   issueEmailVerificationCodeRuntime,
@@ -683,32 +680,6 @@ function issueEmailVerificationCode(user) {
   });
 }
 
-function sanitizeHeaderValue(raw) {
-  return sanitizeHeaderValueRuntime(raw);
-}
-
-function sanitizeEmailAddress(raw) {
-  return sanitizeEmailAddressRuntime(raw);
-}
-
-function boolEnvOn(value, fallback = false) {
-  return boolEnvOnRuntime(value, fallback);
-}
-
-function smtpTextMessage(fromEmail, toEmail, subject, bodyText) {
-  return smtpTextMessageRuntime(fromEmail, toEmail, subject, bodyText);
-}
-
-function parseSmtpLineBuffer(buffer, onResponse) {
-  return parseSmtpLineBufferRuntime(buffer, onResponse);
-}
-
-interface SmtpResponse {
-  code?: number;
-  lines?: string[];
-  error?: Error;
-}
-
 interface EmailDeliveryLog {
   kind: "email_delivery";
   at: string;
@@ -723,173 +694,34 @@ interface EmailDeliveryLog {
 }
 
 async function smtpDeliver(toEmail, subject, bodyText) {
-  if (!EMAIL_SMTP_HOST) {
-    throw new Error("smtp host not configured (set VM_EMAIL_SMTP_HOST)");
-  }
-  if (!isValidEmail(EMAIL_FROM)) {
-    throw new Error("smtp from not configured (set VM_EMAIL_FROM to a valid address)");
-  }
-  const secure = boolEnvOn(EMAIL_SMTP_SECURE, true);
-  const port = Number.isFinite(EMAIL_SMTP_PORT) && EMAIL_SMTP_PORT > 0 ? EMAIL_SMTP_PORT : (secure ? 465 : 25);
-  const transport = secure
-    ? tls.connect({
-      host: EMAIL_SMTP_HOST,
-      port,
-      servername: EMAIL_SMTP_HOST,
-      rejectUnauthorized: boolEnvOn(process.env.VM_EMAIL_SMTP_REJECT_UNAUTHORIZED, true)
-    })
-    : net.connect({ host: EMAIL_SMTP_HOST, port });
-
-  transport.setEncoding("utf8");
-  transport.setTimeout(EMAIL_SMTP_TIMEOUT_MS);
-
-  const responses: SmtpResponse[] = [];
-  const waiters: Array<(response: SmtpResponse) => void> = [];
-  let current = null;
-  let buffered = "";
-  let closed = false;
-
-  const flushResponse = (resp) => {
-    if (!resp) {
-      return;
-    }
-    if (waiters.length) {
-      const resolve = waiters.shift();
-      resolve(resp);
-      return;
-    }
-    responses.push(resp);
-  };
-
-  const onSmtpLine = (line) => {
-    if (!/^\d{3}[ -]/.test(line)) {
-      return;
-    }
-    const code = Number.parseInt(line.slice(0, 3), 10);
-    const done = line[3] === " ";
-    if (!current || current.code !== code) {
-      current = { code, lines: [] };
-    }
-    current.lines.push(line);
-    if (done) {
-      flushResponse(current);
-      current = null;
-    }
-  };
-
-  transport.on("data", (chunk) => {
-    buffered = parseSmtpLineBuffer(buffered + chunk, onSmtpLine);
+  return smtpDeliverRuntime({
+    bodyText,
+    connect: (options) => net.connect(options),
+    fromEmail: EMAIL_FROM,
+    helo: EMAIL_SMTP_HELO,
+    host: EMAIL_SMTP_HOST,
+    pass: EMAIL_SMTP_PASS,
+    port: EMAIL_SMTP_PORT,
+    rejectUnauthorized: process.env.VM_EMAIL_SMTP_REJECT_UNAUTHORIZED,
+    secure: EMAIL_SMTP_SECURE,
+    subject,
+    timeoutMs: EMAIL_SMTP_TIMEOUT_MS,
+    tlsConnect: (options) => tls.connect(options),
+    toEmail,
+    user: EMAIL_SMTP_USER
   });
-
-  const failWaiters = (err) => {
-    closed = true;
-    while (waiters.length) {
-      const resolve = waiters.shift();
-      resolve({ error: err });
-    }
-  };
-
-  transport.on("timeout", () => {
-    transport.destroy(new Error("smtp timeout"));
-  });
-  transport.on("error", (err) => {
-    failWaiters(err);
-  });
-  transport.on("close", () => {
-    if (!closed) {
-      failWaiters(new Error("smtp connection closed"));
-    }
-  });
-
-  const nextResponse = async () => {
-    if (responses.length) {
-      return responses.shift();
-    }
-    const resp = await new Promise<SmtpResponse>((resolve) => {
-      waiters.push(resolve);
-    });
-    if (resp && resp.error) {
-      throw resp.error;
-    }
-    return resp;
-  };
-
-  const expectCode = async (wanted) => {
-    const resp = await nextResponse();
-    if (!resp || !Array.isArray(resp.lines)) {
-      throw new Error("smtp protocol error");
-    }
-    if (!wanted.includes(resp.code)) {
-      throw new Error(`smtp ${resp.code}: ${resp.lines.join(" | ")}`);
-    }
-    return resp;
-  };
-
-  const sendCmd = (line) => {
-    if (transport.destroyed) {
-      throw new Error("smtp socket not writable");
-    }
-    transport.write(`${line}\r\n`);
-  };
-
-  try {
-    await expectCode([220]);
-    sendCmd(`EHLO ${EMAIL_SMTP_HELO}`);
-    await expectCode([250]);
-    if (EMAIL_SMTP_USER || EMAIL_SMTP_PASS) {
-      sendCmd("AUTH LOGIN");
-      await expectCode([334]);
-      sendCmd(Buffer.from(EMAIL_SMTP_USER, "utf8").toString("base64"));
-      await expectCode([334]);
-      sendCmd(Buffer.from(EMAIL_SMTP_PASS, "utf8").toString("base64"));
-      await expectCode([235]);
-    }
-    sendCmd(`MAIL FROM:<${sanitizeEmailAddress(EMAIL_FROM)}>`);
-    await expectCode([250]);
-    sendCmd(`RCPT TO:<${sanitizeEmailAddress(toEmail)}>`);
-    await expectCode([250, 251]);
-    sendCmd("DATA");
-    await expectCode([354]);
-    transport.write(`${smtpTextMessage(EMAIL_FROM, toEmail, subject, bodyText)}\r\n.\r\n`);
-    await expectCode([250]);
-    sendCmd("QUIT");
-  } finally {
-    transport.end();
-  }
 }
 
 async function resendDeliver(toEmail, subject, bodyText) {
-  if (!EMAIL_RESEND_API_KEY) {
-    throw new Error("resend api key not configured (set VM_EMAIL_RESEND_API_KEY)");
-  }
-  if (!isValidEmail(EMAIL_FROM)) {
-    throw new Error("resend from not configured (set VM_EMAIL_FROM to a valid address)");
-  }
-  const response = await fetch(EMAIL_RESEND_BASE_URL, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${EMAIL_RESEND_API_KEY}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      from: EMAIL_FROM,
-      to: [normalizeEmail(toEmail)],
-      subject: String(subject || ""),
-      text: String(bodyText || "")
-    })
+  return resendDeliverRuntime({
+    apiKey: EMAIL_RESEND_API_KEY,
+    baseUrl: EMAIL_RESEND_BASE_URL,
+    bodyText,
+    fetchImpl: fetch,
+    fromEmail: EMAIL_FROM,
+    subject,
+    toEmail
   });
-  const text = await response.text();
-  let parsed = null;
-  try {
-    parsed = text ? JSON.parse(text) : null;
-  } catch (_err) {
-    parsed = null;
-  }
-  if (!response.ok) {
-    const apiMessage = parsed && parsed.message ? String(parsed.message) : (text || response.statusText || "request failed");
-    throw new Error(`resend ${response.status}: ${apiMessage}`);
-  }
-  return parsed;
 }
 
 async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
