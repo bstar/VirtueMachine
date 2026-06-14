@@ -168,6 +168,10 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 function ensureDataDir() {
   ensureServerDataDirRuntime(DATA_DIR);
 }
@@ -649,7 +653,7 @@ async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
       delivery.status = "sent";
     } catch (err) {
       delivery.status = "failed";
-      delivery.error = String(err && err.message ? err.message : err);
+      delivery.error = errorMessage(err);
       appendJsonLine(FILES.emailOutbox, delivery);
       throw new Error(`email delivery failed: ${delivery.error}`);
     }
@@ -662,7 +666,7 @@ async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
       }
     } catch (err) {
       delivery.status = "failed";
-      delivery.error = String(err && err.message ? err.message : err);
+      delivery.error = errorMessage(err);
       appendJsonLine(FILES.emailOutbox, delivery);
       throw new Error(`email delivery failed: ${delivery.error}`);
     }
@@ -739,7 +743,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const username = normalizeUsername(body && body.username);
@@ -799,7 +803,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const email = normalizeEmail(body && body.email);
@@ -844,7 +848,7 @@ const server = http.createServer(async (req, res) => {
         { user_id: user.user_id, template: "verify_email" }
       );
     } catch (err) {
-      sendError(res, 502, "email_delivery_failed", String(err.message || err));
+      sendError(res, 502, "email_delivery_failed", errorMessage(err));
       return;
     }
     persistState(state);
@@ -866,7 +870,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const code = String(body && body.code || "").trim();
@@ -913,7 +917,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const oldPassword = String(body && body.old_password || "");
@@ -984,7 +988,7 @@ const server = http.createServer(async (req, res) => {
         { user_id: user.user_id, template: "recover_password" }
       );
     } catch (err) {
-      sendError(res, 502, "email_delivery_failed", String(err.message || err));
+      sendError(res, 502, "email_delivery_failed", errorMessage(err));
       return;
     }
     persistState(state);
@@ -1016,7 +1020,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const name = String(body && body.name || "").trim();
@@ -1060,7 +1064,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     if (!Array.isArray(body && body.critical_item_policy)) {
@@ -1078,7 +1082,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const events = runCriticalItemMaintenance(state, body || {});
@@ -1092,7 +1096,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const sessionId = String(body && body.session_id || "").trim();
@@ -1126,7 +1130,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const sessionId = String(body && body.session_id || "").trim();
@@ -1177,7 +1181,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const phase = String(body && body.phase || "").trim().toLowerCase();
@@ -1295,7 +1299,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const verb = String(body && body.verb || "").trim().toLowerCase();
@@ -1520,7 +1524,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const replied = replyAuthoritativeConversation(state, {
@@ -1565,7 +1569,7 @@ const server = http.createServer(async (req, res) => {
     try {
       body = await readBody(req);
     } catch (err) {
-      sendError(res, 400, "bad_json", String(err.message || err));
+      sendError(res, 400, "bad_json", errorMessage(err));
       return;
     }
     const snapshotBase64 = String(body && body.snapshot_base64 || "").trim();
@@ -1612,7 +1616,7 @@ const server = http.createServer(async (req, res) => {
       try {
         body = await readBody(req);
       } catch (err) {
-        sendError(res, 400, "bad_json", String(err.message || err));
+        sendError(res, 400, "bad_json", errorMessage(err));
         return;
       }
       const snapshotBase64 = String(body && body.snapshot_base64 || "").trim();
