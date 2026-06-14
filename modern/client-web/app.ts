@@ -95,7 +95,6 @@ import {
   RUNTIME_PROFILES,
   createDefaultRuntimeExtensions,
   normalizeRuntimeProfile,
-  parseRuntimeExtensionListCsv,
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
 } from "../common/runtime_contract.ts";
@@ -165,6 +164,10 @@ import {
   renderNetAuthButtonRuntime,
   renderNetSessionStatRuntime
 } from "./net/status_runtime.ts";
+import {
+  persistRuntimeProfileConfigRuntime,
+  resolveRuntimeProfileConfigRuntime
+} from "./net/runtime_profile_config_runtime.ts";
 import {
   legacyAttackVerbRuntime,
   legacyCastVerbRuntime,
@@ -3451,37 +3454,22 @@ function applyRuntimeProfileState(profile, extensions) {
 }
 
 function initRuntimeProfileConfig() {
-  let profile = RUNTIME_PROFILE_CANONICAL_STRICT;
-  let extensions = createDefaultRuntimeExtensions();
-  try {
-    profile = normalizeRuntimeProfile(localStorage.getItem(RUNTIME_PROFILE_KEY) || profile);
-    const raw = localStorage.getItem(RUNTIME_EXTENSIONS_KEY);
-    if (raw) {
-      extensions = sanitizeRuntimeExtensions(JSON.parse(raw));
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
-
-  try {
-    const qs = new URLSearchParams(window.location.search || "");
-    if (qs.has("profile")) {
-      profile = normalizeRuntimeProfile(qs.get("profile"));
-    }
-    if (qs.has("ext")) {
-      extensions = parseRuntimeExtensionListCsv(qs.get("ext"));
-    }
-  } catch (_err) {
-    // ignore malformed query params
-  }
-
+  const { profile, extensions } = resolveRuntimeProfileConfigRuntime({
+    keys: {
+      profileKey: RUNTIME_PROFILE_KEY,
+      extensionsKey: RUNTIME_EXTENSIONS_KEY
+    },
+    locationSearch: window.location.search,
+    storage: localStorage
+  });
   applyRuntimeProfileState(profile, extensions);
-  try {
-    localStorage.setItem(RUNTIME_PROFILE_KEY, state.runtimeProfile);
-    localStorage.setItem(RUNTIME_EXTENSIONS_KEY, JSON.stringify(state.runtimeExtensions));
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  persistRuntimeProfileConfigRuntime(localStorage, {
+    profileKey: RUNTIME_PROFILE_KEY,
+    extensionsKey: RUNTIME_EXTENSIONS_KEY
+  }, {
+    profile: state.runtimeProfile,
+    extensions: state.runtimeExtensions
+  });
 }
 
 function setTheme(themeName) {
