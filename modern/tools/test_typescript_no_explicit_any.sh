@@ -8,7 +8,6 @@ matches="$(
     '(:\s*any\b|as\s+any\b|<[^>]*\bany\b|Map<\s*any\b|Array<\s*any\b|\bany\[\])' \
     "$ROOT_DIR/modern" \
     --glob '*.ts' \
-    --glob '!**/tests/**' \
     --glob '!**/assets/**' \
     --glob '!**/fixtures/**' \
     || true
@@ -16,7 +15,7 @@ matches="$(
 
 if [[ -n "$matches" ]]; then
   printf '%s\n' "$matches"
-  echo "Explicit non-test TypeScript any usage is not allowed."
+  echo "Explicit TypeScript any usage is not allowed."
   exit 1
 fi
 
