@@ -31,6 +31,128 @@ export type FurnitureObjectProviderRuntime = (
   z: number
 ) => Iterable<FurniturePoseObjectRuntime>;
 
+export type FurnitureAvatarPoseRuntime = "stand" | "sit" | "sleep";
+
+export type FurniturePoseAnchorRuntime = {
+  x: number;
+  y: number;
+  z?: number;
+  order?: number;
+  type: number;
+};
+
+export type FurnitureInteractionSimRuntime = {
+  avatarPose: FurnitureAvatarPoseRuntime | string;
+  avatarPoseAnchor: FurniturePoseAnchorRuntime | null;
+  avatarPoseSetTick: number;
+  tick: number;
+  world: {
+    map_x: number;
+    map_y: number;
+    map_z: number;
+  };
+};
+
+export type FurnitureInteractionRuntimeResult = {
+  clearPendingMoveCommands: boolean;
+  diagClass: "ok";
+  ok: boolean;
+  text: string;
+};
+
+export type FurnitureInteractionRuntimeDeps = {
+  isBedObject(obj: FurniturePoseObjectRuntime): boolean;
+  preferredSleepCell(
+    bedObj: FurniturePoseObjectRuntime,
+    fromX: number,
+    fromY: number
+  ): FurniturePoseCellRuntime & { z: number };
+};
+
+export function furniturePoseAnchorKeyRuntime(
+  anchor: FurniturePoseAnchorRuntime | null | undefined
+): string {
+  if (!anchor) {
+    return "";
+  }
+  return `${Number(anchor.x) & 0x3ff},${Number(anchor.y) & 0x3ff},${Number(anchor.z) & 0x0f},${Number(anchor.order) & 0xffff},${Number(anchor.type) & 0x3ff}`;
+}
+
+export function clearFurnitureAvatarPoseRuntime(sim: FurnitureInteractionSimRuntime): void {
+  sim.avatarPose = "stand";
+  sim.avatarPoseAnchor = null;
+  sim.avatarPoseSetTick = -1;
+}
+
+export function applyFurnitureInteractionRuntime(
+  sim: FurnitureInteractionSimRuntime,
+  obj: FurniturePoseObjectRuntime | null | undefined,
+  deps: FurnitureInteractionRuntimeDeps
+): FurnitureInteractionRuntimeResult {
+  if (!obj) {
+    if (sim.avatarPose !== "stand") {
+      clearFurnitureAvatarPoseRuntime(sim);
+      return {
+        clearPendingMoveCommands: false,
+        diagClass: "ok",
+        ok: true,
+        text: "Stood up."
+      };
+    }
+    return {
+      clearPendingMoveCommands: false,
+      diagClass: "ok",
+      ok: false,
+      text: ""
+    };
+  }
+
+  const nextPose: FurnitureAvatarPoseRuntime = deps.isBedObject(obj) ? "sleep" : "sit";
+  const currentKey = furniturePoseAnchorKeyRuntime(sim.avatarPoseAnchor);
+  const targetKey = furniturePoseAnchorKeyRuntime(obj);
+  if (sim.avatarPose === nextPose && currentKey === targetKey) {
+    clearFurnitureAvatarPoseRuntime(sim);
+    return {
+      clearPendingMoveCommands: false,
+      diagClass: "ok",
+      ok: true,
+      text: "Stood up."
+    };
+  }
+
+  const fromX = sim.world.map_x | 0;
+  const fromY = sim.world.map_y | 0;
+  sim.avatarPose = nextPose;
+  sim.avatarPoseSetTick = Number(sim.tick) | 0;
+  sim.avatarPoseAnchor = {
+    x: obj.x | 0,
+    y: obj.y | 0,
+    z: obj.z | 0,
+    order: obj.order | 0,
+    type: obj.type | 0
+  };
+
+  if (nextPose === "sleep" && deps.isBedObject(obj)) {
+    const sleepCell = deps.preferredSleepCell(obj, fromX, fromY);
+    sim.world.map_x = sleepCell.x | 0;
+    sim.world.map_y = sleepCell.y | 0;
+    sim.world.map_z = sleepCell.z | 0;
+  } else {
+    sim.world.map_x = obj.x | 0;
+    sim.world.map_y = obj.y | 0;
+    sim.world.map_z = obj.z | 0;
+  }
+
+  return {
+    clearPendingMoveCommands: true,
+    diagClass: "ok",
+    ok: true,
+    text: nextPose === "sleep"
+      ? `Sleeping at ${obj.x},${obj.y},${obj.z}`
+      : `Sitting at ${obj.x},${obj.y},${obj.z}`
+  };
+}
+
 export function furnitureOccupancyCellsRuntime(
   obj: FurniturePoseObjectRuntime | null | undefined,
   tileFlagsForTile: TileFlagsForTileRuntime

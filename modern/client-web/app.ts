@@ -205,8 +205,10 @@ import {
   remotePlayerFrameOffsetRuntime
 } from "./sim/legacy_actor_frame_runtime.ts";
 import {
+  applyFurnitureInteractionRuntime,
   bedInteractionScoreRuntime,
   chairFrameForCellRuntime,
+  clearFurnitureAvatarPoseRuntime,
   furnitureAtWorldCellRuntime,
   furnitureOccupancyCellsRuntime,
   objectIsBedAtCellRuntime,
@@ -231,8 +233,7 @@ import {
   addObjectToInventoryRuntime,
   inventoryKeyForObjectRuntime,
   isObjectRemovedRuntime,
-  markObjectRemovedRuntime,
-  objectAnchorKeyRuntime
+  markObjectRemovedRuntime
 } from "./sim/inventory_runtime.ts";
 import {
   isBedObjectRuntime,
@@ -5206,9 +5207,7 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
 }
 
 function clearAvatarPose(sim) {
-  sim.avatarPose = "stand";
-  sim.avatarPoseAnchor = null;
-  sim.avatarPoseSetTick = -1;
+  clearFurnitureAvatarPoseRuntime(sim);
 }
 
 function clearPendingAvatarMoveCommands(sim) {
@@ -5260,56 +5259,19 @@ function furnitureAtCell(sim, tx, ty) {
 }
 
 function tryInteractFurnitureObject(sim, o) {
-  if (!o) {
-    if (sim.avatarPose !== "stand") {
-      clearAvatarPose(sim);
-      diagBox.className = "diag ok";
-      diagBox.textContent = "Stood up.";
-      return true;
-    }
+  const result = applyFurnitureInteractionRuntime(sim, o, {
+    isBedObject: isBedObjectRuntime,
+    preferredSleepCell: preferredSleepCellForBed
+  });
+  if (!result.ok) {
     return false;
   }
-
-  const nextPose = isBedObjectRuntime(o) ? "sleep" : "sit";
-  const currentKey = sim.avatarPoseAnchor
-    ? `${sim.avatarPoseAnchor.x & 0x3ff},${sim.avatarPoseAnchor.y & 0x3ff},${sim.avatarPoseAnchor.z & 0x0f},${sim.avatarPoseAnchor.order & 0xffff},${sim.avatarPoseAnchor.type & 0x3ff}`
-    : "";
-  const targetKey = objectAnchorKeyRuntime(o);
-  if (sim.avatarPose === nextPose && currentKey === targetKey) {
-    clearAvatarPose(sim);
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Stood up.";
-    return true;
+  if (result.clearPendingMoveCommands) {
+    /* Prevent stale buffered movement from instantly cancelling a fresh sit/sleep pose. */
+    clearPendingAvatarMoveCommands(sim);
   }
-
-  const fromX = sim.world.map_x | 0;
-  const fromY = sim.world.map_y | 0;
-  sim.avatarPose = nextPose;
-  sim.avatarPoseSetTick = Number(sim.tick) | 0;
-  sim.avatarPoseAnchor = {
-    x: o.x | 0,
-    y: o.y | 0,
-    z: o.z | 0,
-    order: o.order | 0,
-    type: o.type | 0
-  };
-  /* Prevent stale buffered movement from instantly cancelling a fresh sit/sleep pose. */
-  clearPendingAvatarMoveCommands(sim);
-  if (nextPose === "sleep" && isBedObjectRuntime(o)) {
-    const sleepCell = preferredSleepCellForBed(o, fromX, fromY);
-    sim.world.map_x = sleepCell.x | 0;
-    sim.world.map_y = sleepCell.y | 0;
-    sim.world.map_z = sleepCell.z | 0;
-  } else {
-    // Align avatar position to interacted furniture tile so sit/sleep is spatially coherent.
-    sim.world.map_x = o.x | 0;
-    sim.world.map_y = o.y | 0;
-    sim.world.map_z = o.z | 0;
-  }
-  diagBox.className = "diag ok";
-  diagBox.textContent = nextPose === "sleep"
-    ? `Sleeping at ${o.x},${o.y},${o.z}`
-    : `Sitting at ${o.x},${o.y},${o.z}`;
+  diagBox.className = `diag ${result.diagClass}`;
+  diagBox.textContent = result.text;
   return true;
 }
 

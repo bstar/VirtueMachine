@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  applyFurnitureInteractionRuntime,
   bedInteractionScoreRuntime,
   chairFrameForCellRuntime,
+  clearFurnitureAvatarPoseRuntime,
   furnitureAtWorldCellRuntime,
   furnitureOccupancyCellsRuntime,
+  furniturePoseAnchorKeyRuntime,
   objectIsBedAtCellRuntime,
   objectIsChairAtCellRuntime,
   preferredSleepCellForBedRuntime,
@@ -92,6 +95,138 @@ assert.equal(chairFrameForCellRuntime(chair, 5, 6, () => []), 3);
 assert.equal(objectIsChairAtCellRuntime(chair, 5, 6, singleFlags, () => []), true);
 assert.equal(objectIsChairAtCellRuntime(chair, 4, 6, horizontalFlags, () => []), true);
 assert.equal(objectIsChairAtCellRuntime(chair, 3, 6, horizontalFlags, () => []), false);
+
+{
+  const sim = {
+    avatarPose: "sit",
+    avatarPoseAnchor: { x: 1, y: 2, z: 0, order: 3, type: 0x0fc },
+    avatarPoseSetTick: 99,
+    tick: 100,
+    world: { map_x: 1, map_y: 2, map_z: 0 }
+  };
+  clearFurnitureAvatarPoseRuntime(sim);
+  assert.equal(sim.avatarPose, "stand");
+  assert.equal(sim.avatarPoseAnchor, null);
+  assert.equal(sim.avatarPoseSetTick, -1);
+}
+
+assert.equal(furniturePoseAnchorKeyRuntime({ x: 1025, y: 1026, z: 17, order: 65537, type: 1025 }), "1,2,1,1,1");
+assert.equal(furniturePoseAnchorKeyRuntime(null), "");
+
+{
+  const sim = {
+    avatarPose: "stand",
+    avatarPoseAnchor: null,
+    avatarPoseSetTick: -1,
+    tick: 7,
+    world: { map_x: 4, map_y: 4, map_z: 0 }
+  };
+  const result = applyFurnitureInteractionRuntime(sim, null, {
+    isBedObject: () => false,
+    preferredSleepCell: () => ({ x: 0, y: 0, z: 0 })
+  });
+  assert.deepEqual(result, {
+    clearPendingMoveCommands: false,
+    diagClass: "ok",
+    ok: false,
+    text: ""
+  });
+  assert.equal(sim.avatarPose, "stand");
+  assert.deepEqual(sim.world, { map_x: 4, map_y: 4, map_z: 0 });
+}
+
+{
+  const sim = {
+    avatarPose: "sleep",
+    avatarPoseAnchor: { x: 12, y: 20, z: 1, order: 4, type: 0x0a3 },
+    avatarPoseSetTick: 8,
+    tick: 9,
+    world: { map_x: 12, map_y: 20, map_z: 1 }
+  };
+  const result = applyFurnitureInteractionRuntime(sim, null, {
+    isBedObject: () => false,
+    preferredSleepCell: () => ({ x: 0, y: 0, z: 0 })
+  });
+  assert.deepEqual(result, {
+    clearPendingMoveCommands: false,
+    diagClass: "ok",
+    ok: true,
+    text: "Stood up."
+  });
+  assert.equal(sim.avatarPose, "stand");
+  assert.equal(sim.avatarPoseAnchor, null);
+  assert.equal(sim.avatarPoseSetTick, -1);
+}
+
+{
+  const sim = {
+    avatarPose: "sit",
+    avatarPoseAnchor: { x: 5, y: 6, z: 0, order: 2, type: 0x0fc },
+    avatarPoseSetTick: 8,
+    tick: 9,
+    world: { map_x: 5, map_y: 6, map_z: 0 }
+  };
+  const result = applyFurnitureInteractionRuntime(sim, chair, {
+    isBedObject: (obj) => obj.type === 0x0a3,
+    preferredSleepCell: () => ({ x: 0, y: 0, z: 0 })
+  });
+  assert.deepEqual(result, {
+    clearPendingMoveCommands: false,
+    diagClass: "ok",
+    ok: true,
+    text: "Stood up."
+  });
+  assert.equal(sim.avatarPose, "stand");
+  assert.equal(sim.avatarPoseAnchor, null);
+}
+
+{
+  const sim = {
+    avatarPose: "stand",
+    avatarPoseAnchor: null,
+    avatarPoseSetTick: -1,
+    tick: 42,
+    world: { map_x: 4, map_y: 6, map_z: 0 }
+  };
+  const result = applyFurnitureInteractionRuntime(sim, chair, {
+    isBedObject: (obj) => obj.type === 0x0a3,
+    preferredSleepCell: () => ({ x: 0, y: 0, z: 0 })
+  });
+  assert.deepEqual(result, {
+    clearPendingMoveCommands: true,
+    diagClass: "ok",
+    ok: true,
+    text: "Sitting at 5,6,0"
+  });
+  assert.equal(sim.avatarPose, "sit");
+  assert.deepEqual(sim.avatarPoseAnchor, { x: 5, y: 6, z: 0, order: 2, type: 0x0fc });
+  assert.equal(sim.avatarPoseSetTick, 42);
+  assert.deepEqual(sim.world, { map_x: 5, map_y: 6, map_z: 0 });
+}
+
+{
+  const sim = {
+    avatarPose: "stand",
+    avatarPoseAnchor: null,
+    avatarPoseSetTick: -1,
+    tick: 43,
+    world: { map_x: 11, map_y: 19, map_z: 1 }
+  };
+  const result = applyFurnitureInteractionRuntime(sim, { ...bed, frame: 5 }, {
+    isBedObject: (obj) => obj.type === 0x0a3,
+    preferredSleepCell: (obj, fromX, fromY) => preferredSleepCellForBedRuntime(obj, fromX, fromY, doubleFlags)
+  });
+  assert.deepEqual(result, {
+    clearPendingMoveCommands: true,
+    diagClass: "ok",
+    ok: true,
+    text: "Sleeping at 12,20,1"
+  });
+  assert.equal(sim.avatarPose, "sleep");
+  assert.deepEqual(sim.avatarPoseAnchor, { x: 12, y: 20, z: 1, order: 4, type: 0x0a3 });
+  assert.equal(sim.avatarPoseSetTick, 43);
+  assert.deepEqual(sim.world, { map_x: 11, map_y: 19, map_z: 1 });
+}
 
 const footprintChair = {
   baseTile: 0x500,
