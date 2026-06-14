@@ -40,6 +40,11 @@ const commandLog = [{ type: 99, tick: 0 }];
 appendCommandLogRuntime(commandLog, { type: USE, tick: 1 }, 1);
 assert.deepEqual(commandLog, [{ type: USE, tick: 1 }]);
 
+const clonedCommand = { type: USE, tick: 2, arg0: 4 };
+appendCommandLogRuntime(commandLog, clonedCommand, 2);
+clonedCommand.arg0 = 9;
+assert.deepEqual(commandLog[1], { type: USE, tick: 2, arg0: 4 });
+
 assert.equal(shouldSuppressRepeatedMoveRuntime({
   dx: 1,
   dy: 0,
