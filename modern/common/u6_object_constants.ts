@@ -4,6 +4,10 @@ export const OBJ_COORD_USE_CONTAINED = 0x08;
 export const OBJ_COORD_USE_INVEN = 0x10;
 export const OBJ_COORD_USE_EQUIP = 0x18;
 
+export function coordUseOfStatus(status: unknown): number {
+  return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
+}
+
 export const OBJECT_TYPE_DOOR_VALUES = Object.freeze([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
 export const OBJECT_TYPE_CLOSEABLE_DOOR_VALUES = Object.freeze([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
 export const OBJECT_TYPE_CHAIR_VALUES = Object.freeze([0x0fc]);

@@ -6,13 +6,21 @@ import {
   OBJECT_TYPE_TOP_DECOR_VALUES,
   u6ObjectTypeSet
 } from "../common/u6_object_constants.ts";
+import type { NpcStepTarget, WorldObject, WorldObjectRuntimeState } from "./world_object_types.ts";
 
 const OBJECT_TYPES_DOOR = u6ObjectTypeSet(OBJECT_TYPE_DOOR_VALUES);
 const OBJECT_TYPES_CLOSEABLE_DOOR = u6ObjectTypeSet(OBJECT_TYPE_CLOSEABLE_DOOR_VALUES);
 const OBJECT_TYPES_TOP_DECOR = u6ObjectTypeSet(OBJECT_TYPE_TOP_DECOR_VALUES);
 const OBJECT_TYPES_SOLID_ENV = u6ObjectTypeSet(OBJECT_TYPE_SOLID_ENV_VALUES);
 
-export function objectFootprintCells(obj: any, tileFlags: Uint8Array | null | undefined): Array<{ x: number; y: number; z: number; tile_id: number }> {
+export interface ObjectFootprintCell {
+  x: number;
+  y: number;
+  z: number;
+  tile_id: number;
+}
+
+export function objectFootprintCells(obj: WorldObject, tileFlags: Uint8Array | null | undefined): ObjectFootprintCell[] {
   const wrap10 = (v: unknown) => Number(v) & 0x3ff;
   const x = wrap10(obj.x);
   const y = wrap10(obj.y);
@@ -38,8 +46,8 @@ export function objectAnchorIndexKey(x: unknown, y: unknown, z: unknown): string
   return `${Number(x) & 0x3ff},${Number(y) & 0x3ff},${Number(z) & 0x0f}`;
 }
 
-export function buildObjectAnchorIndex(objects: any[]): Map<string, any[]> {
-  const out = new Map<string, any[]>();
+export function buildObjectAnchorIndex(objects: WorldObject[]): Map<string, WorldObject[]> {
+  const out = new Map<string, WorldObject[]>();
   for (const obj of Array.isArray(objects) ? objects : []) {
     if (!obj || (Number(obj.coord_use) | 0) !== OBJ_COORD_USE_LOCXYZ) {
       continue;
@@ -55,20 +63,20 @@ export function buildObjectAnchorIndex(objects: any[]): Map<string, any[]> {
   return out;
 }
 
-export function refreshWorldObjectIndexes(state: any): void {
+export function refreshWorldObjectIndexes(state: WorldObjectRuntimeState): void {
   if (!state?.worldObjects) {
     return;
   }
   state.worldObjects.activeByAnchor = buildObjectAnchorIndex(state.worldObjects.active);
 }
 
-export function activeObjectsAnchoredAt(state: any, x: unknown, y: unknown, z: unknown): any[] {
+export function activeObjectsAnchoredAt(state: WorldObjectRuntimeState, x: unknown, y: unknown, z: unknown): WorldObject[] {
   const key = objectAnchorIndexKey(x, y, z);
   const indexed = state?.worldObjects?.activeByAnchor;
   if (indexed && typeof indexed.get === "function") {
     return indexed.get(key) || [];
   }
-  return (state?.worldObjects?.active || []).filter((obj: any) => (
+  return (state?.worldObjects?.active || []).filter((obj) => (
     (Number(obj?.coord_use) | 0) === OBJ_COORD_USE_LOCXYZ
     && ((Number(obj.x) & 0x3ff) === (Number(x) & 0x3ff))
     && ((Number(obj.y) & 0x3ff) === (Number(y) & 0x3ff))
@@ -92,11 +100,11 @@ function isDoorFrameOpen(type: unknown, frame: unknown): boolean {
   return f >= 0 && f < 4;
 }
 
-function isSolidEnvObject(obj: any): boolean {
+function isSolidEnvObject(obj: WorldObject): boolean {
   return !!obj && OBJECT_TYPES_SOLID_ENV.has(Number(obj.type) & 0x03ff);
 }
 
-function isImplicitSolidObjectTile(obj: any, tileId: unknown, tileFlags: Uint8Array | null | undefined): boolean {
+function isImplicitSolidObjectTile(obj: WorldObject, tileId: unknown, tileFlags: Uint8Array | null | undefined): boolean {
   const type = Number(obj?.type) & 0x03ff;
   if (OBJECT_TYPES_DOOR.has(type)) {
     return false;
@@ -117,7 +125,7 @@ function isImplicitSolidObjectTile(obj: any, tileId: unknown, tileFlags: Uint8Ar
   return false;
 }
 
-export function objectBlocksCell(obj: any, tx: number, ty: number, tz: number, tileFlags: Uint8Array | null | undefined): boolean {
+export function objectBlocksCell(obj: WorldObject, tx: number, ty: number, tz: number, tileFlags: Uint8Array | null | undefined): boolean {
   if (!obj || (Number(obj.coord_use) | 0) !== OBJ_COORD_USE_LOCXYZ || (Number(obj.z) | 0) !== (tz | 0)) {
     return false;
   }
@@ -147,7 +155,7 @@ export function objectBlocksCell(obj: any, tx: number, ty: number, tz: number, t
   return false;
 }
 
-export function canNpcStepInto(state: any, step: any): boolean {
+export function canNpcStepInto(state: WorldObjectRuntimeState, step: NpcStepTarget): boolean {
   const tx = Number(step?.to_x) | 0;
   const ty = Number(step?.to_y) | 0;
   const tz = Number(step?.to_z) | 0;
@@ -155,8 +163,9 @@ export function canNpcStepInto(state: any, step: any): boolean {
     return true;
   }
   const rawTile = state.mapRuntime.tileAt(tx, ty, tz) & 0x07ff;
-  const terrain = state.worldObjects.terrainType ? (state.worldObjects.terrainType[rawTile] ?? 0) : 0;
-  const tileFlag = state.worldObjects.tileFlags ? (state.worldObjects.tileFlags[rawTile] ?? 0) : 0;
+  const worldObjects = state.worldObjects;
+  const terrain = worldObjects.terrainType ? (worldObjects.terrainType[rawTile] ?? 0) : 0;
+  const tileFlag = worldObjects.tileFlags ? (worldObjects.tileFlags[rawTile] ?? 0) : 0;
   if ((terrain & 0x04) !== 0 || (tileFlag & 0x04) !== 0 || (tileFlag & 0x20) !== 0) {
     return false;
   }
@@ -174,7 +183,7 @@ export function canNpcStepInto(state: any, step: any): boolean {
         continue;
       }
       seen.add(key);
-      if (objectBlocksCell(obj, tx, ty, tz, state.worldObjects.tileFlags)) {
+      if (objectBlocksCell(obj, tx, ty, tz, worldObjects.tileFlags)) {
         return false;
       }
     }

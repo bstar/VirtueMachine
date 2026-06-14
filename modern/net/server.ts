@@ -30,12 +30,18 @@ const {
   refreshWorldObjectIndexes
 } = require("./world_object_collision.ts");
 const {
-  DEFAULT_PICKUP_RESPAWN_MS,
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
   pushSpawnedWorldObject
 } = require("./world_object_policy.ts");
+const {
+  compareLegacyWorldObjectOrder,
+  findActiveObjectByKey,
+  normalizeWorldObjectDeltas,
+  persistPatchedObject,
+  worldObjectMeta: buildWorldObjectMeta
+} = require("./world_object_state_runtime.ts");
 const {
   loadNpcBaselineRuntime,
   loadScheduleRuntime,
@@ -577,125 +583,6 @@ function loadWorldObjectBaseline(runtimeDir) {
   };
 }
 
-function normalizeWorldObjectDeltas(raw) {
-  const out = {
-    schema_version: 1,
-    removed: {},
-    moved: {},
-    spawned: [],
-    respawns: {}
-  };
-  if (!raw || typeof raw !== "object") {
-    return out;
-  }
-  if (raw.schema_version === 1) {
-    out.schema_version = 1;
-  }
-  if (raw.removed && typeof raw.removed === "object") {
-    for (const [k, v] of Object.entries(raw.removed)) {
-      if (v) {
-        out.removed[String(k)] = true;
-      }
-    }
-  }
-  if (raw.moved && typeof raw.moved === "object") {
-    for (const [k, v] of Object.entries(raw.moved)) {
-      if (!v || typeof v !== "object") {
-        continue;
-      }
-      const entry = v as any;
-      out.moved[String(k)] = {
-        x: Number(entry.x) | 0,
-        y: Number(entry.y) | 0,
-        z: Number(entry.z) | 0,
-        status: Number.isFinite(Number(entry.status)) ? (Number(entry.status) & 0xff) : null,
-        holder_kind: String(entry.holder_kind || "none"),
-        holder_id: String(entry.holder_id || ""),
-        holder_key: String(entry.holder_key || "")
-      };
-    }
-  }
-  if (Array.isArray(raw.spawned)) {
-    out.spawned = raw.spawned
-      .filter((v) => v && typeof v === "object")
-      .map((v, i) => ({
-        object_key: String(v.object_key || `spawn_${i}`),
-        source_area: Number(v.source_area) >>> 0,
-        source_index: Number(v.source_index) >>> 0,
-        status: Number(v.status) & 0xff,
-        shape_type: Number(v.shape_type) & 0xffff,
-        amount: Number(v.amount) & 0xffff,
-        type: Number(v.type) & 0x3ff,
-        frame: Number(v.frame) & 0x3f,
-        tile_id: Number(v.tile_id) & 0xffff,
-        x: Number(v.x) | 0,
-        y: Number(v.y) | 0,
-        z: Number(v.z) | 0,
-        holder_kind: String(v.holder_kind || "none"),
-        holder_id: String(v.holder_id || ""),
-        holder_key: String(v.holder_key || "")
-      }));
-  }
-  if (raw.respawns && typeof raw.respawns === "object") {
-    for (const [k, v] of Object.entries(raw.respawns)) {
-      if (!v || typeof v !== "object") {
-        continue;
-      }
-      const entry = v as any;
-      const dueAtMs = Number(entry.due_at_ms);
-      const takenAtMs = Number(entry.taken_at_ms);
-      const respawnMs = Number(entry.respawn_ms);
-      if (!Number.isFinite(dueAtMs) || dueAtMs <= 0) {
-        continue;
-      }
-      out.respawns[String(k)] = {
-        due_at_ms: Math.floor(dueAtMs),
-        taken_at_ms: Number.isFinite(takenAtMs) ? Math.floor(takenAtMs) : 0,
-        respawn_ms: Number.isFinite(respawnMs) ? Math.max(0, Math.floor(respawnMs)) : DEFAULT_PICKUP_RESPAWN_MS,
-        policy: String(entry.policy || "default")
-      };
-    }
-  }
-  return out;
-}
-
-function isStatus0010(status) {
-  return (Number(status) & 0x10) !== 0;
-}
-
-function compareLegacyWorldObjectOrder(a, b) {
-  if ((a.legacy_order | 0) !== (b.legacy_order | 0)) {
-    return (a.legacy_order | 0) - (b.legacy_order | 0);
-  }
-  const aUse = coordUseOfStatus(a.status);
-  const bUse = coordUseOfStatus(b.status);
-  if (aUse !== 0 && bUse === 0) {
-    return -1;
-  }
-  if (bUse !== 0 && aUse === 0) {
-    return 1;
-  }
-  if ((a.y | 0) !== (b.y | 0)) {
-    return (a.y | 0) - (b.y | 0);
-  }
-  if ((a.x | 0) !== (b.x | 0)) {
-    return (a.x | 0) - (b.x | 0);
-  }
-  if ((a.z | 0) !== (b.z | 0)) {
-    return (b.z | 0) - (a.z | 0);
-  }
-  if (isStatus0010(a.status) !== isStatus0010(b.status)) {
-    return isStatus0010(a.status) ? -1 : 1;
-  }
-  if ((a.source_area | 0) !== (b.source_area | 0)) {
-    return (a.source_area | 0) - (b.source_area | 0);
-  }
-  if ((a.source_index | 0) !== (b.source_index | 0)) {
-    return (a.source_index | 0) - (b.source_index | 0);
-  }
-  return String(a.object_key || "").localeCompare(String(b.object_key || ""));
-}
-
 function buildWorldObjectState(runtimeDir, rawDeltas) {
   const baseline = loadWorldObjectBaseline(runtimeDir);
   const tileFlags = loadTileFlagMap(runtimeDir);
@@ -742,57 +629,7 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
 }
 
 function worldObjectMeta(state) {
-  const wo = state.worldObjects;
-  return {
-    baseline_dir: OBJECT_BASELINE_DIR,
-    source_dir: wo.baseline.source_dir,
-    loaded_at: wo.baseline.loaded_at,
-    files_loaded: wo.baseline.files_loaded >>> 0,
-    baseline_count: wo.baseline.baseline_count >>> 0,
-    active_count: wo.active.length >>> 0,
-    delta_removed_count: Object.keys(wo.deltas.removed || {}).length >>> 0,
-    delta_moved_count: Object.keys(wo.deltas.moved || {}).length >>> 0,
-    delta_spawned_count: Array.isArray(wo.deltas.spawned) ? wo.deltas.spawned.length >>> 0 : 0
-  };
-}
-
-function findActiveObjectByKey(state, objectKey) {
-  const key = String(objectKey || "");
-  if (!key) {
-    return null;
-  }
-  return state.worldObjects.active.find((o) => String(o.object_key || "") === key) || null;
-}
-
-function persistPatchedObject(state, obj) {
-  if (!obj || !obj.object_key) {
-    return;
-  }
-  if (String(obj.source_kind || "").startsWith("spawned")) {
-    const si = state.worldObjects.deltas.spawned.findIndex((s) => String(s.object_key || "") === String(obj.object_key));
-    if (si >= 0) {
-      state.worldObjects.deltas.spawned[si] = {
-        ...state.worldObjects.deltas.spawned[si],
-        x: obj.x | 0,
-        y: obj.y | 0,
-        z: obj.z | 0,
-        status: Number(obj.status) & 0xff,
-        holder_kind: String(obj.holder_kind || "none"),
-        holder_id: String(obj.holder_id || ""),
-        holder_key: String(obj.holder_key || "")
-      };
-    }
-    return;
-  }
-  state.worldObjects.deltas.moved[String(obj.object_key)] = {
-    x: obj.x | 0,
-    y: obj.y | 0,
-    z: obj.z | 0,
-    status: Number(obj.status) & 0xff,
-    holder_kind: String(obj.holder_kind || "none"),
-    holder_id: String(obj.holder_id || ""),
-    holder_key: String(obj.holder_key || "")
-  };
+  return buildWorldObjectMeta(state, OBJECT_BASELINE_DIR);
 }
 
 function defaultWorldInteractionLog() {
@@ -1180,6 +1017,25 @@ function parseSmtpLineBuffer(buffer, onResponse) {
   return rest;
 }
 
+interface SmtpResponse {
+  code?: number;
+  lines?: string[];
+  error?: Error;
+}
+
+interface EmailDeliveryLog {
+  kind: "email_delivery";
+  at: string;
+  to: string;
+  subject: string;
+  body_text: string;
+  mode: string;
+  status: "queued" | "sent" | "failed" | "logged";
+  error?: string;
+  provider_id?: string;
+  [key: string]: unknown;
+}
+
 async function smtpDeliver(toEmail, subject, bodyText) {
   if (!EMAIL_SMTP_HOST) {
     throw new Error("smtp host not configured (set VM_EMAIL_SMTP_HOST)");
@@ -1201,8 +1057,8 @@ async function smtpDeliver(toEmail, subject, bodyText) {
   transport.setEncoding("utf8");
   transport.setTimeout(EMAIL_SMTP_TIMEOUT_MS);
 
-  const responses = [];
-  const waiters = [];
+  const responses: SmtpResponse[] = [];
+  const waiters: Array<(response: SmtpResponse) => void> = [];
   let current = null;
   let buffered = "";
   let closed = false;
@@ -1263,7 +1119,7 @@ async function smtpDeliver(toEmail, subject, bodyText) {
     if (responses.length) {
       return responses.shift();
     }
-    const resp = await new Promise<any>((resolve) => {
+    const resp = await new Promise<SmtpResponse>((resolve) => {
       waiters.push(resolve);
     });
     if (resp && resp.error) {
@@ -1351,7 +1207,7 @@ async function resendDeliver(toEmail, subject, bodyText) {
 }
 
 async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
-  const delivery: any = {
+  const delivery: EmailDeliveryLog = {
     kind: "email_delivery",
     at: nowIso(),
     to: normalizeEmail(toEmail),

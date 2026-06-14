@@ -1,8 +1,15 @@
+import type { SpawnedWorldObjectDelta, WorldObject, WorldObjectRuntimeState, WorldObjectStateContainer } from "./world_object_types.ts";
+
 export const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
 export const LOOT_PICKUP_RESPAWN_MS = 60 * 60 * 1000;
 
-export function isSlowRespawnLootObject(obj: unknown): boolean {
-  const type = Number((obj as any)?.type) & 0x3ff;
+export interface PickupRespawnPolicy {
+  policy: string;
+  respawn_ms: number;
+}
+
+export function isSlowRespawnLootObject(obj: Pick<WorldObject, "type"> | null | undefined): boolean {
+  const type = Number(obj?.type) & 0x3ff;
   /*
     Legacy U6 object ids: 88=gold coin, 89=gold nugget, 98=chest.
     Keep this deliberately narrow until the object-name table is wired in.
@@ -10,7 +17,7 @@ export function isSlowRespawnLootObject(obj: unknown): boolean {
   return type === 88 || type === 89 || type === 98;
 }
 
-export function pickupRespawnPolicyForObject(obj: unknown): { policy: string; respawn_ms: number } {
+export function pickupRespawnPolicyForObject(obj: Pick<WorldObject, "type"> | null | undefined): PickupRespawnPolicy {
   if (isSlowRespawnLootObject(obj)) {
     return {
       policy: "loot_slow",
@@ -23,20 +30,24 @@ export function pickupRespawnPolicyForObject(obj: unknown): { policy: string; re
   };
 }
 
-export function isBaselineWorldObject(obj: unknown): boolean {
-  const kind = String((obj as any)?.source_kind || "baseline");
+export function isBaselineWorldObject(obj: Pick<WorldObject, "source_kind"> | null | undefined): boolean {
+  const kind = String(obj?.source_kind || "baseline");
   return kind === "baseline" || kind === "baseline_moved" || kind === "";
 }
 
-export function inventoryCloneKeyForTake(state: unknown, target: unknown, actorId: unknown): string {
-  const nextSeq = (Number((state as any)?.worldInteractionLog?.seq || 0) + 1) >>> 0;
-  const source = String((target as any)?.object_key || "object").replace(/[^a-zA-Z0-9:_-]+/g, "_");
+export function inventoryCloneKeyForTake(
+  state: Pick<WorldObjectRuntimeState, "worldInteractionLog"> | null | undefined,
+  target: Pick<WorldObject, "object_key"> | null | undefined,
+  actorId: unknown
+): string {
+  const nextSeq = (Number(state?.worldInteractionLog?.seq || 0) + 1) >>> 0;
+  const source = String(target?.object_key || "object").replace(/[^a-zA-Z0-9:_-]+/g, "_");
   const actor = String(actorId || "actor").replace(/[^a-zA-Z0-9:_-]+/g, "_");
   return `inv:${source}:${actor}:${nextSeq}`;
 }
 
-export function pushSpawnedWorldObject(state: any, obj: any): void {
-  state.worldObjects.deltas.spawned.push({
+export function spawnedWorldObjectDeltaFromObject(obj: WorldObject): SpawnedWorldObjectDelta {
+  return {
     object_key: String(obj.object_key || ""),
     source_area: Number(obj.source_area) >>> 0,
     source_index: Number(obj.source_index) >>> 0,
@@ -52,5 +63,9 @@ export function pushSpawnedWorldObject(state: any, obj: any): void {
     holder_kind: String(obj.holder_kind || "none"),
     holder_id: String(obj.holder_id || ""),
     holder_key: String(obj.holder_key || "")
-  });
+  };
+}
+
+export function pushSpawnedWorldObject(state: WorldObjectStateContainer, obj: WorldObject): void {
+  state.worldObjects.deltas.spawned.push(spawnedWorldObjectDeltaFromObject(obj));
 }

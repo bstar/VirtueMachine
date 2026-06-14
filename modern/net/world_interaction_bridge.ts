@@ -8,12 +8,8 @@ const {
   OBJ_COORD_USE_EQUIP,
   OBJ_COORD_USE_INVEN,
   OBJ_COORD_USE_LOCXYZ,
-  OBJ_COORD_USE_MASK
+  coordUseOfStatus
 } = require("../common/u6_object_constants.ts");
-
-function coordUseOfStatus(status) {
-  return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
-}
 
 function holderKindCode(name) {
   const v = String(name || "").toLowerCase();
@@ -137,7 +133,17 @@ function applyCanonicalWorldInteractionCommand(input) {
     return { ok: false, ...mapBridgeCode(canonical.code) };
   }
 
-  const patch: any = {
+  interface InteractionPatch {
+    status: number;
+    holder_kind: string;
+    holder_id?: string;
+    holder_key?: string;
+    x?: number;
+    y?: number;
+    z?: number;
+  }
+
+  const patch: InteractionPatch = {
     status: Number(canonical.status) & 0xff,
     holder_kind: String(canonical.holder_kind || "none")
   };
