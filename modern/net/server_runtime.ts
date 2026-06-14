@@ -49,6 +49,45 @@ export type WorldSnapshotRuntime = {
   updated_at: string;
 };
 
+type WorldSnapshotSourceRuntime = {
+  snapshot_base64?: unknown;
+  snapshot_meta?: {
+    saved_tick?: unknown;
+    schema_version?: unknown;
+    sim_core_version?: unknown;
+    snapshot_hash?: unknown;
+  };
+  updated_at?: unknown;
+};
+
+type WorldInteractionEventSourceRuntime = {
+  actor_id?: unknown;
+  container_key?: unknown;
+  holder_id?: unknown;
+  holder_key?: unknown;
+  holder_kind?: unknown;
+  runtime_extensions?: unknown;
+  runtime_profile?: unknown;
+  seq?: unknown;
+  status?: unknown;
+  target_key?: unknown;
+  verb?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type PresenceHeartbeatBodyRuntime = {
+  character_name?: unknown;
+  facing_dx?: unknown;
+  facing_dy?: unknown;
+  map_x?: unknown;
+  map_y?: unknown;
+  map_z?: unknown;
+  mode?: unknown;
+  session_id?: unknown;
+};
+
 export type PresenceRowRuntime = {
   character_name: string;
   facing_dx: number;
@@ -118,15 +157,31 @@ export function defaultWorldSnapshotRuntime(nowIso = new Date().toISOString()): 
   };
 }
 
+function asWorldSnapshotSourceRuntime(raw: unknown): WorldSnapshotSourceRuntime | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const row = raw as {
+    snapshot_base64?: unknown;
+    snapshot_meta?: unknown;
+    updated_at?: unknown;
+  };
+  return {
+    snapshot_base64: row.snapshot_base64,
+    snapshot_meta: row.snapshot_meta && typeof row.snapshot_meta === "object"
+      ? row.snapshot_meta as WorldSnapshotSourceRuntime["snapshot_meta"]
+      : undefined,
+    updated_at: row.updated_at
+  };
+}
+
 export function normalizeWorldSnapshotRuntime(raw: unknown, nowIso = new Date().toISOString()): WorldSnapshotRuntime {
   const base = defaultWorldSnapshotRuntime(nowIso);
-  if (!raw || typeof raw !== "object") {
+  const row = asWorldSnapshotSourceRuntime(raw);
+  if (!row) {
     return base;
   }
-  const row = raw as Record<string, unknown>;
-  const meta = row.snapshot_meta && typeof row.snapshot_meta === "object"
-    ? row.snapshot_meta as Record<string, unknown>
-    : {};
+  const meta = row.snapshot_meta ?? {};
   return {
     snapshot_meta: {
       schema_version: Number(meta.schema_version) || 1,
@@ -340,6 +395,13 @@ function parseRuntimeExtensionsRuntime(raw: unknown): string[] {
   );
 }
 
+function asWorldInteractionEventSourceRuntime(raw: unknown): WorldInteractionEventSourceRuntime {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  return raw as WorldInteractionEventSourceRuntime;
+}
+
 export function defaultWorldInteractionLogRuntime(): WorldInteractionLogRuntime {
   return {
     schema_version: 1,
@@ -370,7 +432,7 @@ export function normalizeWorldInteractionLogRuntime(raw: unknown): WorldInteract
 }
 
 export function normalizeWorldInteractionEventRuntime(raw: unknown, seq: number): WorldInteractionEventRuntime {
-  const event = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const event = asWorldInteractionEventSourceRuntime(raw);
   return {
     seq: Number(seq || event.seq) | 0,
     verb: String(event.verb || ""),
@@ -497,6 +559,13 @@ export function removePresenceSessionRuntime(
   };
 }
 
+function asPresenceHeartbeatBodyRuntime(raw: unknown): PresenceHeartbeatBodyRuntime {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  return raw as PresenceHeartbeatBodyRuntime;
+}
+
 export function buildPresenceHeartbeatRowRuntime(args: {
   body: unknown;
   characterName?: unknown;
@@ -506,7 +575,7 @@ export function buildPresenceHeartbeatRowRuntime(args: {
   userId: unknown;
   username: unknown;
 }): PresenceRowRuntime {
-  const body = args.body && typeof args.body === "object" ? args.body as Record<string, unknown> : {};
+  const body = asPresenceHeartbeatBodyRuntime(args.body);
   const contract = args.runtimeContract || {};
   return {
     user_id: String(args.userId || ""),

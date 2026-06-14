@@ -408,6 +408,31 @@ assert.deepEqual(buildPresenceHeartbeatRowRuntime({
   updated_at_ms: 500
 });
 
+assert.deepEqual(buildPresenceHeartbeatRowRuntime({
+  body: "bad",
+  characterName: "Avatar",
+  clockTick: 5,
+  nowMs: 100,
+  runtimeContract: {},
+  userId: "u1",
+  username: "Avatar"
+}), {
+  user_id: "u1",
+  username: "Avatar",
+  session_id: "",
+  character_name: "Avatar",
+  map_x: 0,
+  map_y: 0,
+  map_z: 0,
+  facing_dx: 0,
+  facing_dy: 0,
+  tick: 5,
+  mode: "avatar",
+  runtime_profile: "canonical_strict",
+  runtime_extensions: [],
+  updated_at_ms: 100
+});
+
 assert.deepEqual(presenceRowsPayloadRuntime([{
   ...presenceRows[0],
   tick: -1,
