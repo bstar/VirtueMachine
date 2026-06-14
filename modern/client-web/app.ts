@@ -799,7 +799,6 @@ type AppState = {
   palette: RgbPaletteRuntime | null;
   paletteFrame: RgbPaletteRuntime | null;
   paletteFrameTick: number;
-  partyMembers: number[];
   partyNameById: Record<string, string>;
   portraitArchiveA: Uint8Array | null;
   portraitArchiveB: Uint8Array | null;
@@ -1117,7 +1116,6 @@ const state: AppState = {
   audioAmbientTriggerCount: 0,
   queue: [],
   commandLog: [],
-  partyMembers: [1],
   partyNameById: { "1": "Avatar" },
   mapCtx: null,
   tileSet: null,
@@ -3897,9 +3895,9 @@ function netSnapshotRoute(): string {
 }
 
 function applyLoadedSimSnapshot(loaded: SimSnapshotRuntime): void {
-  state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
-  state.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
-  state.sim.partyMembers = state.partyMembers.slice();
+  const fallbackPartySize = Array.isArray(state.sim.partyMembers) ? state.sim.partyMembers.length : 1;
+  state.sim = toAppSimStateRuntime(loaded, fallbackPartySize);
+  state.sim.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
   state.queue = [];
   state.commandLog = [];
   state.accMs = 0;
@@ -8275,9 +8273,7 @@ function loadWorldSnapshotHotkey(): void {
 }
 
 function runtimePartyMembersForUiProbe(): number[] {
-  const source = Array.isArray(state.sim.partyMembers) ? state.sim.partyMembers : state.partyMembers;
-  const members = normalizePartyMemberIdsRuntime(source, 1);
-  state.partyMembers = members.slice();
+  const members = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
   state.sim.partyMembers = members.slice();
   state.sim.partySize = members.length >>> 0;
   if ((state.sim.world.active | 0) >= members.length) {
