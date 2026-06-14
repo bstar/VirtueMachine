@@ -110,8 +110,7 @@ import {
 } from "./net/profile_runtime.ts";
 import {
   decodeSimSnapshotBase64Runtime,
-  encodeSimSnapshotBase64Runtime,
-  type SimSnapshotRuntime
+  encodeSimSnapshotBase64Runtime
 } from "./net/snapshot_codec_runtime.ts";
 import { loadNetPanelPrefs, persistNetLoginSettings, setModalOpenRuntime } from "./net/panel_runtime.ts";
 import {
@@ -147,6 +146,10 @@ import {
   shouldSuppressRepeatedMoveRuntime,
   upsertMoveCommandForTickRuntime
 } from "./sim/queue_runtime.ts";
+import {
+  createInitialAppSimState,
+  toAppSimStateRuntime
+} from "./sim/app_state_runtime.ts";
 import {
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
@@ -648,13 +651,8 @@ const INITIAL_WORLD = Object.freeze({
 
 const INITIAL_SEED = 0x12345678;
 
-type AppSimState = Omit<SimSnapshotRuntime, "doorOpenStates"> & {
-  doorOpenStates: Record<string, number>;
-  partySize: number;
-};
-
 const state = {
-  sim: createInitialSimState(),
+  sim: createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED),
   audio: createU6AudioRuntime(),
   musicPhase: "",
   musicSong: "",
@@ -4801,37 +4799,6 @@ function composeLegacyViewportFromModernGrid() {
   lv.drawImage(compose, 8, 8, 160, 160, 0, 0, 160, 160);
 }
 
-function createInitialSimState(): AppSimState {
-  return {
-    tick: 0,
-    rngState: INITIAL_SEED >>> 0,
-    worldFlags: 0,
-    commandsApplied: 0,
-    doorOpenStates: {},
-    removedObjectKeys: {},
-    removedObjectAtTick: {},
-    removedObjectCount: 0,
-    inventory: {},
-    spawnedWorldObjects: [],
-    spawnedWorldSeq: 0,
-    avatarPose: "stand",
-    avatarPoseSetTick: -1,
-    avatarPoseAnchor: null,
-    partySize: 1,
-    world: { ...INITIAL_WORLD }
-  };
-}
-
-function toAppSimState(snapshot: SimSnapshotRuntime): AppSimState {
-  return {
-    ...snapshot,
-    doorOpenStates: Object.fromEntries(
-      Object.entries(snapshot.doorOpenStates ?? {}).map(([key, value]) => [key, Number(value) | 0])
-    ),
-    partySize: Math.max(1, Number((snapshot as { partySize?: number }).partySize) || state.partyMembers.length || 1)
-  };
-}
-
 function applyRuntimeProfileState(profile, extensions) {
   state.runtimeProfile = normalizeRuntimeProfile(profile);
   state.runtimeExtensions = sanitizeRuntimeExtensions(extensions);
@@ -5292,7 +5259,7 @@ async function netLogin() {
     snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
-      state.sim = toAppSimState(loaded);
+      state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
       state.queue = [];
       state.commandLog = [];
       state.accMs = 0;
@@ -5490,7 +5457,7 @@ async function netLoadSnapshot() {
     snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
-      state.sim = toAppSimState(loaded);
+      state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
       state.queue = [];
       state.commandLog = [];
       state.accMs = 0;
@@ -9311,7 +9278,7 @@ function replayCheckpointsCsv(checkpoints) {
 }
 
 function runReplayCheckpoints(commands, totalTicks, interval) {
-  const sim = createInitialSimState();
+  const sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
   const queue = commands.map((cmd) => ({ ...cmd }));
   const checkpoints = [];
 
@@ -9373,7 +9340,7 @@ function runAnimationCheckpoints(commands, totalTicks, interval) {
   if (!state.mapCtx) {
     return [];
   }
-  const sim = createInitialSimState();
+  const sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
   const queue = commands.map((cmd) => ({ ...cmd }));
   const checkpoints = [];
 
@@ -9429,7 +9396,7 @@ function verifyReplayStability() {
 }
 
 function resetRun() {
-  state.sim = createInitialSimState();
+  state.sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
   state.queue = [];
   state.commandLog = [];
   state.paletteFrameTick = -1;

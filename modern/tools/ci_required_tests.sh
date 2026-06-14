@@ -27,6 +27,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_legacy_ui_anchors.sh"
   "$ROOT_DIR/modern/tools/test_client_web_conversation.sh"
   "$ROOT_DIR/modern/tools/test_client_web_error_runtime.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_app_state.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_probe.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_inventory_paperdoll.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_paperdoll_equipment.sh"
