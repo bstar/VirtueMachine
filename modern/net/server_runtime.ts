@@ -365,3 +365,100 @@ export function normalizePresenceRowsRuntime(raw: unknown): PresenceRowRuntime[]
     updated_at_ms: Number(p?.updated_at_ms || 0)
   }));
 }
+
+export function prunePresenceRowsRuntime(
+  rows: readonly PresenceRowRuntime[],
+  args: { nowMs: number; ttlMs: number }
+): PresenceRowRuntime[] {
+  const cutoff = (Number(args.nowMs) || 0) - Math.max(0, Number(args.ttlMs) || 0);
+  return rows.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+}
+
+export function upsertPresenceRowRuntime(
+  rows: readonly PresenceRowRuntime[],
+  row: PresenceRowRuntime,
+  args: { nowMs: number; ttlMs: number }
+): PresenceRowRuntime[] {
+  const userId = String(row.user_id || "");
+  const sessionId = String(row.session_id || "");
+  const replaced = rows.filter((p) => {
+    const pUserId = String(p.user_id || "");
+    const pSessionId = String(p.session_id || "");
+    return pUserId !== userId && pSessionId !== sessionId;
+  });
+  return prunePresenceRowsRuntime([...replaced, row], args);
+}
+
+export function removePresenceForUserRuntime(
+  rows: readonly PresenceRowRuntime[],
+  userId: unknown,
+  args: { nowMs: number; ttlMs: number }
+): PresenceRowRuntime[] {
+  const wanted = String(userId || "");
+  return prunePresenceRowsRuntime(rows.filter((p) => String(p.user_id || "") !== wanted), args);
+}
+
+export function removePresenceSessionRuntime(
+  rows: readonly PresenceRowRuntime[],
+  args: { nowMs: number; sessionId: unknown; ttlMs: number; userId: unknown }
+): { key: string; rows: PresenceRowRuntime[] } {
+  const userId = String(args.userId || "");
+  const sessionId = String(args.sessionId || "");
+  const key = `${userId}:${sessionId}`;
+  const rowsOut = rows.filter((p) => {
+    const pKey = `${String(p.user_id || "")}:${String(p.session_id || "")}`;
+    return pKey !== key;
+  });
+  return {
+    key,
+    rows: prunePresenceRowsRuntime(rowsOut, args)
+  };
+}
+
+export function buildPresenceHeartbeatRowRuntime(args: {
+  body: unknown;
+  characterName?: unknown;
+  clockTick: unknown;
+  nowMs: number;
+  runtimeContract: { extensions?: unknown; profile?: unknown };
+  userId: unknown;
+  username: unknown;
+}): PresenceRowRuntime {
+  const body = args.body && typeof args.body === "object" ? args.body as Record<string, unknown> : {};
+  const contract = args.runtimeContract || {};
+  return {
+    user_id: String(args.userId || ""),
+    username: String(args.username || ""),
+    session_id: String(body.session_id || "").trim(),
+    character_name: String(body.character_name ?? args.characterName ?? "").trim(),
+    map_x: Number(body.map_x) | 0,
+    map_y: Number(body.map_y) | 0,
+    map_z: Number(body.map_z) | 0,
+    facing_dx: Number(body.facing_dx) | 0,
+    facing_dy: Number(body.facing_dy) | 0,
+    tick: Number(args.clockTick) >>> 0,
+    mode: String(body.mode || "avatar"),
+    runtime_profile: normalizeRuntimeProfile(contract.profile),
+    runtime_extensions: parseRuntimeExtensionsRuntime(contract.extensions),
+    updated_at_ms: Number(args.nowMs) || 0
+  };
+}
+
+export function presenceRowsPayloadRuntime(rows: readonly PresenceRowRuntime[]): PresenceRowRuntime[] {
+  return rows.map((p) => ({
+    user_id: String(p.user_id || ""),
+    username: String(p.username || ""),
+    session_id: String(p.session_id || ""),
+    character_name: String(p.character_name || ""),
+    map_x: Number(p.map_x) | 0,
+    map_y: Number(p.map_y) | 0,
+    map_z: Number(p.map_z) | 0,
+    facing_dx: Number(p.facing_dx) | 0,
+    facing_dy: Number(p.facing_dy) | 0,
+    tick: Number(p.tick) >>> 0,
+    mode: String(p.mode || "avatar"),
+    runtime_profile: normalizeRuntimeProfile(p.runtime_profile),
+    runtime_extensions: parseRuntimeExtensionsRuntime(p.runtime_extensions),
+    updated_at_ms: Number(p.updated_at_ms || 0)
+  }));
+}

@@ -81,6 +81,7 @@ const {
 } = require("./server_account_runtime.ts");
 const {
   advanceWorldClockMinuteRuntime,
+  buildPresenceHeartbeatRowRuntime,
   clampIntRuntime,
   computeSnapshotHashRuntime,
   defaultCriticalPolicyRuntime,
@@ -90,9 +91,14 @@ const {
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
+  presenceRowsPayloadRuntime,
   queryIntOrRuntime,
   recordWorldInteractionEventRuntime,
-  runCriticalItemMaintenanceRuntime
+  removePresenceForUserRuntime,
+  removePresenceSessionRuntime,
+  prunePresenceRowsRuntime,
+  runCriticalItemMaintenanceRuntime,
+  upsertPresenceRowRuntime
 } = require("./server_runtime.ts");
 const {
   appendJsonLineRuntime,
@@ -601,21 +607,17 @@ function persistState(state) {
 }
 
 function prunePresence(state, nowMs = Date.now()) {
-  const cutoff = nowMs - PRESENCE_TTL_MS;
-  state.presence = state.presence.filter((p) => Number(p.updated_at_ms || 0) >= cutoff);
+  state.presence = prunePresenceRowsRuntime(state.presence, {
+    nowMs,
+    ttlMs: PRESENCE_TTL_MS
+  });
 }
 
 function upsertPresenceRow(state, row, nowMs = Date.now()) {
-  const userId = String(row.user_id || "");
-  const sessionId = String(row.session_id || "");
-  const prior = Array.isArray(state.presence) ? state.presence : [];
-  state.presence = prior.filter((p) => {
-    const pUserId = String(p.user_id || "");
-    const pSessionId = String(p.session_id || "");
-    return pUserId !== userId && pSessionId !== sessionId;
+  state.presence = upsertPresenceRowRuntime(state.presence, row, {
+    nowMs,
+    ttlMs: PRESENCE_TTL_MS
   });
-  state.presence.push(row);
-  prunePresence(state, nowMs);
 }
 
 function requireUser(state, req, res) {
@@ -842,8 +844,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     // Ensure old sessions for this account do not survive re-login as ghost presences.
-    state.presence = state.presence.filter((p) => String(p.user_id || "") !== String(user.user_id));
-    prunePresence(state);
+    state.presence = removePresenceForUserRuntime(state.presence, user.user_id, {
+      nowMs: Date.now(),
+      ttlMs: PRESENCE_TTL_MS
+    });
     const token = issueToken(state, user.user_id);
     persistState(state);
     sendJson(res, 200, {
@@ -1170,22 +1174,14 @@ const server = http.createServer(async (req, res) => {
     }
     const nowMs = Date.now();
     const clock = updateAuthoritativeClock(state);
-    const row = {
-      user_id: user.user_id,
-      username: user.username,
-      session_id: sessionId,
-      character_name: String(body && body.character_name || "").trim(),
-      map_x: Number(body && body.map_x) | 0,
-      map_y: Number(body && body.map_y) | 0,
-      map_z: Number(body && body.map_z) | 0,
-      facing_dx: Number(body && body.facing_dx) | 0,
-      facing_dy: Number(body && body.facing_dy) | 0,
-      tick: clock.tick >>> 0,
-      mode: String(body && body.mode || "avatar"),
-      runtime_profile: runtimeContract.profile,
-      runtime_extensions: runtimeContract.extensions,
-      updated_at_ms: nowMs
-    };
+    const row = buildPresenceHeartbeatRowRuntime({
+      body,
+      clockTick: clock.tick,
+      nowMs,
+      runtimeContract,
+      userId: user.user_id,
+      username: user.username
+    });
     upsertPresenceRow(state, row, nowMs);
     persistState(state);
     sendJson(res, 200, {
@@ -1210,14 +1206,15 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 400, "bad_session_id", "session_id is required");
       return;
     }
-    const key = `${user.user_id}:${sessionId}`;
-    state.presence = state.presence.filter((p) => {
-      const pKey = `${String(p.user_id || "")}:${String(p.session_id || "")}`;
-      return pKey !== key;
+    const removed = removePresenceSessionRuntime(state.presence, {
+      nowMs: Date.now(),
+      sessionId,
+      ttlMs: PRESENCE_TTL_MS,
+      userId: user.user_id
     });
-    prunePresence(state);
+    state.presence = removed.rows;
     persistState(state);
-    sendJson(res, 200, { ok: true, removed: key });
+    sendJson(res, 200, { ok: true, removed: removed.key });
     return;
   }
 
@@ -1277,26 +1274,7 @@ const server = http.createServer(async (req, res) => {
     prunePresence(state);
     persistState(state);
     sendJson(res, 200, {
-      players: state.presence.map((p) => ({
-        user_id: p.user_id,
-        username: p.username,
-        session_id: p.session_id,
-        character_name: p.character_name,
-        map_x: p.map_x | 0,
-        map_y: p.map_y | 0,
-        map_z: p.map_z | 0,
-        facing_dx: p.facing_dx | 0,
-        facing_dy: p.facing_dy | 0,
-        tick: Number(p.tick) >>> 0,
-        mode: p.mode || "avatar",
-        runtime_profile: normalizeRuntimeProfile(p.runtime_profile),
-        runtime_extensions: parseRuntimeExtensionsHeader(
-          Array.isArray(p.runtime_extensions)
-            ? p.runtime_extensions.join(",")
-            : p.runtime_extensions
-        ),
-        updated_at_ms: Number(p.updated_at_ms || 0)
-      }))
+      players: presenceRowsPayloadRuntime(state.presence)
     });
     return;
   }

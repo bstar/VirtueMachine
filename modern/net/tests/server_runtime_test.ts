@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   advanceWorldClockMinuteRuntime,
+  buildPresenceHeartbeatRowRuntime,
   clampIntRuntime,
   computeSnapshotHashRuntime,
   decodePackedCoordRuntime,
@@ -13,8 +14,14 @@ import {
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
   parseU16LERuntime,
+  presenceRowsPayloadRuntime,
+  prunePresenceRowsRuntime,
   queryIntOrRuntime,
   recordWorldInteractionEventRuntime,
+  removePresenceForUserRuntime,
+  removePresenceSessionRuntime,
+  type PresenceRowRuntime,
+  upsertPresenceRowRuntime,
   runCriticalItemMaintenanceRuntime
 } from "../server_runtime.ts";
 
@@ -241,6 +248,120 @@ assert.deepEqual(normalizePresenceRowsRuntime([{
   runtime_profile: "canonical_plus",
   runtime_extensions: ["housing", "quest_system"],
   updated_at_ms: 123
+}]);
+
+const presenceRows: PresenceRowRuntime[] = [{
+  user_id: "u1",
+  username: "Avatar",
+  session_id: "s1",
+  character_name: "Avatar",
+  map_x: 1,
+  map_y: 2,
+  map_z: 0,
+  facing_dx: 1,
+  facing_dy: 0,
+  tick: 10,
+  mode: "avatar",
+  runtime_profile: "canonical_strict",
+  runtime_extensions: [],
+  updated_at_ms: 100
+}, {
+  user_id: "u2",
+  username: "Dupre",
+  session_id: "s2",
+  character_name: "Dupre",
+  map_x: 3,
+  map_y: 4,
+  map_z: 0,
+  facing_dx: 0,
+  facing_dy: 1,
+  tick: 11,
+  mode: "avatar",
+  runtime_profile: "canonical_plus",
+  runtime_extensions: ["quest_system"],
+  updated_at_ms: 10
+}];
+assert.deepEqual(prunePresenceRowsRuntime(presenceRows, { nowMs: 110, ttlMs: 50 }), [presenceRows[0]]);
+
+const upserted = upsertPresenceRowRuntime(presenceRows, {
+  ...presenceRows[0],
+  user_id: "u3",
+  session_id: "s1",
+  username: "Iolo",
+  updated_at_ms: 120
+}, { nowMs: 120, ttlMs: 200 });
+assert.deepEqual(upserted.map((p) => `${p.user_id}:${p.session_id}`), ["u2:s2", "u3:s1"]);
+
+assert.deepEqual(
+  removePresenceForUserRuntime(presenceRows, "u1", { nowMs: 110, ttlMs: 200 }).map((p) => p.user_id),
+  ["u2"]
+);
+const removedSession = removePresenceSessionRuntime(presenceRows, {
+  nowMs: 110,
+  sessionId: "s1",
+  ttlMs: 200,
+  userId: "u1"
+});
+assert.equal(removedSession.key, "u1:s1");
+assert.deepEqual(removedSession.rows.map((p) => p.session_id), ["s2"]);
+
+assert.deepEqual(buildPresenceHeartbeatRowRuntime({
+  body: {
+    session_id: " session-123 ",
+    character_name: " Avatar ",
+    map_x: "307",
+    map_y: "347",
+    map_z: "0",
+    facing_dx: "-1",
+    facing_dy: "0",
+    mode: "ghost"
+  },
+  clockTick: -1,
+  nowMs: 500,
+  runtimeContract: {
+    profile: "canonical_plus",
+    extensions: ["housing", "bad_ext", "quest_system"]
+  },
+  userId: "u1",
+  username: "Avatar"
+}), {
+  user_id: "u1",
+  username: "Avatar",
+  session_id: "session-123",
+  character_name: "Avatar",
+  map_x: 307,
+  map_y: 347,
+  map_z: 0,
+  facing_dx: -1,
+  facing_dy: 0,
+  tick: 0xffffffff,
+  mode: "ghost",
+  runtime_profile: "canonical_plus",
+  runtime_extensions: ["bad_ext", "housing", "quest_system"],
+  updated_at_ms: 500
+});
+
+assert.deepEqual(presenceRowsPayloadRuntime([{
+  ...presenceRows[0],
+  tick: -1,
+  mode: "",
+  runtime_profile: "bad",
+  runtime_extensions: ["housing", "quest_system"]
+}]), [{
+  user_id: "u1",
+  username: "Avatar",
+  session_id: "s1",
+  character_name: "Avatar",
+  map_x: 1,
+  map_y: 2,
+  map_z: 0,
+  facing_dx: 1,
+  facing_dy: 0,
+  tick: 0xffffffff,
+  mode: "avatar",
+  runtime_profile: "canonical_strict",
+  runtime_extensions: ["housing", "quest_system"],
+  updated_at_ms: 100
 }]);
 
 console.log("server_runtime_test: ok");
