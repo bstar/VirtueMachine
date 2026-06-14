@@ -10,7 +10,12 @@ import {
   normalizedConversationNameRuntime,
   parseConversationHeaderAndDescRuntime
 } from "../conversation/archive_runtime.ts";
-import { buildConversationVmContext, conversationKeyMatchesInput, renderConversationMacrosWithContext } from "../conversation/text_runtime.ts";
+import {
+  buildConversationVmContext,
+  conversationKeyMatchesInput,
+  renderConversationMacrosWithContext,
+  type ConversationVmContext
+} from "../conversation/text_runtime.ts";
 import { decodeConversationOpeningResult, decodeConversationResponseOpcodeAware } from "../conversation/vm_runtime.ts";
 import { conversationRunFromKeyCursor } from "../conversation/dialog_runtime.ts";
 
@@ -38,14 +43,14 @@ function readObjlistTalkFlags() {
   return Array.from(objlist.slice(TALK_FLAGS_OFF, TALK_FLAGS_OFF + 0x100));
 }
 
-function renderLines(lines: unknown[], vmContext: any) {
+function renderLines(lines: unknown[], vmContext: ConversationVmContext) {
   return (Array.isArray(lines) ? lines : [])
     .map((line) => renderConversationMacrosWithContext(String(line || ""), vmContext))
     .map((line) => String(line || "").trim())
     .filter(Boolean);
 }
 
-function runCursorReply(script: Uint8Array, startPc: number, typed: string, vmContext: any) {
+function runCursorReply(script: Uint8Array, startPc: number, typed: string, vmContext: ConversationVmContext) {
   return conversationRunFromKeyCursor({
     scriptBytes: script,
     startPc,
@@ -61,7 +66,7 @@ function runCursorReply(script: Uint8Array, startPc: number, typed: string, vmCo
     },
     keyMatchesInput: conversationKeyMatchesInput,
     decodeResponseOpcodeAware: decodeConversationResponseOpcodeAware,
-    renderMacros: (line: string, ctx: any) => renderConversationMacrosWithContext(line, ctx)
+    renderMacros: (line: string, ctx: ConversationVmContext) => renderConversationMacrosWithContext(line, ctx)
   });
 }
 

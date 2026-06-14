@@ -2,21 +2,23 @@ import assert from "node:assert/strict";
 import {
   buildTargetResolverRegressionProbesRuntime,
   nearestTalkTargetAtCellRuntime,
-  topWorldObjectAtCellRuntime
+  topWorldObjectAtCellRuntime,
+  type TargetObjectLayerRuntime,
+  type TargetWorldObjectRuntime
 } from "../sim/target_runtime.ts";
 
 function testTopWorldObjectSelection() {
-  const objectLayer = {
+  const objectLayer: TargetObjectLayerRuntime = {
     objectsAt: (_x: number, _y: number, _z: number) => ([
-      { key: "low", renderable: true, legacyOrder: 3, order: 3, index: 1, type: 0x90 },
-      { key: "high", renderable: true, legacyOrder: 30, order: 30, index: 2, type: 0x91 }
+      { key: "low", renderable: true, legacyOrder: 3, order: 3, index: 1, type: 0x90, frame: 0 },
+      { key: "high", renderable: true, legacyOrder: 30, order: 30, index: 2, type: 0x91, frame: 0 }
     ])
   };
   const deps = {
-    isObjectRemoved: (_sim: any, _obj: any) => false,
+    isObjectRemoved: (_sim: unknown, _obj: TargetWorldObjectRuntime) => false,
     isLikelyPickupObjectType: (_type: number) => true
   };
-  const pick = topWorldObjectAtCellRuntime(objectLayer as any, {}, 0, 0, 0, {}, deps);
+  const pick = topWorldObjectAtCellRuntime(objectLayer, {}, 0, 0, 0, {}, deps);
   assert.equal(pick?.key, "high", "highest legacy order should be selected");
 }
 

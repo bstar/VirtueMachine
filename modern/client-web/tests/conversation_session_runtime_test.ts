@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import {
   buildDebugChatLedgerText,
   pushLedgerMessage,
-  submitLegacyConversationInput
+  submitLegacyConversationInput,
+  type LegacyConversationState
 } from "../conversation/session_runtime.ts";
 
 function testUnimplementedReplyFallsBackToCanonicalNoResponse() {
   const lines: string[] = [];
-  const state: any = {
+  const state: LegacyConversationState = {
     legacyConversationInput: "job",
     legacyConversationActive: true,
     legacyConversationActorEntityId: 5,
@@ -30,7 +31,7 @@ function testUnimplementedReplyFallsBackToCanonicalNoResponse() {
 testUnimplementedReplyFallsBackToCanonicalNoResponse();
 
 function testDebugLedgerIncludesConversationMetadata() {
-  const state: any = {
+  const state: LegacyConversationState = {
     legacyConversationActive: true,
     legacyConversationActorEntityId: 6,
     legacyConversationTargetObjNum: 6,
