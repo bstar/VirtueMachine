@@ -193,8 +193,8 @@ import { runNetPanelActionRuntime } from "./net/panel_actions_runtime.ts";
 import {
   applyNetStatusRuntime,
   pulseNetIndicatorRuntime,
-  renderNetAuthButtonRuntime,
-  renderNetSessionStatRuntime
+  renderNetStatusViewRuntime,
+  type NetStatusElementsRuntime
 } from "./net/status_runtime.ts";
 import {
   persistRuntimeProfileConfigRuntime,
@@ -3697,13 +3697,26 @@ function initPanelCopyButtons(): void {
   }
 }
 
-function updateNetSessionStat(): void {
-  renderNetSessionStatRuntime(statNetSession, {
-    token: state.net.token,
-    userId: state.net.userId,
-    username: state.net.username,
-    characterName: state.net.characterName
+function currentNetStatusElements(): NetStatusElementsRuntime {
+  return {
+    statNetSession,
+    topNetStatus,
+    topNetIndicator,
+    netQuickStatus,
+    netLoginButton
+  };
+}
+
+function renderCurrentNetStatusView(): void {
+  renderNetStatusViewRuntime({
+    stateNet: state.net,
+    isAuthenticated: isNetAuthenticated(),
+    elements: currentNetStatusElements()
   });
+}
+
+function updateNetSessionStat(): void {
+  renderCurrentNetStatusView();
   updateIntroPhaseUi();
 }
 
@@ -3742,7 +3755,7 @@ function updateIntroPhaseUi(): void {
 }
 
 function updateNetAuthButton(): void {
-  renderNetAuthButtonRuntime(netLoginButton, isNetAuthenticated());
+  renderCurrentNetStatusView();
 }
 
 function setNetStatus(level: string, text: string): void {
@@ -3751,10 +3764,7 @@ function setNetStatus(level: string, text: string): void {
     level,
     text,
     isAuthenticated: isNetAuthenticated(),
-    topNetStatus,
-    topNetIndicator,
-    netQuickStatus,
-    netLoginButton
+    elements: currentNetStatusElements()
   });
 }
 

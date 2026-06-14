@@ -76,33 +76,64 @@ export function renderNetAuthButtonRuntime(
   netLoginButton.classList.add(model.addClass);
 }
 
-export function applyNetStatusRuntime(args: {
-  stateNet: {
-    statusLevel: string;
-    statusText: string;
-  };
-  level: string;
-  text: string;
-  isAuthenticated: boolean;
+export type NetStatusStateRuntime = {
+  token?: string;
+  userId?: string;
+  username?: string;
+  characterName?: string;
+  statusLevel: string;
+  statusText: string;
+};
+
+export type NetStatusElementsRuntime = {
+  statNetSession?: HTMLElement | null;
   topNetStatus?: HTMLElement | null;
   topNetIndicator?: HTMLElement | null;
   netQuickStatus?: HTMLElement | null;
   netLoginButton?: HTMLButtonElement | null;
+};
+
+export function renderNetStatusViewRuntime(args: {
+  stateNet: NetStatusStateRuntime;
+  isAuthenticated: boolean;
+  elements: NetStatusElementsRuntime;
+}): void {
+  const stateNet = args.stateNet;
+  const elements = args.elements;
+  renderNetSessionStatRuntime(elements.statNetSession, {
+    token: String(stateNet.token || ""),
+    userId: String(stateNet.userId || ""),
+    username: String(stateNet.username || ""),
+    characterName: String(stateNet.characterName || "")
+  });
+  if (elements.topNetStatus) {
+    elements.topNetStatus.textContent = deriveTopNetStatusText(stateNet.statusLevel, stateNet.statusText);
+  }
+  if (elements.topNetIndicator) {
+    elements.topNetIndicator.dataset.state = deriveNetIndicatorState(stateNet.statusLevel, args.isAuthenticated);
+  }
+  if (elements.netQuickStatus) {
+    elements.netQuickStatus.textContent = deriveNetQuickStatusText(args.isAuthenticated);
+  }
+  renderNetAuthButtonRuntime(elements.netLoginButton, args.isAuthenticated);
+}
+
+export function applyNetStatusRuntime(args: {
+  stateNet: NetStatusStateRuntime;
+  level: string;
+  text: string;
+  isAuthenticated: boolean;
+  elements: NetStatusElementsRuntime;
 }): void {
   const lvl = String(args.level || "idle");
   const msg = String(args.text || "");
   args.stateNet.statusLevel = lvl;
   args.stateNet.statusText = msg;
-  if (args.topNetStatus) {
-    args.topNetStatus.textContent = deriveTopNetStatusText(lvl, msg);
-  }
-  if (args.topNetIndicator) {
-    args.topNetIndicator.dataset.state = deriveNetIndicatorState(lvl, args.isAuthenticated);
-  }
-  if (args.netQuickStatus) {
-    args.netQuickStatus.textContent = deriveNetQuickStatusText(args.isAuthenticated);
-  }
-  renderNetAuthButtonRuntime(args.netLoginButton, args.isAuthenticated);
+  renderNetStatusViewRuntime({
+    stateNet: args.stateNet,
+    isAuthenticated: args.isAuthenticated,
+    elements: args.elements
+  });
 }
 
 export function pulseNetIndicatorRuntime(args: {

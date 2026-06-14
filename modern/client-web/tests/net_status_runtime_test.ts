@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import {
+  applyNetStatusRuntime,
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
   deriveNetQuickStatusText,
   deriveNetSessionText,
   deriveTopNetStatusText,
-  pulseNetIndicatorRuntime
+  pulseNetIndicatorRuntime,
+  renderNetStatusViewRuntime
 } from "../net/status_runtime.ts";
 
 assert.equal(deriveNetIndicatorState("idle", false), "offline");
@@ -22,6 +24,108 @@ assert.deepEqual(deriveNetAuthButtonModel(true), {
   removeClasses: ["control-btn--login", "control-btn--logout"]
 });
 assert.equal(deriveTopNetStatusText("online", "ready"), "online - ready");
+
+function fakeElement(): HTMLElement {
+  return {
+    dataset: {},
+    textContent: "",
+    classList: {
+      add() {},
+      remove() {}
+    }
+  } as unknown as HTMLElement;
+}
+
+function fakeButton(): HTMLButtonElement {
+  const classes = new Set<string>();
+  return {
+    dataset: {},
+    textContent: "",
+    classList: {
+      add(name: string) {
+        classes.add(name);
+      },
+      remove(...names: string[]) {
+        for (const name of names) {
+          classes.delete(name);
+        }
+      },
+      contains(name: string) {
+        return classes.has(name);
+      }
+    }
+  } as unknown as HTMLButtonElement;
+}
+
+{
+  const statNetSession = fakeElement();
+  const topNetStatus = fakeElement();
+  const topNetIndicator = fakeElement();
+  const netQuickStatus = fakeElement();
+  const netLoginButton = fakeButton();
+  const stateNet = {
+    token: "token",
+    userId: "u1",
+    username: "rhy",
+    characterName: "Avatar",
+    statusLevel: "online",
+    statusText: "Ready"
+  };
+  renderNetStatusViewRuntime({
+    stateNet,
+    isAuthenticated: true,
+    elements: {
+      statNetSession,
+      topNetStatus,
+      topNetIndicator,
+      netQuickStatus,
+      netLoginButton
+    }
+  });
+  assert.equal(statNetSession.textContent, "rhy/Avatar");
+  assert.equal(topNetStatus.textContent, "online - Ready");
+  assert.equal(topNetIndicator.dataset.state, "online");
+  assert.equal(netQuickStatus.textContent, "Account: Signed in");
+  assert.equal(netLoginButton.textContent, "Logout (Shift+I)");
+  assert.equal(netLoginButton.classList.contains("control-btn--logout"), true);
+}
+
+{
+  const statNetSession = fakeElement();
+  const topNetStatus = fakeElement();
+  const topNetIndicator = fakeElement();
+  const netQuickStatus = fakeElement();
+  const netLoginButton = fakeButton();
+  const stateNet = {
+    token: "",
+    userId: "",
+    username: "rhy",
+    characterName: "Avatar",
+    statusLevel: "online",
+    statusText: "Ready"
+  };
+  applyNetStatusRuntime({
+    stateNet,
+    level: "error",
+    text: "Login failed",
+    isAuthenticated: false,
+    elements: {
+      statNetSession,
+      topNetStatus,
+      topNetIndicator,
+      netQuickStatus,
+      netLoginButton
+    }
+  });
+  assert.equal(stateNet.statusLevel, "error");
+  assert.equal(stateNet.statusText, "Login failed");
+  assert.equal(statNetSession.textContent, "offline");
+  assert.equal(topNetStatus.textContent, "error - Login failed");
+  assert.equal(topNetIndicator.dataset.state, "error");
+  assert.equal(netQuickStatus.textContent, "Account: Signed out");
+  assert.equal(netLoginButton.textContent, "Net Login (Shift+I)");
+  assert.equal(netLoginButton.classList.contains("control-btn--login"), true);
+}
 
 {
   const classes = new Set<string>();

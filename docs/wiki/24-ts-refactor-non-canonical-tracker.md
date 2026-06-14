@@ -64,11 +64,11 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 ### 7) Net status render orchestration split
 
-- Status: `temporary`
+- Status: `verified`
 - Location: `modern/client-web/net/status_runtime.ts`
-- Note: session/auth/status label rendering and indicator pulse now run through typed helpers, while `app.ts` still owns status timing/call order.
-- Risk: status text/indicator update ordering may drift if future slices bypass `setNetStatus`.
-- Exit criteria: centralize all status writes through one path and add UI integration coverage for login/logout/error transitions.
+- Note: session/auth/status label rendering now runs through one typed status-view renderer, status writes flow through `applyNetStatusRuntime`, and the runtime test covers signed-in plus signed-out error rendering.
+- Risk: broader login/logout sequencing is still owned by the large `app.ts` shell and is tracked by the app-shell orchestration items.
+- Exit criteria: satisfied for status-view rendering; retain normal app-shell guardrails for flow sequencing.
 
 ### 8) Transitional `app.ts` orchestration typing
 
