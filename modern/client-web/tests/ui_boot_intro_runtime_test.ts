@@ -14,9 +14,12 @@ import {
   bootIntroTvAddSpriteRuntime,
   bootIntroTvRandRuntime,
   bootIntroTvStateAtRuntime,
+  bootIntroPrintTextOnCardRuntime,
+  bootIntroPrintTextRuntime,
   bootIntroWouCharWidthRuntime,
   createBootIntroTvMachineRuntime,
   decodeBootIntroWouFontRuntime,
+  drawBootIntroWouTextRuntime,
   measureBootIntroTextWidthRuntime,
   bootIntroOverlayAlphaRuntime,
   createBootIntroRuntimeState,
@@ -25,6 +28,18 @@ import {
   wrapBootIntroTextPixelsRuntime,
   wrapBootIntroTextRuntime
 } from "../ui/boot_intro_runtime.ts";
+
+type RectCall = { color: unknown; h: number; w: number; x: number; y: number };
+
+function makeFakeTextCanvas() {
+  return {
+    fillStyle: "",
+    rects: [] as RectCall[],
+    fillRect(x: number, y: number, w: number, h: number) {
+      this.rects.push({ color: this.fillStyle, x, y, w, h });
+    }
+  };
+}
 
 function testStartAndAdvance() {
   const state = createBootIntroRuntimeState();
@@ -190,6 +205,93 @@ function testWouFontHelpers() {
   assert.equal(decodeBootIntroWouFontRuntime(new Uint8Array([1]), () => invalidHeight), null);
 }
 
+function testTextDrawingHelpers() {
+  const bytes = new Uint8Array(0x340);
+  bytes[0x04 + 65] = 2;
+  bytes[0x104 + 65] = 0x20;
+  bytes[0x204 + 65] = 0;
+  bytes[0x20] = 0x7f;
+  bytes[0x21] = 0;
+  bytes[0x22] = 0;
+  bytes[0x23] = 0x7f;
+  const font = { bytes, height: 2, pixelChar: 0x7f };
+  const g = makeFakeTextCanvas();
+  assert.equal(drawBootIntroWouTextRuntime(g, {
+    color: "#abc",
+    drawFallbackText: () => assert.fail("fallback draw should not be used with a valid font"),
+    fallbackMeasure: () => 99,
+    font,
+    scale: 2,
+    sx: 10,
+    sy: 20,
+    text: "A"
+  }), 14);
+  assert.deepEqual(g.rects, [
+    { color: "#abc", x: 10, y: 20, w: 2, h: 2 },
+    { color: "#abc", x: 12, y: 22, w: 2, h: 2 }
+  ]);
+
+  const fallback = makeFakeTextCanvas();
+  let fallbackArgs: unknown[] | null = null;
+  assert.equal(drawBootIntroWouTextRuntime(fallback, {
+    color: "#def",
+    drawFallbackText: (_g, text, sx, sy, scale, color) => {
+      fallbackArgs = [text, sx, sy, scale, color];
+    },
+    fallbackMeasure: (text) => String(text).length * 3,
+    font: null,
+    scale: 2,
+    sx: 5,
+    sy: 6,
+    text: "AB"
+  }), 17);
+  assert.deepEqual(fallbackArgs, ["AB", 5, 6, 2, "#def"]);
+
+  const drawn: Array<{ text: string; x: number; y: number }> = [];
+  assert.deepEqual(bootIntroPrintTextRuntime(makeFakeTextCanvas(), {
+    color: "#fff",
+    drawTextRun: (_ctx, text, x, y) => {
+      drawn.push({ text, x, y });
+      return x + text.length;
+    },
+    measureText: (text) => text.length,
+    scale: 1,
+    spaceWidth: 1,
+    startX: 0,
+    text: "aa bb c",
+    width: 5,
+    x: 0,
+    y: 0
+  }), { x: 4, y: 8 });
+  assert.deepEqual(drawn, [
+    { text: "aa", x: 0, y: 0 },
+    { text: "bb", x: 0, y: 8 },
+    { text: "c", x: 3, y: 8 }
+  ]);
+
+  const cardCanvas = makeFakeTextCanvas();
+  bootIntroPrintTextOnCardRuntime(cardCanvas, {
+    cardX: 3,
+    cardY: 4,
+    color: "#fff",
+    drawTextRun: (ctx, _text, x, y) => {
+      ctx.fillRect(x, y, 1, 1);
+      return x + 1;
+    },
+    measureText: () => 1,
+    scale: 2,
+    spaceWidth: 1,
+    startX: 0,
+    text: "x",
+    width: 10,
+    x: 1,
+    y: 2
+  });
+  assert.deepEqual(cardCanvas.rects, [
+    { color: "", x: 7, y: 10, w: 1, h: 1 }
+  ]);
+}
+
 function testWindowHelpers() {
   const randCtx = { seed: 0x51f15eED };
   const rand = bootIntroWindowRandRuntime(randCtx, -5, 5);
@@ -238,6 +340,7 @@ testPaletteHelpers();
 testZeroFadeSceneHasNoOverlay();
 testTvMachine();
 testWouFontHelpers();
+testTextDrawingHelpers();
 testWindowHelpers();
 testTextWrapHelpers();
 

@@ -241,9 +241,12 @@ import {
   bootIntroPaletteCacheKeyRuntime,
   bootIntroWindowSceneBaseRuntime,
   bootIntroWindowStateAtRuntime,
+  bootIntroPrintTextOnCardRuntime,
+  bootIntroPrintTextRuntime,
   bootIntroTvStateAtRuntime,
   bootIntroWouCharWidthRuntime,
   decodeBootIntroWouFontRuntime,
+  drawBootIntroWouTextRuntime,
   bootIntroOverlayAlphaRuntime,
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
@@ -2956,39 +2959,16 @@ function measureBootIntroTextWidth(text) {
 }
 
 function drawBootIntroWouText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
-  const font = state.bootIntroFont;
-  if (!font) {
-    drawU6CompactText(g, text, sx, sy, scale, color);
-    return sx + measureU6TextWidth(text, true) * scale;
-  }
-  const msg = String(text || "");
-  const bytes = font.bytes;
-  const height = font.height | 0;
-  const pixelChar = font.pixelChar & 0xff;
-  let cursor = 0;
-  g.fillStyle = color;
-  for (let i = 0; i < msg.length; i += 1) {
-    const code = msg.charCodeAt(i) & 0xff;
-    const width = bytes[0x04 + code] || 0;
-    const glyphOff = ((bytes[0x204 + code] || 0) << 8) + (bytes[0x104 + code] || 0);
-    if (width > 0 && glyphOff > 0 && glyphOff + (width * height) <= bytes.length) {
-      for (let row = 0; row < height; row += 1) {
-        const rowOff = glyphOff + (row * width);
-        for (let col = 0; col < width; col += 1) {
-          if ((bytes[rowOff + col] & 0xff) === pixelChar) {
-            g.fillRect(
-              sx + ((cursor + col) * scale),
-              sy + (row * scale),
-              scale,
-              scale
-            );
-          }
-        }
-      }
-    }
-    cursor += width;
-  }
-  return sx + cursor * scale;
+  return drawBootIntroWouTextRuntime(g, {
+    color,
+    drawFallbackText: (ctx, fallbackText, x, y, s, c) => drawU6CompactText(ctx, fallbackText, x, y, s, c),
+    fallbackMeasure: (fallbackText) => measureU6TextWidth(fallbackText, true),
+    font: state.bootIntroFont,
+    scale,
+    sx,
+    sy,
+    text
+  });
 }
 
 function drawBootIntroTextRun(g, text, x, y, scale, color) {
@@ -2998,62 +2978,36 @@ function drawBootIntroTextRun(g, text, x, y, scale, color) {
 
 function bootIntroPrintText(g, text, startX, width, x, y, scale, color) {
   const font = state.bootIntroFont;
-  const src = String(text || "");
-  const spaceWidth = font ? bootIntroWouCharWidth(font, 32) : measureU6TextWidth(" ", true);
-  let cursorX = Math.max(0, Number(x) | 0);
-  let cursorY = Math.max(0, Number(y) | 0);
-  let len = cursorX - (Number(startX) | 0);
-  const tokens = [];
-  let start = 0;
-  let found = src.indexOf(" ", start);
-  while (found !== -1) {
-    const token = src.slice(start, found);
-    const tokenLen = measureBootIntroTextWidth(token);
-    if (len + tokenLen + spaceWidth > width) {
-      let newSpace = 0;
-      if (tokens.length > 1) {
-        newSpace = Math.floor((width - (len - spaceWidth * (tokens.length - 1))) / (tokens.length - 1));
-      }
-      for (const item of tokens) {
-        cursorX = drawBootIntroTextRun(g, item, cursorX, cursorY, scale, color);
-        cursorX += newSpace;
-      }
-      cursorY += 8;
-      cursorX = startX;
-      len = tokenLen + spaceWidth;
-      tokens.length = 0;
-      tokens.push(token);
-    } else {
-      tokens.push(token);
-      len += tokenLen + spaceWidth;
-    }
-    start = found + 1;
-    found = src.indexOf(" ", start);
-  }
-  for (const item of tokens) {
-    cursorX = drawBootIntroTextRun(g, item, cursorX, cursorY, scale, color);
-    cursorX += spaceWidth;
-  }
-  if (start < src.length) {
-    const token = src.slice(start);
-    if (len + measureBootIntroTextWidth(token) > width) {
-      cursorY += 8;
-      cursorX = startX;
-    }
-    cursorX = drawBootIntroTextRun(g, token, cursorX, cursorY, scale, color);
-  }
-  return { x: cursorX, y: cursorY };
+  return bootIntroPrintTextRuntime(g, {
+    color,
+    drawTextRun: drawBootIntroTextRun,
+    measureText: measureBootIntroTextWidth,
+    scale,
+    spaceWidth: font ? bootIntroWouCharWidth(font, 32) : measureU6TextWidth(" ", true),
+    startX,
+    text,
+    width,
+    x,
+    y
+  });
 }
 
 function bootIntroPrintTextOnCard(g, cardX, cardY, text, startX, width, x, y, scale, color) {
-  const translated = {
-    fillStyle: g.fillStyle,
-    fillRect: (px, py, pw, ph) => {
-      g.fillStyle = translated.fillStyle;
-      g.fillRect(px + Math.round(cardX * scale), py + Math.round(cardY * scale), pw, ph);
-    }
-  };
-  return bootIntroPrintText(translated, text, startX, width, x, y, scale, color);
+  const font = state.bootIntroFont;
+  return bootIntroPrintTextOnCardRuntime(g, {
+    cardX,
+    cardY,
+    color,
+    drawTextRun: drawBootIntroTextRun,
+    measureText: measureBootIntroTextWidth,
+    scale,
+    spaceWidth: font ? bootIntroWouCharWidth(font, 32) : measureU6TextWidth(" ", true),
+    startX,
+    text,
+    width,
+    x,
+    y
+  });
 }
 
 function bootIntroClockFrames(now = new Date()) {

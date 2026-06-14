@@ -66,6 +66,11 @@ export type BootIntroWouFontRuntime = {
   pixelChar: number;
 };
 
+export type BootIntroTextCanvasRuntime = {
+  fillStyle?: unknown;
+  fillRect(x: number, y: number, w: number, h: number): void;
+};
+
 export type BootIntroWindowSpriteRuntime = {
   frame: number;
   x: number;
@@ -821,6 +826,153 @@ export function measureBootIntroTextWidthRuntime(
     width += bootIntroWouCharWidthRuntime(font, msg.charCodeAt(i));
   }
   return width;
+}
+
+export function drawBootIntroWouTextRuntime(
+  g: BootIntroTextCanvasRuntime,
+  args: {
+    color: string;
+    drawFallbackText: (g: BootIntroTextCanvasRuntime, text: string, sx: number, sy: number, scale: number, color: string) => void;
+    fallbackMeasure: (text: unknown) => number;
+    font: BootIntroWouFontRuntime | null | undefined;
+    scale: number;
+    sx: number;
+    sy: number;
+    text: unknown;
+  }
+): number {
+  const scale = Math.max(1, Number(args.scale) || 1);
+  const sx = Number(args.sx) || 0;
+  const sy = Number(args.sy) || 0;
+  const msg = String(args.text || "");
+  const font = args.font;
+  if (!font) {
+    args.drawFallbackText(g, msg, sx, sy, scale, args.color);
+    return sx + args.fallbackMeasure(msg) * scale;
+  }
+  const bytes = font.bytes;
+  const height = font.height | 0;
+  const pixelChar = font.pixelChar & 0xff;
+  let cursor = 0;
+  g.fillStyle = args.color;
+  for (let i = 0; i < msg.length; i += 1) {
+    const code = msg.charCodeAt(i) & 0xff;
+    const width = bytes[0x04 + code] || 0;
+    const glyphOff = ((bytes[0x204 + code] || 0) << 8) + (bytes[0x104 + code] || 0);
+    if (width > 0 && glyphOff > 0 && glyphOff + (width * height) <= bytes.length) {
+      for (let row = 0; row < height; row += 1) {
+        const rowOff = glyphOff + (row * width);
+        for (let col = 0; col < width; col += 1) {
+          if ((bytes[rowOff + col] & 0xff) === pixelChar) {
+            g.fillRect(
+              sx + ((cursor + col) * scale),
+              sy + (row * scale),
+              scale,
+              scale
+            );
+          }
+        }
+      }
+    }
+    cursor += width;
+  }
+  return sx + cursor * scale;
+}
+
+export function bootIntroPrintTextRuntime(
+  g: BootIntroTextCanvasRuntime,
+  args: {
+    color: string;
+    drawTextRun: (g: BootIntroTextCanvasRuntime, text: string, x: number, y: number, scale: number, color: string) => number;
+    measureText: (text: string) => number;
+    scale: number;
+    spaceWidth: number;
+    startX: number;
+    text: unknown;
+    width: number;
+    x: number;
+    y: number;
+  }
+): { x: number; y: number } {
+  const src = String(args.text || "");
+  const spaceWidth = Math.max(0, Number(args.spaceWidth) || 0);
+  const width = Number(args.width) || 0;
+  const startX = Number(args.startX) | 0;
+  let cursorX = Math.max(0, Number(args.x) | 0);
+  let cursorY = Math.max(0, Number(args.y) | 0);
+  let len = cursorX - startX;
+  const tokens: string[] = [];
+  let start = 0;
+  let found = src.indexOf(" ", start);
+  while (found !== -1) {
+    const token = src.slice(start, found);
+    const tokenLen = args.measureText(token);
+    if (len + tokenLen + spaceWidth > width) {
+      let newSpace = 0;
+      if (tokens.length > 1) {
+        newSpace = Math.floor((width - (len - spaceWidth * (tokens.length - 1))) / (tokens.length - 1));
+      }
+      for (const item of tokens) {
+        cursorX = args.drawTextRun(g, item, cursorX, cursorY, args.scale, args.color);
+        cursorX += newSpace;
+      }
+      cursorY += 8;
+      cursorX = startX;
+      len = tokenLen + spaceWidth;
+      tokens.length = 0;
+      tokens.push(token);
+    } else {
+      tokens.push(token);
+      len += tokenLen + spaceWidth;
+    }
+    start = found + 1;
+    found = src.indexOf(" ", start);
+  }
+  for (const item of tokens) {
+    cursorX = args.drawTextRun(g, item, cursorX, cursorY, args.scale, args.color);
+    cursorX += spaceWidth;
+  }
+  if (start < src.length) {
+    const token = src.slice(start);
+    if (len + args.measureText(token) > width) {
+      cursorY += 8;
+      cursorX = startX;
+    }
+    cursorX = args.drawTextRun(g, token, cursorX, cursorY, args.scale, args.color);
+  }
+  return { x: cursorX, y: cursorY };
+}
+
+export function bootIntroPrintTextOnCardRuntime(
+  g: BootIntroTextCanvasRuntime,
+  args: {
+    cardX: number;
+    cardY: number;
+    color: string;
+    drawTextRun: (g: BootIntroTextCanvasRuntime, text: string, x: number, y: number, scale: number, color: string) => number;
+    measureText: (text: string) => number;
+    scale: number;
+    spaceWidth: number;
+    startX: number;
+    text: unknown;
+    width: number;
+    x: number;
+    y: number;
+  }
+): { x: number; y: number } {
+  const translated: BootIntroTextCanvasRuntime = {
+    fillStyle: g.fillStyle,
+    fillRect: (px, py, pw, ph) => {
+      g.fillStyle = translated.fillStyle;
+      g.fillRect(
+        px + Math.round((Number(args.cardX) || 0) * args.scale),
+        py + Math.round((Number(args.cardY) || 0) * args.scale),
+        pw,
+        ph
+      );
+    }
+  };
+  return bootIntroPrintTextRuntime(translated, args);
 }
 
 export function bootIntroWindowRandRuntime(
