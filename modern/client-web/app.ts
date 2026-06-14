@@ -10,6 +10,14 @@ import {
   decodeLegacyPixmapRuntime,
   decodeLookLzdEntriesRuntime
 } from "./assets/legacy_pixmap_runtime.ts";
+import {
+  buildLegacyPaletteFrameRuntime,
+  buildPackedIntroPalettesRuntime,
+  buildPaletteFromU6PalRuntime,
+  buildStartupPaletteForMenuRuntime,
+  cloneRgbPaletteRuntime,
+  rotatePaletteRangeInPlaceRuntime
+} from "./assets/palette_runtime.ts";
 import { errorMessageRuntime } from "./error_runtime.ts";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
@@ -500,18 +508,6 @@ const STARTUP_MENU = Object.freeze([
   { id: "ack", label: "Acknowledgements", enabled: false },
   { id: "journey", label: "Journey Onward", enabled: true }
 ]);
-const STARTUP_MENU_PAL = Object.freeze([
-  [232, 96, 0],
-  [236, 128, 0],
-  [244, 164, 0],
-  [248, 200, 0],
-  [252, 252, 84],
-  [248, 200, 0],
-  [244, 164, 0],
-  [236, 128, 0],
-  [232, 96, 0]
-]);
-const STARTUP_MENU_PAL_IDX = Object.freeze([14, 33, 34, 35, 36]);
 const LEGACY_TARGET_VERB = Object.freeze({
   ATTACK: "attack",
   CAST: "cast",
@@ -940,37 +936,6 @@ function resolveAnimatedObjectTile(obj) {
   return resolveAnimatedObjectTileAtTick(obj, animationTick());
 }
 
-function buildLegacyPaletteFrame(basePalette, counter) {
-  if (!basePalette) {
-    return null;
-  }
-  const pal = basePalette.slice();
-  const c = counter & 0xff;
-
-  // Legacy VGA palette cycling from seg_0903 PaletteAnimation():
-  // 0xE0..0xE7 <- rotating 0xE0..0xE7 (source window anchored at 0xE7)
-  // 0xE8..0xEF <- rotating 0xE8..0xEF (source window anchored at 0xEF)
-  for (let i = 0; i < 8; i += 1) {
-    const dstA = ((c - i) & 7) + 0xe0;
-    const srcA = 0xe7 - i;
-    pal[dstA] = basePalette[srcA];
-
-    const dstB = ((c - i) & 7) + 0xe8;
-    const srcB = 0xef - i;
-    pal[dstB] = basePalette[srcB];
-  }
-
-  // 0xF0..0xFB in 3x4 groups, cycled at half speed.
-  const h = (c >> 1) & 0xff;
-  for (let i = 0; i < 4; i += 1) {
-    const slot = (h - i) & 3;
-    pal[slot + 0xf0] = basePalette[0xf3 - i];
-    pal[slot + 0xf4] = basePalette[0xf7 - i];
-    pal[slot + 0xf8] = basePalette[0xfb - i];
-  }
-  return pal;
-}
-
 function renderPaletteTick() {
   return animationTick();
 }
@@ -991,7 +956,7 @@ function getRenderPalette() {
   if (state.paletteFrame && state.paletteFrameTick === phase) {
     return state.paletteFrame;
   }
-  state.paletteFrame = buildLegacyPaletteFrame(state.basePalette, phase);
+  state.paletteFrame = buildLegacyPaletteFrameRuntime(state.basePalette, phase);
   state.paletteFrameTick = phase;
   return state.paletteFrame;
 }
@@ -3567,17 +3532,7 @@ function renderStartupMenuLayer(g, scale) {
 }
 
 function buildStartupPaletteForMenu() {
-  if (!state.basePalette || state.basePalette.length < 256) {
-    return null;
-  }
-  const palette = state.basePalette.map((rgb) => [rgb[0] | 0, rgb[1] | 0, rgb[2] | 0]);
-  const idx = state.startupMenuIndex | 0;
-  for (let i = 0; i < 5; i += 1) {
-    const src = STARTUP_MENU_PAL[(4 + i - idx)] || STARTUP_MENU_PAL[4];
-    const di = STARTUP_MENU_PAL_IDX[i] | 0;
-    palette[di] = [src[0] | 0, src[1] | 0, src[2] | 0];
-  }
-  return palette;
+  return buildStartupPaletteForMenuRuntime(state.basePalette, state.startupMenuIndex);
 }
 
 function bootIntroScenePaletteIndex(scene) {
@@ -3596,31 +3551,6 @@ function bootIntroScenePaletteIndex(scene) {
   return 0;
 }
 
-function buildPackedIntroPalettes(bytes) {
-  const stride = 0x240;
-  const count = Math.floor((bytes?.length || 0) / stride);
-  const out = new Array(count);
-  for (let idx = 0; idx < count; idx += 1) {
-    const palette = new Array(256);
-    const srcOff = idx * stride;
-    for (let i = 0; i < 256; i += 1) {
-      const rgb = [0, 0, 0];
-      for (let j = 0; j < 3; j += 1) {
-        const bitPos = (i * 3 * 6) + (j * 6);
-        const bytePos = srcOff + (bitPos >> 3);
-        const shift = bitPos & 7;
-        const lo = bytes[bytePos] ?? 0;
-        const hi = bytes[bytePos + 1] ?? 0;
-        const color = ((lo | (hi << 8)) >> shift) & 0x3f;
-        rgb[j] = Math.min(255, color << 2);
-      }
-      palette[i] = rgb;
-    }
-    out[idx] = palette;
-  }
-  return out;
-}
-
 function bootIntroStonesPaletteShift(scene = null) {
   if (scene?.kind !== "stones") {
     return 0;
@@ -3629,29 +3559,13 @@ function bootIntroStonesPaletteShift(scene = null) {
   return Math.floor(elapsed / 125) & 0x0f;
 }
 
-function rotatePaletteRangeInPlace(palette, pos, length, count) {
-  const start = Number(pos) | 0;
-  const len = Math.max(0, Number(length) | 0);
-  const steps = ((Number(count) | 0) % len + len) % len;
-  if (!palette || len <= 1 || steps <= 0) {
-    return;
-  }
-  for (let s = 0; s < steps; s += 1) {
-    const last = palette[start + len - 1];
-    for (let i = len - 1; i > 0; i -= 1) {
-      palette[start + i] = palette[start + i - 1];
-    }
-    palette[start] = last;
-  }
-}
-
 function activeTitleIntroPalette(scene = null) {
   const idx = bootIntroScenePaletteIndex(scene);
   const paletteSrc = state.bootIntroPalettes?.[idx] || state.basePalette || buildStartupPaletteForMenu();
   if (!paletteSrc || paletteSrc.length < 256) {
     return null;
   }
-  const palette = paletteSrc.map((rgb) => [rgb[0] | 0, rgb[1] | 0, rgb[2] | 0]);
+  const palette = cloneRgbPaletteRuntime(paletteSrc);
   if (scene?.kind === "window") {
     const hot = scene.id === "window_lightning" || scene.id === "window_strike" || scene.id === "window_pan";
     if (hot) {
@@ -3664,7 +3578,7 @@ function activeTitleIntroPalette(scene = null) {
     palette[0x19] = [0, 0, 0];
   }
   if (scene?.kind === "stones") {
-    rotatePaletteRangeInPlace(palette, 0x90, 16, bootIntroStonesPaletteShift(scene));
+    rotatePaletteRangeInPlaceRuntime(palette, 0x90, 16, bootIntroStonesPaletteShift(scene));
   }
   return palette;
 }
@@ -7644,22 +7558,6 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   });
 }
 
-function buildPaletteFromU6Pal(bytes) {
-  const colors = new Array(256);
-  for (let i = 0; i < 256; i += 1) {
-    const off = i * 3;
-    if (off + 2 >= bytes.length) {
-      colors[i] = [0, 0, 0];
-      continue;
-    }
-    const r = Math.min(255, bytes[off + 0] * 4);
-    const g = Math.min(255, bytes[off + 1] * 4);
-    const b = Math.min(255, bytes[off + 2] * 4);
-    colors[i] = [r, g, b];
-  }
-  return colors;
-}
-
 function buildBaseTileTable(bytes) {
   const out = new Uint16Array(1024);
   const n = Math.min(1024, Math.floor(bytes.length / 2));
@@ -9695,7 +9593,7 @@ async function loadRuntimeAssets() {
     ]);
     state.mapCtx = new U6MapRuntime(new Uint8Array(mapBuf), new Uint8Array(chunkBuf));
     if (palRes.ok && palBuf.byteLength >= 0x300) {
-      state.basePalette = buildPaletteFromU6Pal(new Uint8Array(palBuf));
+      state.basePalette = buildPaletteFromU6PalRuntime(new Uint8Array(palBuf));
       state.palette = state.basePalette;
       state.paletteFrameTick = -1;
       state.paletteFrame = null;
@@ -9759,7 +9657,7 @@ async function loadRuntimeAssets() {
       state.bootIntroBanks = null;
     }
     if (introPaletteRes.ok && introPaletteBuf.byteLength >= 0x240) {
-      state.bootIntroPalettes = buildPackedIntroPalettes(new Uint8Array(introPaletteBuf));
+      state.bootIntroPalettes = buildPackedIntroPalettesRuntime(new Uint8Array(introPaletteBuf));
     } else {
       state.bootIntroPalettes = null;
     }
