@@ -8,11 +8,13 @@ import {
   defaultCriticalPolicyRuntime,
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
+  defaultWorldSnapshotRuntime,
   deterministicRecoveryTickLastRuntime,
   hashInteractionEventRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
+  normalizeWorldSnapshotRuntime,
   parseU16LERuntime,
   presenceRowsPayloadRuntime,
   prunePresenceRowsRuntime,
@@ -51,6 +53,48 @@ assert.deepEqual(normalizeWorldClockRuntime({
   date_m: 13,
   date_y: 5,
   last_advanced_at_ms: 999
+});
+
+assert.deepEqual(defaultWorldSnapshotRuntime("now"), {
+  snapshot_meta: {
+    schema_version: 1,
+    sim_core_version: "unknown",
+    saved_tick: 0,
+    snapshot_hash: null
+  },
+  snapshot_base64: null,
+  updated_at: "now"
+});
+
+assert.deepEqual(normalizeWorldSnapshotRuntime({
+  snapshot_meta: {
+    schema_version: "2",
+    sim_core_version: "sim-core",
+    saved_tick: -1,
+    snapshot_hash: 123
+  },
+  snapshot_base64: "encoded",
+  updated_at: "saved"
+}, "now"), {
+  snapshot_meta: {
+    schema_version: 2,
+    sim_core_version: "sim-core",
+    saved_tick: 0xffffffff,
+    snapshot_hash: "123"
+  },
+  snapshot_base64: "encoded",
+  updated_at: "saved"
+});
+
+assert.deepEqual(normalizeWorldSnapshotRuntime({ snapshot_meta: "bad" }, "now"), {
+  snapshot_meta: {
+    schema_version: 1,
+    sim_core_version: "unknown",
+    saved_tick: 0,
+    snapshot_hash: null
+  },
+  snapshot_base64: null,
+  updated_at: "now"
 });
 
 assert.equal(parseU16LERuntime(new Uint8Array([0x34, 0x12]), 0), 0x1234);

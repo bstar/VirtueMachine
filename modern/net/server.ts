@@ -90,10 +90,12 @@ const {
   defaultCriticalPolicyRuntime,
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
+  defaultWorldSnapshotRuntime,
   hashInteractionEventRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
+  normalizeWorldSnapshotRuntime,
   presenceRowsPayloadRuntime,
   queryIntOrRuntime,
   recordWorldInteractionEventRuntime,
@@ -246,6 +248,10 @@ function defaultCriticalPolicy() {
 
 function defaultWorldClock() {
   return defaultWorldClockRuntime();
+}
+
+function defaultWorldSnapshot() {
+  return defaultWorldSnapshotRuntime(nowIso());
 }
 
 function defaultNpcRuntimeState(baseline) {
@@ -485,16 +491,7 @@ function loadState() {
     users: readJsonValidated(FILES.users, [], normalizeServerUsersRuntime),
     tokens: readJsonValidated(FILES.tokens, [], normalizeServerTokensRuntime),
     characters: readJsonValidated(FILES.characters, [], normalizeServerCharactersRuntime),
-    worldSnapshot: readJson(FILES.worldSnapshot, {
-      snapshot_meta: {
-        schema_version: 1,
-        sim_core_version: "unknown",
-        saved_tick: 0,
-        snapshot_hash: null
-      },
-      snapshot_base64: null,
-      updated_at: nowIso()
-    }),
+    worldSnapshot: readJsonValidated(FILES.worldSnapshot, defaultWorldSnapshot(), (raw) => normalizeWorldSnapshotRuntime(raw, nowIso())),
     presence: readJsonValidated(FILES.presence, [], normalizePresenceRows),
     worldClock: readJsonValidated(FILES.worldClock, defaultWorldClock(), normalizeWorldClock),
     npcBaseline,
@@ -524,32 +521,6 @@ function loadState() {
   }
   for (const user of state.users) {
     ensureUserSchema(user);
-  }
-  if (!state.worldSnapshot || typeof state.worldSnapshot !== "object") {
-    state.worldSnapshot = {
-      snapshot_meta: {
-        schema_version: 1,
-        sim_core_version: "unknown",
-        saved_tick: 0,
-        snapshot_hash: null
-      },
-      snapshot_base64: null,
-      updated_at: nowIso()
-    };
-  }
-  if (!state.worldSnapshot.snapshot_meta || typeof state.worldSnapshot.snapshot_meta !== "object") {
-    state.worldSnapshot.snapshot_meta = {
-      schema_version: 1,
-      sim_core_version: "unknown",
-      saved_tick: 0,
-      snapshot_hash: null
-    };
-  }
-  if (!Object.prototype.hasOwnProperty.call(state.worldSnapshot, "snapshot_base64")) {
-    state.worldSnapshot.snapshot_base64 = null;
-  }
-  if (!state.worldSnapshot.updated_at) {
-    state.worldSnapshot.updated_at = nowIso();
   }
   rebuildNpcRuntimeState(state);
   ensureConversationRuntimeState(state, RUNTIME_DIR);

@@ -38,6 +38,17 @@ export type WorldInteractionLogRuntime = {
   seq: number;
 };
 
+export type WorldSnapshotRuntime = {
+  snapshot_base64: string | null;
+  snapshot_meta: {
+    saved_tick: number;
+    schema_version: number;
+    sim_core_version: string;
+    snapshot_hash: string | null;
+  };
+  updated_at: string;
+};
+
 export type PresenceRowRuntime = {
   character_name: string;
   facing_dx: number;
@@ -91,6 +102,40 @@ export function defaultWorldClockRuntime(nowMs = Date.now()): WorldClockRuntime 
     date_m: 1,
     date_y: 1,
     last_advanced_at_ms: nowMs
+  };
+}
+
+export function defaultWorldSnapshotRuntime(nowIso = new Date().toISOString()): WorldSnapshotRuntime {
+  return {
+    snapshot_meta: {
+      schema_version: 1,
+      sim_core_version: "unknown",
+      saved_tick: 0,
+      snapshot_hash: null
+    },
+    snapshot_base64: null,
+    updated_at: nowIso
+  };
+}
+
+export function normalizeWorldSnapshotRuntime(raw: unknown, nowIso = new Date().toISOString()): WorldSnapshotRuntime {
+  const base = defaultWorldSnapshotRuntime(nowIso);
+  if (!raw || typeof raw !== "object") {
+    return base;
+  }
+  const row = raw as Record<string, unknown>;
+  const meta = row.snapshot_meta && typeof row.snapshot_meta === "object"
+    ? row.snapshot_meta as Record<string, unknown>
+    : {};
+  return {
+    snapshot_meta: {
+      schema_version: Number(meta.schema_version) || 1,
+      sim_core_version: String(meta.sim_core_version || "unknown"),
+      saved_tick: Number(meta.saved_tick) >>> 0,
+      snapshot_hash: meta.snapshot_hash == null ? null : String(meta.snapshot_hash || "")
+    },
+    snapshot_base64: row.snapshot_base64 == null ? null : String(row.snapshot_base64 || ""),
+    updated_at: String(row.updated_at || nowIso)
   };
 }
 
