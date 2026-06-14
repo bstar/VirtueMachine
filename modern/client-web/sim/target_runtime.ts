@@ -82,10 +82,10 @@ export function nearestTalkTargetAtCellRuntime(
   for (const e of entityEntries) {
     const idx = i;
     i += 1;
-    if ((e.z | 0) !== (tz | 0)) continue;
-    if ((e.x | 0) !== (tx | 0)) continue;
-    if ((e.y | 0) !== (ty | 0)) continue;
-    if ((e.id | 0) === (avatarEntityId | 0)) continue;
+    if ((Number(e.z) | 0) !== (tz | 0)) continue;
+    if ((Number(e.x) | 0) !== (tx | 0)) continue;
+    if ((Number(e.y) | 0) !== (ty | 0)) continue;
+    if ((Number(e.id) | 0) === (avatarEntityId | 0)) continue;
     const sortOrder = Number((e.legacyOrder != null) ? e.legacyOrder : e.order) | 0;
     candidates.push({ entity: e, sortOrder, index: idx });
   }

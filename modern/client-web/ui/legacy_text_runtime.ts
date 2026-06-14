@@ -7,18 +7,21 @@ export function legacyLookupTileStringRuntime(
   tileId: number,
   entries: readonly LegacyLookStringEntryRuntime[] | null | undefined
 ): string {
-  const n = Array.isArray(entries) ? entries.length : 0;
+  const list = Array.isArray(entries) ? entries : [];
+  const n = list.length;
   if (n <= 0) {
     return "nothing";
   }
   let i = 0;
-  let si = entries[0].tileId | 0;
-  let out = String(entries[0].text || "nothing");
+  let entry = list[0];
+  let si = Number(entry?.tileId) | 0;
+  let out = String(entry?.text || "nothing");
   const target = tileId & 0xffff;
   while (si < target && (i + 1) < n) {
     i += 1;
-    si = entries[i].tileId | 0;
-    out = String(entries[i].text || out);
+    entry = list[i];
+    si = Number(entry?.tileId) | 0;
+    out = String(entry?.text || out);
   }
   return out || "nothing";
 }
