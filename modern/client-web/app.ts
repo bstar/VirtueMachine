@@ -317,6 +317,17 @@ import {
   readStoredChoicePreferenceRuntime,
   writeStoredStringPreferenceRuntime
 } from "./ui/preference_runtime.ts";
+import {
+  formatAvatarStateRuntime,
+  formatClockRuntime,
+  formatDateRuntime,
+  formatInputModeRuntime,
+  formatLayerCountRuntime,
+  formatLedgerEntryCountRuntime,
+  formatLoopHealthRuntime,
+  formatPositionRuntime,
+  formatRenderParityRuntime
+} from "./ui/status_text_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -896,7 +907,7 @@ function buildDebugChatLedgerText() {
 function renderDebugChatLedgerPanel() {
   if (debugChatCount) {
     const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
-    debugChatCount.textContent = `${count} entr${count === 1 ? "y" : "ies"}`;
+    debugChatCount.textContent = formatLedgerEntryCountRuntime(count);
   }
   if (debugChatLedgerBody) {
     debugChatLedgerBody.textContent = buildDebugChatLedgerText();
@@ -6811,56 +6822,40 @@ function drawTileGrid() {
 function updateStats() {
   const w = state.sim.world;
   statTick.textContent = String(state.sim.tick);
-  statPos.textContent = `${w.map_x}, ${w.map_y}, ${w.map_z}`;
-  const hh = String(w.time_h).padStart(2, "0");
-  const mm = String(w.time_m).padStart(2, "0");
-  statClock.textContent = `${hh}:${mm}`;
-  statDate.textContent = `${w.date_d} / ${w.date_m} / ${w.date_y}`;
+  statPos.textContent = formatPositionRuntime(w);
+  const clock = formatClockRuntime(w);
+  statClock.textContent = clock.text;
+  statDate.textContent = formatDateRuntime(w);
   if (topTimeOfDay) {
-    topTimeOfDay.textContent = `${timeOfDayLabelRuntime(w.time_h)} (${hh}:${mm})`;
+    topTimeOfDay.textContent = `${timeOfDayLabelRuntime(w.time_h)} (${clock.text})`;
   }
   if (topInputMode) {
-    if (!state.sessionStarted) {
-      topInputMode.textContent = "Title Menu";
-    } else if (state.useCursorActive) {
-      const label = LEGACY_TARGET_VERB_LABEL[state.targetVerb] || "Target";
-      topInputMode.textContent = `${label} Target`;
-    } else {
-      topInputMode.textContent = state.movementMode === "avatar" ? "World" : "Ghost";
-    }
+    topInputMode.textContent = formatInputModeRuntime({
+      movementMode: state.movementMode,
+      sessionStarted: state.sessionStarted,
+      targetVerb: state.targetVerb,
+      targetVerbLabels: LEGACY_TARGET_VERB_LABEL,
+      useCursorActive: state.useCursorActive
+    });
   }
   statQueued.textContent = String(state.queue.length);
-  if (state.objectLayer) {
-    statObjects.textContent = `${state.objectOverlayCount} / ${state.objectLayer.totalLoaded}`;
-  } else {
-    statObjects.textContent = "0 / 0";
-  }
+  statObjects.textContent = formatLayerCountRuntime(state.objectOverlayCount, state.objectLayer?.totalLoaded, !!state.objectLayer);
   if (statEntities) {
-    if (state.entityLayer) {
-      statEntities.textContent = `${state.entityOverlayCount} / ${state.entityLayer.totalLoaded}`;
-    } else {
-      statEntities.textContent = "0 / 0";
-    }
+    statEntities.textContent = formatLayerCountRuntime(state.entityOverlayCount, state.entityLayer?.totalLoaded, !!state.entityLayer);
   }
   if (statRenderParity) {
-    if (state.renderParityMismatches > 0) {
-      statRenderParity.textContent = `warn (${state.renderParityMismatches})`;
-    } else if (state.interactionProbeTile != null) {
-      statRenderParity.textContent = `ok (probe 0x${state.interactionProbeTile.toString(16)})`;
-    } else {
-      statRenderParity.textContent = "ok";
-    }
+    statRenderParity.textContent = formatRenderParityRuntime({
+      interactionProbeTile: state.interactionProbeTile,
+      mismatchCount: state.renderParityMismatches
+    });
   }
   if (statAvatarState) {
-    const facing = state.avatarFacingDx < 0 ? "W"
-      : state.avatarFacingDx > 0 ? "E"
-        : state.avatarFacingDy < 0 ? "N" : "S";
-    const pose = state.sim.avatarPose === "sleep"
-      ? "sleep"
-      : (state.sim.avatarPose === "sit" ? "sit" : "stand");
-    statAvatarState.textContent = state.movementMode === "avatar"
-      ? `avatar (${facing}, ${pose})`
-      : "ghost";
+    statAvatarState.textContent = formatAvatarStateRuntime({
+      facingDx: state.avatarFacingDx,
+      facingDy: state.avatarFacingDy,
+      movementMode: state.movementMode,
+      pose: state.sim.avatarPose
+    });
   }
   if (statNpcOcclusionBlocks) {
     statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
@@ -6871,10 +6866,14 @@ function updateStats() {
   }
   if (statLoopHealth) {
     const lh = state.loopHealth;
-    const last = Math.round(Math.max(0, Number(lh.lastDtMs) || 0));
-    const max = Math.round(Math.max(0, Number(lh.maxDtMs) || 0));
-    const prefix = state.simPaused ? "paused | " : "";
-    statLoopHealth.textContent = `${prefix}dt ${last}ms / max ${max}ms | drop ${lh.backlogDrops | 0} | vis ${lh.visibilityResets | 0} | err ${lh.frameErrors | 0}`;
+    statLoopHealth.textContent = formatLoopHealthRuntime({
+      backlogDrops: lh.backlogDrops,
+      frameErrors: lh.frameErrors,
+      lastDtMs: lh.lastDtMs,
+      maxDtMs: lh.maxDtMs,
+      paused: state.simPaused,
+      visibilityResets: lh.visibilityResets
+    });
   }
   if (statAudio && state.audio) {
     const audio = state.audio.status();
@@ -6902,7 +6901,7 @@ function updateStats() {
     renderDebugChatLedgerPanel();
   } else if (debugChatCount) {
     const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
-    debugChatCount.textContent = `${count} entr${count === 1 ? "y" : "ies"}`;
+    debugChatCount.textContent = formatLedgerEntryCountRuntime(count);
   }
 }
 
