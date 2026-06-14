@@ -3,6 +3,7 @@ import { normalizePartyMemberIdsRuntime } from "./party_runtime.ts";
 
 export type AppSimState = Omit<SimSnapshotRuntime, "doorOpenStates"> & {
   doorOpenStates: Record<string, number>;
+  inventoryTiles?: Record<string, number>;
   partySize: number;
 };
 
@@ -20,6 +21,7 @@ export function createInitialAppSimState(
     removedObjectAtTick: {},
     removedObjectCount: 0,
     inventory: {},
+    inventoryTiles: {},
     spawnedWorldObjects: [],
     spawnedWorldSeq: 0,
     partyMembers: [1],

@@ -160,6 +160,7 @@ import {
   collectWorldItemsForMaintenanceFromLayer,
   inventoryItemFromTakeResponseRuntime,
   inventoryProjectionFromServerObjectsRuntime,
+  inventoryTileProjectionFromServerObjectsRuntime,
   requestIntroPhaseRuntime,
   requestTakeWorldObjectRuntime,
   runCriticalMaintenanceRuntime,
@@ -2456,7 +2457,12 @@ function renderLegacyHudStubOnBackdrop(): void {
           continue;
         }
         seen.add(key);
-        out.push({ key, count });
+        const cachedTile = Number(state.sim.inventoryTiles?.[key]);
+        out.push({
+          key,
+          count,
+          tile_hex: Number.isFinite(cachedTile) ? `0x${(cachedTile & 0xffff).toString(16)}` : undefined
+        });
         if (out.length >= 12) {
           return out;
         }
@@ -4980,7 +4986,9 @@ function applyInventoryProjectionFromServerObjects(sim: AppSimState | null | und
   if (!sim) {
     return;
   }
-  sim.inventory = inventoryProjectionFromServerObjectsRuntime(worldInventorySourcesFromJsonRuntime(objects));
+  const sources = worldInventorySourcesFromJsonRuntime(objects);
+  sim.inventory = inventoryProjectionFromServerObjectsRuntime(sources);
+  sim.inventoryTiles = inventoryTileProjectionFromServerObjectsRuntime(sources);
 }
 
 async function netSyncInventoryProjection() {
@@ -5010,6 +5018,13 @@ async function netTakeWorldObject(
   }, netRequest);
   const item = inventoryItemFromTakeResponseRuntime(out, obj);
   addObjectToInventoryRuntime(state.sim, item);
+  const tileId = Number(item.tile_id);
+  if (Number.isFinite(tileId)) {
+    if (!state.sim.inventoryTiles) {
+      state.sim.inventoryTiles = {};
+    }
+    state.sim.inventoryTiles[inventoryKeyForObjectRuntime(item)] = tileId & 0xffff;
+  }
   markObjectRemovedRuntime(state.sim, obj);
   const invKey = inventoryKeyForObjectRuntime(item);
   const count = Number(state.sim.inventory[invKey]) >>> 0;

@@ -41,6 +41,7 @@ export type WorldRuntimeInventorySource = object & {
   frame?: unknown;
   objectKey?: unknown;
   object_key?: unknown;
+  tile_id?: unknown;
   type?: unknown;
 };
 
@@ -86,6 +87,7 @@ export type WorldRuntimeInventoryItem = {
   frame: number;
   objectKey?: string;
   object_key?: string;
+  tile_id?: number;
   type: number;
 };
 
@@ -129,6 +131,23 @@ export function inventoryProjectionFromServerObjectsRuntime(
   return next;
 }
 
+export function inventoryTileProjectionFromServerObjectsRuntime(
+  objects: readonly WorldRuntimeInventorySource[] | null | undefined
+): Record<string, number> {
+  const next: Record<string, number> = {};
+  for (const obj of objects || []) {
+    const type = Number(obj.type);
+    const frame = Number(obj.frame);
+    const tileId = Number(obj.tile_id);
+    if (!Number.isFinite(type) || !Number.isFinite(frame) || !Number.isFinite(tileId)) {
+      continue;
+    }
+    const key = inventoryKeyForObjectRuntime({ type, frame });
+    next[key] = Number(tileId) & 0xffff;
+  }
+  return next;
+}
+
 function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null | undefined): WorldRuntimeInventoryItem {
   const row = value || {};
   const out: WorldRuntimeInventoryItem = {
@@ -142,6 +161,10 @@ function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null
   const objectKeySnake = String(row.object_key || "").trim();
   if (objectKeySnake) {
     out.object_key = objectKeySnake;
+  }
+  const tileId = Number(row.tile_id);
+  if (Number.isFinite(tileId)) {
+    out.tile_id = Number(tileId) & 0xffff;
   }
   return out;
 }

@@ -3,6 +3,7 @@ import {
   collectWorldItemsForMaintenanceFromLayer,
   inventoryItemFromTakeResponseRuntime,
   inventoryProjectionFromServerObjectsRuntime,
+  inventoryTileProjectionFromServerObjectsRuntime,
   normalizeIntroPhaseRuntime,
   requestIntroPhaseRuntime,
   requestTakeWorldObjectRuntime,
@@ -20,9 +21,9 @@ assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: "bad", index: 9 
 assert.equal(serverObjectKeyForWorldObjectRuntime(null), "");
 
 const decodedInventorySources = worldInventorySourcesFromJsonRuntime([
+  { type: 0x123, frame: 0, tile_id: 0x345 },
   { type: 0x123, frame: 0 },
-  { type: 0x123, frame: 0 },
-  { type: 0x123, frame: 1 },
+  { type: 0x123, frame: 1, tile_id: 0x346 },
   { type: "bad", frame: 1 },
   null
 ]);
@@ -30,14 +31,19 @@ assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(decodedInventorySou
   "0x123:0x00": 2,
   "0x123:0x01": 1
 });
+assert.deepEqual(inventoryTileProjectionFromServerObjectsRuntime(decodedInventorySources), {
+  "0x123:0x00": 0x345,
+  "0x123:0x01": 0x346
+});
 assert.equal(decodedInventorySources.length, 4);
 assert.deepEqual(worldInventorySourcesFromJsonRuntime(null), []);
 assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(null), {});
+assert.deepEqual(inventoryTileProjectionFromServerObjectsRuntime(null), {});
 
 assert.deepEqual(inventoryItemFromTakeResponseRuntime({
-  inventory_item: { frame: 2, object_key: " inv ", type: 0x123 },
+  inventory_item: { frame: 2, object_key: " inv ", tile_id: 0x347, type: 0x123 },
   target: { frame: 1, object_key: "target", type: 0x122 }
-}, { frame: 0, object_key: "fallback", type: 0x121 }), { frame: 2, object_key: "inv", type: 0x123 });
+}, { frame: 0, object_key: "fallback", type: 0x121 }), { frame: 2, object_key: "inv", tile_id: 0x347, type: 0x123 });
 assert.deepEqual(inventoryItemFromTakeResponseRuntime({
   target: { frame: 1, object_key: "target", type: 0x122 }
 }, { frame: 0, object_key: "fallback", type: 0x121 }), { frame: 1, object_key: "target", type: 0x122 });
