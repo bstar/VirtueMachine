@@ -6865,14 +6865,19 @@ function updateStats() {
   }
 }
 
-function releaseReplayUrl() {
+type ReplayCheckpointRuntime = {
+  hash: string;
+  tick: number;
+};
+
+function releaseReplayUrl(): void {
   if (state.replayUrl) {
     URL.revokeObjectURL(state.replayUrl);
     state.replayUrl = null;
   }
 }
 
-function setReplayCsv(csvText) {
+function setReplayCsv(csvText: string): void {
   releaseReplayUrl();
   const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
   state.replayUrl = URL.createObjectURL(blob);
@@ -6881,7 +6886,7 @@ function setReplayCsv(csvText) {
   replayDownload.classList.remove("disabled");
 }
 
-function replayCheckpointsCsv(checkpoints) {
+function replayCheckpointsCsv(checkpoints: readonly ReplayCheckpointRuntime[]): string {
   const lines = ["tick,hash"];
   for (const cp of checkpoints) {
     lines.push(`${cp.tick},${cp.hash}`);
@@ -6889,10 +6894,14 @@ function replayCheckpointsCsv(checkpoints) {
   return `${lines.join("\n")}\n`;
 }
 
-function runReplayCheckpoints(commands, totalTicks, interval) {
+function runReplayCheckpoints(
+  commands: readonly SimCommandRuntime[],
+  totalTicks: number,
+  interval: number
+): ReplayCheckpointRuntime[] {
   const sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
   const queue = commands.map((cmd) => ({ ...cmd }));
-  const checkpoints = [];
+  const checkpoints: ReplayCheckpointRuntime[] = [];
 
   for (let i = 0; i < totalTicks; i += 1) {
     const pending = stepSimTick(sim, queue);
@@ -6910,7 +6919,7 @@ function runReplayCheckpoints(commands, totalTicks, interval) {
   return checkpoints;
 }
 
-function animationViewportHash(sim) {
+function animationViewportHash(sim: AppSimState): string | null {
   if (!state.mapCtx) {
     return null;
   }
@@ -6948,13 +6957,17 @@ function animationViewportHash(sim) {
   return hashHexRuntime(h);
 }
 
-function runAnimationCheckpoints(commands, totalTicks, interval) {
+function runAnimationCheckpoints(
+  commands: readonly SimCommandRuntime[],
+  totalTicks: number,
+  interval: number
+): ReplayCheckpointRuntime[] {
   if (!state.mapCtx) {
     return [];
   }
   const sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
   const queue = commands.map((cmd) => ({ ...cmd }));
-  const checkpoints = [];
+  const checkpoints: ReplayCheckpointRuntime[] = [];
 
   for (let i = 0; i < totalTicks; i += 1) {
     const pending = stepSimTick(sim, queue);
@@ -6964,7 +6977,7 @@ function runAnimationCheckpoints(commands, totalTicks, interval) {
     if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
       checkpoints.push({
         tick: sim.tick,
-        hash: animationViewportHash(sim)
+        hash: animationViewportHash(sim) ?? ""
       });
     }
   }
@@ -6972,7 +6985,7 @@ function runAnimationCheckpoints(commands, totalTicks, interval) {
   return checkpoints;
 }
 
-function verifyReplayStability() {
+function verifyReplayStability(): void {
   const maxCommandTick = state.commandLog.reduce((maxTick, cmd) => Math.max(maxTick, cmd.tick), 0);
   const totalTicks = Math.max(state.sim.tick, maxCommandTick, 1);
   const a = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
