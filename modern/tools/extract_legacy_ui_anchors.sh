@@ -13,7 +13,11 @@ emit_section() {
   local title="$1"
   local pattern="$2"
   echo "## $title"
-  if ! rg -n "$pattern" "$SRC_DIR" -S | head -n 80 | sed "s|$ROOT_DIR/||"; then
+  local matches
+  matches="$(rg -n "$pattern" "$SRC_DIR" -S || true)"
+  if [[ -n "$matches" ]]; then
+    awk -v root="$ROOT_DIR/" 'NR <= 80 { sub(root, ""); print }' <<<"$matches"
+  else
     true
   fi
   echo

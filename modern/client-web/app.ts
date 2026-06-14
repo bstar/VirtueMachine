@@ -247,6 +247,11 @@ import {
   U6EntityLayerRuntime,
   type U6EntityEntryRuntime
 } from "./sim/entity_layer_runtime.ts";
+import {
+  fetchObjectBaselineVersionRuntime,
+  loadPristineObjectBaselineRuntime,
+  type ObjectBaselineLoadResultRuntime
+} from "./sim/object_baseline_runtime.ts";
 import { U6MapRuntime } from "./sim/map_runtime.ts";
 import {
   LEGACY_COMMAND_TYPE_RUNTIME,
@@ -255,7 +260,7 @@ import {
   legacyVerbSelectRangeRuntime
 } from "./sim/legacy_command_runtime.ts";
 import {
-  U6ObjectLayerRuntime,
+  type U6ObjectLayerRuntime,
   type U6ObjectEntryRuntime,
   objectLayerAnchorKeyRuntime
 } from "./sim/object_layer_runtime.ts";
@@ -7434,18 +7439,8 @@ function clearObjectTransientState(): void {
 }
 
 async function fetchPristineBaselineVersion() {
-  const res = await fetch(PRISTINE_BASELINE_VERSION_PATH, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`missing baseline version marker (${PRISTINE_BASELINE_VERSION_PATH})`);
-  }
-  return String(await res.text()).trim();
+  return fetchObjectBaselineVersionRuntime(PRISTINE_BASELINE_VERSION_PATH);
 }
-
-type ObjectBaselineLoadResult = {
-  entityLayer: U6EntityLayerRuntime;
-  objectLayer: U6ObjectLayerRuntime;
-  objectPath: string;
-};
 
 function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime): boolean {
   const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
@@ -7459,38 +7454,12 @@ function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime): boolean {
   return !!removed[objectLayerAnchorKeyRuntime(obj)];
 }
 
-async function loadObjectBaselineFromPath(
-  baseTiles: ArrayLike<number> | null | undefined,
-  objectPath: string
-): Promise<ObjectBaselineLoadResult> {
-  if (!baseTiles || baseTiles.length < 0x400) {
-    throw new Error("invalid base tile table for object baseline");
-  }
-  const objectLayer = new U6ObjectLayerRuntime(baseTiles, isObjectRemovedForObjectLayer);
-  await objectLayer.loadOutdoor((name) => fetch(`${objectPath}/${name}`, { cache: "no-store" }));
-  const objListRes = await fetch(`${objectPath}/objlist`, { cache: "no-store" });
-  if (objectLayer.filesLoaded < 64 || !objListRes.ok) {
-    throw new Error(`missing object baseline at ${objectPath}`);
-  }
-  const objListBuf = await objListRes.arrayBuffer();
-  const entityLayer = new U6EntityLayerRuntime(baseTiles);
-  if (objListBuf.byteLength >= 0x0900) {
-    entityLayer.load(new Uint8Array(objListBuf));
-  }
-  return { objectLayer, entityLayer, objectPath };
-}
-
-async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise<ObjectBaselineLoadResult> {
-  const baselinePaths = [RUNTIME_OBJECT_PATH, PRISTINE_OBJECT_PATH];
-  let lastErr: unknown = null;
-  for (const objectPath of baselinePaths) {
-    try {
-      return await loadObjectBaselineFromPath(baseTiles, objectPath);
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  throw (lastErr || new Error("no valid object baseline path"));
+async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise<ObjectBaselineLoadResultRuntime> {
+  return loadPristineObjectBaselineRuntime({
+    baseTiles,
+    isObjectRemoved: isObjectRemovedForObjectLayer,
+    paths: [RUNTIME_OBJECT_PATH, PRISTINE_OBJECT_PATH]
+  });
 }
 
 async function refreshPristineBaseline(force = false): Promise<boolean> {

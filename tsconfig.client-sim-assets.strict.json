@@ -22,6 +22,7 @@
     "modern/client-web/sim/entity_layer_runtime.ts",
     "modern/client-web/sim/legacy_actor_frame_runtime.ts",
     "modern/client-web/sim/map_runtime.ts",
+    "modern/client-web/sim/object_baseline_runtime.ts",
     "modern/client-web/sim/object_layer_runtime.ts",
     "modern/common/**/*.ts"
   ]
