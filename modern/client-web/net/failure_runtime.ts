@@ -8,6 +8,20 @@ export function resetBackgroundFailureState(netState: {
   netState.backgroundSyncPaused = false;
 }
 
+export function backgroundFailureMessageRuntime(err: unknown): string {
+  if (!err) {
+    return "";
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    return String(message || err);
+  }
+  return String(err);
+}
+
 export function handleBackgroundFailure(
   netState: {
     backgroundFailCount: number;
@@ -33,10 +47,8 @@ export function handleBackgroundFailure(
     args.setStatus("offline", "Server unreachable. Auto-sync paused; use Net Login to retry.");
     return;
   }
-  const errMessage = args.err && typeof args.err === "object" && "message" in args.err
-    ? (args.err as { message?: unknown }).message
-    : args.err;
-  const suffix = args.err ? `: ${String(errMessage || args.err)}` : "";
+  const errMessage = backgroundFailureMessageRuntime(args.err);
+  const suffix = errMessage ? `: ${errMessage}` : "";
   args.setStatus("error", `${args.context} failed${suffix}`);
 }
 

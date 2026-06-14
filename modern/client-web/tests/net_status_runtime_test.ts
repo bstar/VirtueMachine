@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  backgroundFailureMessageRuntime,
+  handleBackgroundFailure,
+  resetBackgroundFailureState
+} from "../net/failure_runtime.ts";
+import {
   applyNetStatusRuntime,
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
@@ -9,6 +14,11 @@ import {
   pulseNetIndicatorRuntime,
   renderNetStatusViewRuntime
 } from "../net/status_runtime.ts";
+
+assert.equal(backgroundFailureMessageRuntime(null), "");
+assert.equal(backgroundFailureMessageRuntime(new Error("offline")), "offline");
+assert.equal(backgroundFailureMessageRuntime({ message: "timeout" }), "timeout");
+assert.equal(backgroundFailureMessageRuntime("lost"), "lost");
 
 assert.equal(deriveNetIndicatorState("idle", false), "offline");
 assert.equal(deriveNetIndicatorState("connecting", false), "connecting");
@@ -55,6 +65,42 @@ function fakeButton(): HTMLButtonElement {
       }
     }
   } as unknown as HTMLButtonElement;
+}
+
+{
+  const stateNet = {
+    backgroundFailCount: 0,
+    backgroundSyncPaused: true,
+    firstBackgroundFailAtMs: 99
+  };
+  resetBackgroundFailureState(stateNet);
+  assert.deepEqual(stateNet, {
+    backgroundFailCount: 0,
+    backgroundSyncPaused: false,
+    firstBackgroundFailAtMs: 0
+  });
+  const statuses: string[] = [];
+  handleBackgroundFailure(stateNet, {
+    context: "Presence",
+    err: { message: "timeout" },
+    maxFailures: 2,
+    nowMs: 100,
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    windowMs: 1000
+  });
+  assert.equal(stateNet.backgroundFailCount, 1);
+  assert.equal(stateNet.backgroundSyncPaused, false);
+  assert.deepEqual(statuses, ["error:Presence failed: timeout"]);
+  handleBackgroundFailure(stateNet, {
+    context: "Presence",
+    err: "offline",
+    maxFailures: 2,
+    nowMs: 200,
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    windowMs: 1000
+  });
+  assert.equal(stateNet.backgroundSyncPaused, true);
+  assert.equal(statuses[1], "offline:Server unreachable. Auto-sync paused; use Net Login to retry.");
 }
 
 {
