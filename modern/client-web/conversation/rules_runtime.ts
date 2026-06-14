@@ -29,9 +29,9 @@ function parseConversationRulesInRange(
       continue;
     }
     i += 1;
-    const keys = [];
+    const keys: string[] = [];
     while (i < end) {
-      const keyBytes = [];
+      const keyBytes: number[] = [];
       while (
         i < end
         && (scriptBytes[i] & 0xff) !== 0x2c
@@ -83,7 +83,7 @@ export function parseConversationRules(
   if (!(scriptBytes instanceof Uint8Array) || !scriptBytes.length) {
     return [];
   }
-  const out = [];
+  const out: ConversationRule[] = [];
   parseConversationRulesInRange(
     scriptBytes,
     Math.max(0, Number(mainPc) | 0),

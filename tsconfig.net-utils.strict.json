@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "modern/net/email_runtime.ts",
+    "modern/net/server_account_runtime.ts",
+    "modern/net/server_file_store.ts",
+    "modern/net/server_http_runtime.ts",
+    "modern/common/**/*.ts"
+  ]
+}
