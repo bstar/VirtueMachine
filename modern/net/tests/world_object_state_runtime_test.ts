@@ -128,6 +128,15 @@ assert.equal(deltas.spawned[0].type, 88);
 assert.equal(deltas.respawns.a00i001.due_at_ms, 2000);
 assert.equal(deltas.respawns.invalid, undefined);
 
+const malformedDeltaMaps = normalizeWorldObjectDeltas({
+  removed: ["a00i001"],
+  moved: [{ x: 9, y: 9, z: 0 }],
+  respawns: [{ due_at_ms: 2000 }]
+});
+assert.deepEqual(malformedDeltaMaps.removed, {});
+assert.deepEqual(malformedDeltaMaps.moved, {});
+assert.deepEqual(malformedDeltaMaps.respawns, {});
+
 const builtWorldState = buildWorldObjectStateRuntime({
   baseline: {
     source_dir: "/baseline",

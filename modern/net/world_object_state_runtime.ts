@@ -17,6 +17,18 @@ type WorldObjectDeltasSourceRuntime = {
   spawned?: unknown;
 };
 
+type WorldObjectRemovedDeltaMapSourceRuntime = {
+  [objectKey: string]: unknown;
+};
+
+type WorldObjectMovedDeltaMapSourceRuntime = {
+  [objectKey: string]: unknown;
+};
+
+type WorldObjectRespawnDeltaMapSourceRuntime = {
+  [objectKey: string]: unknown;
+};
+
 type MovedWorldObjectDeltaSourceRuntime = {
   holder_id?: unknown;
   holder_key?: unknown;
@@ -61,24 +73,36 @@ function parseU16LE(bytes: Uint8Array, off: number): number {
   return (bytes[off] | (bytes[off + 1] << 8)) >>> 0;
 }
 
-function asWorldObjectDeltasSourceRuntime(value: unknown): WorldObjectDeltasSourceRuntime | null {
-  return value && typeof value === "object" ? value as WorldObjectDeltasSourceRuntime : null;
+function isObjectSourceRuntime(value: unknown): value is object {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function asUnknownEntryMapRuntime(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+function asWorldObjectDeltasSourceRuntime(value: unknown): WorldObjectDeltasSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as WorldObjectDeltasSourceRuntime : null;
+}
+
+function asWorldObjectRemovedDeltaMapSourceRuntime(value: unknown): WorldObjectRemovedDeltaMapSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as WorldObjectRemovedDeltaMapSourceRuntime : null;
+}
+
+function asWorldObjectMovedDeltaMapSourceRuntime(value: unknown): WorldObjectMovedDeltaMapSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as WorldObjectMovedDeltaMapSourceRuntime : null;
+}
+
+function asWorldObjectRespawnDeltaMapSourceRuntime(value: unknown): WorldObjectRespawnDeltaMapSourceRuntime | null {
+  return isObjectSourceRuntime(value) ? value as WorldObjectRespawnDeltaMapSourceRuntime : null;
 }
 
 function asMovedWorldObjectDeltaSourceRuntime(value: unknown): MovedWorldObjectDeltaSourceRuntime | null {
-  return value && typeof value === "object" ? value as MovedWorldObjectDeltaSourceRuntime : null;
+  return isObjectSourceRuntime(value) ? value as MovedWorldObjectDeltaSourceRuntime : null;
 }
 
 function asSpawnedWorldObjectDeltaSourceRuntime(value: unknown): SpawnedWorldObjectDeltaSourceRuntime | null {
-  return value && typeof value === "object" ? value as SpawnedWorldObjectDeltaSourceRuntime : null;
+  return isObjectSourceRuntime(value) ? value as SpawnedWorldObjectDeltaSourceRuntime : null;
 }
 
 function asRespawnWorldObjectDeltaSourceRuntime(value: unknown): RespawnWorldObjectDeltaSourceRuntime | null {
-  return value && typeof value === "object" ? value as RespawnWorldObjectDeltaSourceRuntime : null;
+  return isObjectSourceRuntime(value) ? value as RespawnWorldObjectDeltaSourceRuntime : null;
 }
 
 function decodePackedCoord(raw0: number, raw1: number, raw2: number): { x: number; y: number; z: number } {
@@ -239,7 +263,7 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
   if (!src) {
     return out;
   }
-  const removed = asUnknownEntryMapRuntime(src.removed);
+  const removed = asWorldObjectRemovedDeltaMapSourceRuntime(src.removed);
   if (removed) {
     for (const [key, value] of Object.entries(removed)) {
       if (value) {
@@ -247,7 +271,7 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
       }
     }
   }
-  const moved = asUnknownEntryMapRuntime(src.moved);
+  const moved = asWorldObjectMovedDeltaMapSourceRuntime(src.moved);
   if (moved) {
     for (const [key, value] of Object.entries(moved)) {
       const entry = asMovedWorldObjectDeltaSourceRuntime(value);
@@ -273,7 +297,7 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
       })
       .filter((value): value is SpawnedWorldObjectDelta => !!value);
   }
-  const respawns = asUnknownEntryMapRuntime(src.respawns);
+  const respawns = asWorldObjectRespawnDeltaMapSourceRuntime(src.respawns);
   if (respawns) {
     for (const [key, value] of Object.entries(respawns)) {
       const entry = asRespawnWorldObjectDeltaSourceRuntime(value);
