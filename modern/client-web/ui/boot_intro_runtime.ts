@@ -45,6 +45,18 @@ export type BootIntroTvSpriteRuntime = {
   yOff: number;
 };
 
+export type BootIntroTvStaticCellRuntime = {
+  colorIndex: number;
+  px: number;
+  py: number;
+};
+
+export type BootIntroClockSpriteRuntime = {
+  frame: number;
+  x: number;
+  y: number;
+};
+
 export type BootIntroTvMachineRuntime = {
   fingerVisible: boolean;
   loopCnt: number;
@@ -973,6 +985,53 @@ export function bootIntroPrintTextOnCardRuntime(
     }
   };
   return bootIntroPrintTextRuntime(translated, args);
+}
+
+export function bootIntroTvStaticCellsRuntime(seed: number, width = 57, height = 37): BootIntroTvStaticCellRuntime[] {
+  let s = seed >>> 0;
+  const w = Math.max(0, Number(width) | 0);
+  const h = Math.max(0, Number(height) | 0);
+  const cells: BootIntroTvStaticCellRuntime[] = [];
+  for (let py = 0; py < h; py += 1) {
+    for (let px = 0; px < w; px += 1) {
+      s = ((s * 1103515245) + 12345) >>> 0;
+      cells.push({
+        colorIndex: ((s >>> 16) & 1) ? 0x3e : 0x00,
+        px,
+        py
+      });
+    }
+  }
+  return cells;
+}
+
+export function bootIntroClockFramesRuntime(now: Date = new Date()): number[] {
+  let hour = now.getHours();
+  const minute = now.getMinutes();
+  if (hour > 12) {
+    hour -= 12;
+  }
+  const h1 = hour < 10 ? 12 : 3;
+  if (hour >= 10) {
+    hour -= 10;
+  }
+  return [
+    h1,
+    hour + 2,
+    Math.floor(minute / 10) + 2,
+    (minute % 10) + 2
+  ];
+}
+
+export function bootIntroClockSpritesRuntime(now: Date, scrollPx: unknown): BootIntroClockSpriteRuntime[] {
+  const frames = bootIntroClockFramesRuntime(now);
+  const xOff = Math.floor(Number(scrollPx) || 0);
+  return [
+    { frame: frames[0], x: 0xdd - xOff, y: 0x14 },
+    { frame: frames[1], x: 0xe1 - xOff, y: 0x14 },
+    { frame: frames[2], x: 0xe7 - xOff, y: 0x14 },
+    { frame: frames[3], x: 0xeb - xOff, y: 0x14 }
+  ];
 }
 
 export function bootIntroWindowRandRuntime(

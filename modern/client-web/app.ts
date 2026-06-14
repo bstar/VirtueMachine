@@ -243,7 +243,10 @@ import {
   bootIntroWindowStateAtRuntime,
   bootIntroPrintTextOnCardRuntime,
   bootIntroPrintTextRuntime,
+  bootIntroClockFramesRuntime,
+  bootIntroClockSpritesRuntime,
   bootIntroTvStateAtRuntime,
+  bootIntroTvStaticCellsRuntime,
   bootIntroWouCharWidthRuntime,
   decodeBootIntroWouFontRuntime,
   drawBootIntroWouTextRuntime,
@@ -2931,18 +2934,12 @@ function drawBootIntroClippedSprite(g, bankName, frameIdx, lx, ly, scale, scene,
 
 function drawBootIntroTvStatic(g, x, y, scale, seed) {
   const pal = activeTitleIntroPalette({ kind: "lounge" }) || [];
-  let s = seed >>> 0;
-  const w = 57;
-  const h = 37;
   const cell = Math.max(1, scale | 0);
-  for (let py = 0; py < h; py += 1) {
-    for (let px = 0; px < w; px += 1) {
-      s = ((s * 1103515245) + 12345) >>> 0;
-      const idx = ((s >>> 16) & 1) ? 0x3e : 0x00;
-      const rgb = pal[idx] || (idx ? [230, 209, 160] : [0, 0, 0]);
-      g.fillStyle = `rgb(${rgb[0] | 0}, ${rgb[1] | 0}, ${rgb[2] | 0})`;
-      g.fillRect(Math.round((x + px) * scale), Math.round((y + py) * scale), cell, cell);
-    }
+  for (const staticCell of bootIntroTvStaticCellsRuntime(seed)) {
+    const idx = staticCell.colorIndex;
+    const rgb = pal[idx] || (idx ? [230, 209, 160] : [0, 0, 0]);
+    g.fillStyle = `rgb(${rgb[0] | 0}, ${rgb[1] | 0}, ${rgb[2] | 0})`;
+    g.fillRect(Math.round((x + staticCell.px) * scale), Math.round((y + staticCell.py) * scale), cell, cell);
   }
 }
 
@@ -3011,30 +3008,13 @@ function bootIntroPrintTextOnCard(g, cardX, cardY, text, startX, width, x, y, sc
 }
 
 function bootIntroClockFrames(now = new Date()) {
-  let hour = now.getHours();
-  const minute = now.getMinutes();
-  if (hour > 12) {
-    hour -= 12;
-  }
-  const h1 = hour < 10 ? 12 : 3;
-  if (hour >= 10) {
-    hour -= 10;
-  }
-  return [
-    h1,
-    hour + 2,
-    Math.floor(minute / 10) + 2,
-    (minute % 10) + 2
-  ];
+  return bootIntroClockFramesRuntime(now);
 }
 
 function drawBootIntroClock(g, scene, scale, scrollPx) {
-  const frames = bootIntroClockFrames();
-  const xOff = Math.floor(Number(scrollPx) || 0);
-  drawBootIntroSprite(g, "intro1", frames[0], 0xdd - xOff, 0x14, scale, scene);
-  drawBootIntroSprite(g, "intro1", frames[1], 0xe1 - xOff, 0x14, scale, scene);
-  drawBootIntroSprite(g, "intro1", frames[2], 0xe7 - xOff, 0x14, scale, scene);
-  drawBootIntroSprite(g, "intro1", frames[3], 0xeb - xOff, 0x14, scale, scene);
+  for (const sprite of bootIntroClockSpritesRuntime(new Date(), scrollPx)) {
+    drawBootIntroSprite(g, "intro1", sprite.frame, sprite.x, sprite.y, scale, scene);
+  }
 }
 
 function bootIntroWindowSceneBase(sceneId) {

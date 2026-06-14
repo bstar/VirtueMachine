@@ -16,7 +16,10 @@ import {
   bootIntroTvStateAtRuntime,
   bootIntroPrintTextOnCardRuntime,
   bootIntroPrintTextRuntime,
+  bootIntroClockFramesRuntime,
+  bootIntroClockSpritesRuntime,
   bootIntroWouCharWidthRuntime,
+  bootIntroTvStaticCellsRuntime,
   createBootIntroTvMachineRuntime,
   decodeBootIntroWouFontRuntime,
   drawBootIntroWouTextRuntime,
@@ -292,6 +295,30 @@ function testTextDrawingHelpers() {
   ]);
 }
 
+function testTvStaticAndClockPlanning() {
+  assert.deepEqual(bootIntroTvStaticCellsRuntime(0x12345678, 3, 2), [
+    { colorIndex: 0x3e, px: 0, py: 0 },
+    { colorIndex: 0x00, px: 1, py: 0 },
+    { colorIndex: 0x3e, px: 2, py: 0 },
+    { colorIndex: 0x3e, px: 0, py: 1 },
+    { colorIndex: 0x3e, px: 1, py: 1 },
+    { colorIndex: 0x00, px: 2, py: 1 }
+  ]);
+  assert.deepEqual(bootIntroTvStaticCellsRuntime(1, 0, 4), []);
+
+  const morning = new Date("2026-06-14T09:05:00");
+  assert.deepEqual(bootIntroClockFramesRuntime(morning), [12, 11, 2, 7]);
+
+  const evening = new Date("2026-06-14T23:59:00");
+  assert.deepEqual(bootIntroClockFramesRuntime(evening), [3, 3, 7, 11]);
+  assert.deepEqual(bootIntroClockSpritesRuntime(evening, 4), [
+    { frame: 3, x: 0xd9, y: 0x14 },
+    { frame: 3, x: 0xdd, y: 0x14 },
+    { frame: 7, x: 0xe3, y: 0x14 },
+    { frame: 11, x: 0xe7, y: 0x14 }
+  ]);
+}
+
 function testWindowHelpers() {
   const randCtx = { seed: 0x51f15eED };
   const rand = bootIntroWindowRandRuntime(randCtx, -5, 5);
@@ -341,6 +368,7 @@ testZeroFadeSceneHasNoOverlay();
 testTvMachine();
 testWouFontHelpers();
 testTextDrawingHelpers();
+testTvStaticAndClockPlanning();
 testWindowHelpers();
 testTextWrapHelpers();
 
