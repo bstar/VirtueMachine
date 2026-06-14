@@ -70,13 +70,13 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 - Risk: status text/indicator update ordering may drift if future slices bypass `setNetStatus`.
 - Exit criteria: centralize all status writes through one path and add UI integration coverage for login/logout/error transitions.
 
-### 8) Transitional `app.ts` typing looseness to re-enable global typecheck
+### 8) Transitional `app.ts` orchestration typing
 
 - Status: `temporary`
 - Location: `modern/client-web/app.ts`
-- Note: to bring `app.ts` back into `tsconfig` checks, this slice introduced broad typing guards (`state: any`, generic `byId<T=any>()`, and permissive class field declarations for legacy runtime containers).
-- Risk: weakened compile-time guarantees inside orchestration-heavy code can hide shape regressions while refactor slices continue.
-- Exit criteria: replace broad `any` usage with shared interfaces (`AppState`, `UiProbe`, map/tile/object/entity layer contracts), then tighten helper return types and remove fallback casts.
+- Note: `app.ts` now has an explicit local `AppState` contract and is covered by `tsconfig.client-app-shell.strict.json`, but it still owns too many render, input, net, and asset-loading orchestration paths.
+- Risk: compile-time shape drift is guarded, but hidden ordering/coupling regressions can still occur while behavior remains concentrated in the shell.
+- Exit criteria: move remaining pure logic into typed runtime modules, keep `app.ts` as composition/bootstrap, and retain strict app-shell coverage in `npm run typecheck`.
 
 ### 9) Party roster authority fallback remains client-local
 

@@ -89,6 +89,7 @@ import {
   showLegacyLedgerPrompt as showLegacyLedgerPromptImported,
   startLegacyConversationPagination as startLegacyConversationPaginationImported,
   submitLegacyConversationInput as submitLegacyConversationInputImported,
+  type DebugChatLedgerEntry,
   type LegacyConversationState,
   wrapLegacyLedgerLines as wrapLegacyLedgerLinesImported
 } from "./conversation/session_runtime.ts";
@@ -443,6 +444,10 @@ const HASH_OFFSET = 1469598103934665603n;
 const HASH_PRIME = 1099511628211n;
 const HASH_MASK = (1n << 64n) - 1n;
 const HASH_CFG = { offset: HASH_OFFSET, prime: HASH_PRIME, mask: HASH_MASK };
+const FALLBACK_RENDER_PALETTE: RgbPaletteRuntime = Array.from(
+  { length: 256 },
+  (_unused, idx) => fallbackTileColorRuntime(idx)
+);
 const WORLD_OBJECT_LOOKUP_DEPS = {
   isObjectRemoved: isObjectRemovedRuntime,
   isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
@@ -661,13 +666,176 @@ type LegacyCompositionStateView = {
   sessionStarted: boolean;
   tileSet: U6TileSetRuntime | null;
 };
+type AppLoopHealthState = {
+  backlogDrops: number;
+  frameErrors: number;
+  lastDtMs: number;
+  maxDtMs: number;
+  visibilityResets: number;
+};
+type AppNetState = {
+  apiBase: string;
+  backgroundFailCount: number;
+  backgroundSyncPaused: boolean;
+  characterId: string;
+  characterName: string;
+  clockPollInFlight: boolean;
+  email: string;
+  emailVerified: boolean;
+  firstBackgroundFailAtMs: number;
+  introPhase: string;
+  lastClockPollTick: number;
+  lastMaintenanceTick: number;
+  lastPresenceHeartbeatTick: number;
+  lastPresencePollTick: number;
+  lastSavedTick: number;
+  maintenanceAuto: boolean;
+  maintenanceInFlight: boolean;
+  presencePollInFlight: boolean;
+  recoveryEventCount: number;
+  remotePlayers: RemotePresencePlayer[];
+  resumeFromSnapshot: boolean;
+  sessionId: string;
+  statusLevel: string;
+  statusText: string;
+  token: string;
+  userId: string;
+  username: string;
+};
+type AppState = {
+  accMs: number;
+  animData: U6AnimDataRuntime | null;
+  animationFrozen: boolean;
+  audio: U6AudioRuntime;
+  audioAmbientLastSfx: string;
+  audioAmbientLastTickBySfx: Record<string, number>;
+  audioAmbientTriggerCount: number;
+  avatarFacingDx: number;
+  avatarFacingDy: number;
+  avatarFrameSeed: number;
+  avatarLastMoveTick: number;
+  avatarPortraitCanvas: HTMLCanvasElement | null;
+  avatarWalkAnimUntilMs: number;
+  basePalette: RgbPaletteRuntime | null;
+  bootIntro: BootIntroRuntimeState;
+  bootIntroBanks: Partial<Record<BootIntroBankName, Array<IndexedPixmapRuntime | null>>> | null;
+  bootIntroBlocks: Array<IndexedPixmapRuntime | null> | null;
+  bootIntroCanvasCache: Map<string, HTMLCanvasElement | null>;
+  bootIntroFont: BootIntroWouFontRuntime | null;
+  bootIntroPalettes: RgbPaletteRuntime[] | null;
+  centerAnimatedTile: number;
+  centerPaletteBand: string;
+  centerRawTile: number;
+  commandLog: SimCommandRuntime[];
+  converseArchiveA: Uint8Array | null;
+  converseArchiveB: Uint8Array | null;
+  converseArchiveDiag: string;
+  cornerVariantCache: Map<string, number>;
+  cursorIndex: number;
+  cursorPixmaps: U6ShapeRuntime[] | null;
+  debugChatLedger: DebugChatLedgerEntry[];
+  debugPanelTab: "runtime" | "chat";
+  enablePaletteFx: boolean;
+  entityLayer: U6EntityLayerRuntime | null;
+  entityOverlayCount: number;
+  frozenAnimationTick: number | null;
+  interactionProbeTile: number | null;
+  lastMoveInputDx: number;
+  lastMoveInputDy: number;
+  lastMoveQueueAtMs: number;
+  lastTs: number;
+  legacyBackdropBaseCanvas: HTMLCanvasElement | null;
+  legacyCombatModeLabel: string;
+  legacyComposeCanvas: HTMLCanvasElement | null;
+  legacyConversationActive: boolean;
+  legacyConversationActorEntityId: number;
+  legacyConversationAuthoritative: boolean;
+  legacyConversationDescText: string;
+  legacyConversationEquipmentSlots: ReturnType<typeof projectLegacyEquipmentSlotsRuntime>;
+  legacyConversationInput: string;
+  legacyConversationInputOpcode: number;
+  legacyConversationKnownNames: Record<string, string>;
+  legacyConversationNpcKey: string;
+  legacyConversationPages: string[][];
+  legacyConversationPaging: boolean;
+  legacyConversationPc: number;
+  legacyConversationPendingPrompt: string;
+  legacyConversationPortraitTile: number | null;
+  legacyConversationPrevStatus: number;
+  legacyConversationRules: ConversationRule[];
+  legacyConversationScript: Uint8Array | null;
+  legacyConversationSessionId: string;
+  legacyConversationShowInventory: boolean;
+  legacyConversationTargetName: string;
+  legacyConversationTargetObjNum: number;
+  legacyConversationTargetObjType: number;
+  legacyConversationVmContext: ConversationVmContextRuntime | null;
+  legacyHudLayerHidden: boolean;
+  legacyHudSelection: LegacyHudPanelHitRuntime | null;
+  legacyLedgerLines: string[];
+  legacyLedgerPrompt: boolean;
+  legacyPaperPixmap: IndexedPixmapRuntime | null;
+  legacyPromptAnimMs: number;
+  legacyPromptAnimPhase: number;
+  legacyScaleMode: string;
+  legacyStatusDisplay: number;
+  lookStringEntries: LegacyLookStringEntryRuntime[] | null;
+  loopHealth: AppLoopHealthState;
+  mapCtx: U6MapRuntime | null;
+  mouseInCanvas: boolean;
+  mouseNormX: number;
+  mouseNormY: number;
+  movementMode: string;
+  musicPhase: string;
+  musicSong: string;
+  net: AppNetState;
+  npcOcclusionBlockedMoves: number;
+  objectLayer: U6ObjectLayerRuntime | null;
+  objectOverlayCount: number;
+  palette: RgbPaletteRuntime | null;
+  paletteFrame: RgbPaletteRuntime | null;
+  paletteFrameTick: number;
+  partyMembers: number[];
+  partyNameById: Record<string, string>;
+  portraitArchiveA: Uint8Array | null;
+  portraitArchiveB: Uint8Array | null;
+  portraitCanvasCache: Map<string, HTMLCanvasElement>;
+  pristineBaselineLastPollTick: number;
+  pristineBaselinePollInFlight: boolean;
+  pristineBaselineVersion: string;
+  queue: SimCommandRuntime[];
+  renderParityMismatches: number;
+  replayUrl: string | null;
+  runtimeExtensions: ReturnType<typeof createDefaultRuntimeExtensions>;
+  runtimeProfile: string;
+  runtimeReady: boolean;
+  sessionStarted: boolean;
+  showGrid: boolean;
+  showOverlayDebug: boolean;
+  sim: AppSimState;
+  simPaused: boolean;
+  startupCanvasCache: Map<string, HTMLCanvasElement | null>;
+  startupMenuIndex: number;
+  startupMenuPixmap: IndexedPixmapRuntime | null;
+  startupTitlePixmaps: [IndexedPixmapRuntime | null, IndexedPixmapRuntime | null] | null;
+  targetVerb: string;
+  terrainType: Uint8Array | null;
+  tileFlags: Uint8Array | null;
+  tileFlags2: Uint8Array | null;
+  tileSet: U6TileSetRuntime | null;
+  u6MainFont: Uint8Array | null;
+  uiProbeMode: string;
+  useCursorActive: boolean;
+  useCursorX: number;
+  useCursorY: number;
+};
 
 function byId<T = HTMLElement>(id: string): T {
   return document.getElementById(id) as unknown as T;
 }
 
 const canvas = byId<HTMLCanvasElement>("viewport");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 const legacyBackdropCanvas = byId<HTMLCanvasElement>("legacyBackdrop");
 const legacyViewportCanvas = byId<HTMLCanvasElement>("legacyViewport");
 const legacyWorldSurface = byId<HTMLCanvasElement>("legacyWorldSurface");
@@ -935,7 +1103,7 @@ const INITIAL_WORLD = Object.freeze({
 
 const INITIAL_SEED = 0x12345678;
 
-const state = {
+const state: AppState = {
   sim: createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED),
   audio: createU6AudioRuntime(),
   musicPhase: "",
@@ -5614,8 +5782,10 @@ type AmbientSfxCandidate = {
 };
 
 function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
+  const arg0 = Number(cmd.arg0) | 0;
+  const arg1 = Number(cmd.arg1) | 0;
   if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
-    const moveResult = applyAvatarMoveCommandRuntime(sim, cmd.arg0, cmd.arg1, {
+    const moveResult = applyAvatarMoveCommandRuntime(sim, arg0, arg1, {
       isBlockedAt: (x, y, z) => isBlockedAt(sim, x, y, z),
       movementMode: state.movementMode
     });
@@ -5641,12 +5811,12 @@ function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_FACING) {
     if (state.movementMode === "avatar") {
-      tryInteractFacing(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryInteractFacing(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_AT_CELL) {
     if (state.movementMode === "avatar") {
-      const tx = cmd.arg0 | 0;
-      const ty = cmd.arg1 | 0;
+      const tx = arg0;
+      const ty = arg1;
       const dx = Math.sign(tx - (sim.world.map_x | 0));
       const dy = Math.sign(ty - (sim.world.map_y | 0));
       if (dx !== 0 || dy !== 0) {
@@ -5657,35 +5827,35 @@ function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.LOOK_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryLookAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryLookAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.TALK_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryTalkAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryTalkAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.GET_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryGetAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryGetAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.ATTACK_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryAttackAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryAttackAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.CAST_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryCastAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryCastAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.DROP_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryDropAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryDropAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryMoveVerbAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryMoveVerbAtCell(sim, arg0, arg1);
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_VERB_AT_CELL) {
     if (state.movementMode === "avatar") {
-      tryInteractAtCell(sim, cmd.arg0 | 0, cmd.arg1 | 0);
+      tryInteractAtCell(sim, arg0, arg1);
     }
   }
   sim.commandsApplied += 1;
@@ -6051,7 +6221,9 @@ function isTileBackground(tileId: number): boolean {
 }
 
 function buildLegacyViewContext(startX: number, startY: number, wz: number): LegacyViewContextRuntime | null {
-  if (!state.mapCtx) {
+  const mapCtx = state.mapCtx;
+  const objectLayer = state.objectLayer;
+  if (!mapCtx) {
     return null;
   }
   return buildLegacyViewContextRuntime({
@@ -6059,8 +6231,8 @@ function buildLegacyViewContext(startX: number, startY: number, wz: number): Leg
     dateM: state.sim.world.date_m,
     hasWallTerrain,
     isBackgroundObjectTile: isTileBackground,
-    mapTileAt: (wx, wy, z) => state.mapCtx.tileAt(wx, wy, z),
-    objectsAt: state.objectLayer ? (wx, wy, z) => state.objectLayer.objectsAt(wx, wy, z) : null,
+    mapTileAt: (wx, wy, z) => mapCtx.tileAt(wx, wy, z),
+    objectsAt: objectLayer ? (wx, wy, z) => objectLayer.objectsAt(wx, wy, z) : null,
     resolveAnimatedObjectTile,
     startX,
     startY,
@@ -6080,11 +6252,12 @@ function applyLegacyCornerVariant(
   wz: number,
   viewCtx: LegacyViewContextRuntime | null
 ): number {
-  if (!state.mapCtx) {
+  const mapCtx = state.mapCtx;
+  if (!mapCtx) {
     return tileId & 0xffff;
   }
   return applyLegacyCornerVariantRuntime(tileId, wx, wy, wz, {
-    mapTileAt: (tx, ty, tz) => state.mapCtx.tileAt(tx, ty, tz),
+    mapTileAt: (tx, ty, tz) => mapCtx.tileAt(tx, ty, tz),
     terrainOf,
     viewCtx
   });
@@ -6109,11 +6282,12 @@ function stableCornerVariant(
   wz: number,
   viewCtx: LegacyViewContextRuntime | null
 ): number {
-  if (!state.mapCtx) {
+  const mapCtx = state.mapCtx;
+  if (!mapCtx) {
     return rawTile & 0xffff;
   }
   return stableCornerVariantRuntime(rawTile, wx, wy, wz, {
-    mapTileAt: (tx, ty, tz) => state.mapCtx.tileAt(tx, ty, tz),
+    mapTileAt: (tx, ty, tz) => mapCtx.tileAt(tx, ty, tz),
     terrainOf,
     viewCtx
   });
@@ -6125,14 +6299,16 @@ function buildBaseTileBuffersCurrent(
   wz: number,
   viewCtx: LegacyViewContextRuntime | null
 ): ReturnType<typeof buildBaseTileBuffersRuntime> {
+  const mapCtx = state.mapCtx;
+  const objectLayer = state.objectLayer;
   return buildBaseTileBuffersRuntime({
     isBackgroundObjectTile: isTileBackground,
-    mapTileAt: state.mapCtx ? (wx, wy, z) => state.mapCtx.tileAt(wx, wy, z) : null,
-    objectsAt: state.objectLayer ? (wx, wy, z) => state.objectLayer.objectsAt(wx, wy, z) : null,
-    objectsInWindowLegacyOrder: state.objectLayer && typeof state.objectLayer.objectsInWindowLegacyOrder === "function"
-      ? (wx, wy, w, h, z) => state.objectLayer.objectsInWindowLegacyOrder(wx, wy, w, h, z)
+    mapTileAt: mapCtx ? (wx, wy, z) => mapCtx.tileAt(wx, wy, z) : null,
+    objectsAt: objectLayer ? (wx, wy, z) => objectLayer.objectsAt(wx, wy, z) : null,
+    objectsInWindowLegacyOrder: objectLayer && typeof objectLayer.objectsInWindowLegacyOrder === "function"
+      ? (wx, wy, w, h, z) => objectLayer.objectsInWindowLegacyOrder(wx, wy, w, h, z)
       : null,
-    processBackgroundObjects: Boolean(state.objectLayer && state.tileFlags2),
+    processBackgroundObjects: Boolean(objectLayer && state.tileFlags2),
     resolveAnimatedObjectTile,
     resolveDoorTileId: (o) => resolveDoorTileIdRuntime(state.sim, o),
     startX,
@@ -6386,14 +6562,14 @@ function tileColor(t: number, palette: RgbPaletteRuntime | null | undefined): st
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
-function paletteForTile(tileId: number): RgbPaletteRuntime | null {
+function paletteForTile(tileId: number): RgbPaletteRuntime {
   if (!state.basePalette) {
-    return null;
+    return FALLBACK_RENDER_PALETTE;
   }
   if (!state.enablePaletteFx || !state.tileSet || !state.tileSet.tileUsesLegacyPaletteFx(tileId)) {
     return state.basePalette;
   }
-  return getRenderPalette();
+  return getRenderPalette() ?? state.basePalette;
 }
 
 function paletteKeyForTile(tileId: number): string {
@@ -6578,8 +6754,8 @@ function drawTileGrid(): void {
   const { rawTiles: baseRawTiles, displayTiles: baseDisplayTiles } = buildBaseTileBuffers(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayBuild = buildOverlayCells(startX, startY, state.sim.world.map_z, viewCtx);
   const overlayCells = overlayBuild.overlayCells;
-  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
-  const shouldDrawOverlayEntry = (gx, gy, entry) => {
+  const cellIndex = (gx: number, gy: number): number => (gy * VIEW_W) + gx;
+  const shouldDrawOverlayEntry = (gx: number, gy: number, entry: RenderOverlayCell | null): boolean => {
     if (!viewCtx) {
       return true;
     }
@@ -6593,10 +6769,17 @@ function drawTileGrid(): void {
     }
     return viewCtx.visibleAtWorld(entry.sourceX | 0, entry.sourceY | 0);
   };
-  const drawOverlayEntry = (entry, px, py) => {
+  const drawOverlayEntry = (entry: RenderOverlayCell, px: number, py: number): void => {
+    const tileSet = state.tileSet;
+    if (!tileSet) {
+      return;
+    }
     const op = paletteForTile(entry.tileId);
     const ok = paletteKeyForTile(entry.tileId);
-    const oc = state.tileSet.tileCanvas(entry.tileId, op, ok);
+    const oc = tileSet.tileCanvas(entry.tileId, op, ok);
+    if (!oc) {
+      return;
+    }
     ctx.drawImage(oc, px, py, TILE_SIZE, TILE_SIZE);
     if (state.showOverlayDebug && entry.dbg) {
       ctx.fillStyle = "rgba(7, 12, 16, 0.72)";
@@ -6606,8 +6789,12 @@ function drawTileGrid(): void {
       ctx.fillText(entry.dbg, px + 5, py + 13);
     }
   };
-  const drawEntityTile = (tileId, gx, gy) => {
+  const drawEntityTile = (tileId: number, gx: number, gy: number): void => {
     if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
+      return;
+    }
+    const tileSet = state.tileSet;
+    if (!tileSet) {
       return;
     }
     const wx = startX + gx;
@@ -6619,7 +6806,10 @@ function drawTileGrid(): void {
     const py = gy * TILE_SIZE;
     const ep = paletteForTile(tileId);
     const ek = paletteKeyForTile(tileId);
-    const ec = state.tileSet.tileCanvas(tileId, ep, ek);
+    const ec = tileSet.tileCanvas(tileId, ep, ek);
+    if (!ec) {
+      return;
+    }
     ctx.drawImage(ec, px, py, TILE_SIZE, TILE_SIZE);
   };
 
@@ -6654,14 +6844,20 @@ function drawTileGrid(): void {
             centerPaletteBand = "static";
           }
         }
-        const basePal = state.basePalette;
+        const basePal = state.basePalette ?? FALLBACK_RENDER_PALETTE;
         const baseKey = "pal-static";
         const baseTileCanvas = state.tileSet.tileCanvas(animRawTile, basePal, baseKey);
+        if (!baseTileCanvas) {
+          continue;
+        }
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(baseTileCanvas, px, py, TILE_SIZE, TILE_SIZE);
-        const topPal = state.basePalette;
+        const topPal = state.basePalette ?? FALLBACK_RENDER_PALETTE;
         const topKey = "pal-static";
         const tc = state.tileSet.tileCanvas(animTile, topPal, topKey);
+        if (!tc) {
+          continue;
+        }
         ctx.drawImage(tc, px, py, TILE_SIZE, TILE_SIZE);
       } else {
         ctx.fillStyle = tileColor(t, renderPalette);
@@ -7147,7 +7343,7 @@ function tickLoop(ts: number): void {
           state.tileFlags,
           state.terrainType,
           state.objectLayer,
-          viewCtx ? (x, y) => viewCtx.visibleAtWorld(x, y) : null
+          viewCtx ? (x: number, y: number) => viewCtx.visibleAtWorld(x, y) : null
         );
         state.npcOcclusionBlockedMoves += blocked;
       }
@@ -8663,7 +8859,7 @@ async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}): P
             for (let i = 0; i < out.objects.length; i += 1) {
               const o = out.objects[i];
               const fp = Array.isArray(o.footprint)
-                ? o.footprint.map((c) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
+                ? o.footprint.map((c: { x?: unknown; y?: unknown; z?: unknown }) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
                 : "";
               rows.push(
                 `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} hk=${String(o.holder_kind || "none")} hid=${String(o.holder_id || "")} hkey=${String(o.holder_key || "")} root=${String(o.root_anchor_key || "")} blocked=${String(o.blocked_by || "")} chain=${Array.isArray(o.assoc_chain) ? o.assoc_chain.join(">") : ""} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} lord=${Number(o.legacy_order || 0) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
