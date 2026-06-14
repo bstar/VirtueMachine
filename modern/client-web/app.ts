@@ -288,6 +288,7 @@ import {
   inventoryKeyForObjectRuntime,
   isObjectRemovedRuntime,
   markObjectRemovedRuntime,
+  resolveObjectByInventoryAnchorRuntime,
   type InventoryObjectRuntime
 } from "./sim/inventory_runtime.ts";
 import {
@@ -5095,36 +5096,15 @@ function tryMoveVerbAtCell(sim: AppSimState, tx: number, ty: number): boolean {
 
 function findObjectByAnchor(anchor: InventoryObjectRuntime | null | undefined): U6ObjectEntryRuntime | null {
   const interactionState = state as unknown as GameplayInteractionStateView;
-  if (!anchor || !interactionState.objectLayer) {
+  if (!interactionState.objectLayer) {
     return null;
   }
-  const overlays = interactionState.objectLayer.objectsAt(Number(anchor.x) | 0, Number(anchor.y) | 0, Number(anchor.z) | 0);
-  let typeMatch: U6ObjectEntryRuntime | null = null;
-  const anchorOrder = Number(anchor.order) | 0;
-  const anchorType = Number(anchor.type) | 0;
-  for (const o of overlays) {
-    if ((o.order | 0) === anchorOrder && (o.type | 0) === anchorType) {
-      return o;
-    }
-    if (!typeMatch && (o.type | 0) === anchorType) {
-      typeMatch = o;
-    }
-  }
-  /*
-    Canonical object order can drift after assoc/overlay normalization. Keep anchor
-    resolution stable by falling back to same-cell/same-type when order no longer matches.
-  */
-  if (typeMatch) {
-    return typeMatch;
-  }
-  if (isChairObjectRuntime(anchor) || isBedObjectRuntime(anchor)) {
-    for (const o of overlays) {
-      if (isChairObjectRuntime(o) || isBedObjectRuntime(o)) {
-        return o;
-      }
-    }
-  }
-  return null;
+  return resolveObjectByInventoryAnchorRuntime({
+    anchor,
+    objectsAt: (x, y, z) => interactionState.objectLayer?.objectsAt(x, y, z) ?? [],
+    isBedObject: isBedObjectRuntime,
+    isChairObject: isChairObjectRuntime
+  });
 }
 
 function objectFootprintTiles(sim: AppSimState, o: ObjectFootprintSourceRuntime, ox: number, oy: number) {

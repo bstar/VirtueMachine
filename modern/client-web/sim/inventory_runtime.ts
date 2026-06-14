@@ -47,7 +47,7 @@ export function markObjectRemovedRuntime(
   if (!sim.removedObjectKeys[key]) {
     sim.removedObjectKeys[key] = 1;
     sim.removedObjectAtTick[key] = Number(sim.tick) >>> 0;
-    sim.removedObjectCount = (Number(sim.removedObjectCount) + 1) >>> 0;
+    sim.removedObjectCount = ((Number(sim.removedObjectCount) || 0) + 1) >>> 0;
   }
 }
 
@@ -65,6 +65,53 @@ export function addObjectToInventoryRuntime(sim: SimInventoryRuntimeState, obj: 
   const prev = Number(sim.inventory[key]) >>> 0;
   sim.inventory[key] = (prev + 1) >>> 0;
   return key;
+}
+
+export function resolveObjectByInventoryAnchorRuntime<TObject extends InventoryObjectRuntime>(args: {
+  anchor: InventoryObjectRuntime | null | undefined;
+  objectsAt: (x: number, y: number, z: number) => readonly TObject[];
+  isBedObject?: (obj: InventoryObjectRuntime | null | undefined) => boolean;
+  isChairObject?: (obj: InventoryObjectRuntime | null | undefined) => boolean;
+}): TObject | null {
+  const anchor = args.anchor;
+  if (!anchor) {
+    return null;
+  }
+  const overlays = args.objectsAt(
+    Number(anchor.x) | 0,
+    Number(anchor.y) | 0,
+    Number(anchor.z) | 0
+  );
+  let typeMatch: TObject | null = null;
+  const anchorOrder = Number(anchor.order) | 0;
+  const anchorType = Number(anchor.type) | 0;
+  for (const obj of overlays) {
+    if ((Number(obj.order) | 0) === anchorOrder && (Number(obj.type) | 0) === anchorType) {
+      return obj;
+    }
+    if (!typeMatch && (Number(obj.type) | 0) === anchorType) {
+      typeMatch = obj;
+    }
+  }
+  /*
+    Canonical object order can drift after assoc/overlay normalization. Keep anchor
+    resolution stable by falling back to same-cell/same-type when order no longer matches.
+  */
+  if (typeMatch) {
+    return typeMatch;
+  }
+  const anchorIsFurniture = !!(
+    args.isChairObject?.(anchor) ||
+    args.isBedObject?.(anchor)
+  );
+  if (anchorIsFurniture) {
+    for (const obj of overlays) {
+      if (args.isChairObject?.(obj) || args.isBedObject?.(obj)) {
+        return obj;
+      }
+    }
+  }
+  return null;
 }
 
 export function firstInventoryKeyRuntime(sim: SimInventoryRuntimeState | null | undefined): string {

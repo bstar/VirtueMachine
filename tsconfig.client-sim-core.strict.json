@@ -19,6 +19,7 @@
   },
   "include": [
     "modern/client-web/sim/command_wire_runtime.ts",
+    "modern/client-web/sim/inventory_runtime.ts",
     "modern/client-web/sim/legacy_command_runtime.ts",
     "modern/client-web/sim/queue_runtime.ts",
     "modern/client-web/sim/range_runtime.ts",
