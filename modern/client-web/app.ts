@@ -6,6 +6,10 @@ import {
 } from "./render_composition.ts";
 import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
+import {
+  decodeLegacyPixmapRuntime,
+  decodeLookLzdEntriesRuntime
+} from "./assets/legacy_pixmap_runtime.ts";
 import { errorMessageRuntime } from "./error_runtime.ts";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
@@ -1758,54 +1762,6 @@ function decompressU6Lzw(bytes) {
   }
 
   return out;
-}
-
-function decodeLegacyPixmap(bytes) {
-  if (!bytes || bytes.length < 4) {
-    return null;
-  }
-  const decoded = decompressU6Lzw(bytes);
-  if (!decoded || decoded.length < 4) {
-    return null;
-  }
-  const w = decoded[0] | (decoded[1] << 8);
-  const h = decoded[2] | (decoded[3] << 8);
-  const size = w * h;
-  if (w <= 0 || h <= 0 || decoded.length < (4 + size)) {
-    return null;
-  }
-  return {
-    width: w,
-    height: h,
-    pixels: decoded.slice(4, 4 + size)
-  };
-}
-
-function decodeLookLzdEntries(bytes) {
-  const decoded = decompressU6Lzw(bytes);
-  if (!decoded || decoded.length < 3) {
-    return [];
-  }
-  const entries = [];
-  let p = 0;
-  const td = new TextDecoder("latin1");
-  while ((p + 2) <= decoded.length) {
-    const tileId = (decoded[p] | (decoded[p + 1] << 8)) & 0xffff;
-    p += 2;
-    let e = p;
-    while (e < decoded.length && decoded[e] !== 0) {
-      e += 1;
-    }
-    const raw = td.decode(decoded.slice(p, e)).trim();
-    if (raw) {
-      entries.push({ tileId, text: raw });
-    }
-    if (e >= decoded.length) {
-      break;
-    }
-    p = e + 1;
-  }
-  return entries;
 }
 
 function legacyLookupTileString(tileId) {
@@ -9748,7 +9704,7 @@ async function loadRuntimeAssets() {
       state.palette = null;
     }
     if (paperRes.ok && paperBuf.byteLength >= 4) {
-      state.legacyPaperPixmap = decodeLegacyPixmap(new Uint8Array(paperBuf));
+      state.legacyPaperPixmap = decodeLegacyPixmapRuntime(new Uint8Array(paperBuf), decompressU6Lzw);
     } else {
       state.legacyPaperPixmap = null;
     }
@@ -9830,7 +9786,7 @@ async function loadRuntimeAssets() {
       state.cursorPixmaps = null;
     }
     if (lookRes.ok && lookBuf.byteLength > 4) {
-      state.lookStringEntries = decodeLookLzdEntries(new Uint8Array(lookBuf));
+      state.lookStringEntries = decodeLookLzdEntriesRuntime(new Uint8Array(lookBuf), decompressU6Lzw);
     } else {
       state.lookStringEntries = null;
     }
