@@ -115,6 +115,7 @@ import {
   performNetVerifyEmail
 } from "./net/account_runtime.ts";
 import {
+  applyAuthoritativeNpcStatesRuntime,
   applyAuthoritativeWorldClockToSim,
   performPresenceHeartbeat,
   performPresenceLeave,
@@ -4158,43 +4159,7 @@ function applyAuthoritativeNpcStates(rows) {
   if (!state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
     return;
   }
-  const nowMs = performance.now();
-  const authoritativeRows = Array.isArray(rows) ? rows : [];
-  const byId = new Map(authoritativeRows.map((row) => [Number(row?.npc_id) | 0, row]));
-  for (const e of state.entityLayer.entries) {
-    const row = byId.get(Number(e.id) | 0);
-    if (!row) {
-      continue;
-    }
-    const nextX = Number(row.x) | 0;
-    const nextY = Number(row.y) | 0;
-    const nextZ = Number(row.z) | 0;
-    const hadAuthoritativePosition = Number.isFinite(e.authoritativeLastX)
-      && Number.isFinite(e.authoritativeLastY)
-      && Number.isFinite(e.authoritativeLastZ);
-    const moved = hadAuthoritativePosition
-      && ((e.authoritativeLastX | 0) !== nextX || (e.authoritativeLastY | 0) !== nextY || (e.authoritativeLastZ | 0) !== nextZ);
-    e.x = nextX;
-    e.y = nextY;
-    e.z = nextZ;
-    e.homeX = e.x;
-    e.homeY = e.y;
-    e.authoritative = true;
-    e.authoritativeLastX = nextX;
-    e.authoritativeLastY = nextY;
-    e.authoritativeLastZ = nextZ;
-    e.authoritativeUpdatedAtMs = nowMs;
-    if (moved || !Number.isFinite(e.authoritativeMovedAtMs)) {
-      e.authoritativeMovedAtMs = nowMs;
-    }
-    e.movable = false;
-    e.authoritativeAction = Number(row.action) & 0xff;
-    e.authoritativeMode = Number(row.mode ?? row.action) & 0xff;
-    e.authoritativeDirection = Number(row.direction ?? 4) & 0x07;
-    e.authoritativePose = String(row.pose || "").trim().toLowerCase();
-    e.authoritativePathStatus = String(row.path_status || "").trim().toLowerCase();
-    e.authoritativeScheduleIndex = Number(row.schedule_index) | 0;
-  }
+  applyAuthoritativeNpcStatesRuntime(state.entityLayer.entries, rows, performance.now());
 }
 
 function applyAuthoritativeNpcOverrides(overrides) {

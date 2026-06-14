@@ -20,6 +20,42 @@ export interface WorldClockPayload {
   [key: string]: unknown;
 }
 
+export interface AuthoritativeNpcStateRow {
+  action?: unknown;
+  direction?: unknown;
+  mode?: unknown;
+  npc_id?: unknown;
+  path_status?: unknown;
+  pose?: unknown;
+  schedule_index?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+  [key: string]: unknown;
+}
+
+export interface AuthoritativeNpcEntityRuntime {
+  authoritative?: boolean;
+  authoritativeAction?: number;
+  authoritativeDirection?: number;
+  authoritativeLastX?: number;
+  authoritativeLastY?: number;
+  authoritativeLastZ?: number;
+  authoritativeMode?: number;
+  authoritativeMovedAtMs?: number;
+  authoritativePathStatus?: string;
+  authoritativePose?: string;
+  authoritativeScheduleIndex?: number;
+  authoritativeUpdatedAtMs?: number;
+  homeX?: number;
+  homeY?: number;
+  id?: unknown;
+  movable?: boolean;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
 export type PresenceCommonDeps = {
   isAuthenticated: () => boolean;
   request: (route: string, init?: RequestInit, auth?: boolean) => Promise<PresenceRuntimeJson | null>;
@@ -136,6 +172,57 @@ export function applyAuthoritativeWorldClockToSim(
     date_m: Number(clock.date_m) >>> 0,
     date_y: Number(clock.date_y) >>> 0
   });
+}
+
+export function applyAuthoritativeNpcStatesRuntime(
+  entries: Iterable<AuthoritativeNpcEntityRuntime> | null | undefined,
+  rows: unknown,
+  nowMs: number
+): number {
+  if (!entries) {
+    return 0;
+  }
+  const authoritativeRows = Array.isArray(rows) ? rows as AuthoritativeNpcStateRow[] : [];
+  const byId = new Map(authoritativeRows.map((row) => [Number(row?.npc_id) | 0, row]));
+  let applied = 0;
+  for (const entity of entries) {
+    const row = byId.get(Number(entity.id) | 0);
+    if (!row) {
+      continue;
+    }
+    const nextX = Number(row.x) | 0;
+    const nextY = Number(row.y) | 0;
+    const nextZ = Number(row.z) | 0;
+    const hadAuthoritativePosition = Number.isFinite(entity.authoritativeLastX)
+      && Number.isFinite(entity.authoritativeLastY)
+      && Number.isFinite(entity.authoritativeLastZ);
+    const moved = hadAuthoritativePosition
+      && ((Number(entity.authoritativeLastX) | 0) !== nextX
+        || (Number(entity.authoritativeLastY) | 0) !== nextY
+        || (Number(entity.authoritativeLastZ) | 0) !== nextZ);
+    entity.x = nextX;
+    entity.y = nextY;
+    entity.z = nextZ;
+    entity.homeX = nextX;
+    entity.homeY = nextY;
+    entity.authoritative = true;
+    entity.authoritativeLastX = nextX;
+    entity.authoritativeLastY = nextY;
+    entity.authoritativeLastZ = nextZ;
+    entity.authoritativeUpdatedAtMs = nowMs;
+    if (moved || !Number.isFinite(entity.authoritativeMovedAtMs)) {
+      entity.authoritativeMovedAtMs = nowMs;
+    }
+    entity.movable = false;
+    entity.authoritativeAction = Number(row.action) & 0xff;
+    entity.authoritativeMode = Number(row.mode ?? row.action) & 0xff;
+    entity.authoritativeDirection = Number(row.direction ?? 4) & 0x07;
+    entity.authoritativePose = String(row.pose || "").trim().toLowerCase();
+    entity.authoritativePathStatus = String(row.path_status || "").trim().toLowerCase();
+    entity.authoritativeScheduleIndex = Number(row.schedule_index) | 0;
+    applied += 1;
+  }
+  return applied;
 }
 
 export async function performWorldClockPoll(

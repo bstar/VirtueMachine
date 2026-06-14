@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  applyAuthoritativeNpcStatesRuntime,
   applyAuthoritativeWorldClockToSim,
   performPresenceHeartbeat,
   performPresencePoll,
   performWorldClockPoll,
-  projectRemotePresencePlayers
+  projectRemotePresencePlayers,
+  type AuthoritativeNpcEntityRuntime
 } from "../net/presence_runtime.ts";
 
 const projected = projectRemotePresencePlayers([
@@ -79,6 +81,93 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
   }, (next) => { applied = next; });
   assert.deepEqual(applied, { tick: 123, time_m: 4, time_h: 5, date_d: 6, date_m: 7, date_y: 8 });
 }
+
+{
+  const entries = [{
+    id: 10,
+    x: 1,
+    y: 2,
+    z: 0
+  }, {
+    id: 11,
+    x: 9,
+    y: 9,
+    z: 0
+  }];
+  const applied = applyAuthoritativeNpcStatesRuntime(entries, [{
+    npc_id: 10,
+    x: 3,
+    y: 4,
+    z: 1,
+    action: 0x102,
+    direction: 9,
+    pose: " Stand ",
+    path_status: " OK ",
+    schedule_index: 7
+  }], 123.5);
+  assert.equal(applied, 1);
+  assert.deepEqual(entries[0], {
+    id: 10,
+    x: 3,
+    y: 4,
+    z: 1,
+    homeX: 3,
+    homeY: 4,
+    authoritative: true,
+    authoritativeLastX: 3,
+    authoritativeLastY: 4,
+    authoritativeLastZ: 1,
+    authoritativeUpdatedAtMs: 123.5,
+    authoritativeMovedAtMs: 123.5,
+    movable: false,
+    authoritativeAction: 0x02,
+    authoritativeMode: 0x02,
+    authoritativeDirection: 1,
+    authoritativePose: "stand",
+    authoritativePathStatus: "ok",
+    authoritativeScheduleIndex: 7
+  });
+  assert.deepEqual(entries[1], {
+    id: 11,
+    x: 9,
+    y: 9,
+    z: 0
+  });
+}
+
+{
+  const entries: AuthoritativeNpcEntityRuntime[] = [{
+    id: 10,
+    authoritativeLastX: 3,
+    authoritativeLastY: 4,
+    authoritativeLastZ: 1,
+    authoritativeMovedAtMs: 100,
+    x: 3,
+    y: 4,
+    z: 1
+  }];
+  applyAuthoritativeNpcStatesRuntime(entries, [{
+    npc_id: 10,
+    x: 3,
+    y: 4,
+    z: 1,
+    mode: 5
+  }], 200);
+  assert.equal(entries[0].authoritativeMovedAtMs, 100);
+  assert.equal(entries[0].authoritativeMode, 5);
+  assert.equal(entries[0].authoritativeDirection, 4);
+
+  applyAuthoritativeNpcStatesRuntime(entries, [{
+    npc_id: 10,
+    x: 4,
+    y: 4,
+    z: 1
+  }], 300);
+  assert.equal(entries[0].authoritativeMovedAtMs, 300);
+}
+
+assert.equal(applyAuthoritativeNpcStatesRuntime(null, [{ npc_id: 1 }], 1), 0);
+assert.equal(applyAuthoritativeNpcStatesRuntime([{ id: 1 }], null, 1), 0);
 
 {
   let appliedTick = 0;
