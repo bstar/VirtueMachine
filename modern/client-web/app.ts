@@ -5,6 +5,7 @@ import {
   topInteractiveOverlayAtModel
 } from "./render_composition.ts";
 import {
+  buildBaseTileTableRuntime,
   canvasFromIndexedPixelsRuntime,
   fallbackTileColorRuntime,
   tilePaletteIndexRuntime
@@ -5415,16 +5416,6 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   });
 }
 
-function buildBaseTileTable(bytes) {
-  const out = new Uint16Array(1024);
-  const n = Math.min(1024, Math.floor(bytes.length / 2));
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  for (let i = 0; i < n; i += 1) {
-    out[i] = dv.getUint16(i * 2, true);
-  }
-  return out;
-}
-
 function fallbackTileColor(t) {
   return fallbackTileColorRuntime(t);
 }
@@ -7081,7 +7072,7 @@ async function loadRuntimeAssets() {
     }
 
     if (baseTileRes.ok && baseTileBuf.byteLength >= 2048) {
-      const baseTiles = buildBaseTileTable(new Uint8Array(baseTileBuf));
+      const baseTiles = buildBaseTileTableRuntime(new Uint8Array(baseTileBuf));
       const loaded = await loadPristineObjectBaseline(baseTiles);
       state.objectLayer = loaded.objectLayer;
       state.entityLayer = loaded.entityLayer;

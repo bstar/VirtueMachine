@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildBaseTileTableRuntime,
   canvasFromIndexedPixelsRuntime,
   fallbackTileColorRuntime,
   tilePaletteIndexRuntime
@@ -69,5 +70,11 @@ const terrain = new Uint8Array(0x200);
 terrain[0x10] = 0x52;
 assert.equal(tilePaletteIndexRuntime(0x10, terrain), (0x58 + 0 + 1) & 0xff);
 assert.equal(tilePaletteIndexRuntime(-1, terrain), 0xff);
+
+const baseTiles = buildBaseTileTableRuntime(new Uint8Array([0x34, 0x12, 0xcd, 0xab, 0xff]));
+assert.equal(baseTiles.length, 1024);
+assert.equal(baseTiles[0], 0x1234);
+assert.equal(baseTiles[1], 0xabcd);
+assert.equal(baseTiles[2], 0);
 
 console.log("indexed_pixels_runtime_test: ok");

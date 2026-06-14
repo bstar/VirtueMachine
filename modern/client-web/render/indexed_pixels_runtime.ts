@@ -41,6 +41,16 @@ export function tilePaletteIndexRuntime(
   return (base + (tileId & 0x03) + (weight >> 2)) & 0xff;
 }
 
+export function buildBaseTileTableRuntime(bytes: Uint8Array): Uint16Array {
+  const out = new Uint16Array(1024);
+  const n = Math.min(1024, Math.floor(bytes.length / 2));
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = dv.getUint16(i * 2, true);
+  }
+  return out;
+}
+
 export function canvasFromIndexedPixelsRuntime(
   pixmap: IndexedPixmapRuntime | null | undefined,
   palette: RgbPaletteRuntime | null | undefined,
