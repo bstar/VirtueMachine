@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "modern/client-web/assets/legacy_pixmap_runtime.ts",
+    "modern/client-web/assets/palette_runtime.ts",
+    "modern/client-web/assets/shape_archive_runtime.ts",
+    "modern/client-web/render/indexed_pixels_runtime.ts",
+    "modern/client-web/render/legacy_text_render_runtime.ts",
+    "modern/client-web/render/tile_set_runtime.ts",
+    "modern/common/**/*.ts"
+  ]
+}
