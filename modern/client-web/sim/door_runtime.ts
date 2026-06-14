@@ -72,3 +72,22 @@ export function resolveDoorTileIdRuntime(
   const base = obj.baseTile | 0;
   return (base + resolvedDoorFrameRuntime(sim, obj)) & 0xffff;
 }
+
+export function doorToggleMessageRuntime(args: {
+  afterOpen: boolean;
+  beforeOpen: boolean;
+  x: number;
+  y: number;
+  z: number;
+}): string {
+  const x = Number(args.x) | 0;
+  const y = Number(args.y) | 0;
+  const z = Number(args.z) | 0;
+  if (args.afterOpen && !args.beforeOpen) {
+    return `Opened door at ${x},${y},${z}`;
+  }
+  if (!args.afterOpen && args.beforeOpen) {
+    return `Closed door at ${x},${y},${z}`;
+  }
+  return `Toggled door at ${x},${y},${z}`;
+}

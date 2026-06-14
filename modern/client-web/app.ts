@@ -220,6 +220,7 @@ import {
 } from "./sim/object_footprint_runtime.ts";
 import { isBlockedAtRuntime } from "./sim/collision_runtime.ts";
 import {
+  doorToggleMessageRuntime,
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
   resolvedDoorFrameRuntime,
@@ -5197,11 +5198,7 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
     const afterFrame = resolvedDoorFrameRuntime(sim, o);
     const afterOpen = isDoorFrameOpenRuntime(o?.type, afterFrame);
     diagBox.className = "diag ok";
-    diagBox.textContent = afterOpen && !beforeOpen
-      ? `Opened door at ${tx},${ty},${tz}`
-      : (!afterOpen && beforeOpen
-        ? `Closed door at ${tx},${ty},${tz}`
-        : `Toggled door at ${tx},${ty},${tz}`);
+    diagBox.textContent = doorToggleMessageRuntime({ afterOpen, beforeOpen, x: tx, y: ty, z: tz });
     return true;
   }
   return false;
@@ -5380,11 +5377,7 @@ function tryToggleDoorAtCell(sim, tx, ty, tz) {
     const afterFrame = resolvedDoorFrameRuntime(sim, o);
     const afterOpen = isDoorFrameOpenRuntime(o?.type, afterFrame);
     diagBox.className = "diag ok";
-    diagBox.textContent = afterOpen && !beforeOpen
-      ? `Opened door at ${tx},${ty},${tz}`
-      : (!afterOpen && beforeOpen
-        ? `Closed door at ${tx},${ty},${tz}`
-        : `Toggled door at ${tx},${ty},${tz}`);
+    diagBox.textContent = doorToggleMessageRuntime({ afterOpen, beforeOpen, x: tx, y: ty, z: tz });
     return true;
   }
   return false;
