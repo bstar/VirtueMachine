@@ -73,6 +73,17 @@ import {
   wrapLegacyLedgerLines as wrapLegacyLedgerLinesImported
 } from "./conversation/session_runtime.ts";
 import {
+  canonicalConversationHintIdFromSpeakerRuntime,
+  conversationHeaderIsPlausibleCanonicalFallbackRuntime,
+  conversationHeaderMatchesExpectedCanonicalDescRuntime,
+  conversationHeaderMatchesExpectedCanonicalNameRuntime,
+  decodeU6LzwWithKnownLengthRuntime,
+  isLikelyValidConversationScriptRuntime,
+  loadLegacyConversationScriptForNpcRuntime,
+  normalizedConversationNameRuntime,
+  parseConversationHeaderAndDescRuntime
+} from "./conversation/archive_runtime.ts";
+import {
   DEFAULT_RUNTIME_EXTENSIONS,
   RUNTIME_PROFILE_CANONICAL_STRICT,
   RUNTIME_PROFILE_CANONICAL_PLUS,
@@ -1750,8 +1761,6 @@ function pushLegacyConversationPrompt() {
 const CONV_OP_KEY = 0xef;
 const CONV_OP_RES = 0xf6;
 const CONV_OP_ENDRES = 0xee;
-const CONV_OP_DESC = 0xf1;
-const CONV_OP_MAIN = 0xf2;
 const CONV_OP_END = 0xff;
 const CONV_OP_JOIN = 0xca;
 const CONV_OP_ASKTOP = 0xf7;
@@ -1806,239 +1815,43 @@ function conversationVmContextForSession(overrides = null) {
 }
 
 function decodeU6LzwWithKnownLength(srcBytes, outLen) {
-  const src = (srcBytes instanceof Uint8Array) ? srcBytes : new Uint8Array(srcBytes || 0);
-  const outSize = Number(outLen) >>> 0;
-  if (!src.length || outSize === 0 || outSize > 0x7fffffff) {
-    return null;
-  }
-  /*
-    Runtime LZW decoder consumes a 32-bit little-endian output length header.
-    Conversation archives store compressed payload + external known length.
-  */
-  const wrapped = new Uint8Array(src.length + 4);
-  wrapped[0] = outSize & 0xff;
-  wrapped[1] = (outSize >>> 8) & 0xff;
-  wrapped[2] = (outSize >>> 16) & 0xff;
-  wrapped[3] = (outSize >>> 24) & 0xff;
-  wrapped.set(src, 4);
-  return decompressU6Lzw(wrapped);
-}
-
-function conversationArchiveForNpc(objNum, objType) {
-  const n = Number(objNum) | 0;
-  const t = Number(objType) & 0x03ff;
-  if (n >= 0xe0) {
-    if (t === 0x175) return { archive: "b", index: 0x66 };
-    if (t === 0x17e) return { archive: "b", index: 0x67 };
-    if (t === 0x16b) return { archive: "b", index: 0x68 };
-    return null;
-  }
-  if (n > 0x62) {
-    return { archive: "b", index: n - 0x63 };
-  }
-  if (n < 0) {
-    return null;
-  }
-  return { archive: "a", index: n };
+  return decodeU6LzwWithKnownLengthRuntime(srcBytes, outLen);
 }
 
 function loadLegacyConversationScript(objNum, objType) {
-  const spec = conversationArchiveForNpc(objNum, objType);
-  if (!spec) {
-    return null;
-  }
-  const archive = (spec.archive === "b") ? state.converseArchiveB : state.converseArchiveA;
-  if (!(archive instanceof Uint8Array) || archive.length < 4) {
-    return null;
-  }
-  const idx = Number(spec.index) | 0;
-  const offPtr = idx << 2;
-  if (offPtr < 0 || (offPtr + 4) > archive.length) {
-    return null;
-  }
-  const dv = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-  const offset = dv.getUint32(offPtr, true) >>> 0;
-  if (!offset || (offset + 4) > archive.length) {
-    return null;
-  }
-  const inflatedSize = dv.getUint32(offset, true) >>> 0;
-  let bytes = null;
-  if (inflatedSize && inflatedSize < 0x2800) {
-    bytes = decodeU6LzwWithKnownLength(archive.subarray(offset + 4), inflatedSize);
-  } else {
-    const end = Math.min(archive.length, offset + 4 + 0x2800);
-    bytes = archive.subarray(offset + 4, end);
-  }
-  if (!(bytes instanceof Uint8Array) || bytes.length < 4) {
-    return null;
-  }
-  return bytes;
+  return loadLegacyConversationScriptForNpcRuntime(
+    { a: state.converseArchiveA, b: state.converseArchiveB },
+    objNum,
+    objType
+  );
 }
 
 function parseConversationHeaderAndDesc(scriptBytes) {
-  if (!(scriptBytes instanceof Uint8Array) || scriptBytes.length < 4) {
-    return { name: "", desc: "", mainPc: 0 };
-  }
-  let i = 0;
-  if (scriptBytes[i] === CONV_OP_END) i += 1; /* OP__FF */
-  if (i < scriptBytes.length) i += 1; /* npc num */
-  let name = "";
-  while (i < scriptBytes.length && scriptBytes[i] !== CONV_OP_DESC) {
-    const b = scriptBytes[i++];
-    if (b >= 32 && b < 127) {
-      name += String.fromCharCode(b);
-    }
-  }
-  if (i < scriptBytes.length && scriptBytes[i] === CONV_OP_DESC) {
-    i += 1;
-  }
-  let desc = "";
-  while (i < scriptBytes.length && scriptBytes[i] !== CONV_OP_MAIN) {
-    const b = scriptBytes[i++];
-    if (b === 0x2a) { /* legacy separator '*' before topic table */
-      break;
-    }
-    if (b === 10 || b === 13) {
-      desc += " ";
-    } else if (b >= 32 && b < 127) {
-      desc += String.fromCharCode(b);
-    }
-  }
-  while (i < scriptBytes.length && scriptBytes[i] !== CONV_OP_MAIN) {
-    i += 1;
-  }
-  if (i < scriptBytes.length && scriptBytes[i] === CONV_OP_MAIN) {
-    i += 1;
-  }
-  return {
-    name: String(name || "").trim(),
-    desc: String(desc || "").replace(/\s+/g, " ").trim(),
-    mainPc: i
-  };
-}
-
-function conversationTextReadabilityScore(text) {
-  const s = String(text || "");
-  if (!s) return 0;
-  let good = 0;
-  for (let i = 0; i < s.length; i += 1) {
-    const ch = s[i];
-    if (/[A-Za-z0-9 ,.'!?-]/.test(ch)) {
-      good += 1;
-    }
-  }
-  return good / s.length;
-}
-
-function isLikelyValidConversationHeader(header) {
-  const name = String(header?.name || "").trim();
-  const desc = String(header?.desc || "").trim();
-  if (!name || !desc) {
-    return false;
-  }
-  if (conversationTextReadabilityScore(name) < 0.85) {
-    return false;
-  }
-  if (conversationTextReadabilityScore(desc) < 0.85) {
-    return false;
-  }
-  return /[A-Za-z]/.test(name) && /[A-Za-z]/.test(desc);
+  return parseConversationHeaderAndDescRuntime(scriptBytes);
 }
 
 function isLikelyValidConversationScript(scriptBytes, header) {
-  if (!(scriptBytes instanceof Uint8Array) || scriptBytes.length < 8) {
-    return false;
-  }
-  if (scriptBytes[0] !== CONV_OP_END) {
-    return false;
-  }
-  if (!isLikelyValidConversationHeader(header)) {
-    return false;
-  }
-  const mainPc = Number(header?.mainPc) | 0;
-  if (mainPc <= 2 || mainPc >= scriptBytes.length) {
-    return false;
-  }
-  let keyCount = 0;
-  for (let i = mainPc; i < scriptBytes.length; i += 1) {
-    if (scriptBytes[i] === CONV_OP_KEY) {
-      keyCount += 1;
-      if (keyCount >= 1) break;
-    }
-  }
-  return keyCount >= 1;
+  return isLikelyValidConversationScriptRuntime(scriptBytes, header);
 }
 
 function canonicalConversationHintIdFromSpeaker(speaker) {
-  const s = String(speaker || "").toLowerCase();
-  if (s.includes("lord british") || s.includes("ruler of britannia")) return 5;
-  if (s.includes("nystul") || s.includes("concerned looking mage") || s === "mage") return 6;
-  if (s.includes("dupre") || s.includes("fighter")) return 2;
-  return -1;
-}
-
-function expectedCanonicalNameForConversationId(objNum) {
-  const n = Number(objNum) | 0;
-  if (n === 5) return "Lord British";
-  if (n === 6) return "Nystul";
-  if (n === 2) return "Dupre";
-  return "";
-}
-
-function expectedCanonicalDescTokensForConversationId(objNum) {
-  const n = Number(objNum) | 0;
-  if (n === 5) return ["ruler", "britannia"];
-  if (n === 6) return ["concerned", "mage"];
-  if (n === 2) return ["handsome", "man"];
-  return [];
+  return canonicalConversationHintIdFromSpeakerRuntime(speaker);
 }
 
 function normalizedNameForCompare(name) {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizedConversationNameRuntime(name);
 }
 
 function headerMatchesExpectedCanonicalName(header, objNum) {
-  const expected = expectedCanonicalNameForConversationId(objNum);
-  if (!expected) return true;
-  const got = normalizedNameForCompare(header?.name || "");
-  const want = normalizedNameForCompare(expected);
-  if (!got || !want) return false;
-  return got === want || got.startsWith(want) || want.startsWith(got);
+  return conversationHeaderMatchesExpectedCanonicalNameRuntime(header, objNum);
 }
 
 function headerMatchesExpectedCanonicalDesc(header, objNum) {
-  const tokens = expectedCanonicalDescTokensForConversationId(objNum);
-  if (!Array.isArray(tokens) || tokens.length === 0) {
-    return true;
-  }
-  const desc = normalizedNameForCompare(header?.desc || "");
-  if (!desc) {
-    return false;
-  }
-  for (const token of tokens) {
-    if (!desc.includes(String(token || "").toLowerCase())) {
-      return false;
-    }
-  }
-  return true;
+  return conversationHeaderMatchesExpectedCanonicalDescRuntime(header, objNum);
 }
 
 function headerIsPlausibleCanonicalFallback(script, header, objNum) {
-  const n = Number(objNum) | 0;
-  if (!(script instanceof Uint8Array)) {
-    return false;
-  }
-  if (!headerMatchesExpectedCanonicalName(header, n)) {
-    return false;
-  }
-  const rules = parseConversationRules(script, Number(header?.mainPc) | 0);
-  if (n === 5) return rules.length >= 20;
-  if (n === 2) return rules.length >= 8;
-  if (n === 6) return rules.length >= 1;
-  return false;
+  return conversationHeaderIsPlausibleCanonicalFallbackRuntime(script, header, objNum);
 }
 
 function resolveConversationScriptForActor(actor, tileId) {

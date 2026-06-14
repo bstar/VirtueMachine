@@ -1,6 +1,11 @@
+import { parseConversationRules } from "./rules_runtime.ts";
+
 export const CONV_OP_DESC = 0xf1;
 export const CONV_OP_MAIN = 0xf2;
 export const CONV_OP_END = 0xff;
+const CONV_OP_KEY = 0xef;
+const CONV_OP_RES = 0xf6;
+const CONV_OP_ENDRES = 0xee;
 
 export function decompressU6LzwRuntime(bytes: Uint8Array | null | undefined): Uint8Array | null {
   if (!(bytes instanceof Uint8Array) || bytes.length < 4) return null;
@@ -245,5 +250,91 @@ export function isLikelyValidConversationScriptRuntime(
       return true;
     }
   }
+  return false;
+}
+
+export function canonicalConversationHintIdFromSpeakerRuntime(speaker: unknown): number {
+  const s = String(speaker || "").toLowerCase();
+  if (s.includes("lord british") || s.includes("ruler of britannia")) return 5;
+  if (s.includes("nystul") || s.includes("concerned looking mage") || s === "mage") return 6;
+  if (s.includes("dupre") || s.includes("fighter")) return 2;
+  return -1;
+}
+
+export function expectedCanonicalNameForConversationIdRuntime(objNum: number): string {
+  const n = Number(objNum) | 0;
+  if (n === 5) return "Lord British";
+  if (n === 6) return "Nystul";
+  if (n === 2) return "Dupre";
+  return "";
+}
+
+export function expectedCanonicalDescTokensForConversationIdRuntime(objNum: number): string[] {
+  const n = Number(objNum) | 0;
+  if (n === 5) return ["ruler", "britannia"];
+  if (n === 6) return ["concerned", "mage"];
+  if (n === 2) return ["handsome", "man"];
+  return [];
+}
+
+export function normalizedConversationNameRuntime(name: unknown): string {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function conversationHeaderMatchesExpectedCanonicalNameRuntime(
+  header: { name?: unknown } | null | undefined,
+  objNum: number
+): boolean {
+  const expected = expectedCanonicalNameForConversationIdRuntime(objNum);
+  if (!expected) return true;
+  const got = normalizedConversationNameRuntime(header?.name || "");
+  const want = normalizedConversationNameRuntime(expected);
+  if (!got || !want) return false;
+  return got === want || got.startsWith(want) || want.startsWith(got);
+}
+
+export function conversationHeaderMatchesExpectedCanonicalDescRuntime(
+  header: { desc?: unknown } | null | undefined,
+  objNum: number
+): boolean {
+  const tokens = expectedCanonicalDescTokensForConversationIdRuntime(objNum);
+  if (!Array.isArray(tokens) || tokens.length === 0) {
+    return true;
+  }
+  const desc = normalizedConversationNameRuntime(header?.desc || "");
+  if (!desc) {
+    return false;
+  }
+  for (const token of tokens) {
+    if (!desc.includes(String(token || "").toLowerCase())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function conversationHeaderIsPlausibleCanonicalFallbackRuntime(
+  script: Uint8Array | null | undefined,
+  header: { name?: unknown; mainPc?: unknown } | null | undefined,
+  objNum: number
+): boolean {
+  const n = Number(objNum) | 0;
+  if (!(script instanceof Uint8Array)) {
+    return false;
+  }
+  if (!conversationHeaderMatchesExpectedCanonicalNameRuntime(header, n)) {
+    return false;
+  }
+  const rules = parseConversationRules(script, Number(header?.mainPc) | 0, {
+    KEY: CONV_OP_KEY,
+    RES: CONV_OP_RES,
+    ENDRES: CONV_OP_ENDRES
+  });
+  if (n === 5) return rules.length >= 20;
+  if (n === 2) return rules.length >= 8;
+  if (n === 6) return rules.length >= 1;
   return false;
 }

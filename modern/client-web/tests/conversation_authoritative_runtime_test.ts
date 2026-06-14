@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { loadLegacyConversationScriptForNpcRuntime, parseConversationHeaderAndDescRuntime } from "../conversation/archive_runtime.ts";
+import {
+  canonicalConversationHintIdFromSpeakerRuntime,
+  conversationHeaderIsPlausibleCanonicalFallbackRuntime,
+  conversationHeaderMatchesExpectedCanonicalDescRuntime,
+  conversationHeaderMatchesExpectedCanonicalNameRuntime,
+  loadLegacyConversationScriptForNpcRuntime,
+  normalizedConversationNameRuntime,
+  parseConversationHeaderAndDescRuntime
+} from "../conversation/archive_runtime.ts";
 import { buildConversationVmContext, conversationKeyMatchesInput, renderConversationMacrosWithContext } from "../conversation/text_runtime.ts";
 import { decodeConversationOpeningResult, decodeConversationResponseOpcodeAware } from "../conversation/vm_runtime.ts";
 import { conversationRunFromKeyCursor } from "../conversation/dialog_runtime.ts";
@@ -60,10 +68,19 @@ function runCursorReply(script: Uint8Array, startPc: number, typed: string, vmCo
 const archives = readConversationArchives();
 const savedTalkFlags = readObjlistTalkFlags();
 
+assert.equal(canonicalConversationHintIdFromSpeakerRuntime("Lord British, ruler of Britannia"), 5);
+assert.equal(canonicalConversationHintIdFromSpeakerRuntime("concerned looking mage"), 6);
+assert.equal(canonicalConversationHintIdFromSpeakerRuntime("fighter"), 2);
+assert.equal(canonicalConversationHintIdFromSpeakerRuntime("unknown villager"), -1);
+assert.equal(normalizedConversationNameRuntime("  Lord-British!! "), "lord british");
+
 {
   const script = loadLegacyConversationScriptForNpcRuntime(archives, 5, 0x199);
   assert.ok(script instanceof Uint8Array, "Lord British script should load");
   const header = parseConversationHeaderAndDescRuntime(script);
+  assert.equal(conversationHeaderMatchesExpectedCanonicalNameRuntime(header, 5), true);
+  assert.equal(conversationHeaderMatchesExpectedCanonicalDescRuntime(header, 5), true);
+  assert.equal(conversationHeaderIsPlausibleCanonicalFallbackRuntime(script, header, 5), true);
 
   const introVm = buildConversationVmContext({
     hour: 9,
@@ -102,6 +119,9 @@ const savedTalkFlags = readObjlistTalkFlags();
   const script = loadLegacyConversationScriptForNpcRuntime(archives, 2, 0x19b);
   assert.ok(script instanceof Uint8Array, "Dupre script should load");
   const header = parseConversationHeaderAndDescRuntime(script);
+  assert.equal(conversationHeaderMatchesExpectedCanonicalNameRuntime(header, 2), true);
+  assert.equal(conversationHeaderMatchesExpectedCanonicalDescRuntime(header, 2), true);
+  assert.equal(conversationHeaderIsPlausibleCanonicalFallbackRuntime(script, header, 2), true);
   const vmContext = buildConversationVmContext({
     hour: 9,
     player: "Avatar",
@@ -119,6 +139,13 @@ const savedTalkFlags = readObjlistTalkFlags();
   const script = loadLegacyConversationScriptForNpcRuntime(archives, 6, 0x17a);
   assert.ok(script instanceof Uint8Array, "Nystul script should load");
   const header = parseConversationHeaderAndDescRuntime(script);
+  assert.equal(conversationHeaderMatchesExpectedCanonicalNameRuntime(header, 6), true);
+  assert.equal(conversationHeaderMatchesExpectedCanonicalDescRuntime(header, 6), true);
+  assert.equal(conversationHeaderIsPlausibleCanonicalFallbackRuntime(script, header, 6), true);
+  assert.equal(
+    conversationHeaderMatchesExpectedCanonicalDescRuntime({ ...header, desc: "garbled text" }, 6),
+    false
+  );
   const introVm = buildConversationVmContext({
     hour: 9,
     player: "Avatar",
