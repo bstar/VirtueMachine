@@ -3,12 +3,14 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-
-const OBJ_COORD_USE_LOCXYZ = 0x00;
-const OBJ_COORD_USE_CONTAINED = 0x08;
+const {
+  OBJ_COORD_USE_CONTAINED,
+  OBJ_COORD_USE_LOCXYZ,
+  OBJ_COORD_USE_MASK
+} = require("../common/u6_object_constants.ts");
 
 function coordUseOfStatus(status) {
-  return (Number(status) & 0x18) >>> 0;
+  return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
 }
 
 function assocBinPath() {
@@ -68,15 +70,52 @@ function holderKindName(v) {
   return "none";
 }
 
-function objectNodeArg(obj) {
-  const key = Number.parseInt(String(obj?.object_key || "0"), 10) | 0;
+function buildBridgeKeyMap(objects) {
+  const keyToBridge = new Map();
+  const bridgeToKey = new Map();
+  let next = 1;
+  for (const obj of Array.isArray(objects) ? objects : []) {
+    const key = String(obj?.object_key || "").trim();
+    if (!key || keyToBridge.has(key)) {
+      continue;
+    }
+    keyToBridge.set(key, next);
+    bridgeToKey.set(String(next), key);
+    next += 1;
+  }
+  return { keyToBridge, bridgeToKey };
+}
+
+function bridgeKeyForObject(map, obj) {
+  const key = String(obj?.object_key || "").trim();
+  return key ? (Number(map?.keyToBridge?.get(key)) | 0) : 0;
+}
+
+function bridgeHolderKey(map, obj) {
+  if (holderKindName(obj?.holder_kind) !== "object") {
+    return 0;
+  }
+  const key = String(obj?.holder_key || obj?.holder_id || "").trim();
+  return key ? (Number(map?.keyToBridge?.get(key)) | 0) : 0;
+}
+
+function publicKeyForBridge(map, bridgeKey) {
+  const k = Number(bridgeKey) | 0;
+  if (k === 0) {
+    return "";
+  }
+  return String(map?.bridgeToKey?.get(String(k)) || k);
+}
+
+function objectNodeArg(obj, map) {
+  const key = bridgeKeyForObject(map, obj);
   const status = Number(obj?.status) & 0xff;
   const holderKind = holderKindName(obj?.holder_kind);
-  const holderKey = Number.parseInt(String(obj?.holder_key || obj?.holder_id || "0"), 10) | 0;
+  const holderKey = bridgeHolderKey(map, obj);
   return `${key}:${status}:${holderKind}:${holderKey}`;
 }
 
-function parseBridgeOutput(stdout) {
+function parseBridgeOutput(stdout, map) {
   const text = String(stdout || "").trim();
   const re = /^code=(-?\d+)\s+root_anchor_key=(-?\d+)\s+blocked_by_key=(-?\d+)\s+chain_accessible=(\d+)\s+cycle_detected=(\d+)\s+missing_parent=(\d+)\s+parent_owned=(\d+)\s+chain=(.*)$/i;
   const m = re.exec(text);
@@ -85,7 +124,7 @@ function parseBridgeOutput(stdout) {
   }
   const rawChain = String(m[8] || "").trim();
   const chain = rawChain
-    ? rawChain.split(";").map((v) => String(Number.parseInt(v, 10))).filter((v) => v !== "NaN" && v !== "0")
+    ? rawChain.split(";").map((v) => publicKeyForBridge(map, Number.parseInt(v, 10))).filter(Boolean)
     : [];
   return {
     code: Number(m[1]) | 0,
@@ -99,26 +138,26 @@ function parseBridgeOutput(stdout) {
   };
 }
 
-function blockedByLabel(parsed) {
+function blockedByLabel(parsed, map) {
   if (!parsed || parsed.chain_accessible) {
     return "";
   }
   if (parsed.cycle_detected) {
-    return `cycle:${parsed.blocked_by_key}`;
+    return `cycle:${publicKeyForBridge(map, parsed.blocked_by_key)}`;
   }
   if (parsed.missing_parent) {
     if ((parsed.blocked_by_key | 0) !== 0) {
-      return `missing-parent:${parsed.blocked_by_key}`;
+      return `missing-parent:${publicKeyForBridge(map, parsed.blocked_by_key)}`;
     }
     return "missing-parent-ref";
   }
   if (parsed.parent_owned) {
-    return `parent-owned:${parsed.blocked_by_key}`;
+    return `parent-owned:${publicKeyForBridge(map, parsed.blocked_by_key)}`;
   }
   return "max-depth";
 }
 
-function parseBatchBridgeOutput(stdout) {
+function parseBatchBridgeOutput(stdout, map) {
   const lines = String(stdout || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const byTarget = new Map();
   const re = /^target=(-?\d+)\s+code=(-?\d+)\s+root_anchor_key=(-?\d+)\s+blocked_by_key=(-?\d+)\s+chain_accessible=(\d+)\s+cycle_detected=(\d+)\s+missing_parent=(\d+)\s+parent_owned=(\d+)\s+chain=(.*)$/i;
@@ -130,9 +169,9 @@ function parseBatchBridgeOutput(stdout) {
     const target = Number(m[1]) | 0;
     const rawChain = String(m[9] || "").trim();
     const chain = rawChain
-      ? rawChain.split(";").map((v) => String(Number.parseInt(v, 10))).filter((v) => v !== "NaN" && v !== "0")
+      ? rawChain.split(";").map((v) => publicKeyForBridge(map, Number.parseInt(v, 10))).filter(Boolean)
       : [];
-    byTarget.set(String(target), {
+    byTarget.set(publicKeyForBridge(map, target), {
       code: Number(m[2]) | 0,
       root_anchor_key: Number(m[3]) | 0,
       blocked_by_key: Number(m[4]) | 0,
@@ -146,7 +185,7 @@ function parseBatchBridgeOutput(stdout) {
   return byTarget;
 }
 
-function diagnosticsFromParsed(targetObject, parsed) {
+function diagnosticsFromParsed(targetObject, parsed, map) {
   if (!parsed || (parsed.code | 0) !== 0) {
     return {
       assoc_chain: [],
@@ -162,14 +201,15 @@ function diagnosticsFromParsed(targetObject, parsed) {
   }
   return {
     assoc_chain: parsed.assoc_chain,
-    root_anchor_key: parsed.root_anchor_key ? String(parsed.root_anchor_key) : String(targetObject.object_key || ""),
-    blocked_by: blockedByLabel(parsed),
+    root_anchor_key: parsed.root_anchor_key ? publicKeyForBridge(map, parsed.root_anchor_key) : String(targetObject.object_key || ""),
+    blocked_by: blockedByLabel(parsed, map),
     chain_accessible: chainAccessible
   };
 }
 
 function analyzeContainmentChainViaSimCore(objects, targetObject) {
-  const targetKey = Number.parseInt(String(targetObject?.object_key || "0"), 10) | 0;
+  const bridgeMap = buildBridgeKeyMap(objects);
+  const targetKey = bridgeKeyForObject(bridgeMap, targetObject);
   if (!targetObject || targetKey === 0) {
     return { ok: false, code: "invalid-object", message: "invalid target object" };
   }
@@ -180,19 +220,19 @@ function analyzeContainmentChainViaSimCore(objects, targetObject) {
     return { ok: false, code: "assoc_bridge_unavailable", message: "sim-core assoc-chain bridge unavailable" };
   }
 
-  const args = [String(targetKey), ...objects.map((obj) => objectNodeArg(obj))];
+  const args = [String(targetKey), ...objects.map((obj) => objectNodeArg(obj, bridgeMap))];
   const proc = spawnSync(ASSOC_BIN, args, { encoding: "utf8", timeout: 4000, maxBuffer: 8 * 1024 * 1024 });
   if (proc.error || (proc.status | 0) !== 0) {
     return { ok: false, code: "assoc_bridge_failed", message: "sim-core assoc-chain bridge execution failed" };
   }
-  const parsed = parseBridgeOutput(proc.stdout);
+  const parsed = parseBridgeOutput(proc.stdout, bridgeMap);
   if (!parsed) {
     return { ok: false, code: "assoc_bridge_parse_failed", message: "sim-core assoc-chain bridge emitted invalid output" };
   }
   if ((parsed.code | 0) !== 0) {
-    return { ok: true, value: diagnosticsFromParsed(targetObject, parsed) };
+    return { ok: true, value: diagnosticsFromParsed(targetObject, parsed, bridgeMap) };
   }
-  return { ok: true, value: diagnosticsFromParsed(targetObject, parsed) };
+  return { ok: true, value: diagnosticsFromParsed(targetObject, parsed, bridgeMap) };
 }
 
 function analyzeContainmentChainsBatchViaSimCore(objects, targetObjects) {
@@ -205,18 +245,19 @@ function analyzeContainmentChainsBatchViaSimCore(objects, targetObjects) {
   if (!ASSOC_BATCH_BIN) {
     return { ok: false, code: "assoc_batch_bridge_unavailable", message: "sim-core assoc-chain batch bridge unavailable" };
   }
+  const bridgeMap = buildBridgeKeyMap(objects);
   const targetKeys = targetObjects
-    .map((o) => Number.parseInt(String(o?.object_key || "0"), 10) | 0)
+    .map((o) => bridgeKeyForObject(bridgeMap, o))
     .filter((k) => k !== 0);
   if (targetKeys.length === 0) {
     return { ok: false, code: "invalid-targets", message: "no valid target keys" };
   }
-  const args = [targetKeys.join(","), ...objects.map((obj) => objectNodeArg(obj))];
+  const args = [targetKeys.join(","), ...objects.map((obj) => objectNodeArg(obj, bridgeMap))];
   const proc = spawnSync(ASSOC_BATCH_BIN, args, { encoding: "utf8", timeout: 8000, maxBuffer: 16 * 1024 * 1024 });
   if (proc.error || (proc.status | 0) !== 0) {
     return { ok: false, code: "assoc_batch_bridge_failed", message: "sim-core assoc-chain batch bridge execution failed" };
   }
-  const parsedMap = parseBatchBridgeOutput(proc.stdout);
+  const parsedMap = parseBatchBridgeOutput(proc.stdout, bridgeMap);
   if (!parsedMap) {
     return { ok: false, code: "assoc_batch_bridge_parse_failed", message: "sim-core assoc-chain batch bridge emitted invalid output" };
   }
@@ -224,7 +265,7 @@ function analyzeContainmentChainsBatchViaSimCore(objects, targetObjects) {
   for (const obj of targetObjects) {
     const key = String(obj?.object_key || "");
     if (!key) continue;
-    byKey.set(key, diagnosticsFromParsed(obj, parsedMap.get(key)));
+    byKey.set(key, diagnosticsFromParsed(obj, parsedMap.get(key), bridgeMap));
   }
   return { ok: true, byKey };
 }

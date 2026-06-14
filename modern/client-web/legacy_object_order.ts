@@ -1,5 +1,9 @@
-const OBJ_COORD_USE_LOCXYZ = 0x00;
-const OBJ_COORD_USE_CONTAINED = 0x08;
+import {
+  OBJ_COORD_USE_CONTAINED,
+  OBJ_COORD_USE_LOCXYZ,
+  OBJ_COORD_USE_MASK
+} from "../common/u6_object_constants.ts";
+
 const OBJ_STATUS_IS_0010 = 0x10;
 
 type LegacyObj = {
@@ -15,7 +19,7 @@ type LegacyObj = {
 } | null | undefined;
 
 function coordUseOf(obj: LegacyObj): number {
-  return (obj && Number.isFinite(obj.coordUse)) ? (obj.coordUse & 0x18) : OBJ_COORD_USE_LOCXYZ;
+  return (obj && Number.isFinite(obj.coordUse)) ? (obj.coordUse & OBJ_COORD_USE_MASK) : OBJ_COORD_USE_LOCXYZ;
 }
 
 function is0010(obj: LegacyObj): boolean {

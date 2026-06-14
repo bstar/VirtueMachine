@@ -1,13 +1,19 @@
-const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
-const OBJECT_TYPES_CHAIR = new Set([0x0fc]);
-const OBJECT_TYPES_BED = new Set([0x0a3]);
-const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
-const OBJECT_TYPES_SOLID_ENV = new Set([
-  0x0a3, 0x0a4, 0x0b0, 0x0b1, 0x0c6, 0x0d8, 0x0d9,
-  0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
-  0x147
-]);
-const OBJECT_TYPES_CLOSEABLE_DOOR = new Set([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
+import {
+  OBJECT_TYPE_BED_VALUES,
+  OBJECT_TYPE_CHAIR_VALUES,
+  OBJECT_TYPE_CLOSEABLE_DOOR_VALUES,
+  OBJECT_TYPE_DOOR_VALUES,
+  OBJECT_TYPE_SOLID_ENV_VALUES,
+  OBJECT_TYPE_TOP_DECOR_VALUES,
+  u6ObjectTypeSet
+} from "../../common/u6_object_constants.ts";
+
+const OBJECT_TYPES_DOOR = u6ObjectTypeSet(OBJECT_TYPE_DOOR_VALUES);
+const OBJECT_TYPES_CHAIR = u6ObjectTypeSet(OBJECT_TYPE_CHAIR_VALUES);
+const OBJECT_TYPES_BED = u6ObjectTypeSet(OBJECT_TYPE_BED_VALUES);
+const OBJECT_TYPES_TOP_DECOR = u6ObjectTypeSet(OBJECT_TYPE_TOP_DECOR_VALUES);
+const OBJECT_TYPES_SOLID_ENV = u6ObjectTypeSet(OBJECT_TYPE_SOLID_ENV_VALUES);
+const OBJECT_TYPES_CLOSEABLE_DOOR = u6ObjectTypeSet(OBJECT_TYPE_CLOSEABLE_DOOR_VALUES);
 
 function asType(type: number): number {
   return type & 0x03ff;

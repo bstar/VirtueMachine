@@ -6,7 +6,7 @@
     "dev:stop": "bash ./modern/tools/stop_dev_stack.sh",
     "dev:web": "vite --host 0.0.0.0 --port 8080 --strictPort",
     "dev:browser:autoplay": "bash ./modern/tools/dev_browser_autoplay.sh",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.net.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.net.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

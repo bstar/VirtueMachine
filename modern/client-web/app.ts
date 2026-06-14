@@ -58,6 +58,18 @@ import {
   runtimeExtensionsSummary,
   sanitizeRuntimeExtensions
 } from "../common/runtime_contract.ts";
+import {
+  OBJ_COORD_USE_EQUIP,
+  OBJ_COORD_USE_LOCXYZ,
+  OBJ_COORD_USE_MASK,
+  OBJECT_TYPE_BED_VALUES,
+  OBJECT_TYPE_CHAIR_VALUES,
+  OBJECT_TYPE_CLOSEABLE_DOOR_VALUES,
+  OBJECT_TYPE_DOOR_VALUES,
+  OBJECT_TYPE_SOLID_ENV_VALUES,
+  OBJECT_TYPE_TOP_DECOR_VALUES,
+  u6ObjectTypeSet
+} from "../common/u6_object_constants.ts";
 import { performManagedNetRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 import { performNetLoadSnapshot, performNetSaveSnapshot } from "./net/snapshot_runtime.ts";
@@ -223,9 +235,6 @@ const LEGACY_CORNER_TABLE = [
   1, 5, 1, 1,
   11, 0, 2, 2
 ];
-const OBJ_COORD_USE_MASK = 0x18;
-const OBJ_COORD_USE_LOCXYZ = 0x00;
-const OBJ_COORD_USE_EQUIP = 0x18;
 const OBJ_STATUS_INVISIBLE = 0x02;
 const OBJ_U6_CLOCK = 0x09f;
 const OBJ_U6_FIREPLACE = 0x0a4;
@@ -244,16 +253,12 @@ const LEGACY_SLEEP_SHAPE_TYPE = 0x092;
 const NPC_FLAG_DIRECTION_MASK = 0x07;
 const NPC_FLAG_WALKING = 0x80;
 const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
-const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
-const OBJECT_TYPES_CLOSEABLE_DOOR = new Set([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
-const OBJECT_TYPES_CHAIR = new Set([0x0fc]);
-const OBJECT_TYPES_BED = new Set([0x0a3]);
-const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
-const OBJECT_TYPES_SOLID_ENV = new Set([
-  0x0a3, 0x0a4, 0x0b0, 0x0b1, 0x0c6, 0x0d8, 0x0d9,
-  0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
-  0x147
-]);
+const OBJECT_TYPES_DOOR = u6ObjectTypeSet(OBJECT_TYPE_DOOR_VALUES);
+const OBJECT_TYPES_CLOSEABLE_DOOR = u6ObjectTypeSet(OBJECT_TYPE_CLOSEABLE_DOOR_VALUES);
+const OBJECT_TYPES_CHAIR = u6ObjectTypeSet(OBJECT_TYPE_CHAIR_VALUES);
+const OBJECT_TYPES_BED = u6ObjectTypeSet(OBJECT_TYPE_BED_VALUES);
+const OBJECT_TYPES_TOP_DECOR = u6ObjectTypeSet(OBJECT_TYPE_TOP_DECOR_VALUES);
+const OBJECT_TYPES_SOLID_ENV = u6ObjectTypeSet(OBJECT_TYPE_SOLID_ENV_VALUES);
 function isRenderableWorldObjectType(type) {
   const t = type & 0x03ff;
   if (t >= ENTITY_TYPE_ACTOR_MIN && t <= ENTITY_TYPE_ACTOR_MAX) {

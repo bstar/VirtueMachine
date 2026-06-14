@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-
-const OBJ_COORD_USE_LOCXYZ = 0x00;
-const OBJ_COORD_USE_EQUIP = 0x18;
+import {
+  OBJ_COORD_USE_EQUIP,
+  OBJ_COORD_USE_LOCXYZ
+} from "../common/u6_object_constants.ts";
 
 const OBJ_STATUS_OFF = 0x0000;
 const OBJ_POS_OFF = 0x0100;

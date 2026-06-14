@@ -3,6 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
+import {
+  OBJ_COORD_USE_CONTAINED,
+  OBJ_COORD_USE_EQUIP,
+  OBJ_COORD_USE_INVEN,
+  OBJ_COORD_USE_LOCXYZ,
+  OBJ_COORD_USE_MASK
+} from "../../common/u6_object_constants.ts";
 
 const ROOT = path.resolve(new URL("../../../..", import.meta.url).pathname);
 const SERVER_TS = path.join(ROOT, "modern/net/server.ts");
@@ -45,13 +52,8 @@ async function jsonFetch(baseUrl, route, init = {}) {
 }
 
 function coordUseOfStatus(status) {
-  return (Number(status) & 0x18) >>> 0;
+  return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
 }
-
-const OBJ_COORD_USE_LOCXYZ = 0x00;
-const OBJ_COORD_USE_CONTAINED = 0x08;
-const OBJ_COORD_USE_INVEN = 0x10;
-const OBJ_COORD_USE_EQUIP = 0x18;
 
 function isStatus0010(status) {
   return (Number(status) & 0x10) !== 0;

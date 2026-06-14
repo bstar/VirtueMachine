@@ -3,14 +3,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-
-const OBJ_COORD_USE_LOCXYZ = 0x00;
-const OBJ_COORD_USE_CONTAINED = 0x08;
-const OBJ_COORD_USE_INVEN = 0x10;
-const OBJ_COORD_USE_EQUIP = 0x18;
+const {
+  OBJ_COORD_USE_CONTAINED,
+  OBJ_COORD_USE_EQUIP,
+  OBJ_COORD_USE_INVEN,
+  OBJ_COORD_USE_LOCXYZ,
+  OBJ_COORD_USE_MASK
+} = require("../common/u6_object_constants.ts");
 
 function coordUseOfStatus(status) {
-  return (Number(status) & 0x18) >>> 0;
+  return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
 }
 
 function holderKindCode(name) {
