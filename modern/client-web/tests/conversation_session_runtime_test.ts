@@ -55,6 +55,8 @@ function testDebugLedgerIncludesConversationMetadata() {
 
 function testDebugLedgerFormatsPlainLinesWithoutMetadata() {
   const text = buildDebugChatLedgerText([
+    ["bad-row"],
+    null,
     { tick: 123, line: "plain status message", actorId: null, convId: null, objType: null }
   ]);
   assert.equal(

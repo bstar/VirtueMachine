@@ -1,3 +1,5 @@
+import type { ConversationRule } from "./rules_runtime.ts";
+
 export interface DebugChatLedgerEntry {
   tick: number;
   line: string;
@@ -25,17 +27,34 @@ export interface LegacyConversationState {
   legacyConversationNpcKey?: string;
   legacyConversationPendingPrompt?: string;
   legacyConversationShowInventory?: boolean;
-  legacyConversationEquipmentSlots?: unknown[];
+  legacyConversationEquipmentSlots?: LegacyConversationEquipmentSlot[];
   legacyConversationPaging?: boolean;
   legacyConversationPages?: string[][];
   legacyConversationScript?: unknown;
   legacyConversationDescText?: string;
-  legacyConversationRules?: unknown[];
+  legacyConversationRules?: ConversationRule[];
   legacyConversationPc?: number;
   legacyConversationInputOpcode?: number;
   legacyConversationVmContext?: unknown;
   legacyConversationPrevStatus?: number;
   legacyStatusDisplay?: number;
+}
+
+export interface LegacyConversationEquipmentSlot {
+  id?: unknown;
+  index?: unknown;
+  item?: unknown;
+  label?: unknown;
+  name?: unknown;
+  slot?: unknown;
+}
+
+interface DebugChatLedgerEntrySource {
+  actorId?: unknown;
+  convId?: unknown;
+  line?: unknown;
+  objType?: unknown;
+  tick?: unknown;
 }
 
 export interface PushLedgerOptions {
@@ -54,8 +73,10 @@ export interface ConversationPaginationOptions {
 
 export interface ConversationReply {
   kind: string;
-  lines?: unknown[];
+  lines?: ConversationReplyLine[];
 }
+
+export type ConversationReplyLine = number | string | null | undefined;
 
 export interface SubmitConversationDeps {
   pushLedgerMessage?: (line: string) => void;
@@ -182,11 +203,15 @@ export function buildDebugChatLedgerText(entries: unknown): string {
   const src = Array.isArray(entries) ? entries : [];
   const hasMetaNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0);
   for (const entry of src) {
-    const tick = Number(entry.tick) >>> 0;
-    const msg = String(entry.line || "");
-    const actorId = entry?.actorId;
-    const convId = entry?.convId;
-    const objType = entry?.objType;
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
+    }
+    const row = entry as DebugChatLedgerEntrySource;
+    const tick = Number(row.tick) >>> 0;
+    const msg = String(row.line || "");
+    const actorId = row.actorId;
+    const convId = row.convId;
+    const objType = row.objType;
     const hasMeta = hasMetaNumber(actorId)
       && hasMetaNumber(convId)
       && hasMetaNumber(objType);
