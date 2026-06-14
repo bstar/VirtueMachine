@@ -79,6 +79,7 @@ import {
   showLegacyLedgerPrompt as showLegacyLedgerPromptImported,
   startLegacyConversationPagination as startLegacyConversationPaginationImported,
   submitLegacyConversationInput as submitLegacyConversationInputImported,
+  type LegacyConversationState,
   wrapLegacyLedgerLines as wrapLegacyLedgerLinesImported
 } from "./conversation/session_runtime.ts";
 import {
@@ -847,12 +848,12 @@ const state = {
   }
 };
 
-function wrapLegacyLedgerLines(text) {
+function wrapLegacyLedgerLines(text: unknown): string[] {
   return wrapLegacyLedgerLinesImported(text, LEGACY_LEDGER_MAX_CHARS);
 }
 
-function pushLedgerMessage(text) {
-  pushLedgerMessageImported(state, text, {
+function pushLedgerMessage(text: unknown): void {
+  pushLedgerMessageImported(state as LegacyConversationState, text, {
     maxChars: LEGACY_LEDGER_MAX_CHARS,
     maxLines: LEGACY_LEDGER_MAX_LINES,
     tick: Number(state.sim?.tick) >>> 0,
@@ -860,11 +861,11 @@ function pushLedgerMessage(text) {
   });
 }
 
-function buildDebugChatLedgerText() {
+function buildDebugChatLedgerText(): string {
   return buildDebugChatLedgerTextImported(state.debugChatLedger);
 }
 
-function renderDebugChatLedgerPanel() {
+function renderDebugChatLedgerPanel(): void {
   if (debugChatCount) {
     const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
     debugChatCount.textContent = formatLedgerEntryCountRuntime(count);
@@ -875,7 +876,7 @@ function renderDebugChatLedgerPanel() {
   }
 }
 
-function setDebugPanelTab(tab) {
+function setDebugPanelTab(tab: unknown): void {
   const next = (tab === "chat") ? "chat" : "runtime";
   state.debugPanelTab = next;
   const runtimeActive = next === "runtime";
@@ -898,12 +899,12 @@ function setDebugPanelTab(tab) {
   }
 }
 
-function paginateLedgerMessages(lines, maxLines = LEGACY_LEDGER_MAX_LINES - 1) {
+function paginateLedgerMessages(lines: unknown, maxLines = LEGACY_LEDGER_MAX_LINES - 1): string[][] {
   return paginateLedgerMessagesImported(lines, maxLines, LEGACY_LEDGER_MAX_CHARS);
 }
 
-function startLegacyConversationPagination(lines) {
-  return startLegacyConversationPaginationImported(state, lines, {
+function startLegacyConversationPagination(lines: unknown): boolean {
+  return startLegacyConversationPaginationImported(state as LegacyConversationState, lines, {
     pageMaxLines: LEGACY_LEDGER_MAX_LINES - 1,
     maxChars: LEGACY_LEDGER_MAX_CHARS,
     tick: Number(state.sim?.tick) >>> 0,
@@ -911,15 +912,15 @@ function startLegacyConversationPagination(lines) {
   });
 }
 
-function advanceLegacyConversationPagination() {
-  return advanceLegacyConversationPaginationImported(state, pushLegacyConversationPrompt);
+function advanceLegacyConversationPagination(): boolean {
+  return advanceLegacyConversationPaginationImported(state as LegacyConversationState, pushLegacyConversationPrompt);
 }
 
-function showLegacyLedgerPrompt() {
-  showLegacyLedgerPromptImported(state);
+function showLegacyLedgerPrompt(): void {
+  showLegacyLedgerPromptImported(state as LegacyConversationState);
 }
 
-function isLegacyScaleMode(mode) {
+function isLegacyScaleMode(mode: unknown): boolean {
   return mode === "fit" || mode === "1" || mode === "2" || mode === "3" || mode === "4";
 }
 
