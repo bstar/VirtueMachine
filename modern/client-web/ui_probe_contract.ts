@@ -17,6 +17,7 @@ import {
   computeMessageLogWindowRuntime
 } from "./ui/message_log_runtime.ts";
 import { listPanelScopeRuntime } from "./ui/panel_scope_runtime.ts";
+import { partyMemberIdSourcesFromJsonRuntime } from "./sim/party_runtime.ts";
 import { buildTargetResolverRegressionProbesRuntime } from "./sim/target_runtime.ts";
 import {
   buildMechanicsCapabilityMatrixRuntime,
@@ -214,7 +215,10 @@ function fromRuntime(runtime: ProbeRuntimeInput) {
   const sim = runtime?.sim || {};
   const world = sim.world || {};
   const commandLog: Array<{ tick?: unknown; kind?: unknown }> = Array.isArray(runtime.commandLog) ? runtime.commandLog : [];
-  const partyMembers = normalizePartyMemberIdsRuntime(runtime?.partyMembers || sim.partyMembers, 1);
+  const partyMembers = normalizePartyMemberIdsRuntime(
+    partyMemberIdSourcesFromJsonRuntime(runtime?.partyMembers || sim.partyMembers),
+    1
+  );
   const activeIndex = clampActivePartyIndexRuntime(world.active || 0, partyMembers.length);
   const activeId = partyMembers[activeIndex] || partyMembers[0] || 1;
   const partyPanelMembers = projectPartyPanelMembersRuntime({
@@ -262,7 +266,10 @@ function fromRuntime(runtime: ProbeRuntimeInput) {
  3) Anchor panel location to current world map coords.
 */
 export function createCanonicalTestAvatar(snapshot: ProbeSnapshotInput = {}) {
-  const partyMembers = normalizePartyMemberIdsRuntime(snapshot.party_members, 1);
+  const partyMembers = normalizePartyMemberIdsRuntime(
+    partyMemberIdSourcesFromJsonRuntime(snapshot.party_members),
+    1
+  );
   const activeIndex = clampActivePartyIndexRuntime(snapshot.active_party_index || 0, partyMembers.length);
   const resolvedId = partyMembers[activeIndex] || partyMembers[0] || 1;
   const world = snapshot.world || {};

@@ -5,8 +5,11 @@ import {
   projectPartyPanelMembersRuntime,
   resolvePartySwitchDigitRuntime
 } from "../ui/party_message_runtime.ts";
+import { partyMemberIdSourcesFromJsonRuntime } from "../sim/party_runtime.ts";
 
 function testPartyMemberNormalization() {
+  assert.deepEqual(partyMemberIdSourcesFromJsonRuntime(null), []);
+  assert.deepEqual(partyMemberIdSourcesFromJsonRuntime([1, "2"]), [1, "2"]);
   assert.deepEqual(
     normalizePartyMemberIdsRuntime([1, 12, 12, 0, -3, 23], 1),
     [1, 12, 23],

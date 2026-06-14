@@ -1,3 +1,5 @@
+import { normalizePartyMemberIdsRuntime } from "../sim/party_runtime.ts";
+
 export type PartyPanelMemberRuntime = {
   id: number;
   name: string;
@@ -19,28 +21,7 @@ function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
 
-function normalizePartyMemberIdRuntime(v: unknown): number {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) {
-    return 1;
-  }
-  return (n >>> 0) || 1;
-}
-
-export function normalizePartyMemberIdsRuntime(
-  partyMembers: unknown,
-  fallbackId: number = 1
-): number[] {
-  const src = Array.isArray(partyMembers) ? partyMembers : [];
-  const dedup = new Set<number>();
-  for (const raw of src) {
-    dedup.add(normalizePartyMemberIdRuntime(raw));
-  }
-  if (!dedup.size) {
-    dedup.add(normalizePartyMemberIdRuntime(fallbackId));
-  }
-  return Array.from(dedup).slice(0, 10);
-}
+export { normalizePartyMemberIdsRuntime } from "../sim/party_runtime.ts";
 
 export function clampActivePartyIndexRuntime(activeIndex: unknown, partyCount: number): number {
   const n = Number(activeIndex) | 0;
@@ -57,7 +38,7 @@ export function clampActivePartyIndexRuntime(activeIndex: unknown, partyCount: n
 }
 
 export function projectPartyPanelMembersRuntime(input: {
-  partyMembers: unknown;
+  partyMembers: readonly unknown[] | null | undefined;
   activeIndex: unknown;
   nameById?: Record<string, string> | null;
 }): PartyPanelMemberRuntime[] {
@@ -92,7 +73,7 @@ function digitKeyToLegacyTargetIndexRuntime(digitKey: unknown): number {
 
 export function resolvePartySwitchDigitRuntime(input: {
   digitKey: unknown;
-  partyMembers: unknown;
+  partyMembers: readonly unknown[] | null | undefined;
   activeIndex: unknown;
 }): PartySwitchResolutionRuntime {
   const ids = normalizePartyMemberIdsRuntime(input?.partyMembers, 1);

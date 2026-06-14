@@ -1,30 +1,10 @@
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
+import { normalizePartyMemberIdsRuntime } from "./party_runtime.ts";
 
 export type AppSimState = Omit<SimSnapshotRuntime, "doorOpenStates"> & {
   doorOpenStates: Record<string, number>;
   partySize: number;
 };
-
-function normalizePartyMembersRuntime(raw: unknown): number[] {
-  const src = Array.isArray(raw) ? raw : [];
-  const out: number[] = [];
-  const seen = new Set<number>();
-  for (const value of src) {
-    const id = Number(value) >>> 0;
-    if (id <= 0 || seen.has(id)) {
-      continue;
-    }
-    seen.add(id);
-    out.push(id);
-    if (out.length >= 10) {
-      break;
-    }
-  }
-  if (!out.length) {
-    out.push(1);
-  }
-  return out;
-}
 
 export function createInitialAppSimState(
   initialWorld: SimSnapshotRuntime["world"],
@@ -56,7 +36,7 @@ export function toAppSimStateRuntime(
   fallbackPartySize = 1
 ): AppSimState {
   const maybePartySize = Number((snapshot as { partySize?: number }).partySize);
-  const partyMembers = normalizePartyMembersRuntime(snapshot.partyMembers);
+  const partyMembers = normalizePartyMemberIdsRuntime(snapshot.partyMembers, 1);
   return {
     ...snapshot,
     doorOpenStates: Object.fromEntries(
