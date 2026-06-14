@@ -129,7 +129,10 @@ import {
   performPresenceHeartbeat,
   performPresenceLeave,
   performPresencePoll,
-  performWorldClockPoll
+  performWorldClockPoll,
+  type AuthoritativeNpcStateRow,
+  type RemotePresencePlayer,
+  type WorldClockPayload
 } from "./net/presence_runtime.ts";
 import {
   collectWorldItemsForMaintenanceFromLayer,
@@ -457,6 +460,8 @@ type AnimatedTileObject = {
   [key: string]: unknown;
 };
 type LegacyTalkActor = {
+  baseTile?: number;
+  frame?: number;
   id?: number;
   type?: number;
   x?: number;
@@ -478,6 +483,17 @@ type LegacyConversationVmOverrides = {
   greeting?: unknown;
   objNum?: unknown;
 };
+type AuthoritativeConversationPayload = {
+  conversation_session?: {
+    desc?: unknown;
+    next_pc?: unknown;
+    npc_id?: unknown;
+    opening_lines?: unknown;
+    session_id?: unknown;
+    stop_opcode?: unknown;
+    target_name?: unknown;
+  };
+};
 type LegacyConversationStateView = {
   converseArchiveA: Uint8Array | null;
   converseArchiveB: Uint8Array | null;
@@ -493,6 +509,13 @@ type LegacyConversationStateView = {
 type AppObjectLayerStateView = {
   entityLayer: U6EntityLayerRuntime | null;
   objectLayer: U6ObjectLayerRuntime | null;
+};
+type AppPresenceStateView = AppObjectLayerStateView & {
+  net: {
+    clockPollInFlight: boolean;
+    presencePollInFlight: boolean;
+    remotePlayers: RemotePresencePlayer[];
+  };
 };
 type LegacyPortraitEntry = {
   archive: "a" | "b";
@@ -535,6 +558,10 @@ type LegacyBackdropRenderStateView = {
   legacyStatusDisplay: number;
   objectLayer: U6ObjectLayerRuntime | null;
   tileSet: U6TileSetRuntime | null;
+};
+type AuthoritativeConversationStateView = {
+  legacyConversationEquipmentSlots: LegacyPanelSlotEntry[];
+  legacyConversationPortraitTile: number;
 };
 type StartupMenuRenderStateView = {
   basePalette: RgbPaletteRuntime | null;
@@ -3605,7 +3632,7 @@ async function netSetIntroPhase(phase: unknown): Promise<Record<string, unknown>
   return out;
 }
 
-async function netEnsureCharacter() {
+async function netEnsureCharacter(): Promise<void> {
   const out = await performNetEnsureCharacter(
     String(netCharacterNameInput?.value || "Avatar"),
     netRequest
@@ -3614,7 +3641,7 @@ async function netEnsureCharacter() {
   state.net.characterName = out.characterName;
 }
 
-function netSnapshotRoute() {
+function netSnapshotRoute(): string {
   const characterId = String(state.net.characterId || "").trim();
   return characterId ? `/api/characters/${characterId}/snapshot` : "/api/world/snapshot";
 }
@@ -3778,11 +3805,11 @@ async function netChangePassword() {
   );
 }
 
-function netLogout() {
+function netLogout(): void {
   void netLogoutAndPersist();
 }
 
-async function netLogoutAndPersist() {
+async function netLogoutAndPersist(): Promise<void> {
   const { saveErr, leaveErr } = await performNetLogoutSequence({
     hasSession: () => !!(state.net.token && state.net.userId),
     saveSnapshot: netSaveSnapshot,
@@ -3872,14 +3899,14 @@ async function netRunCriticalMaintenance(opts: { silent?: boolean } = {}) {
   });
 }
 
-async function netFetchWorldObjectsAtCell(x, y, z) {
+async function netFetchWorldObjectsAtCell(x: number, y: number, z: number) {
   if (!isNetAuthenticated()) {
     return null;
   }
   return requestWorldObjectsAtCell(x, y, z, netRequest);
 }
 
-async function netSendPresenceHeartbeat() {
+async function netSendPresenceHeartbeat(): Promise<void> {
   await performPresenceHeartbeat({
     session_id: state.net.sessionId,
     character_name: state.net.characterName || "Avatar",
@@ -3898,7 +3925,7 @@ async function netSendPresenceHeartbeat() {
   });
 }
 
-async function netLeavePresence() {
+async function netLeavePresence(): Promise<void> {
   await performPresenceLeave(state.net.sessionId, {
     isAuthenticated: isNetAuthenticated,
     request: netRequest,
@@ -3906,17 +3933,18 @@ async function netLeavePresence() {
   });
 }
 
-async function netPollPresence() {
+async function netPollPresence(): Promise<void> {
+  const presenceState = state as AppPresenceStateView;
   await performPresencePoll({
     isAuthenticated: isNetAuthenticated,
     request: netRequest,
     resetBackgroundFailures,
-    isPollInFlight: () => state.net.presencePollInFlight,
+    isPollInFlight: () => presenceState.net.presencePollInFlight,
     setPollInFlight: (inFlight) => {
-      state.net.presencePollInFlight = !!inFlight;
+      presenceState.net.presencePollInFlight = !!inFlight;
     },
     setRemotePlayers: (players) => {
-      state.net.remotePlayers = Array.isArray(players) ? players : [];
+      presenceState.net.remotePlayers = Array.isArray(players) ? players : [];
     },
     selfIdentity: () => ({
       sessionId: state.net.sessionId,
@@ -3926,18 +3954,24 @@ async function netPollPresence() {
   });
 }
 
-function applyAuthoritativeNpcStates(rows) {
-  if (!state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
+function applyAuthoritativeNpcStates(rows: unknown): void {
+  const presenceState = state as AppPresenceStateView;
+  if (!presenceState.entityLayer || !Array.isArray(presenceState.entityLayer.entries)) {
     return;
   }
-  applyAuthoritativeNpcStatesRuntime(state.entityLayer.entries, rows, performance.now());
+  applyAuthoritativeNpcStatesRuntime(presenceState.entityLayer.entries, rows, performance.now());
 }
 
-function applyAuthoritativeNpcOverrides(overrides) {
+function applyAuthoritativeNpcOverrides(overrides: unknown): void {
   applyAuthoritativeNpcStates(overrides);
 }
 
-function applyAuthoritativeWorldClock(clock) {
+function applyAuthoritativeWorldClock(clock: WorldClockPayload | null): void {
+  const clockRecord = clock && typeof clock === "object" ? clock as {
+    intro_state?: { phase?: unknown };
+    npc_overrides?: unknown;
+    npc_states?: AuthoritativeNpcStateRow[];
+  } : {};
   applyAuthoritativeWorldClockToSim(clock, (next) => {
     state.sim.tick = next.tick;
     const w = state.sim.world;
@@ -3945,32 +3979,41 @@ function applyAuthoritativeWorldClock(clock) {
     w.time_h = next.time_h;
     w.date_d = next.date_d;
     w.date_m = next.date_m;
-    w.date_y = next.date_y;
+      w.date_y = next.date_y;
   });
-  state.net.introPhase = String(clock?.intro_state?.phase || state.net.introPhase || "post_intro");
+  state.net.introPhase = String(clockRecord.intro_state?.phase || state.net.introPhase || "post_intro");
   updateIntroPhaseUi();
-  applyAuthoritativeNpcStates(Array.isArray(clock?.npc_states) ? clock.npc_states : clock?.npc_overrides);
+  applyAuthoritativeNpcStates(Array.isArray(clockRecord.npc_states) ? clockRecord.npc_states : clockRecord.npc_overrides);
 }
 
-async function netPollWorldClock() {
+async function netPollWorldClock(): Promise<void> {
+  const presenceState = state as AppPresenceStateView;
   await performWorldClockPoll({
     isAuthenticated: isNetAuthenticated,
     request: netRequest,
     resetBackgroundFailures,
-    isPollInFlight: () => state.net.clockPollInFlight,
+    isPollInFlight: () => presenceState.net.clockPollInFlight,
     setPollInFlight: (inFlight) => {
-      state.net.clockPollInFlight = !!inFlight;
+      presenceState.net.clockPollInFlight = !!inFlight;
     },
     applyClock: applyAuthoritativeWorldClock
   });
 }
 
-function startAuthoritativeConversationFromPayload(payload, actor, tileId) {
-  const sessionId = String(payload?.session_id || "").trim();
-  const targetName = sanitizeLegacyHudLabelText(String(payload?.target_name || canonicalTalkSpeakerForTile(tileId) || "Unknown")) || "Unknown";
-  const desc = sanitizeLegacyHudLabelText(String(payload?.desc || "").trim() || targetName);
-  const openingLines = Array.isArray(payload?.opening_lines)
-    ? payload.opening_lines.map((line) => String(line || "").trim()).filter(Boolean)
+function startAuthoritativeConversationFromPayload(
+  payload: unknown,
+  actor: LegacyTalkActor,
+  tileId: number
+): void {
+  const conversationState = state as unknown as AuthoritativeConversationStateView;
+  const session = payload && typeof payload === "object"
+    ? payload as NonNullable<AuthoritativeConversationPayload["conversation_session"]>
+    : {};
+  const sessionId = String(session.session_id || "").trim();
+  const targetName = sanitizeLegacyHudLabelText(String(session.target_name || canonicalTalkSpeakerForTile(tileId) || "Unknown")) || "Unknown";
+  const desc = sanitizeLegacyHudLabelText(String(session.desc || "").trim() || targetName);
+  const openingLines = Array.isArray(session.opening_lines)
+    ? session.opening_lines.map((line) => String(line || "").trim()).filter(Boolean)
     : [];
   state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
   state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
@@ -3980,20 +4023,20 @@ function startAuthoritativeConversationFromPayload(payload, actor, tileId) {
   state.legacyConversationInput = "";
   state.legacyConversationTargetName = targetName;
   state.legacyConversationActorEntityId = Number(actor?.id) | 0;
-  state.legacyConversationPortraitTile = tileId;
-  state.legacyConversationTargetObjNum = Number(payload?.npc_id) | 0;
+  conversationState.legacyConversationPortraitTile = tileId;
+  state.legacyConversationTargetObjNum = Number(session.npc_id) | 0;
   state.legacyConversationTargetObjType = Number(actor?.type) | 0;
   state.legacyConversationNpcKey = "";
   state.legacyConversationPendingPrompt = "";
   state.legacyConversationScript = null;
   state.legacyConversationDescText = desc;
   state.legacyConversationRules = [];
-  state.legacyConversationPc = Number(payload?.next_pc) | 0;
-  state.legacyConversationInputOpcode = Number(payload?.stop_opcode) | 0;
+  state.legacyConversationPc = Number(session.next_pc) | 0;
+  state.legacyConversationInputOpcode = Number(session.stop_opcode) | 0;
   state.legacyConversationVmContext = null;
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
   state.legacyConversationShowInventory = equipSlots.length > 0;
-  state.legacyConversationEquipmentSlots = equipSlots;
+  conversationState.legacyConversationEquipmentSlots = equipSlots;
   const openingBlock = [formatYouSeeLine(desc || targetName)];
   if (openingLines.length > 0) {
     openingBlock.push("");
@@ -4011,7 +4054,7 @@ function startAuthoritativeConversationFromPayload(payload, actor, tileId) {
   }
 }
 
-async function netStartConversation(actor, tx, ty, tz) {
+async function netStartConversation(actor: LegacyTalkActor, tx: number, ty: number, tz: number) {
   const tileId = ((Number(actor?.baseTile) | 0) + (Number(actor?.frame) | 0)) & 0xffff;
   const out = await netRequest("/api/world/objects/interact", {
     method: "POST",
@@ -4026,12 +4069,13 @@ async function netStartConversation(actor, tx, ty, tz) {
       player_name: String(state.net.characterName || "Avatar")
     })
   }, true);
-  startAuthoritativeConversationFromPayload(out?.conversation_session || {}, actor, tileId);
+  const payload = out as AuthoritativeConversationPayload;
+  startAuthoritativeConversationFromPayload(payload.conversation_session || {}, actor, tileId);
   diagBox.className = "diag ok";
-  diagBox.textContent = `Talk: ${String(out?.conversation_session?.target_name || "NPC")} (authoritative) at ${tx},${ty},${tz}.`;
+  diagBox.textContent = `Talk: ${String(payload.conversation_session?.target_name || "NPC")} (authoritative) at ${tx},${ty},${tz}.`;
 }
 
-async function netReplyConversation(typed) {
+async function netReplyConversation(typed: unknown) {
   const out = await netRequest("/api/world/conversation/respond", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -4043,7 +4087,7 @@ async function netReplyConversation(typed) {
   return out;
 }
 
-function setAccountModalOpen(open) {
+function setAccountModalOpen(open: boolean): void {
   setModalOpenRuntime(netAccountModal, !!open);
 }
 
