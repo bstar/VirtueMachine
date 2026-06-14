@@ -1,4 +1,5 @@
 import { normalizePartyMemberIdsRuntime } from "../sim/party_runtime.ts";
+import type { PartyMemberIdSourceRuntime } from "../sim/party_runtime.ts";
 
 export type PartyPanelMemberRuntime = {
   id: number;
@@ -38,7 +39,7 @@ export function clampActivePartyIndexRuntime(activeIndex: unknown, partyCount: n
 }
 
 export function projectPartyPanelMembersRuntime(input: {
-  partyMembers: readonly unknown[] | null | undefined;
+  partyMembers: readonly PartyMemberIdSourceRuntime[] | null | undefined;
   activeIndex: unknown;
   nameById?: Record<string, string> | null;
 }): PartyPanelMemberRuntime[] {
@@ -73,7 +74,7 @@ function digitKeyToLegacyTargetIndexRuntime(digitKey: unknown): number {
 
 export function resolvePartySwitchDigitRuntime(input: {
   digitKey: unknown;
-  partyMembers: readonly unknown[] | null | undefined;
+  partyMembers: readonly PartyMemberIdSourceRuntime[] | null | undefined;
   activeIndex: unknown;
 }): PartySwitchResolutionRuntime {
   const ids = normalizePartyMemberIdsRuntime(input?.partyMembers, 1);

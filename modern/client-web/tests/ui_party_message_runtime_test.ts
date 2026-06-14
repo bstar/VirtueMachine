@@ -10,6 +10,7 @@ import { partyMemberIdSourcesFromJsonRuntime } from "../sim/party_runtime.ts";
 function testPartyMemberNormalization() {
   assert.deepEqual(partyMemberIdSourcesFromJsonRuntime(null), []);
   assert.deepEqual(partyMemberIdSourcesFromJsonRuntime([1, "2"]), [1, "2"]);
+  assert.deepEqual(partyMemberIdSourcesFromJsonRuntime([1, null, { id: 2 }, "3"]), [1, "3"]);
   assert.deepEqual(
     normalizePartyMemberIdsRuntime([1, 12, 12, 0, -3, 23], 1),
     [1, 12, 23],

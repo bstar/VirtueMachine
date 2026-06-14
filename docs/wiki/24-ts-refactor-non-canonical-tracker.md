@@ -82,7 +82,7 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 - Status: `temporary`
 - Location: `modern/client-web/app.ts`, `modern/client-web/ui/party_message_runtime.ts`, `modern/client-web/ui_probe_contract.ts`
-- Note: U3 harness now has canonical party ordering/selection runtime logic, live snapshots persist `sim.partyMembers`, render/probe/input paths read the sim-owned roster directly, and party member ID normalization is shared through `sim/party_runtime.ts`.
+- Note: U3 harness now has canonical party ordering/selection runtime logic, live snapshots persist `sim.partyMembers`, render/probe/input paths read the sim-owned roster directly, party member JSON rows decode to scalar ID sources before normalization, and party member ID normalization is shared through `sim/party_runtime.ts`.
 - Risk: party roster mutations are still not server/sim-core authored, so roster composition may drift once recruit/dismiss workflows exist.
 - Exit criteria: bridge party membership mutation from sim-core/net payloads and retire this tracker item.
 

@@ -1,3 +1,5 @@
+export type PartyMemberIdSourceRuntime = number | string;
+
 export function normalizePartyMemberIdRuntime(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) {
@@ -6,12 +8,17 @@ export function normalizePartyMemberIdRuntime(value: unknown): number {
   return (n >>> 0) || 1;
 }
 
-export function partyMemberIdSourcesFromJsonRuntime(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+export function partyMemberIdSourcesFromJsonRuntime(value: unknown): PartyMemberIdSourceRuntime[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is PartyMemberIdSourceRuntime => {
+    return typeof item === "number" || typeof item === "string";
+  });
 }
 
 export function normalizePartyMemberIdsRuntime(
-  partyMembers: readonly unknown[] | null | undefined,
+  partyMembers: readonly PartyMemberIdSourceRuntime[] | null | undefined,
   fallbackId = 1
 ): number[] {
   const out: number[] = [];
