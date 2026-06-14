@@ -217,7 +217,10 @@ import {
 } from "./sim/app_state_runtime.ts";
 import { applyAvatarMoveCommandRuntime } from "./sim/avatar_move_runtime.ts";
 import { U6AnimDataRuntime } from "./sim/anim_data_runtime.ts";
-import { U6EntityLayerRuntime } from "./sim/entity_layer_runtime.ts";
+import {
+  U6EntityLayerRuntime,
+  type U6EntityEntryRuntime
+} from "./sim/entity_layer_runtime.ts";
 import { U6MapRuntime } from "./sim/map_runtime.ts";
 import {
   LEGACY_COMMAND_TYPE_RUNTIME,
@@ -340,7 +343,8 @@ import {
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
   shouldBlackoutTileRuntime,
-  stableCornerVariantRuntime
+  stableCornerVariantRuntime,
+  type LegacyViewContextRuntime
 } from "./ui/legacy_view_tile_runtime.ts";
 import { isTypingContextRuntime } from "./ui/input_runtime.ts";
 import {
@@ -6007,18 +6011,20 @@ function terrainOf(tileId) {
   return state.terrainType[tileId];
 }
 
-function hasWallTerrain(tileId) {
+type EntityPoseRuntime = "eat" | "play" | "sit" | "sleep" | "stand" | "walk";
+
+function hasWallTerrain(tileId: number): boolean {
   return (terrainOf(tileId) & 0x04) !== 0;
 }
 
-function isTileBackground(tileId) {
+function isTileBackground(tileId: number): boolean {
   if (!state.tileFlags2) {
     return false;
   }
   return (state.tileFlags2[tileId & 0x07ff] & 0x20) !== 0;
 }
 
-function buildLegacyViewContext(startX, startY, wz) {
+function buildLegacyViewContext(startX: number, startY: number, wz: number): LegacyViewContextRuntime | null {
   if (!state.mapCtx) {
     return null;
   }
@@ -6041,7 +6047,16 @@ function buildLegacyViewContext(startX, startY, wz) {
   });
 }
 
-function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
+function applyLegacyCornerVariant(
+  tileId: number,
+  wx: number,
+  wy: number,
+  wz: number,
+  viewCtx: LegacyViewContextRuntime | null
+): number {
+  if (!state.mapCtx) {
+    return tileId & 0xffff;
+  }
   return applyLegacyCornerVariantRuntime(tileId, wx, wy, wz, {
     mapTileAt: (tx, ty, tz) => state.mapCtx.tileAt(tx, ty, tz),
     terrainOf,
@@ -6049,14 +6064,28 @@ function applyLegacyCornerVariant(tileId, wx, wy, wz, viewCtx) {
   });
 }
 
-function shouldBlackoutTile(rawTile, wx, wy, viewCtx) {
+function shouldBlackoutTile(
+  rawTile: number,
+  wx: number,
+  wy: number,
+  viewCtx: LegacyViewContextRuntime | null
+): boolean {
   return shouldBlackoutTileRuntime(rawTile, wx, wy, {
     terrainOf,
     viewCtx
   });
 }
 
-function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
+function stableCornerVariant(
+  rawTile: number,
+  wx: number,
+  wy: number,
+  wz: number,
+  viewCtx: LegacyViewContextRuntime | null
+): number {
+  if (!state.mapCtx) {
+    return rawTile & 0xffff;
+  }
   return stableCornerVariantRuntime(rawTile, wx, wy, wz, {
     mapTileAt: (tx, ty, tz) => state.mapCtx.tileAt(tx, ty, tz),
     terrainOf,
@@ -6064,7 +6093,12 @@ function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
   });
 }
 
-function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
+function buildBaseTileBuffersCurrent(
+  startX: number,
+  startY: number,
+  wz: number,
+  viewCtx: LegacyViewContextRuntime | null
+): ReturnType<typeof buildBaseTileBuffersRuntime> {
   return buildBaseTileBuffersRuntime({
     isBackgroundObjectTile: isTileBackground,
     mapTileAt: state.mapCtx ? (wx, wy, z) => state.mapCtx.tileAt(wx, wy, z) : null,
@@ -6090,7 +6124,12 @@ type BaseTileBuffers = ReturnType<typeof buildBaseTileBuffersCurrent> & {
   debug: unknown;
 };
 
-function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
+function buildBaseTileBuffers(
+  startX: number,
+  startY: number,
+  wz: number,
+  viewCtx: LegacyViewContextRuntime | null
+): BaseTileBuffers {
   const base: BaseTileBuffers = {
     ...buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx),
     debug: null
@@ -6099,55 +6138,67 @@ function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
   return base;
 }
 
-function avatarFacingFrameOffset() {
+function avatarFacingFrameOffset(): number {
   return directionGroupFromDxDyRuntime(state.avatarFacingDx, state.avatarFacingDy);
 }
 
-function legacyActorDirectionGroup(entity) {
+function legacyActorDirectionGroup(entity: U6EntityEntryRuntime): number {
   return legacyActorDirectionGroupRuntime(entity);
 }
 
-function legacyActorStandingTileId(entity, dirGroup, moving) {
+function legacyActorStandingTileId(entity: U6EntityEntryRuntime, dirGroup: number, moving: boolean): number {
   return legacyActorStandingTileIdRuntime(entity, dirGroup, moving, state.sim.tick >>> 0);
 }
 
-function sleepFrameOffsetForBed(bedObj) {
+function sleepFrameOffsetForBed(bedObj: FurniturePoseObjectRuntime | null | undefined): number {
   if (!bedObj) {
     return 0;
   }
   return sleepFrameOffsetForBedAtCell(bedObj, bedObj.x | 0, bedObj.y | 0);
 }
 
-function tileFlagsForTile(tileId) {
+function tileFlagsForTile(tileId: number): number {
   if (!state.tileFlags) {
     return 0;
   }
   return state.tileFlags[tileId & 0x07ff] ?? 0;
 }
 
-function furnitureOccupancyCells(obj: FurniturePoseObjectRuntime | null | undefined) {
+function furnitureOccupancyCells(obj: FurniturePoseObjectRuntime | null | undefined): ReturnType<typeof furnitureOccupancyCellsRuntime> {
   return furnitureOccupancyCellsRuntime(obj, tileFlagsForTile);
 }
 
-function sleepBedCellFrameOffset(bedObj: FurniturePoseObjectRuntime, wx: number, wy: number) {
+function sleepBedCellFrameOffset(bedObj: FurniturePoseObjectRuntime, wx: number, wy: number): number {
   return sleepBedCellFrameOffsetRuntime(bedObj, wx, wy, tileFlagsForTile);
 }
 
-function preferredSleepCellForBed(bedObj: FurniturePoseObjectRuntime, fromX: number, fromY: number) {
+function preferredSleepCellForBed(
+  bedObj: FurniturePoseObjectRuntime,
+  fromX: number,
+  fromY: number
+): ReturnType<typeof preferredSleepCellForBedRuntime> {
   return preferredSleepCellForBedRuntime(bedObj, fromX, fromY, tileFlagsForTile);
 }
 
-function sleepFrameOffsetForBedAtCell(bedObj: FurniturePoseObjectRuntime | null | undefined, wx: number, wy: number) {
+function sleepFrameOffsetForBedAtCell(
+  bedObj: FurniturePoseObjectRuntime | null | undefined,
+  wx: number,
+  wy: number
+): number {
   /* Legacy AI_SLEEP path in seg_1E0F checks `(GetFrame(bed) - D_0658)`:
      only normalized 0 and 6 are valid sleep orientations, with 6 using frame 1. */
   return sleepFrameOffsetForBedAtCellRuntime(bedObj, wx, wy, tileFlagsForTile);
 }
 
-function bedInteractionScore(bedObj: FurniturePoseObjectRuntime, fromX: number, fromY: number) {
+function bedInteractionScore(
+  bedObj: FurniturePoseObjectRuntime,
+  fromX: number,
+  fromY: number
+): ReturnType<typeof bedInteractionScoreRuntime> {
   return bedInteractionScoreRuntime(bedObj, fromX, fromY, tileFlagsForTile);
 }
 
-function sleepBaseTileForEntity(entity) {
+function sleepBaseTileForEntity(entity: U6EntityEntryRuntime): number {
   if (!state.entityLayer || !state.entityLayer.baseTiles) {
     return entity.baseTile | 0;
   }
@@ -6155,7 +6206,7 @@ function sleepBaseTileForEntity(entity) {
   return legacySleepBase > 0 ? (legacySleepBase | 0) : (entity.baseTile | 0);
 }
 
-function avatarRenderTileId() {
+function avatarRenderTileId(): number | null {
   if (!state.entityLayer || !state.entityLayer.entries) {
     return null;
   }
@@ -6203,7 +6254,7 @@ function avatarRenderTileId() {
   return legacyActorStandingTileId(avatar, dirGroup, walkMoving);
 }
 
-function entityPoseAt(entity) {
+function entityPoseAt(entity: U6EntityEntryRuntime): EntityPoseRuntime {
   const explicitPose = String(entity?.authoritativePose || "").trim().toLowerCase();
   if (explicitPose === "sleep" || explicitPose === "sit" || explicitPose === "eat" || explicitPose === "play" || explicitPose === "walk") {
     return explicitPose;
@@ -6223,11 +6274,11 @@ function entityPoseAt(entity) {
   return "stand";
 }
 
-function entityChairAt(entity) {
+function entityChairAt(entity: U6EntityEntryRuntime): FurniturePoseObjectRuntime | null {
   return furnitureAtWorldCell(state.sim, entity.x | 0, entity.y | 0, entity.z | 0);
 }
 
-function entityBedAt(entity) {
+function entityBedAt(entity: U6EntityEntryRuntime): FurniturePoseObjectRuntime | null {
   if (!state.objectLayer) {
     return null;
   }
@@ -6240,7 +6291,7 @@ function entityBedAt(entity) {
   return null;
 }
 
-function entityRenderTileId(e) {
+function entityRenderTileId(e: U6EntityEntryRuntime): number {
   const pose = entityPoseAt(e);
   if (pose === "sleep") {
     const sleepBase = sleepBaseTileForEntity(e);
@@ -6279,7 +6330,7 @@ function entityRenderTileId(e) {
   return resolveAnimatedObjectTile(e);
 }
 
-function avatarBaseTileId() {
+function avatarBaseTileId(): number | null {
   if (!state.entityLayer || !state.entityLayer.entries) {
     return null;
   }
@@ -6290,16 +6341,16 @@ function avatarBaseTileId() {
   return avatar.baseTile & 0xffff;
 }
 
-function remotePlayerTileId(player) {
+function remotePlayerTileId(player: RemotePresencePlayer): number | null {
   const base = avatarBaseTileId();
   if (base == null) {
     return null;
   }
-  const frame = remotePlayerFrameOffsetRuntime(player.facing_dx | 0, player.facing_dy | 0);
+  const frame = remotePlayerFrameOffsetRuntime(Number(player.facing_dx) | 0, Number(player.facing_dy) | 0);
   return (base + frame) & 0xffff;
 }
 
-function tileColor(t, palette) {
+function tileColor(t: number, palette: RgbPaletteRuntime | null | undefined): string {
   if (!palette) {
     const [r, g, b] = fallbackTileColor(t);
     return `rgb(${r}, ${g}, ${b})`;
@@ -6309,7 +6360,7 @@ function tileColor(t, palette) {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
-function paletteForTile(tileId) {
+function paletteForTile(tileId: number): RgbPaletteRuntime | null {
   if (!state.basePalette) {
     return null;
   }
@@ -6319,7 +6370,7 @@ function paletteForTile(tileId) {
   return getRenderPalette();
 }
 
-function paletteKeyForTile(tileId) {
+function paletteKeyForTile(tileId: number): string {
   if (!state.enablePaletteFx || !state.tileSet || !state.tileSet.tileUsesLegacyPaletteFx(tileId)) {
     return "pal-static";
   }
