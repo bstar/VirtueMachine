@@ -183,6 +183,16 @@ import {
   remotePlayerFrameOffsetRuntime
 } from "./sim/legacy_actor_frame_runtime.ts";
 import {
+  bedInteractionScoreRuntime,
+  chairFrameForCellRuntime,
+  furnitureOccupancyCellsRuntime,
+  objectIsBedAtCellRuntime,
+  objectIsChairAtCellRuntime,
+  preferredSleepCellForBedRuntime,
+  sleepBedCellFrameOffsetRuntime,
+  sleepFrameOffsetForBedAtCellRuntime
+} from "./sim/furniture_pose_runtime.ts";
+import {
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
   resolvedDoorFrameRuntime,
@@ -6064,47 +6074,26 @@ function clearPendingAvatarMoveCommands(sim) {
 }
 
 function chairFrameForCell(obj, tx, ty) {
-  if (!obj) {
-    return null;
-  }
-  const type = (obj.type | 0) & 0x03ff;
-  if (type === 0x0fc) {
-    return (obj.frame | 0) & 0x03;
-  }
-  if (type !== 0x147) {
-    return null;
-  }
-  for (const cell of objectFootprintTiles(state.sim, obj, obj.x | 0, obj.y | 0)) {
-    if ((cell.x | 0) !== (tx | 0) || (cell.y | 0) !== (ty | 0)) {
-      continue;
-    }
-    const normalizedFrame = (((cell.tileId | 0) - (obj.baseTile | 0)) & 0x3f);
-    if (normalizedFrame === 2) {
-      return normalizedFrame;
-    }
-  }
-  return null;
+  return chairFrameForCellRuntime(
+    obj,
+    tx,
+    ty,
+    (o) => objectFootprintTiles(state.sim, o, o.x | 0, o.y | 0)
+  );
 }
 
 function objectIsChairAtCell(obj, tx, ty) {
-  if (!obj) {
-    return false;
-  }
-  const type = (obj.type | 0) & 0x03ff;
-  if (type === 0x147) {
-    return chairFrameForCell(obj, tx, ty) !== null;
-  }
-  if (!isChairObjectRuntime(obj)) {
-    return false;
-  }
-  return furnitureOccupancyCells(obj).some((c) => (c.x | 0) === (tx | 0) && (c.y | 0) === (ty | 0));
+  return objectIsChairAtCellRuntime(
+    obj,
+    tx,
+    ty,
+    tileFlagsForTile,
+    (o) => objectFootprintTiles(state.sim, o, o.x | 0, o.y | 0)
+  );
 }
 
 function objectIsBedAtCell(obj, tx, ty) {
-  if (!obj || !isBedObjectRuntime(obj)) {
-    return false;
-  }
-  return furnitureOccupancyCells(obj).some((c) => (c.x | 0) === (tx | 0) && (c.y | 0) === (ty | 0));
+  return objectIsBedAtCellRuntime(obj, tx, ty, tileFlagsForTile);
 }
 
 function furnitureAtWorldCell(sim, tx, ty, tz) {
@@ -7722,103 +7711,25 @@ function tileFlagsForTile(tileId) {
 }
 
 function furnitureOccupancyCells(obj) {
-  if (!obj) {
-    return [];
-  }
-  const cells = [{ x: obj.x | 0, y: obj.y | 0 }];
-  const tileId = ((obj.baseTile | 0) + (obj.frame | 0)) & 0xffff;
-  const tf = tileFlagsForTile(tileId);
-  if (tf & 0x80) {
-    cells.push({ x: (obj.x | 0) - 1, y: obj.y | 0 });
-  }
-  if (tf & 0x40) {
-    cells.push({ x: obj.x | 0, y: (obj.y | 0) - 1 });
-  }
-  if ((tf & 0xc0) === 0xc0) {
-    cells.push({ x: (obj.x | 0) - 1, y: (obj.y | 0) - 1 });
-  }
-  return cells;
+  return furnitureOccupancyCellsRuntime(obj, tileFlagsForTile);
 }
 
 function sleepBedCellFrameOffset(bedObj, wx, wy) {
-  if (!bedObj) {
-    return 0;
-  }
-  const bx = bedObj.x | 0;
-  const by = bedObj.y | 0;
-  const tileId = ((bedObj.baseTile | 0) + (bedObj.frame | 0)) & 0xffff;
-  const tf = tileFlagsForTile(tileId);
-  const hasDoubleH = (tf & 0x80) !== 0;
-  const hasDoubleV = (tf & 0x40) !== 0;
-
-  if (wx === bx && wy === by) {
-    return 0;
-  }
-  if (hasDoubleH && wx === (bx - 1) && wy === by) {
-    return 1;
-  }
-  if (hasDoubleV && wx === bx && wy === (by - 1)) {
-    return hasDoubleH ? 2 : 1;
-  }
-  if (hasDoubleH && hasDoubleV && wx === (bx - 1) && wy === (by - 1)) {
-    return 3;
-  }
-  return 0;
+  return sleepBedCellFrameOffsetRuntime(bedObj, wx, wy, tileFlagsForTile);
 }
 
 function preferredSleepCellForBed(bedObj, fromX, fromY) {
-  const cells = furnitureOccupancyCells(bedObj);
-  if (!cells.length) {
-    return { x: bedObj.x | 0, y: bedObj.y | 0, z: bedObj.z | 0 };
-  }
-  let best = cells[0];
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const cell of cells) {
-    const normalized = (((bedObj.frame | 0) - sleepBedCellFrameOffset(bedObj, cell.x, cell.y)) & 0x07);
-    const legacySleepValid = normalized === 0 || normalized === 6;
-    const dist = Math.abs((fromX | 0) - cell.x) + Math.abs((fromY | 0) - cell.y);
-    const score = (legacySleepValid ? 0 : 1000) + dist;
-    if (score < bestScore) {
-      best = cell;
-      bestScore = score;
-    }
-  }
-  return { x: best.x | 0, y: best.y | 0, z: bedObj.z | 0 };
+  return preferredSleepCellForBedRuntime(bedObj, fromX, fromY, tileFlagsForTile);
 }
 
 function sleepFrameOffsetForBedAtCell(bedObj, wx, wy) {
-  if (!bedObj) {
-    return 0;
-  }
   /* Legacy AI_SLEEP path in seg_1E0F checks `(GetFrame(bed) - D_0658)`:
      only normalized 0 and 6 are valid sleep orientations, with 6 using frame 1. */
-  const cellOffset = sleepBedCellFrameOffset(bedObj, wx | 0, wy | 0);
-  const normalized = (((bedObj.frame | 0) - cellOffset) & 0x07);
-  return normalized === 6 ? 1 : 0;
+  return sleepFrameOffsetForBedAtCellRuntime(bedObj, wx, wy, tileFlagsForTile);
 }
 
 function bedInteractionScore(bedObj, fromX, fromY) {
-  const cells = furnitureOccupancyCells(bedObj);
-  if (!cells.length) {
-    return { valid: false, dist: 0 };
-  }
-  let valid = false;
-  let validDist = Number.POSITIVE_INFINITY;
-  let anyDist = Number.POSITIVE_INFINITY;
-  for (const cell of cells) {
-    const dist = Math.abs((fromX | 0) - (cell.x | 0)) + Math.abs((fromY | 0) - (cell.y | 0));
-    if (dist < anyDist) {
-      anyDist = dist;
-    }
-    const normalized = (((bedObj.frame | 0) - sleepBedCellFrameOffset(bedObj, cell.x | 0, cell.y | 0)) & 0x07);
-    if (normalized === 0 || normalized === 6) {
-      valid = true;
-      if (dist < validDist) {
-        validDist = dist;
-      }
-    }
-  }
-  return { valid, dist: valid ? validDist : anyDist };
+  return bedInteractionScoreRuntime(bedObj, fromX, fromY, tileFlagsForTile);
 }
 
 function sleepBaseTileForEntity(entity) {
