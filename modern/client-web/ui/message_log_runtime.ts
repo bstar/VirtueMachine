@@ -23,6 +23,13 @@ export type MessageLogScrollCommandRuntime =
   | "home"
   | "end";
 
+export type MessageLogEntrySourceRuntime = object & {
+  level?: unknown;
+  seq?: unknown;
+  text?: unknown;
+  tick?: unknown;
+};
+
 function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
@@ -40,26 +47,32 @@ function clampMessageScrollOffsetRuntime(totalEntries: number, windowSize: numbe
 }
 
 export function normalizeMessageLogEntriesRuntime(input: {
-  entries: unknown;
+  entries: readonly MessageLogEntrySourceRuntime[] | null | undefined;
   lineMaxChars?: number;
 }): MessageLogEntryRuntime[] {
   const lineMaxChars = Math.max(8, Number(input?.lineMaxChars) | 0) || 64;
-  const src = Array.isArray(input?.entries) ? input.entries : [];
+  const src = input?.entries || [];
   const out: MessageLogEntryRuntime[] = src.map((row, i: number) => {
-    const entry = row && typeof row === "object" ? row as Record<string, unknown> : {};
     return {
-      tick: toU32(entry.tick != null ? entry.tick : i),
-      level: String(entry.level || "info"),
-      text: String(entry.text || "").replace(/\s+/g, " ").trim().slice(0, lineMaxChars),
-      seq: toU32(entry.seq != null ? entry.seq : i)
+      tick: toU32(row.tick != null ? row.tick : i),
+      level: String(row.level || "info"),
+      text: String(row.text || "").replace(/\s+/g, " ").trim().slice(0, lineMaxChars),
+      seq: toU32(row.seq != null ? row.seq : i)
     };
   });
   out.sort((a, b) => (a.tick - b.tick) || (a.seq - b.seq));
   return out;
 }
 
+export function messageLogEntrySourcesFromJsonRuntime(entries: unknown): MessageLogEntrySourceRuntime[] {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  return entries.filter((entry): entry is MessageLogEntrySourceRuntime => !!entry && typeof entry === "object");
+}
+
 export function computeMessageLogWindowRuntime(input: {
-  entries: unknown;
+  entries: readonly MessageLogEntrySourceRuntime[] | null | undefined;
   windowSize?: number;
   scrollOffset?: unknown;
   lineMaxChars?: number;
@@ -87,7 +100,7 @@ export function computeMessageLogWindowRuntime(input: {
 }
 
 export function applyMessageLogScrollCommandRuntime(input: {
-  entries: unknown;
+  entries: readonly MessageLogEntrySourceRuntime[] | null | undefined;
   windowSize?: number;
   scrollOffset?: unknown;
   lineMaxChars?: number;
@@ -132,7 +145,7 @@ export function applyMessageLogScrollCommandRuntime(input: {
 }
 
 export function encodeMessageLogSnapshotRuntime(input: {
-  entries: unknown;
+  entries: readonly MessageLogEntrySourceRuntime[] | null | undefined;
   windowSize?: number;
   scrollOffset?: unknown;
   lineMaxChars?: number;
@@ -160,12 +173,16 @@ export function decodeMessageLogSnapshotRuntime(raw: unknown): {
 } | null {
   try {
     const parsed = (typeof raw === "string") ? JSON.parse(raw) : raw;
+    const parsedRecord = parsed && typeof parsed === "object"
+      ? parsed as { entries?: unknown; scroll_offset?: unknown; window_size?: unknown }
+      : {};
+    const sourceEntries = messageLogEntrySourcesFromJsonRuntime(parsedRecord.entries);
     const entries = normalizeMessageLogEntriesRuntime({
-      entries: parsed?.entries,
+      entries: sourceEntries,
       lineMaxChars: 64
     });
-    const windowSize = Math.max(1, Number(parsed?.window_size) | 0) || 8;
-    const scrollOffset = clampMessageScrollOffsetRuntime(entries.length, windowSize, parsed?.scroll_offset);
+    const windowSize = Math.max(1, Number(parsedRecord.window_size) | 0) || 8;
+    const scrollOffset = clampMessageScrollOffsetRuntime(entries.length, windowSize, parsedRecord.scroll_offset);
     return {
       entries,
       window_size: windowSize,

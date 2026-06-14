@@ -14,7 +14,8 @@ import {
 } from "./ui/party_message_runtime.ts";
 import {
   buildMessageLogRegressionProbesRuntime,
-  computeMessageLogWindowRuntime
+  computeMessageLogWindowRuntime,
+  messageLogEntrySourcesFromJsonRuntime
 } from "./ui/message_log_runtime.ts";
 import { listPanelScopeRuntime } from "./ui/panel_scope_runtime.ts";
 import { partyMemberIdSourcesFromJsonRuntime } from "./sim/party_runtime.ts";
@@ -369,7 +370,7 @@ export function buildUiProbeContract(opts: BuildUiProbeOptions = {}) {
       },
       message_log_panel: {
         entries: computeMessageLogWindowRuntime({
-          entries: src.messages,
+          entries: messageLogEntrySourcesFromJsonRuntime(src.messages),
           windowSize: 8,
           scrollOffset: 0,
           lineMaxChars: 64

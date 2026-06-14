@@ -4,7 +4,8 @@ import {
   buildMessageLogRegressionProbesRuntime,
   computeMessageLogWindowRuntime,
   decodeMessageLogSnapshotRuntime,
-  encodeMessageLogSnapshotRuntime
+  encodeMessageLogSnapshotRuntime,
+  messageLogEntrySourcesFromJsonRuntime
 } from "../ui/message_log_runtime.ts";
 
 function makeEntries(count: number) {
@@ -17,6 +18,13 @@ function makeEntries(count: number) {
 }
 
 function testWindowBoundaries() {
+  assert.deepEqual(messageLogEntrySourcesFromJsonRuntime(null), []);
+  assert.equal(messageLogEntrySourcesFromJsonRuntime([
+    { tick: 1, text: "ok" },
+    null,
+    "bad"
+  ]).length, 1);
+
   const short = computeMessageLogWindowRuntime({
     entries: makeEntries(3),
     windowSize: 8,
