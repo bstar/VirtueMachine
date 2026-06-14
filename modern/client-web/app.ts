@@ -31,7 +31,8 @@ import {
   decodePortraitFromArchiveRuntime,
   decodeU6CursorPtrRuntime,
   decodeU6ShapeFromBufferRuntime,
-  decodeU6ShpArchiveRuntime
+  decodeU6ShpArchiveRuntime,
+  type U6ShapeRuntime
 } from "./assets/shape_archive_runtime.ts";
 import {
   buildLegacyPaletteFrameRuntime,
@@ -485,6 +486,24 @@ type AppObjectLayerStateView = {
   entityLayer: U6EntityLayerRuntime | null;
   objectLayer: U6ObjectLayerRuntime | null;
 };
+type LegacyPortraitEntry = {
+  archive: "a" | "b";
+  index: number;
+};
+type LegacyConversationPanelPortraitProbe = {
+  target_name?: unknown;
+  target_obj_num?: unknown;
+  target_obj_type?: unknown;
+};
+type LegacyPortraitStateView = {
+  avatarPortraitCanvas: HTMLCanvasElement | null;
+  basePalette: RgbPaletteRuntime | null;
+  legacyConversationTargetObjNum: number | null;
+  legacyConversationTargetObjType: number | null;
+  portraitArchiveA: Uint8Array | null;
+  portraitArchiveB: Uint8Array | null;
+  portraitCanvasCache: Map<string, HTMLCanvasElement>;
+};
 
 function byId<T = HTMLElement>(id: string): T {
   return document.getElementById(id) as unknown as T;
@@ -672,7 +691,7 @@ const LEGACY_COMBAT_MODE_LABELS = Object.freeze([
   "RETREAT",
   "ASSAULT"
 ]);
-const LEGACY_GENERIC_PORTRAIT_BY_TYPE = Object.freeze({
+const LEGACY_GENERIC_PORTRAIT_BY_TYPE: Readonly<Record<number, number>> = Object.freeze({
   /* C_2FC1_1C19 generic portrait remaps for high objNums. */
   0x175: 0xc0, /* wisp */
   0x17e: 0xc1, /* guard */
@@ -1656,7 +1675,7 @@ async function submitAuthoritativeConversationInput() {
   pushLegacyConversationPrompt();
 }
 
-function handleLegacyConversationKeydown(ev) {
+function handleLegacyConversationKeydown(ev: KeyboardEvent): boolean {
   if (state.legacyConversationAuthoritative && !state.legacyConversationPaging && String(ev?.key || "") === "Enter") {
     submitAuthoritativeConversationInput().catch((err) => {
       diagBox.className = "diag warn";
@@ -1679,23 +1698,23 @@ function handleLegacyConversationKeydown(ev) {
   return !!out?.handled;
 }
 
-function decodeU6ShapeFromBuffer(buf) {
+function decodeU6ShapeFromBuffer(buf: Uint8Array | null | undefined): U6ShapeRuntime | null {
   return decodeU6ShapeFromBufferRuntime(buf);
 }
 
-function decodeU6ShpArchive(bytes) {
+function decodeU6ShpArchive(bytes: Uint8Array | null | undefined): Array<U6ShapeRuntime | null> {
   return decodeU6ShpArchiveRuntime(bytes, decompressU6Lzw);
 }
 
-function decodeU6CursorPtr(bytes) {
+function decodeU6CursorPtr(bytes: Uint8Array | null | undefined): U6ShapeRuntime[] {
   return decodeU6CursorPtrRuntime(bytes, decompressU6Lzw);
 }
 
-function decodePortraitFromArchive(bytes, index = 0) {
+function decodePortraitFromArchive(bytes: Uint8Array | null | undefined, index = 0): IndexedPixmapRuntime | null {
   return decodePortraitFromArchiveRuntime(bytes, decompressU6Lzw, index);
 }
 
-function resolveLegacyPortraitEntry(objNum, objType) {
+function resolveLegacyPortraitEntry(objNum: unknown, objType: unknown): LegacyPortraitEntry | null {
   let n = Number(objNum) | 0;
   const t = Number(objType) & 0x03ff;
   if (n >= 0xe0) {
@@ -1721,8 +1740,11 @@ function resolveLegacyPortraitEntry(objNum, objType) {
   return { archive: "a", index: n };
 }
 
-function conversationPortraitCanvas(probeConversationPanel = null) {
-  if (!state.basePalette) {
+function conversationPortraitCanvas(
+  probeConversationPanel: LegacyConversationPanelPortraitProbe | null = null
+): HTMLCanvasElement | null {
+  const portraitState = state as LegacyPortraitStateView;
+  if (!portraitState.basePalette) {
     return null;
   }
   const panel = probeConversationPanel && typeof probeConversationPanel === "object"
@@ -1730,32 +1752,32 @@ function conversationPortraitCanvas(probeConversationPanel = null) {
     : {};
   const objNum = panel.target_obj_num != null
     ? (Number(panel.target_obj_num) | 0)
-    : (Number(state.legacyConversationTargetObjNum) | 0);
+    : (Number(portraitState.legacyConversationTargetObjNum) | 0);
   const objType = panel.target_obj_type != null
     ? (Number(panel.target_obj_type) | 0)
-    : (Number(state.legacyConversationTargetObjType) | 0);
+    : (Number(portraitState.legacyConversationTargetObjType) | 0);
   const resolved = resolveLegacyPortraitEntry(objNum, objType);
   if (!resolved) {
-    return state.avatarPortraitCanvas;
+    return portraitState.avatarPortraitCanvas;
   }
-  const archive = resolved.archive === "b" ? state.portraitArchiveB : state.portraitArchiveA;
+  const archive = resolved.archive === "b" ? portraitState.portraitArchiveB : portraitState.portraitArchiveA;
   if (!archive) {
     return null;
   }
   const paletteKey = getRenderPaletteKey();
   const cacheKey = `${resolved.archive}:${resolved.index}:${paletteKey}`;
-  if (state.portraitCanvasCache.has(cacheKey)) {
-    return state.portraitCanvasCache.get(cacheKey);
+  if (portraitState.portraitCanvasCache.has(cacheKey)) {
+    return portraitState.portraitCanvasCache.get(cacheKey) || null;
   }
   const pix = decodePortraitFromArchive(archive, resolved.index);
   if (!pix) {
     return null;
   }
-  const canvas = canvasFromIndexedPixels(pix, getRenderPalette() || state.basePalette);
+  const canvas = canvasFromIndexedPixels(pix, getRenderPalette() || portraitState.basePalette);
   if (!canvas) {
     return null;
   }
-  state.portraitCanvasCache.set(cacheKey, canvas);
+  portraitState.portraitCanvasCache.set(cacheKey, canvas);
   return canvas;
 }
 
