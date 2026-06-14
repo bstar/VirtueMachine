@@ -2001,7 +2001,7 @@ function drawLegacyContinueArrow(
   drawLegacyContinueArrowRuntime(g, state.u6MainFont, sx, sy, scale, color);
 }
 
-function applyLegacyFrameLayout() {
+function applyLegacyFrameLayout(): void {
   const renderState = state as LegacyBackdropRenderStateView;
   if (!legacyBackdropCanvas || !legacyWorldSurface || !canvas || !legacyViewportCanvas) {
     return;
@@ -2097,7 +2097,7 @@ function applyLegacyFrameLayout() {
   legacyViewportCanvas.style.height = `${mapH}px`;
 }
 
-function renderLegacyHudStubOnBackdrop() {
+function renderLegacyHudStubOnBackdrop(): void {
   const renderState = state as LegacyBackdropRenderStateView;
   if (!legacyBackdropCanvas) {
     return;
@@ -2726,7 +2726,7 @@ function drawBootIntroSprite(
   g.globalAlpha = prevAlpha;
 }
 
-function bootIntroTvStateAt(updateCount: number) {
+function bootIntroTvStateAt(updateCount: number): ReturnType<typeof bootIntroTvStateAtRuntime> {
   return bootIntroTvStateAtRuntime(updateCount);
 }
 
@@ -2866,7 +2866,7 @@ function bootIntroPrintTextOnCard(
   });
 }
 
-function bootIntroClockFrames(now = new Date()) {
+function bootIntroClockFrames(now = new Date()): ReturnType<typeof bootIntroClockFramesRuntime> {
   return bootIntroClockFramesRuntime(now);
 }
 
@@ -2876,7 +2876,7 @@ function drawBootIntroClock(g: CanvasRenderingContext2D, scene: BootIntroSceneSp
   }
 }
 
-function bootIntroWindowSceneBase(sceneId: string) {
+function bootIntroWindowSceneBase(sceneId: string): number {
   return bootIntroWindowSceneBaseRuntime(sceneId);
 }
 
