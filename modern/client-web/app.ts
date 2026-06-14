@@ -4368,7 +4368,7 @@ function initNetPanel() {
   }
 }
 
-function setGrid(enabled) {
+function setGrid(enabled: boolean): void {
   state.showGrid = !!enabled;
   if (gridToggle) {
     gridToggle.value = state.showGrid ? "on" : "off";
@@ -4376,7 +4376,7 @@ function setGrid(enabled) {
   writeStoredStringPreferenceRuntime(localStorage, GRID_KEY, onOffPreferenceRuntime(state.showGrid));
 }
 
-function initGrid() {
+function initGrid(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, GRID_KEY, "off", ["on", "off"]);
   setGrid(saved === "on");
   if (gridToggle) {
@@ -4386,7 +4386,7 @@ function initGrid() {
   }
 }
 
-function setOverlayDebug(enabled) {
+function setOverlayDebug(enabled: boolean): void {
   state.showOverlayDebug = !!enabled;
   if (debugOverlayToggle) {
     debugOverlayToggle.value = state.showOverlayDebug ? "on" : "off";
@@ -4394,7 +4394,7 @@ function setOverlayDebug(enabled) {
   writeStoredStringPreferenceRuntime(localStorage, DEBUG_OVERLAY_KEY, onOffPreferenceRuntime(state.showOverlayDebug));
 }
 
-function initOverlayDebug() {
+function initOverlayDebug(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, DEBUG_OVERLAY_KEY, "off", ["on", "off"]);
   setOverlayDebug(saved === "on");
   if (debugOverlayToggle) {
@@ -4404,13 +4404,14 @@ function initOverlayDebug() {
   }
 }
 
-function setAnimationMode(mode) {
+function setAnimationMode(mode: string): void {
+  const animationState = state as AnimationPaletteState;
   const nextMode = mode === "freeze" ? "freeze" : "live";
   state.animationFrozen = nextMode === "freeze";
   if (state.animationFrozen) {
-    state.frozenAnimationTick = state.sim.tick >>> 0;
+    animationState.frozenAnimationTick = state.sim.tick >>> 0;
   } else {
-    state.frozenAnimationTick = null;
+    animationState.frozenAnimationTick = null;
   }
   if (animationToggle) {
     animationToggle.value = nextMode;
@@ -4418,7 +4419,7 @@ function setAnimationMode(mode) {
   writeStoredStringPreferenceRuntime(localStorage, ANIMATION_KEY, nextMode);
 }
 
-function initAnimationMode() {
+function initAnimationMode(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, ANIMATION_KEY, "live", ["live", "freeze"]);
   setAnimationMode(saved);
   if (animationToggle) {
@@ -4428,17 +4429,18 @@ function initAnimationMode() {
   }
 }
 
-function setPaletteFxMode(enabled) {
+function setPaletteFxMode(enabled: boolean): void {
+  const paletteState = state as AnimationPaletteState;
   state.enablePaletteFx = !!enabled;
-  state.paletteFrameTick = -1;
-  state.paletteFrame = null;
+  paletteState.paletteFrameTick = -1;
+  paletteState.paletteFrame = null;
   if (paletteFxToggle) {
     paletteFxToggle.value = state.enablePaletteFx ? "on" : "off";
   }
   writeStoredStringPreferenceRuntime(localStorage, PALETTE_FX_KEY, onOffPreferenceRuntime(state.enablePaletteFx));
 }
 
-function initPaletteFxMode() {
+function initPaletteFxMode(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, PALETTE_FX_KEY, "on", ["on", "off"]);
   setPaletteFxMode(saved === "on");
   if (paletteFxToggle) {
@@ -4448,7 +4450,7 @@ function initPaletteFxMode() {
   }
 }
 
-function setMovementMode(mode) {
+function setMovementMode(mode: string): void {
   const next = mode === "avatar" ? "avatar" : "ghost";
   state.movementMode = next;
   if (next !== "avatar") {
@@ -4464,7 +4466,7 @@ function setMovementMode(mode) {
   writeStoredStringPreferenceRuntime(localStorage, MOVEMENT_MODE_KEY, next);
 }
 
-function initMovementMode() {
+function initMovementMode(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, MOVEMENT_MODE_KEY, "avatar", ["avatar", "ghost"]);
   setMovementMode(saved);
   if (movementModeToggle) {
@@ -4474,7 +4476,7 @@ function initMovementMode() {
   }
 }
 
-function setLegacyFramePreview(enabled) {
+function setLegacyFramePreview(enabled: boolean): void {
   const on = !!enabled;
   document.documentElement.setAttribute("data-legacy-frame-preview", on ? "on" : "off");
   if (capturePreviewToggle) {
@@ -4484,7 +4486,7 @@ function setLegacyFramePreview(enabled) {
   writeStoredStringPreferenceRuntime(localStorage, LEGACY_FRAME_PREVIEW_KEY, onOffPreferenceRuntime(on));
 }
 
-function setLegacyScaleMode(mode) {
+function setLegacyScaleMode(mode: string): void {
   const next = isLegacyScaleMode(mode) ? mode : "fit";
   state.legacyScaleMode = next;
   if (legacyScaleModeToggle) {
@@ -4494,7 +4496,7 @@ function setLegacyScaleMode(mode) {
   applyLegacyFrameLayout();
 }
 
-function cycleLegacyScaleMode(step) {
+function cycleLegacyScaleMode(step: number): void {
   const current = isLegacyScaleMode(state.legacyScaleMode) ? state.legacyScaleMode : "fit";
   const idx = LEGACY_SCALE_MODES.indexOf(current);
   const base = idx >= 0 ? idx : 0;
@@ -4502,7 +4504,7 @@ function cycleLegacyScaleMode(step) {
   setLegacyScaleMode(LEGACY_SCALE_MODES[nextIdx]);
 }
 
-function initLegacyScaleMode() {
+function initLegacyScaleMode(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, LEGACY_SCALE_MODE_KEY, "4", LEGACY_SCALE_MODES, {
     native: "4"
   });
