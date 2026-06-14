@@ -21,7 +21,10 @@ import {
   u6GlyphSpanRuntime
 } from "./render/legacy_text_render_runtime.ts";
 import { U6TileSetRuntime } from "./render/tile_set_runtime.ts";
-import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
+import {
+  createU6AudioRuntime,
+  type U6AudioRuntime
+} from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
 import {
   decodeLegacyPixmapRuntime,
@@ -5587,7 +5590,14 @@ async function captureParitySnapshotJson(): Promise<void> {
   }
 }
 
-function applyCommand(sim, cmd) {
+type AmbientSfxCandidate = {
+  dist: number;
+  obj: U6ObjectEntryRuntime;
+  priority: number;
+  sfxId: number;
+};
+
+function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
   if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
     const moveResult = applyAvatarMoveCommandRuntime(sim, cmd.arg0, cmd.arg1, {
       isBlockedAt: (x, y, z) => isBlockedAt(sim, x, y, z),
@@ -5665,7 +5675,7 @@ function applyCommand(sim, cmd) {
   sim.commandsApplied += 1;
 }
 
-function stepSimTick(sim, queue) {
+function stepSimTick(sim: AppSimState, queue: readonly SimCommandRuntime[]): SimCommandRuntime[] {
   const nextTick = (sim.tick + 1) >>> 0;
   const { due, pending } = partitionCommandsForTickRuntime(queue, nextTick);
   for (const cmd of due) {
@@ -5688,11 +5698,11 @@ function stepSimTick(sim, queue) {
   return pending;
 }
 
-function appendCommandLog(cmd) {
+function appendCommandLog(cmd: SimCommandRuntime): void {
   appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
 }
 
-function primeAudioFromUserGesture() {
+function primeAudioFromUserGesture(): void {
   if (!state.audio || !state.sim?.world?.sound_enabled) {
     return;
   }
@@ -5701,7 +5711,7 @@ function primeAudioFromUserGesture() {
   });
 }
 
-function playSfx(sfxId, options = {}) {
+function playSfx(sfxId: number, options: Parameters<U6AudioRuntime["playSfx"]>[1] = {}): boolean {
   try {
     if (!state.audio || !state.sim?.world?.sound_enabled) {
       return false;
@@ -5713,7 +5723,7 @@ function playSfx(sfxId, options = {}) {
   }
 }
 
-function playAmbientSfx(sfxId, options = {}) {
+function playAmbientSfx(sfxId: number, options: Parameters<U6AudioRuntime["playAmbientSfx"]>[1] = {}): boolean {
   try {
     if (!state.audio || !state.sim?.world?.sound_enabled) {
       return false;
@@ -5728,7 +5738,7 @@ function playAmbientSfx(sfxId, options = {}) {
   }
 }
 
-function setAudioEnabledFromWorldFlag() {
+function setAudioEnabledFromWorldFlag(): void {
   if (!state.audio) {
     return;
   }
@@ -5747,7 +5757,7 @@ function setAudioEnabledFromWorldFlag() {
   updateAudioMuteUi();
 }
 
-function updateAudioMuteUi() {
+function updateAudioMuteUi(): void {
   if (!audioMuteButton) {
     return;
   }
@@ -5757,7 +5767,7 @@ function updateAudioMuteUi() {
   audioMuteButton.classList.toggle("is-active", muted);
 }
 
-function toggleAudioMute(reason = "") {
+function toggleAudioMute(reason = ""): void {
   if (!state.audio) {
     return;
   }
@@ -5771,7 +5781,7 @@ function toggleAudioMute(reason = "") {
   diagBox.textContent = reason || (nextMuted ? "Audio muted." : "Audio unmuted.");
 }
 
-function playCanonicalMusicPhase(phase, songId) {
+function playCanonicalMusicPhase(phase: unknown, songId: unknown): boolean {
   try {
     if (!state.audio || !state.sim?.world?.sound_enabled) {
       return false;
@@ -5798,11 +5808,11 @@ function playCanonicalMusicPhase(phase, songId) {
   }
 }
 
-function startBootIntroMusic() {
+function startBootIntroMusic(): boolean {
   return playCanonicalMusicPhase("boot_origin", "bootup.m");
 }
 
-function syncBootIntroMusicPhase() {
+function syncBootIntroMusicPhase(): void {
   const scene = currentBootIntroSceneRuntime(state.bootIntro);
   if (!scene) {
     return;
@@ -5814,11 +5824,11 @@ function syncBootIntroMusicPhase() {
   }
 }
 
-function startStartupMenuMusic() {
+function startStartupMenuMusic(): boolean {
   return playCanonicalMusicPhase("startup_menu", "ultima.m");
 }
 
-function bootIntroMusicAwaitingGesture() {
+function bootIntroMusicAwaitingGesture(): boolean {
   try {
     return !!(state.bootIntro?.active && state.audio?.status?.().musicAwaitingGesture);
   } catch (_err) {
@@ -5826,7 +5836,7 @@ function bootIntroMusicAwaitingGesture() {
   }
 }
 
-function ambientSfxForObjectType(type) {
+function ambientSfxForObjectType(type: unknown): number | null {
   switch ((Number(type) | 0) & 0x3ff) {
     case OBJ_U6_CLOCK:
       return U6_SFX.CLOCK;
@@ -5846,7 +5856,7 @@ function ambientSfxForObjectType(type) {
   }
 }
 
-function updateVisibleAmbientSfx() {
+function updateVisibleAmbientSfx(): void {
   if (!state.sessionStarted || !state.objectLayer || !state.sim?.world?.sound_enabled) {
     return;
   }
@@ -5856,7 +5866,7 @@ function updateVisibleAmbientSfx() {
   const startX = (w.map_x | 0) - (VIEW_W >> 1);
   const startY = (w.map_y | 0) - (VIEW_H >> 1);
   const visible = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W, VIEW_H, w.map_z | 0);
-  const candidates = [];
+  const candidates: AmbientSfxCandidate[] = [];
   for (const obj of visible) {
     const sfxId = ambientSfxForObjectType(obj?.type);
     if (sfxId == null) {
@@ -5896,11 +5906,11 @@ function updateVisibleAmbientSfx() {
   }
 }
 
-function buildWireCommand(tick, type, arg0, arg1) {
+function buildWireCommand(tick: number, type: number, arg0: number, arg1: number): SimCommandRuntime {
   return buildLegacyWireCommandRuntime(tick, type, arg0, arg1);
 }
 
-function queueMove(dx, dy) {
+function queueMove(dx: number, dy: number): void {
   if (state.legacyConversationActive) {
     return;
   }
@@ -5943,7 +5953,7 @@ function queueMove(dx, dy) {
   appendCommandLog(cmd);
 }
 
-function queueInteractDoor() {
+function queueInteractDoor(): void {
   if (state.movementMode !== "avatar") {
     return;
   }
@@ -5961,7 +5971,7 @@ function queueInteractDoor() {
   });
 }
 
-function queueInteractAtCell(wx, wy) {
+function queueInteractAtCell(wx: number, wy: number): void {
   if (state.movementMode !== "avatar") {
     return;
   }
@@ -5976,7 +5986,7 @@ function queueInteractAtCell(wx, wy) {
   });
 }
 
-function queueLegacyTargetVerb(verb, wx, wy) {
+function queueLegacyTargetVerb(verb: unknown, wx: number, wy: number): void {
   if (state.movementMode !== "avatar") {
     return;
   }
@@ -5996,15 +6006,15 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   });
 }
 
-function fallbackTileColor(t) {
+function fallbackTileColor(t: number): ReturnType<typeof fallbackTileColorRuntime> {
   return fallbackTileColorRuntime(t);
 }
 
-function tilePaletteIndex(tileId) {
+function tilePaletteIndex(tileId: number): number {
   return tilePaletteIndexRuntime(tileId, state.terrainType);
 }
 
-function terrainOf(tileId) {
+function terrainOf(tileId: number): number {
   if (!state.terrainType || tileId < 0 || tileId >= state.terrainType.length) {
     return 0;
   }
