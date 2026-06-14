@@ -8,12 +8,15 @@ import {
   buildBaseTileTableRuntime,
   canvasFromIndexedPixelsRuntime,
   fallbackTileColorRuntime,
+  type IndexedPixmapRuntime,
   tilePaletteIndexRuntime
 } from "./render/indexed_pixels_runtime.ts";
 import {
   drawLegacyContinueArrowRuntime,
   drawU6CompactTextRuntime,
   drawU6MainTextRuntime,
+  type LegacyGlyphSpanRuntime,
+  type LegacyTextCanvasRuntime,
   measureU6TextWidthRuntime,
   u6GlyphSpanRuntime
 } from "./render/legacy_text_render_runtime.ts";
@@ -34,6 +37,7 @@ import {
   buildLegacyPaletteFrameRuntime,
   buildPackedIntroPalettesRuntime,
   buildPaletteFromU6PalRuntime,
+  type RgbPaletteRuntime,
   buildStartupPaletteForMenuRuntime
 } from "./assets/palette_runtime.ts";
 import { errorMessageRuntime } from "./error_runtime.ts";
@@ -414,6 +418,10 @@ type UiProbeContractRuntime = UiProbeContract & {
 type VmDebugWindow = Window & typeof globalThis & {
   __vmLastUiProbe?: UiProbeContractRuntime;
   __vmLastUiProbeDigest?: string;
+};
+type U6TextCanvasApp = LegacyTextCanvasRuntime | {
+  fillStyle?: unknown;
+  fillRect(x: number, y: number, w: number, h: number): void;
 };
 
 function byId<T = HTMLElement>(id: string): T {
@@ -1595,27 +1603,51 @@ function conversationPortraitCanvas(probeConversationPanel = null) {
   return canvas;
 }
 
-function canvasFromIndexedPixels(pixmap, palette, transparentIndex = null) {
+function canvasFromIndexedPixels(
+  pixmap: IndexedPixmapRuntime | null | undefined,
+  palette: RgbPaletteRuntime | null | undefined,
+  transparentIndex: number | null = null
+): HTMLCanvasElement | null {
   return canvasFromIndexedPixelsRuntime(pixmap, palette, document, transparentIndex);
 }
 
-function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
+function drawU6MainText(
+  g: LegacyTextCanvasRuntime,
+  text: unknown,
+  sx: number,
+  sy: number,
+  scale = 1,
+  color = "#e7dcc0"
+): void {
   drawU6MainTextRuntime(g, state.u6MainFont, text, sx, sy, scale, color);
 }
 
-function u6GlyphSpan(code) {
+function u6GlyphSpan(code: number): LegacyGlyphSpanRuntime {
   return u6GlyphSpanRuntime(state.u6MainFont, code);
 }
 
-function measureU6TextWidth(text, compact = false) {
+function measureU6TextWidth(text: unknown, compact = false): number {
   return measureU6TextWidthRuntime(state.u6MainFont, text, compact);
 }
 
-function drawU6CompactText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
-  drawU6CompactTextRuntime(g, state.u6MainFont, text, sx, sy, scale, color);
+function drawU6CompactText(
+  g: U6TextCanvasApp,
+  text: unknown,
+  sx: number,
+  sy: number,
+  scale = 1,
+  color = "#e7dcc0"
+): void {
+  drawU6CompactTextRuntime(g as LegacyTextCanvasRuntime, state.u6MainFont, text, sx, sy, scale, color);
 }
 
-function drawLegacyContinueArrow(g, sx, sy, scale = 1, color = "#e7dcc0") {
+function drawLegacyContinueArrow(
+  g: LegacyTextCanvasRuntime,
+  sx: number,
+  sy: number,
+  scale = 1,
+  color = "#e7dcc0"
+): void {
   drawLegacyContinueArrowRuntime(g, state.u6MainFont, sx, sy, scale, color);
 }
 
