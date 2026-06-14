@@ -5,8 +5,8 @@ export interface NetAccountUserPayload {
 }
 
 export interface NetAccountPayload {
+  ok?: unknown;
   user?: NetAccountUserPayload;
-  [key: string]: unknown;
 }
 
 export type NetAccountRequest = (
