@@ -29,6 +29,45 @@ export interface CriticalMaintenanceEvent {
   [key: string]: unknown;
 }
 
+export function normalizeIntroPhaseRuntime(phase: unknown): "pre_intro" | "post_intro" {
+  return String(phase || "").trim().toLowerCase() === "pre_intro" ? "pre_intro" : "post_intro";
+}
+
+export async function requestIntroPhaseRuntime(
+  fallbackPhase: unknown,
+  request: WorldRuntimeRequest
+): Promise<{ out: WorldRuntimeJson | null; phase: "pre_intro" | "post_intro" }> {
+  const out = await request("/api/world/intro-state", { method: "GET" }, true);
+  const rawPhase = out && typeof out === "object"
+    ? (out.intro_state as { phase?: unknown } | undefined)?.phase
+    : null;
+  return {
+    out,
+    phase: normalizeIntroPhaseRuntime(rawPhase || fallbackPhase || "post_intro")
+  };
+}
+
+export async function setIntroPhaseRuntime(
+  phase: unknown,
+  request: WorldRuntimeRequest
+): Promise<{ out: WorldRuntimeJson | null; phase: "pre_intro" | "post_intro" }> {
+  const requested = normalizeIntroPhaseRuntime(phase);
+  const out = await request("/api/world/intro-state", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      phase: requested
+    })
+  }, true);
+  const rawPhase = out && typeof out === "object"
+    ? (out.intro_state as { phase?: unknown } | undefined)?.phase
+    : null;
+  return {
+    out,
+    phase: normalizeIntroPhaseRuntime(rawPhase || requested)
+  };
+}
+
 export function collectWorldItemsForMaintenanceFromLayer(objectLayer: WorldRuntimeObjectLayer | null | undefined): CriticalMaintenanceWorldItem[] {
   if (!objectLayer || !objectLayer.byCoord) {
     return [];

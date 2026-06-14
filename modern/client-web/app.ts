@@ -123,8 +123,10 @@ import {
 } from "./net/presence_runtime.ts";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  requestIntroPhaseRuntime,
   runCriticalMaintenanceRuntime,
-  requestWorldObjectsAtCell
+  requestWorldObjectsAtCell,
+  setIntroPhaseRuntime
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
@@ -3827,22 +3829,15 @@ async function netRequest(route, init = {}, auth = true) {
 }
 
 async function netGetIntroPhase() {
-  const out = await netRequest("/api/world/intro-state", { method: "GET" }, true);
-  state.net.introPhase = String(out?.intro_state?.phase || state.net.introPhase || "post_intro");
+  const { out, phase } = await requestIntroPhaseRuntime(state.net.introPhase, netRequest);
+  state.net.introPhase = phase;
   updateIntroPhaseUi();
   return out;
 }
 
 async function netSetIntroPhase(phase) {
-  const next = String(phase || "").trim().toLowerCase() === "pre_intro" ? "pre_intro" : "post_intro";
-  const out = await netRequest("/api/world/intro-state", {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      phase: next
-    })
-  }, true);
-  state.net.introPhase = String(out?.intro_state?.phase || next);
+  const { out, phase: next } = await setIntroPhaseRuntime(phase, netRequest);
+  state.net.introPhase = next;
   updateIntroPhaseUi();
   return out;
 }
@@ -4589,10 +4584,10 @@ function initNetPanel() {
           throw new Error("Login required");
         }
         const requested = String(netIntroPhaseSelect?.value || state.net.introPhase || "post_intro");
-        const out = await netSetIntroPhase(requested);
+        await netSetIntroPhase(requested);
         diagBox.className = "diag ok";
-        diagBox.textContent = `Intro phase set to ${String(out?.intro_state?.phase || state.net.introPhase)}.`;
-        setNetStatus("online", `Intro phase: ${String(out?.intro_state?.phase || state.net.introPhase)}`);
+        diagBox.textContent = `Intro phase set to ${String(state.net.introPhase)}.`;
+        setNetStatus("online", `Intro phase: ${String(state.net.introPhase)}`);
       } catch (err) {
         setNetStatus("error", `Intro phase update failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";

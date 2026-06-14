@@ -1,8 +1,43 @@
 import assert from "node:assert/strict";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  normalizeIntroPhaseRuntime,
+  requestIntroPhaseRuntime,
+  setIntroPhaseRuntime,
   runCriticalMaintenanceRuntime
 } from "../net/world_runtime.ts";
+
+assert.equal(normalizeIntroPhaseRuntime("pre_intro"), "pre_intro");
+assert.equal(normalizeIntroPhaseRuntime("PRE_INTRO"), "pre_intro");
+assert.equal(normalizeIntroPhaseRuntime("bad"), "post_intro");
+
+{
+  const requested: string[] = [];
+  const result = await requestIntroPhaseRuntime("pre_intro", async (route, init, auth) => {
+    requested.push(`${route}:${init?.method}:${auth}`);
+    return { intro_state: { phase: "post_intro" } };
+  });
+  assert.deepEqual(requested, ["/api/world/intro-state:GET:true"]);
+  assert.equal(result.phase, "post_intro");
+  assert.deepEqual(result.out, { intro_state: { phase: "post_intro" } });
+}
+
+{
+  const result = await requestIntroPhaseRuntime("pre_intro", async () => ({}));
+  assert.equal(result.phase, "pre_intro");
+}
+
+{
+  const requested: string[] = [];
+  const result = await setIntroPhaseRuntime("PRE_INTRO", async (route, init, auth) => {
+    requested.push(`${route}:${init?.method}:${auth}:${String(init?.body || "")}`);
+    return { intro_state: { phase: "post_intro" } };
+  });
+  assert.deepEqual(requested, [
+    "/api/world/intro-state:PUT:true:{\"phase\":\"pre_intro\"}"
+  ]);
+  assert.equal(result.phase, "post_intro");
+}
 
 const items = collectWorldItemsForMaintenanceFromLayer({
   byCoord: new Map([
