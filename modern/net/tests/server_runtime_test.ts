@@ -4,6 +4,7 @@ import {
   clampIntRuntime,
   computeSnapshotHashRuntime,
   decodePackedCoordRuntime,
+  defaultCriticalPolicyRuntime,
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
   deterministicRecoveryTickLastRuntime,
@@ -13,7 +14,8 @@ import {
   normalizeWorldClockRuntime,
   parseU16LERuntime,
   queryIntOrRuntime,
-  recordWorldInteractionEventRuntime
+  recordWorldInteractionEventRuntime,
+  runCriticalItemMaintenanceRuntime
 } from "../server_runtime.ts";
 
 assert.deepEqual(defaultWorldClockRuntime(1234), {
@@ -91,6 +93,67 @@ assert.equal(deterministicRecoveryTickLastRuntime([
   { item_id: "a", tick: 20 }
 ], "a"), 20);
 assert.equal(deterministicRecoveryTickLastRuntime([{ item_id: "b", tick: 30 }], "a"), null);
+
+assert.deepEqual(defaultCriticalPolicyRuntime(), [{
+  item_id: "item_moonstone",
+  policy_type: "regenerative_unique",
+  anchor_locations: [{ x: 307, y: 347, z: 0 }],
+  cooldown_ticks: 120,
+  min_count: 1,
+  quest_gate: null
+}]);
+
+assert.deepEqual(runCriticalItemMaintenanceRuntime({
+  criticalPolicy: [{
+    item_id: "b_item",
+    policy_type: "regenerative_unique",
+    anchor_locations: [{ x: "4", y: "5", z: "1" }],
+    cooldown_ticks: 10,
+    min_count: 1
+  }, {
+    item_id: "a_item",
+    policy_type: "instance_quota",
+    anchor_locations: [{ x: 1, y: 2, z: 0 }],
+    cooldown_ticks: 0,
+    min_count: 2
+  }],
+  nowIso: "2026-06-14T00:00:00.000Z",
+  payload: {
+    tick: 100,
+    world_items: [
+      { item_id: "a_item", reachable: true },
+      { item_id: "b_item", reachable: false }
+    ]
+  },
+  recoveryEvents: []
+}), [{
+  kind: "critical_item_recovery",
+  at: "2026-06-14T00:00:00.000Z",
+  tick: 100,
+  item_id: "a_item",
+  reason: "below_min_count",
+  restored_to: { x: 1, y: 2, z: 0 }
+}, {
+  kind: "critical_item_recovery",
+  at: "2026-06-14T00:00:00.000Z",
+  tick: 100,
+  item_id: "b_item",
+  reason: "missing_or_unreachable",
+  restored_to: { x: 4, y: 5, z: 1 }
+}]);
+
+assert.deepEqual(runCriticalItemMaintenanceRuntime({
+  criticalPolicy: [{
+    item_id: "cooldown_item",
+    policy_type: "regenerative_unique",
+    anchor_locations: [{ x: 0, y: 0, z: 0 }],
+    cooldown_ticks: 50,
+    min_count: 1
+  }],
+  nowIso: "2026-06-14T00:00:00.000Z",
+  payload: { tick: 120, world_items: [] },
+  recoveryEvents: [{ item_id: "cooldown_item", tick: 100 }]
+}), []);
 
 assert.deepEqual(defaultWorldInteractionLogRuntime(), {
   schema_version: 1,

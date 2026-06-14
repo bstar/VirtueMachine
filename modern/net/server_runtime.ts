@@ -55,6 +55,33 @@ export type PresenceRowRuntime = {
   username: string;
 };
 
+export type CriticalItemPolicyRuntime = {
+  anchor_locations?: Array<{ x?: unknown; y?: unknown; z?: unknown }>;
+  cooldown_ticks?: unknown;
+  item_id?: unknown;
+  min_count?: unknown;
+  policy_type?: unknown;
+  quest_gate?: unknown;
+};
+
+export type CriticalWorldItemRuntime = {
+  item_id?: unknown;
+  reachable?: unknown;
+};
+
+export type CriticalRecoveryEventRuntime = {
+  at: string;
+  item_id: string;
+  kind: "critical_item_recovery";
+  reason: "below_min_count" | "missing_or_unreachable";
+  restored_to: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  tick: number | null;
+};
+
 export function defaultWorldClockRuntime(nowMs = Date.now()): WorldClockRuntime {
   return {
     tick: 0,
@@ -150,6 +177,77 @@ export function deterministicRecoveryTickLastRuntime(
     .filter((tick) => Number.isFinite(tick))
     .sort((a, b) => b - a);
   return filtered.length ? filtered[0] : null;
+}
+
+export function defaultCriticalPolicyRuntime(): CriticalItemPolicyRuntime[] {
+  return [
+    {
+      item_id: "item_moonstone",
+      policy_type: "regenerative_unique",
+      anchor_locations: [{ x: 307, y: 347, z: 0 }],
+      cooldown_ticks: 120,
+      min_count: 1,
+      quest_gate: null
+    }
+  ];
+}
+
+export function runCriticalItemMaintenanceRuntime(args: {
+  criticalPolicy: readonly CriticalItemPolicyRuntime[];
+  nowIso: string;
+  payload: unknown;
+  recoveryEvents: readonly { item_id?: unknown; tick?: unknown }[];
+}): CriticalRecoveryEventRuntime[] {
+  const payload = args.payload && typeof args.payload === "object"
+    ? args.payload as { tick?: unknown; world_items?: unknown }
+    : {};
+  const tick = Number(payload.tick);
+  const worldItems = Array.isArray(payload.world_items) ? payload.world_items as CriticalWorldItemRuntime[] : [];
+  const emitted: CriticalRecoveryEventRuntime[] = [];
+
+  const sortedPolicy = [...args.criticalPolicy].sort((a, b) => String(a.item_id).localeCompare(String(b.item_id)));
+
+  for (const policy of sortedPolicy) {
+    const itemId = String(policy.item_id || "");
+    if (!itemId) {
+      continue;
+    }
+    const existing = worldItems.filter((w) => String(w.item_id) === itemId && w.reachable !== false);
+    const minCount = Number.isFinite(Number(policy.min_count)) ? Math.max(1, Number(policy.min_count) | 0) : 1;
+    const cooldown = Number.isFinite(Number(policy.cooldown_ticks)) ? Math.max(0, Number(policy.cooldown_ticks) | 0) : 0;
+    const lastTick = deterministicRecoveryTickLastRuntime(args.recoveryEvents, itemId);
+    const cooldownReady = lastTick == null || !Number.isFinite(tick) || ((tick - lastTick) >= cooldown);
+
+    let needsRecovery = false;
+    if (policy.policy_type === "instance_quota") {
+      needsRecovery = existing.length < minCount;
+    } else {
+      needsRecovery = existing.length < 1;
+    }
+
+    if (!needsRecovery || !cooldownReady) {
+      continue;
+    }
+
+    const anchor = Array.isArray(policy.anchor_locations) && policy.anchor_locations.length
+      ? policy.anchor_locations[0]
+      : { x: 0, y: 0, z: 0 };
+
+    emitted.push({
+      kind: "critical_item_recovery",
+      at: args.nowIso,
+      tick: Number.isFinite(tick) ? tick : null,
+      item_id: itemId,
+      reason: existing.length ? "below_min_count" : "missing_or_unreachable",
+      restored_to: {
+        x: Number(anchor.x) | 0,
+        y: Number(anchor.y) | 0,
+        z: Number(anchor.z) | 0
+      }
+    });
+  }
+
+  return emitted;
 }
 
 function parseRuntimeExtensionsRuntime(raw: unknown): string[] {

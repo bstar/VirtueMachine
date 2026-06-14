@@ -61,16 +61,17 @@ const {
   clampIntRuntime,
   computeSnapshotHashRuntime,
   decodePackedCoordRuntime,
+  defaultCriticalPolicyRuntime,
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
-  deterministicRecoveryTickLastRuntime,
   hashInteractionEventRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
   parseU16LERuntime,
   queryIntOrRuntime,
-  recordWorldInteractionEventRuntime
+  recordWorldInteractionEventRuntime,
+  runCriticalItemMaintenanceRuntime
 } = require("./server_runtime.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
@@ -284,16 +285,7 @@ function readBody(req) {
 }
 
 function defaultCriticalPolicy() {
-  return [
-    {
-      item_id: "item_moonstone",
-      policy_type: "regenerative_unique",
-      anchor_locations: [{ x: 307, y: 347, z: 0 }],
-      cooldown_ticks: 120,
-      min_count: 1,
-      quest_gate: null
-    }
-  ];
+  return defaultCriticalPolicyRuntime();
 }
 
 function defaultWorldClock() {
@@ -1125,60 +1117,17 @@ function computeSnapshotHash(snapshotBase64) {
   return computeSnapshotHashRuntime(snapshotBase64);
 }
 
-function deterministicRecoveryTickLast(events, itemId) {
-  return deterministicRecoveryTickLastRuntime(events, itemId);
-}
-
 function runCriticalItemMaintenance(state, payload) {
-  const tick = Number(payload && payload.tick);
-  const worldItems = Array.isArray(payload && payload.world_items) ? payload.world_items : [];
   const recoveryEvents = readJsonLines(FILES.recoveriesLog);
-  const emitted = [];
-
-  const sortedPolicy = [...state.criticalPolicy].sort((a, b) => String(a.item_id).localeCompare(String(b.item_id)));
-
-  for (const policy of sortedPolicy) {
-    const itemId = String(policy.item_id || "");
-    if (!itemId) {
-      continue;
-    }
-    const existing = worldItems.filter((w) => String(w.item_id) === itemId && w.reachable !== false);
-    const minCount = Number.isFinite(policy.min_count) ? Math.max(1, policy.min_count | 0) : 1;
-    const cooldown = Number.isFinite(policy.cooldown_ticks) ? Math.max(0, policy.cooldown_ticks | 0) : 0;
-    const lastTick = deterministicRecoveryTickLast(recoveryEvents, itemId);
-    const cooldownReady = lastTick == null || !Number.isFinite(tick) || ((tick - lastTick) >= cooldown);
-
-    let needsRecovery = false;
-    if (policy.policy_type === "instance_quota") {
-      needsRecovery = existing.length < minCount;
-    } else {
-      needsRecovery = existing.length < 1;
-    }
-
-    if (!needsRecovery || !cooldownReady) {
-      continue;
-    }
-
-    const anchor = Array.isArray(policy.anchor_locations) && policy.anchor_locations.length
-      ? policy.anchor_locations[0]
-      : { x: 0, y: 0, z: 0 };
-
-    const event = {
-      kind: "critical_item_recovery",
-      at: nowIso(),
-      tick: Number.isFinite(tick) ? tick : null,
-      item_id: itemId,
-      reason: existing.length ? "below_min_count" : "missing_or_unreachable",
-      restored_to: {
-        x: anchor.x | 0,
-        y: anchor.y | 0,
-        z: anchor.z | 0
-      }
-    };
-    emitted.push(event);
+  const emitted = runCriticalItemMaintenanceRuntime({
+    criticalPolicy: state.criticalPolicy,
+    nowIso: nowIso(),
+    payload,
+    recoveryEvents
+  });
+  for (const event of emitted) {
     appendJsonLine(FILES.recoveriesLog, event);
   }
-
   return emitted;
 }
 
