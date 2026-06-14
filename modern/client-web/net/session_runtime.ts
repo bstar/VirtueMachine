@@ -1,3 +1,4 @@
+import type { NetLoginPayload } from "./auth_runtime.ts";
 import type { RemotePresencePlayer } from "./presence_runtime.ts";
 
 export type NetSessionState = {
@@ -15,16 +16,6 @@ export type NetSessionState = {
   backgroundSyncPaused?: boolean;
   backgroundFailCount?: number;
   firstBackgroundFailAtMs?: number;
-};
-
-export type NetLoginPayload = {
-  token?: unknown;
-  user?: {
-    user_id?: unknown;
-    username?: unknown;
-    email?: unknown;
-    email_verified?: unknown;
-  };
 };
 
 /**

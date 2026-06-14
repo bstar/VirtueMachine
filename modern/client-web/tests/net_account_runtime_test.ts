@@ -5,9 +5,53 @@ import {
   performNetSetEmail,
   performNetVerifyEmail
 } from "../net/account_runtime.ts";
+import {
+  applyNetLoginState,
+  clearNetSessionState,
+  type NetSessionState
+} from "../net/session_runtime.ts";
 
 function statusRecorder(): string[] {
   return [];
+}
+
+{
+  const netState: NetSessionState = {
+    backgroundFailCount: 4,
+    characterId: "char-1",
+    firstBackgroundFailAtMs: 123,
+    lastClockPollTick: 8,
+    lastPresenceHeartbeatTick: 9,
+    lastPresencePollTick: 10,
+    remotePlayers: [{ session_id: "remote" }],
+    resumeFromSnapshot: true,
+    token: "old"
+  };
+  applyNetLoginState(netState, {
+    token: "token",
+    user: {
+      email: "avatar@example.com",
+      email_verified: true,
+      user_id: "u1",
+      username: "avatar"
+    }
+  }, "fallback");
+  assert.equal(netState.token, "token");
+  assert.equal(netState.userId, "u1");
+  assert.equal(netState.username, "avatar");
+  assert.equal(netState.email, "avatar@example.com");
+  assert.equal(netState.emailVerified, true);
+  assert.deepEqual(netState.remotePlayers, []);
+  assert.equal(netState.lastPresenceHeartbeatTick, -1);
+  assert.equal(netState.lastPresencePollTick, -1);
+  assert.equal(netState.lastClockPollTick, -1);
+  assert.equal(netState.resumeFromSnapshot, false);
+  assert.equal(netState.backgroundFailCount, 0);
+  assert.equal(netState.firstBackgroundFailAtMs, 0);
+  clearNetSessionState(netState);
+  assert.equal(netState.token, "");
+  assert.equal(netState.userId, "");
+  assert.equal(netState.characterId, "");
 }
 
 {
