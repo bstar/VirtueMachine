@@ -47,7 +47,6 @@ const LEGACY_EQUIP_SLOTS = Object.freeze([
   { index: 9, key: "ring", legacy: "SLOT_RING" }
 ]);
 
-type UnknownRecord = Record<string, unknown>;
 type ProbeRuntimeExtensions = Partial<RuntimeExtensions>;
 type ProbeInventoryCountMap = Record<string, number>;
 
@@ -65,6 +64,11 @@ interface ProbeConversationInput {
   portrait_tile_hex?: unknown;
   show_inventory?: unknown;
   equipment?: unknown;
+}
+
+interface ProbePartyMemberInput {
+  id?: unknown;
+  name?: unknown;
 }
 
 interface ProbeRuntimeInput {
@@ -102,8 +106,16 @@ interface BuildUiProbeOptions {
   runtime?: ProbeRuntimeInput;
 }
 
-function asRecord(value: unknown): UnknownRecord {
-  return value && typeof value === "object" ? value as UnknownRecord : {};
+function asProbeEquipmentEntry(value: unknown): ProbeEquipmentEntry {
+  return value && typeof value === "object" ? value as ProbeEquipmentEntry : {};
+}
+
+function asProbeConversationInput(value: unknown): ProbeConversationInput {
+  return value && typeof value === "object" ? value as ProbeConversationInput : {};
+}
+
+function asProbePartyMember(value: unknown): ProbePartyMemberInput {
+  return value && typeof value === "object" ? value as ProbePartyMemberInput : {};
 }
 
 function toU32(v: unknown): number {
@@ -124,7 +136,7 @@ function normalizeInventory(inventory: ProbeInventoryCountMap | null | undefined
 
 function normalizeEquipment(equipment: unknown) {
   const projected = projectLegacyEquipmentSlotsRuntime((Array.isArray(equipment) ? equipment : []).map((entry) => {
-    const e = asRecord(entry) as ProbeEquipmentEntry;
+    const e = asProbeEquipmentEntry(entry);
     return {
     tileId: toU32(e.tile_id != null ? e.tile_id : e.tile_hex),
     object_key: e.object_key == null ? "" : String(e.object_key)
@@ -146,7 +158,7 @@ function normalizeEquipment(equipment: unknown) {
 }
 
 function normalizeConversation(conversation: unknown) {
-  const c = asRecord(conversation) as ProbeConversationInput;
+  const c = asProbeConversationInput(conversation);
   return {
     active: !!c.active,
     target_name: String(c.target_name || ""),
@@ -363,7 +375,7 @@ export function buildUiProbeContract(opts: BuildUiProbeOptions = {}) {
           partyMembers: src.party_members,
           activeIndex: src.active_party_index,
           nameById: Object.fromEntries((Array.isArray(src.party) ? src.party : []).map((member) => {
-            const m = asRecord(member);
+            const m = asProbePartyMember(member);
             return [String(m.id), String(m.name || "")];
           }))
         }),
