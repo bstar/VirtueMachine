@@ -34,7 +34,7 @@ assert.deepEqual(worldInventorySourcesFromJsonRuntime(null), []);
 assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(null), {});
 
 assert.deepEqual(inventoryItemFromTakeResponseRuntime({
-  inventory_item: { frame: 2, object_key: "inv", type: 0x123 },
+  inventory_item: { frame: 2, object_key: " inv ", type: 0x123 },
   target: { frame: 1, object_key: "target", type: 0x122 }
 }, { frame: 0, object_key: "fallback", type: 0x121 }), { frame: 2, object_key: "inv", type: 0x123 });
 assert.deepEqual(inventoryItemFromTakeResponseRuntime({

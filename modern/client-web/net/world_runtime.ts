@@ -50,8 +50,10 @@ export interface CriticalMaintenanceEvent {
   [key: string]: unknown;
 }
 
-export type WorldRuntimeInventoryItem = Record<string, unknown> & {
+export type WorldRuntimeInventoryItem = {
   frame: number;
+  objectKey?: string;
+  object_key?: string;
   type: number;
 };
 
@@ -95,11 +97,19 @@ export function inventoryProjectionFromServerObjectsRuntime(
 
 function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null | undefined): WorldRuntimeInventoryItem {
   const row = value || {};
-  return {
-    ...row,
+  const out: WorldRuntimeInventoryItem = {
     frame: Number(row.frame) | 0,
     type: Number(row.type) | 0
   };
+  const objectKey = String(row.objectKey || "").trim();
+  if (objectKey) {
+    out.objectKey = objectKey;
+  }
+  const objectKeySnake = String(row.object_key || "").trim();
+  if (objectKeySnake) {
+    out.object_key = objectKeySnake;
+  }
+  return out;
 }
 
 export interface WorldRuntimeTakeResponse {
