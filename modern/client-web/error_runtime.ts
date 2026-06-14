@@ -8,3 +8,10 @@ export function errorMessageRuntime(err: unknown, fallback = ""): string {
   const text = String(err ?? "");
   return text || fallback;
 }
+
+export function errorNameRuntime(err: unknown): string {
+  if (err && typeof err === "object" && "name" in err) {
+    return String((err as { name?: unknown }).name || "");
+  }
+  return "";
+}

@@ -1,6 +1,7 @@
 import { U6AdlibMusicRuntime, type U6AdlibSongSource } from "./adlib_music_runtime.ts";
 import { buildPcSpeakerAmbientSfxRuntime, buildPcSpeakerSfxRuntime, type PcSpeakerAmbientOptions, type PcSpeakerSample } from "./pc_speaker_sfx_runtime.ts";
 import { U6_SFX } from "./sfx_ids_runtime.ts";
+import { errorMessageRuntime, errorNameRuntime } from "../error_runtime.ts";
 
 export type AudioBackendMode = "off" | "pcspeaker" | "adlib";
 
@@ -53,7 +54,7 @@ export function createU6AudioRuntime(): U6AudioRuntime {
   let musicRequestSerial = 0;
 
   function fail(err: unknown): false {
-    lastError = String((err as any)?.message || err || "audio error");
+    lastError = errorMessageRuntime(err, "audio error");
     enabled = false;
     return false;
   }
@@ -78,7 +79,8 @@ export function createU6AudioRuntime(): U6AudioRuntime {
     if (!enabled) return null;
     try {
       if (!audioContext) {
-        const Ctor = globalThis.AudioContext || (globalThis as any).webkitAudioContext;
+        const audioGlobal = globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+        const Ctor = audioGlobal.AudioContext || audioGlobal.webkitAudioContext;
         if (!Ctor) throw new Error("Web Audio API unavailable");
         audioContext = new Ctor();
       }
@@ -166,8 +168,8 @@ export function createU6AudioRuntime(): U6AudioRuntime {
   }
 
   function isAutoplayBlocked(err: unknown): boolean {
-    const name = String((err as any)?.name || "");
-    const message = String((err as any)?.message || err || "");
+    const name = errorNameRuntime(err);
+    const message = errorMessageRuntime(err);
     return name === "NotAllowedError" || /user gesture|interact|autoplay|not allowed/i.test(message);
   }
 

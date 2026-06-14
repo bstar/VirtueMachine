@@ -44,6 +44,62 @@ const LEGACY_EQUIP_SLOTS = Object.freeze([
   { index: 9, key: "ring", legacy: "SLOT_RING" }
 ]);
 
+type UnknownRecord = Record<string, unknown>;
+
+interface ProbeEquipmentEntry {
+  tile_id?: unknown;
+  tile_hex?: unknown;
+  object_key?: unknown;
+}
+
+interface ProbeConversationInput {
+  active?: unknown;
+  target_name?: unknown;
+  target_obj_num?: unknown;
+  target_obj_type?: unknown;
+  portrait_tile_hex?: unknown;
+  show_inventory?: unknown;
+  equipment?: unknown;
+}
+
+interface ProbeRuntimeInput {
+  sim?: {
+    tick?: unknown;
+    inventory?: Record<string, unknown>;
+    world?: {
+      active?: unknown;
+      map_x?: unknown;
+      map_y?: unknown;
+      map_z?: unknown;
+    };
+  };
+  commandLog?: Array<{ tick?: unknown; kind?: unknown }>;
+  partyMembers?: unknown;
+  partyNameById?: Record<string, string> | null;
+  runtimeProfile?: unknown;
+  runtimeExtensions?: UnknownRecord;
+  conversation?: unknown;
+}
+
+interface ProbeSnapshotInput {
+  party_members?: unknown;
+  active_party_index?: unknown;
+  world?: {
+    map_x?: unknown;
+    map_y?: unknown;
+    map_z?: unknown;
+  };
+}
+
+interface BuildUiProbeOptions {
+  mode?: string;
+  runtime?: ProbeRuntimeInput;
+}
+
+function asRecord(value: unknown): UnknownRecord {
+  return value && typeof value === "object" ? value as UnknownRecord : {};
+}
+
 function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
@@ -61,10 +117,13 @@ function normalizeInventory(inventory: Record<string, unknown> | null | undefine
 }
 
 function normalizeEquipment(equipment: unknown) {
-  const projected = projectLegacyEquipmentSlotsRuntime((Array.isArray(equipment) ? equipment : []).map((e: any) => ({
+  const projected = projectLegacyEquipmentSlotsRuntime((Array.isArray(equipment) ? equipment : []).map((entry) => {
+    const e = asRecord(entry) as ProbeEquipmentEntry;
+    return {
     tileId: toU32(e.tile_id != null ? e.tile_id : e.tile_hex),
     object_key: e.object_key == null ? "" : String(e.object_key)
-  })));
+    };
+  }));
   const byIndex = new Map();
   for (const e of projected) {
     const idx = toU32(e.slot);
@@ -80,8 +139,8 @@ function normalizeEquipment(equipment: unknown) {
   }));
 }
 
-function normalizeConversation(conversation: any) {
-  const c: any = conversation && typeof conversation === "object" ? conversation : {};
+function normalizeConversation(conversation: unknown) {
+  const c = asRecord(conversation) as ProbeConversationInput;
   return {
     active: !!c.active,
     target_name: String(c.target_name || ""),
@@ -150,8 +209,8 @@ function deterministicSample() {
   };
 }
 
-function fromRuntime(runtime: any) {
-  const sim = runtime && runtime.sim ? runtime.sim : {};
+function fromRuntime(runtime: ProbeRuntimeInput) {
+  const sim = runtime?.sim || {};
   const world = sim.world || {};
   const commandLog = Array.isArray(runtime && runtime.commandLog) ? runtime.commandLog : [];
   const partyMembers = normalizePartyMemberIdsRuntime(runtime?.partyMembers, 1);
@@ -201,7 +260,7 @@ function fromRuntime(runtime: any) {
  2) Resolve avatar object id from Party[active] else Party[0], mirroring legacy fallback.
  3) Anchor panel location to current world map coords.
 */
-export function createCanonicalTestAvatar(snapshot: any = {}) {
+export function createCanonicalTestAvatar(snapshot: ProbeSnapshotInput = {}) {
   const partyMembers = normalizePartyMemberIdsRuntime(snapshot.party_members, 1);
   const activeIndex = clampActivePartyIndexRuntime(snapshot.active_party_index || 0, partyMembers.length);
   const resolvedId = partyMembers[activeIndex] || partyMembers[0] || 1;
@@ -217,7 +276,7 @@ export function createCanonicalTestAvatar(snapshot: any = {}) {
   };
 }
 
-export function buildUiProbeContract(opts: any = {}) {
+export function buildUiProbeContract(opts: BuildUiProbeOptions = {}) {
   const mode = String(opts.mode || "sample");
   const src = mode === "live" ? fromRuntime(opts.runtime || {}) : deterministicSample();
   const avatar = createCanonicalTestAvatar(src);
@@ -245,7 +304,7 @@ export function buildUiProbeContract(opts: any = {}) {
     mode: src.mode,
     tick: toU32(src.tick),
     runtime_profile: String(src.runtime_profile || "canonical_strict"),
-    runtime_extensions: { ...(src.runtime_extensions || {}) },
+    runtime_extensions: { ...(src.runtime_extensions || {}) } as Record<string, unknown>,
     canonical_ui: {
       avatar_panel: {
         avatar,
@@ -291,7 +350,10 @@ export function buildUiProbeContract(opts: any = {}) {
         members: projectPartyPanelMembersRuntime({
           partyMembers: src.party_members,
           activeIndex: src.active_party_index,
-          nameById: Object.fromEntries((Array.isArray(src.party) ? src.party : []).map((m: any) => [String(m.id), String(m.name || "")]))
+          nameById: Object.fromEntries((Array.isArray(src.party) ? src.party : []).map((member) => {
+            const m = asRecord(member);
+            return [String(m.id), String(m.name || "")];
+          }))
         }),
         regression_probe_counts: {
           selection_cases: partyMessageProbes.party_selection.length >>> 0

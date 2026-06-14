@@ -1,4 +1,5 @@
 import { decodeU6MSongRuntime, U6MRegisterSequencerRuntime, type U6MRegisterWrite } from "./u6m_music_runtime.ts";
+import { errorMessageRuntime } from "../error_runtime.ts";
 
 export const U6_ADLIB_TICK_HZ = 60;
 
@@ -177,7 +178,7 @@ export class U6AdlibMusicRuntime {
       this.loading = false;
       this.timer = setInterval(() => this.tick(), 1000 / U6_ADLIB_TICK_HZ);
     } catch (err) {
-      this.lastError = String((err as any)?.message || err || "adlib music error");
+      this.lastError = errorMessageRuntime(err, "adlib music error");
       this.loading = false;
       this.playing = false;
     }
