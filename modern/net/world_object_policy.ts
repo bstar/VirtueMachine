@@ -122,7 +122,7 @@ export function worldObjectApiCommonPayload(obj: WorldObject): WorldObjectApiCom
 export function worldObjectInteractionPayload(
   obj: WorldObject,
   args: {
-    assocChain?: unknown[];
+    assocChain?: ReadonlyArray<unknown>;
     blockedBy?: unknown;
     rootAnchorKey?: unknown;
     sourceObject?: Pick<WorldObject, "object_key"> | null;

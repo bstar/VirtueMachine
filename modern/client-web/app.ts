@@ -7495,7 +7495,7 @@ async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise
   throw (lastErr || new Error("no valid object baseline path"));
 }
 
-async function fetchRuntimeAssetWithFallback(paths: readonly unknown[], minBytes = 1): Promise<Uint8Array | null> {
+async function fetchRuntimeAssetWithFallback(paths: ReadonlyArray<unknown>, minBytes = 1): Promise<Uint8Array | null> {
   const list = Array.isArray(paths) ? paths : [];
   for (const p of list) {
     const path = String(p || "").trim();
@@ -7607,7 +7607,7 @@ function validateConversationArchiveA(archive: Uint8Array): boolean {
   return true;
 }
 
-async function fetchConversationArchiveAWithValidation(paths: readonly unknown[], minBytes = 256): Promise<Uint8Array | null> {
+async function fetchConversationArchiveAWithValidation(paths: ReadonlyArray<unknown>, minBytes = 256): Promise<Uint8Array | null> {
   const list = Array.isArray(paths) ? paths : [];
   for (const p of list) {
     const path = String(p || "").trim();
@@ -7630,7 +7630,7 @@ async function fetchConversationArchiveAWithValidation(paths: readonly unknown[]
   return null;
 }
 
-async function fetchConversationArchiveAny(paths: readonly unknown[], minBytes = 256): Promise<Uint8Array | null> {
+async function fetchConversationArchiveAny(paths: ReadonlyArray<unknown>, minBytes = 256): Promise<Uint8Array | null> {
   const list = Array.isArray(paths) ? paths : [];
   for (const p of list) {
     const path = String(p || "").trim();

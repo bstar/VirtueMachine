@@ -45,7 +45,7 @@ export type WorldRuntimeInventorySource = object & {
 };
 
 export interface WorldRuntimeServerObject {
-  assoc_chain?: unknown[];
+  assoc_chain?: ReadonlyArray<unknown>;
   assoc_child_0010_count?: unknown;
   assoc_child_count?: unknown;
   blocked_by?: unknown;
