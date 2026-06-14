@@ -212,7 +212,7 @@ function deterministicSample() {
 function fromRuntime(runtime: ProbeRuntimeInput) {
   const sim = runtime?.sim || {};
   const world = sim.world || {};
-  const commandLog = Array.isArray(runtime && runtime.commandLog) ? runtime.commandLog : [];
+  const commandLog: Array<{ tick?: unknown; kind?: unknown }> = Array.isArray(runtime.commandLog) ? runtime.commandLog : [];
   const partyMembers = normalizePartyMemberIdsRuntime(runtime?.partyMembers, 1);
   const activeIndex = clampActivePartyIndexRuntime(world.active || 0, partyMembers.length);
   const activeId = partyMembers[activeIndex] || partyMembers[0] || 1;
