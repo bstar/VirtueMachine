@@ -92,6 +92,7 @@ const {
   defaultWorldClockRuntime,
   defaultWorldSnapshotRuntime,
   hashInteractionEventRuntime,
+  normalizeCriticalPolicyRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
@@ -508,14 +509,11 @@ function loadState() {
     npcPilotById: new Map(),
     conversationArchives: null,
     conversationSessions: Object.create(null),
-    criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
+    criticalPolicy: readJsonValidated(FILES.criticalPolicy, defaultCriticalPolicy(), normalizeCriticalPolicyRuntime),
     worldObjects,
     mapRuntime: new U6MapRuntime(RUNTIME_DIR),
     worldInteractionLog: readJsonValidated(FILES.worldInteractionLog, defaultWorldInteractionLog(), normalizeWorldInteractionLog)
   };
-  if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
-    state.criticalPolicy = defaultCriticalPolicy();
-  }
   if (!Array.isArray(state.presence)) {
     state.presence = [];
   }

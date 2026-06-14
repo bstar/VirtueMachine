@@ -11,6 +11,7 @@ import {
   defaultWorldSnapshotRuntime,
   deterministicRecoveryTickLastRuntime,
   hashInteractionEventRuntime,
+  normalizeCriticalPolicyRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
@@ -153,6 +154,28 @@ assert.deepEqual(defaultCriticalPolicyRuntime(), [{
   min_count: 1,
   quest_gate: null
 }]);
+
+assert.deepEqual(normalizeCriticalPolicyRuntime([
+  {
+    item_id: " item_a ",
+    policy_type: "instance_quota",
+    anchor_locations: [{ x: "4", y: "5", z: "1" }, "bad"],
+    cooldown_ticks: "12",
+    min_count: "2",
+    quest_gate: "quest"
+  },
+  { item_id: "item_a", policy_type: "duplicate" },
+  { item_id: "", policy_type: "missing" }
+]), [{
+  item_id: "item_a",
+  policy_type: "instance_quota",
+  anchor_locations: [{ x: 4, y: 5, z: 1 }],
+  cooldown_ticks: 12,
+  min_count: 2,
+  quest_gate: "quest"
+}]);
+assert.deepEqual(normalizeCriticalPolicyRuntime("bad"), defaultCriticalPolicyRuntime());
+assert.deepEqual(normalizeCriticalPolicyRuntime([]), defaultCriticalPolicyRuntime());
 
 assert.deepEqual(runCriticalItemMaintenanceRuntime({
   criticalPolicy: [{

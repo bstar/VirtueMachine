@@ -237,6 +237,43 @@ export function defaultCriticalPolicyRuntime(): CriticalItemPolicyRuntime[] {
   ];
 }
 
+export function normalizeCriticalPolicyRuntime(raw: unknown): CriticalItemPolicyRuntime[] {
+  if (!Array.isArray(raw)) {
+    return defaultCriticalPolicyRuntime();
+  }
+  const out: CriticalItemPolicyRuntime[] = [];
+  const seen = new Set<string>();
+  for (const value of raw) {
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+    const row = value as CriticalItemPolicyRuntime;
+    const itemId = String(row.item_id || "").trim();
+    if (!itemId || seen.has(itemId)) {
+      continue;
+    }
+    seen.add(itemId);
+    const anchors = Array.isArray(row.anchor_locations)
+      ? row.anchor_locations
+        .filter((anchor) => anchor && typeof anchor === "object")
+        .map((anchor) => ({
+          x: Number((anchor as { x?: unknown }).x) | 0,
+          y: Number((anchor as { y?: unknown }).y) | 0,
+          z: Number((anchor as { z?: unknown }).z) | 0
+        }))
+      : [];
+    out.push({
+      item_id: itemId,
+      policy_type: String(row.policy_type || "regenerative_unique"),
+      anchor_locations: anchors,
+      cooldown_ticks: Number.isFinite(Number(row.cooldown_ticks)) ? Math.max(0, Number(row.cooldown_ticks) | 0) : 0,
+      min_count: Number.isFinite(Number(row.min_count)) ? Math.max(1, Number(row.min_count) | 0) : 1,
+      quest_gate: row.quest_gate ?? null
+    });
+  }
+  return out.length ? out : defaultCriticalPolicyRuntime();
+}
+
 export function runCriticalItemMaintenanceRuntime(args: {
   criticalPolicy: readonly CriticalItemPolicyRuntime[];
   nowIso: string;
