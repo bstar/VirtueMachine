@@ -9,7 +9,6 @@ const ENTITY_TYPE_ACTOR_MIN_RUNTIME = 0x153;
 const ENTITY_TYPE_ACTOR_MAX_RUNTIME = 0x1af;
 
 export type U6ObjectEntryRuntime = {
-  [key: string]: unknown;
   assocChild0010Count?: number;
   assocChildCount?: number;
   assocIndex: number;

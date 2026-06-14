@@ -68,6 +68,26 @@ assert.equal(parsed.entries[0].tileId, 0x300);
 assert.equal(parsed.entries[0].assocChildCount, 1);
 assert.equal(parsed.entries[0].assocChild0010Count, 1);
 assert.equal(parsed.entries[2].renderable, false);
+assert.deepEqual(Object.keys(parsed.entries[0]).sort(), [
+  "assocChild0010Count",
+  "assocChildCount",
+  "assocIndex",
+  "baseTile",
+  "coordUse",
+  "frame",
+  "index",
+  "legacyOrder",
+  "order",
+  "renderable",
+  "sourceArea",
+  "sourceIndex",
+  "status",
+  "tileId",
+  "type",
+  "x",
+  "y",
+  "z"
+]);
 assert.equal(parsed.assocEntries.length, 1);
 assert.equal(parsed.assocEntries[0].assocObj?.index, 0);
 assert.deepEqual(layer.parseObjBlk(new Uint8Array([0]), 0).entries, []);

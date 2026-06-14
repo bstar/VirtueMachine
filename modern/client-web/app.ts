@@ -1537,7 +1537,7 @@ function legacyEquipmentSlotsForTalkActor(actor: LegacyTalkActor | null | undefi
       if ((cur.coordUse | 0) === OBJ_COORD_USE_LOCXYZ) {
         return cur;
       }
-      const key = String(cur.index != null ? cur.index : cur.id);
+      const key = String(cur.index);
       if (seen.has(key)) {
         return null;
       }
