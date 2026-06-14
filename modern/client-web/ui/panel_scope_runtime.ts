@@ -12,8 +12,8 @@ export const MODERN_UI_PANEL_KEYS = Object.freeze([
 ]);
 
 type PanelScopeValidationInput = {
-  canonical_ui?: Record<string, unknown>;
-  modern_ui?: Record<string, unknown>;
+  canonical_ui?: object | null;
+  modern_ui?: object | null;
 };
 
 export function listPanelScopeRuntime(): {

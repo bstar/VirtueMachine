@@ -45,8 +45,19 @@ function testScopeValidatorCatchesUnclassifiedPanels() {
   assert.equal(result.canonical_unclassified.includes("debug_panel"), true, "missing unclassified panel report");
 }
 
+function testScopeValidatorHandlesMalformedInput() {
+  const result = validatePanelScopeRuntime({
+    canonical_ui: null,
+    modern_ui: null
+  });
+  assert.equal(result.ok, false, "empty panel maps should fail validation");
+  assert.deepEqual(result.canonical_missing, [...CANONICAL_UI_PANEL_KEYS]);
+  assert.deepEqual(result.modern_missing, [...MODERN_UI_PANEL_KEYS]);
+}
+
 testScopeListProjection();
 testScopeValidatorPassesProbe();
 testScopeValidatorCatchesUnclassifiedPanels();
+testScopeValidatorHandlesMalformedInput();
 
 console.log("ui_panel_scope_runtime_test: ok");
