@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+bun "$ROOT_DIR/modern/client-web/tests/net_auth_runtime_test.ts"
 bun "$ROOT_DIR/modern/client-web/tests/net_account_runtime_test.ts"
 bun "$ROOT_DIR/modern/client-web/tests/net_character_runtime_test.ts"
 bun "$ROOT_DIR/modern/client-web/tests/net_presence_runtime_test.ts"
+bun "$ROOT_DIR/modern/client-web/tests/net_profile_runtime_test.ts"
+bun "$ROOT_DIR/modern/client-web/tests/net_snapshot_runtime_test.ts"

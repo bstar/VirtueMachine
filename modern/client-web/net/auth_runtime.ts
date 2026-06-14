@@ -1,8 +1,22 @@
+import type { SimSnapshotRuntime } from "./snapshot_codec_runtime.ts";
+
+export interface NetLoginPayload {
+  token?: unknown;
+  user?: {
+    user_id?: unknown;
+    username?: unknown;
+    email?: unknown;
+    email_verified?: unknown;
+  };
+  snapshot_base64?: unknown;
+  [key: string]: unknown;
+}
+
 export type NetLoginRequest = (
   route: string,
   init?: RequestInit,
   auth?: boolean
-) => Promise<any>;
+) => Promise<NetLoginPayload | null>;
 
 export async function performNetLoginFlow(
   inputs: {
@@ -15,11 +29,11 @@ export async function performNetLoginFlow(
     setBackgroundSyncPaused: (paused: boolean) => void;
     setApiBase: (apiBase: string) => void;
     request: NetLoginRequest;
-    applyLogin: (login: any, username: string) => void;
+    applyLogin: (login: NetLoginPayload | null, username: string) => void;
     ensureCharacter: () => Promise<void>;
     snapshotRoute: () => string;
-    decodeSnapshot: (snapshotBase64: string) => any;
-    applyLoadedSim: (loaded: any) => void;
+    decodeSnapshot: (snapshotBase64: string) => SimSnapshotRuntime | null;
+    applyLoadedSim: (loaded: SimSnapshotRuntime) => void;
     pollWorldClock: () => Promise<void>;
     pollPresence: () => Promise<void>;
     setResumeFromSnapshot: (resumed: boolean) => void;
@@ -60,7 +74,7 @@ export async function performNetLoginFlow(
     const route = deps.snapshotRoute() || "/api/world/snapshot";
     const out = await deps.request(route, { method: "GET" }, true);
     if (out?.snapshot_base64) {
-      const loaded = deps.decodeSnapshot(out.snapshot_base64);
+      const loaded = deps.decodeSnapshot(String(out.snapshot_base64));
       if (loaded) {
         deps.applyLoadedSim(loaded);
         resumedFromSnapshot = true;

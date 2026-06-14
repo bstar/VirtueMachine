@@ -1,7 +1,24 @@
+import type { SimSnapshotRuntime } from "./snapshot_codec_runtime.ts";
+
+export interface SnapshotRuntimePayload {
+  snapshot_base64?: unknown;
+  snapshot_meta?: {
+    saved_tick?: unknown;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export type SnapshotRuntimeRequest = (
+  route: string,
+  init?: RequestInit,
+  auth?: boolean
+) => Promise<SnapshotRuntimePayload | null>;
+
 export type SnapshotSaveDeps = {
   ensureAuth: () => Promise<void>;
   isAuthenticated: () => boolean;
-  request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+  request: SnapshotRuntimeRequest;
   snapshotRoute?: () => string;
   encodeSnapshot: () => string;
   currentTick: () => number;
@@ -13,15 +30,15 @@ export type SnapshotSaveDeps = {
 export type SnapshotLoadDeps = {
   ensureAuth: () => Promise<void>;
   isAuthenticated: () => boolean;
-  request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+  request: SnapshotRuntimeRequest;
   snapshotRoute?: () => string;
-  decodeSnapshot: (snapshotBase64: string) => any;
-  applyLoadedSim: (loaded: any) => void;
+  decodeSnapshot: (snapshotBase64: string) => SimSnapshotRuntime | null;
+  applyLoadedSim: (loaded: SimSnapshotRuntime) => void;
   resetBackgroundFailures: () => void;
   setStatus: (level: string, text: string) => void;
 };
 
-export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<any> {
+export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<SnapshotRuntimePayload> {
   deps.setStatus("sync", "Saving world snapshot...");
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
@@ -42,10 +59,10 @@ export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<an
   const tickOut = Number(out?.snapshot_meta?.saved_tick || 0) >>> 0;
   deps.onSavedTick(tickOut);
   deps.setStatus("online", `Saved tick ${tickOut}`);
-  return out;
+  return out || {};
 }
 
-export async function performNetLoadSnapshot(deps: SnapshotLoadDeps): Promise<any> {
+export async function performNetLoadSnapshot(deps: SnapshotLoadDeps): Promise<SnapshotRuntimePayload> {
   deps.setStatus("sync", "Loading world snapshot...");
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
@@ -62,5 +79,5 @@ export async function performNetLoadSnapshot(deps: SnapshotLoadDeps): Promise<an
   deps.applyLoadedSim(loaded);
   deps.resetBackgroundFailures();
   deps.setStatus("online", `Loaded tick ${Number(out?.snapshot_meta?.saved_tick || 0)}`);
-  return out;
+  return out || {};
 }

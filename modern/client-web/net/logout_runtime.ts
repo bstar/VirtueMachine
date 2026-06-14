@@ -1,7 +1,7 @@
 export async function performNetLogoutSequence(
   deps: {
     hasSession: () => boolean;
-    saveSnapshot: () => Promise<void>;
+    saveSnapshot: () => Promise<unknown>;
     leavePresence: () => Promise<void>;
   }
 ): Promise<{ saveErr: unknown; leaveErr: unknown }> {
