@@ -207,7 +207,8 @@ import {
   filterFutureCommandsOfTypeRuntime,
   partitionCommandsForTickRuntime,
   shouldSuppressRepeatedMoveRuntime,
-  upsertMoveCommandForTickRuntime
+  upsertMoveCommandForTickRuntime,
+  type SimCommandRuntime
 } from "./sim/queue_runtime.ts";
 import {
   createInitialAppSimState,
@@ -249,7 +250,8 @@ import {
   objectIsChairAtCellRuntime,
   preferredSleepCellForBedRuntime,
   sleepBedCellFrameOffsetRuntime,
-  sleepFrameOffsetForBedAtCellRuntime
+  sleepFrameOffsetForBedAtCellRuntime,
+  type FurniturePoseObjectRuntime
 } from "./sim/furniture_pose_runtime.ts";
 import {
   isImplicitSolidObjectTileRuntime,
@@ -267,7 +269,8 @@ import {
   addObjectToInventoryRuntime,
   inventoryKeyForObjectRuntime,
   isObjectRemovedRuntime,
-  markObjectRemovedRuntime
+  markObjectRemovedRuntime,
+  type InventoryObjectRuntime
 } from "./sim/inventory_runtime.ts";
 import {
   isBedObjectRuntime,
@@ -279,7 +282,6 @@ import {
 import {
   nearestTalkTargetAtCellRuntime,
   topWorldObjectAtCellRuntime,
-  type TargetEntityRuntime,
   type TargetObjectLayerRuntime
 } from "./sim/target_runtime.ts";
 import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
@@ -544,6 +546,19 @@ type AppPresenceStateView = AppObjectLayerStateView & {
     presencePollInFlight: boolean;
     remotePlayers: RemotePresencePlayer[];
   };
+};
+type GameplayInteractionStateView = {
+  entityLayer: U6EntityLayerRuntime | null;
+  mapCtx: U6MapRuntime | null;
+  objectLayer: U6ObjectLayerRuntime | null;
+  queue: SimCommandRuntime[];
+  sim: AppSimState;
+  terrainType: Uint8Array | null;
+  tileFlags: Uint8Array | null;
+};
+
+type ObjectFootprintSourceRuntime = FurniturePoseObjectRuntime & {
+  renderable?: boolean;
 };
 type LegacyPortraitEntry = {
   archive: "a" | "b";
@@ -4722,7 +4737,7 @@ function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   return true;
 }
 
-function applyInventoryProjectionFromServerObjects(sim, objects) {
+function applyInventoryProjectionFromServerObjects(sim: AppSimState | null | undefined, objects: unknown): void {
   if (!sim) {
     return;
   }
@@ -4741,7 +4756,12 @@ async function netSyncInventoryProjection() {
   return out;
 }
 
-async function netTakeWorldObject(obj, tx, ty, tz) {
+async function netTakeWorldObject(
+  obj: InventoryObjectRuntime & { frame: number },
+  tx: number,
+  ty: number,
+  tz: number
+) {
   const out = await requestTakeWorldObjectRuntime({
     actorId: state.net.characterId || state.net.userId || "Avatar",
     actorX: state.sim.world.map_x,
@@ -4759,7 +4779,8 @@ async function netTakeWorldObject(obj, tx, ty, tz) {
   return out;
 }
 
-function tryGetAtCell(sim, tx, ty) {
+function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  const interactionState = state as unknown as GameplayInteractionStateView;
   const tz = sim.world.map_z | 0;
   if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
     diagBox.className = "diag warn";
@@ -4767,7 +4788,7 @@ function tryGetAtCell(sim, tx, ty) {
     return false;
   }
   const obj = topWorldObjectAtCellRuntime(
-    state.objectLayer,
+    interactionState.objectLayer,
     sim,
     tx,
     ty,
@@ -4783,7 +4804,7 @@ function tryGetAtCell(sim, tx, ty) {
   if (isNetAuthenticated()) {
     diagBox.className = "diag ok";
     diagBox.textContent = `Get: taking 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
-    void netTakeWorldObject(obj, tx, ty, tz).catch((err) => {
+    void netTakeWorldObject(obj as InventoryObjectRuntime & { frame: number }, tx, ty, tz).catch((err: unknown) => {
       diagBox.className = "diag warn";
       diagBox.textContent = `Get failed: ${errorMessageRuntime(err)}`;
     });
@@ -4798,9 +4819,10 @@ function tryGetAtCell(sim, tx, ty) {
   return true;
 }
 
-function tryAttackAtCell(sim, tx, ty) {
+function tryAttackAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  const interactionState = state as unknown as GameplayInteractionStateView;
   const tz = sim.world.map_z | 0;
-  const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
+  const actor = nearestTalkTargetAtCellRuntime(interactionState.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   const result = legacyAttackVerbRuntime(actor, tx, ty, tz);
   if (result.playSfx === "attack_swing") {
     playSfx(U6_SFX.ATTACK_SWING);
@@ -4810,7 +4832,7 @@ function tryAttackAtCell(sim, tx, ty) {
   return result.ok;
 }
 
-function tryCastAtCell(sim, tx, ty) {
+function tryCastAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const tz = sim.world.map_z | 0;
   const result = legacyCastVerbRuntime(tx, ty, tz);
   if (result.playSfx === "casting_magic_p1") {
@@ -4821,14 +4843,14 @@ function tryCastAtCell(sim, tx, ty) {
   return result.ok;
 }
 
-function tryDropAtCell(sim, tx, ty) {
+function tryDropAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const result = legacyDropVerbRuntime(sim, tx, ty);
   diagBox.className = `diag ${result.diagClass}`;
   diagBox.textContent = result.text;
   return result.ok;
 }
 
-function tryMoveVerbAtCell(sim, tx, ty) {
+function tryMoveVerbAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const tz = sim.world.map_z | 0;
   const result = legacyMoveVerbRuntime(tx, ty, tz);
   diagBox.className = `diag ${result.diagClass}`;
@@ -4836,17 +4858,20 @@ function tryMoveVerbAtCell(sim, tx, ty) {
   return result.ok;
 }
 
-function findObjectByAnchor(anchor) {
-  if (!anchor || !state.objectLayer) {
+function findObjectByAnchor(anchor: InventoryObjectRuntime | null | undefined): U6ObjectEntryRuntime | null {
+  const interactionState = state as unknown as GameplayInteractionStateView;
+  if (!anchor || !interactionState.objectLayer) {
     return null;
   }
-  const overlays = state.objectLayer.objectsAt(anchor.x | 0, anchor.y | 0, anchor.z | 0);
-  let typeMatch = null;
+  const overlays = interactionState.objectLayer.objectsAt(Number(anchor.x) | 0, Number(anchor.y) | 0, Number(anchor.z) | 0);
+  let typeMatch: U6ObjectEntryRuntime | null = null;
+  const anchorOrder = Number(anchor.order) | 0;
+  const anchorType = Number(anchor.type) | 0;
   for (const o of overlays) {
-    if ((o.order | 0) === (anchor.order | 0) && (o.type | 0) === (anchor.type | 0)) {
+    if ((o.order | 0) === anchorOrder && (o.type | 0) === anchorType) {
       return o;
     }
-    if (!typeMatch && (o.type | 0) === (anchor.type | 0)) {
+    if (!typeMatch && (o.type | 0) === anchorType) {
       typeMatch = o;
     }
   }
@@ -4867,18 +4892,28 @@ function findObjectByAnchor(anchor) {
   return null;
 }
 
-function objectFootprintTiles(sim, o, ox, oy) {
-  const tileId = resolveDoorTileIdRuntime(sim, o) & 0xffff;
+function objectFootprintTiles(sim: AppSimState, o: ObjectFootprintSourceRuntime, ox: number, oy: number) {
+  const tileId = resolveDoorTileIdRuntime(sim, {
+    baseTile: o.baseTile,
+    frame: o.frame,
+    order: Number(o.order) | 0,
+    type: o.type,
+    x: o.x,
+    y: o.y,
+    z: Number(o.z) | 0
+  }) & 0xffff;
   return objectFootprintTilesRuntime(ox, oy, tileId, tileFlagsForTile);
 }
 
-function isBlockedAt(sim, wx, wy, wz) {
-  if (!state.mapCtx) {
+function isBlockedAt(sim: AppSimState, wx: number, wy: number, wz: number): boolean {
+  const interactionState = state as unknown as GameplayInteractionStateView;
+  const mapCtx = interactionState.mapCtx;
+  if (!mapCtx) {
     return false;
   }
-  return isBlockedAtRuntime(wx, wy, wz, {
+  return isBlockedAtRuntime<U6ObjectEntryRuntime>(wx, wy, wz, {
     avatarEntityId: AVATAR_ENTITY_ID,
-    entities: state.entityLayer?.entries ?? null,
+    entities: interactionState.entityLayer?.entries ?? null,
     isDoorObject: isCloseableDoorObjectRuntime,
     isDoorOpen: (o) => isDoorFrameOpenRuntime(
       o?.type,
@@ -4886,22 +4921,25 @@ function isBlockedAt(sim, wx, wy, wz) {
     ),
     isImplicitSolidObjectTile: (objType, tileId) => isImplicitSolidObjectTileRuntime(objType, tileId, tileFlagsForTile),
     isSolidEnvObject: isSolidEnvObjectRuntime,
-    mapTileAt: (x, y, z) => state.mapCtx.tileAt(x, y, z),
+    mapTileAt: (x, y, z) => mapCtx.tileAt(x, y, z),
     objectFootprintTiles: (o, ox, oy) => objectFootprintTiles(sim, o, ox, oy),
-    objectsAt: state.objectLayer && state.tileFlags ? (x, y, z) => state.objectLayer.objectsAt(x, y, z) : null,
-    terrainFlagsForTile: (tileId) => state.terrainType ? (state.terrainType[tileId & 0x07ff] ?? 0) : 0,
+    objectsAt: interactionState.objectLayer && interactionState.tileFlags
+      ? (x, y, z) => interactionState.objectLayer?.objectsAt(x, y, z) ?? []
+      : null,
+    terrainFlagsForTile: (tileId) => interactionState.terrainType ? (interactionState.terrainType[tileId & 0x07ff] ?? 0) : 0,
     tileFlagsForTile
   });
 }
 
-function tryToggleDoorInFacingDirection(sim, dx, dy) {
-  if (!state.objectLayer) {
+function tryToggleDoorInFacingDirection(sim: AppSimState, dx: number, dy: number): boolean {
+  const interactionState = state as unknown as GameplayInteractionStateView;
+  if (!interactionState.objectLayer) {
     return false;
   }
   const tx = (sim.world.map_x + dx) | 0;
   const ty = (sim.world.map_y + dy) | 0;
   const tz = sim.world.map_z | 0;
-  const overlays = state.objectLayer.objectsAt(tx, ty, tz);
+  const overlays = interactionState.objectLayer.objectsAt(tx, ty, tz);
   for (const o of overlays) {
     if (!isCloseableDoorObjectRuntime(o)) {
       continue;
@@ -4918,14 +4956,15 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
   return false;
 }
 
-function clearPendingAvatarMoveCommands(sim) {
-  if (!Array.isArray(state.queue) || !sim) {
+function clearPendingAvatarMoveCommands(sim: AppSimState | null | undefined): void {
+  const interactionState = state as unknown as GameplayInteractionStateView;
+  if (!Array.isArray(interactionState.queue) || !sim) {
     return;
   }
-  state.queue = filterFutureCommandsOfTypeRuntime(state.queue, sim.tick, LEGACY_COMMAND_TYPE.MOVE_AVATAR);
+  interactionState.queue = filterFutureCommandsOfTypeRuntime(interactionState.queue, sim.tick, LEGACY_COMMAND_TYPE.MOVE_AVATAR);
 }
 
-function chairFrameForCell(obj, tx, ty) {
+function chairFrameForCell(obj: FurniturePoseObjectRuntime | null | undefined, tx: number, ty: number) {
   return chairFrameForCellRuntime(
     obj,
     tx,
@@ -4934,7 +4973,7 @@ function chairFrameForCell(obj, tx, ty) {
   );
 }
 
-function objectIsChairAtCell(obj, tx, ty) {
+function objectIsChairAtCell(obj: FurniturePoseObjectRuntime | null | undefined, tx: number, ty: number): boolean {
   return objectIsChairAtCellRuntime(
     obj,
     tx,
@@ -4944,29 +4983,30 @@ function objectIsChairAtCell(obj, tx, ty) {
   );
 }
 
-function objectIsBedAtCell(obj, tx, ty) {
+function objectIsBedAtCell(obj: FurniturePoseObjectRuntime | null | undefined, tx: number, ty: number): boolean {
   return objectIsBedAtCellRuntime(obj, tx, ty, tileFlagsForTile);
 }
 
-function furnitureAtWorldCell(sim, tx, ty, tz) {
+function furnitureAtWorldCell(sim: AppSimState, tx: number, ty: number, tz: number) {
+  const interactionState = state as unknown as GameplayInteractionStateView;
   return furnitureAtWorldCellRuntime({
     bedInteractionScore,
     fromX: sim.world.map_x,
     fromY: sim.world.map_y,
     isBedAtCell: objectIsBedAtCell,
     isChairAtCell: objectIsChairAtCell,
-    objectsAt: state.objectLayer ? (x, y, z) => state.objectLayer.objectsAt(x, y, z) : null,
+    objectsAt: interactionState.objectLayer ? (x, y, z) => interactionState.objectLayer?.objectsAt(x, y, z) ?? [] : null,
     tx,
     ty,
     tz
   });
 }
 
-function furnitureAtCell(sim, tx, ty) {
+function furnitureAtCell(sim: AppSimState, tx: number, ty: number) {
   return furnitureAtWorldCell(sim, tx, ty, sim.world.map_z | 0);
 }
 
-function tryInteractFurnitureObject(sim, o) {
+function tryInteractFurnitureObject(sim: AppSimState, o: FurniturePoseObjectRuntime | null | undefined): boolean {
   const result = applyFurnitureInteractionRuntime(sim, o, {
     isBedObject: isBedObjectRuntime,
     preferredSleepCell: preferredSleepCellForBed
@@ -4983,17 +5023,18 @@ function tryInteractFurnitureObject(sim, o) {
   return true;
 }
 
-function tryInteractFurnitureInFacingDirection(sim, dx, dy) {
+function tryInteractFurnitureInFacingDirection(sim: AppSimState, dx: number, dy: number): boolean {
   const tx = (sim.world.map_x + dx) | 0;
   const ty = (sim.world.map_y + dy) | 0;
   return tryInteractFurnitureObject(sim, furnitureAtCell(sim, tx, ty));
 }
 
-function tryToggleDoorAtCell(sim, tx, ty, tz) {
-  if (!state.objectLayer) {
+function tryToggleDoorAtCell(sim: AppSimState, tx: number, ty: number, tz: number): boolean {
+  const interactionState = state as unknown as GameplayInteractionStateView;
+  if (!interactionState.objectLayer) {
     return false;
   }
-  const overlays = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
+  const overlays = interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
   for (const o of overlays) {
     if (!isCloseableDoorObjectRuntime(o)) {
       continue;
@@ -5010,10 +5051,11 @@ function tryToggleDoorAtCell(sim, tx, ty, tz) {
   return false;
 }
 
-function tryInteractAtCell(sim, tx, ty) {
+function tryInteractAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  const interactionState = state as unknown as GameplayInteractionStateView;
   const tz = sim.world.map_z | 0;
-  if (state.objectLayer) {
-    const overlays = state.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
+  if (interactionState.objectLayer) {
+    const overlays = interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
     const obj = overlays.find((o) => {
       const type = (Number(o?.type) | 0) & 0x3ff;
       return type === OBJ_U6_BELL || type === OBJ_U6_RUBBER_DUCKY;
@@ -5029,7 +5071,7 @@ function tryInteractAtCell(sim, tx, ty) {
   return tryInteractFurnitureObject(sim, furnitureAtCell(sim, tx, ty));
 }
 
-function tryInteractFacing(sim, dx, dy) {
+function tryInteractFacing(sim: AppSimState, dx: number, dy: number): boolean {
   const tx = (sim.world.map_x + dx) | 0;
   const ty = (sim.world.map_y + dy) | 0;
   if (tryInteractAtCell(sim, tx, ty)) {
@@ -6062,25 +6104,25 @@ function tileFlagsForTile(tileId) {
   return state.tileFlags[tileId & 0x07ff] ?? 0;
 }
 
-function furnitureOccupancyCells(obj) {
+function furnitureOccupancyCells(obj: FurniturePoseObjectRuntime | null | undefined) {
   return furnitureOccupancyCellsRuntime(obj, tileFlagsForTile);
 }
 
-function sleepBedCellFrameOffset(bedObj, wx, wy) {
+function sleepBedCellFrameOffset(bedObj: FurniturePoseObjectRuntime, wx: number, wy: number) {
   return sleepBedCellFrameOffsetRuntime(bedObj, wx, wy, tileFlagsForTile);
 }
 
-function preferredSleepCellForBed(bedObj, fromX, fromY) {
+function preferredSleepCellForBed(bedObj: FurniturePoseObjectRuntime, fromX: number, fromY: number) {
   return preferredSleepCellForBedRuntime(bedObj, fromX, fromY, tileFlagsForTile);
 }
 
-function sleepFrameOffsetForBedAtCell(bedObj, wx, wy) {
+function sleepFrameOffsetForBedAtCell(bedObj: FurniturePoseObjectRuntime | null | undefined, wx: number, wy: number) {
   /* Legacy AI_SLEEP path in seg_1E0F checks `(GetFrame(bed) - D_0658)`:
      only normalized 0 and 6 are valid sleep orientations, with 6 using frame 1. */
   return sleepFrameOffsetForBedAtCellRuntime(bedObj, wx, wy, tileFlagsForTile);
 }
 
-function bedInteractionScore(bedObj, fromX, fromY) {
+function bedInteractionScore(bedObj: FurniturePoseObjectRuntime, fromX: number, fromY: number) {
   return bedInteractionScoreRuntime(bedObj, fromX, fromY, tileFlagsForTile);
 }
 
@@ -6102,7 +6144,7 @@ function avatarRenderTileId() {
   }
   if (state.sim.avatarPose === "sleep") {
     const sleepBase = sleepBaseTileForEntity(avatar);
-    let bed = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    let bed: FurniturePoseObjectRuntime | null = findObjectByAnchor(state.sim.avatarPoseAnchor);
     if (!bed || !isBedObjectRuntime(bed)) {
       const fallback = furnitureAtCell(state.sim, state.sim.world.map_x | 0, state.sim.world.map_y | 0);
       if (fallback && isBedObjectRuntime(fallback)) {
@@ -6124,7 +6166,7 @@ function avatarRenderTileId() {
   const walkMoving = Number(state.avatarWalkAnimUntilMs) >= performance.now();
   const dirGroup = avatarFacingFrameOffset();
   if (state.sim.avatarPose === "sit") {
-    let chair = findObjectByAnchor(state.sim.avatarPoseAnchor);
+    let chair: FurniturePoseObjectRuntime | null = findObjectByAnchor(state.sim.avatarPoseAnchor);
     if (!chair || !isChairObjectRuntime(chair)) {
       const fallback = furnitureAtCell(state.sim, state.sim.world.map_x | 0, state.sim.world.map_y | 0);
       if (fallback && isChairObjectRuntime(fallback)) {
