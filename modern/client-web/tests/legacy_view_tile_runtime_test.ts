@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   applyLegacyCornerVariantRuntime,
   buildBaseTileBuffersRuntime,
+  buildLegacyViewContextRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
@@ -143,5 +144,70 @@ assert.deepEqual(Array.from(buildBaseTileBuffersRuntime({
   0x21f, 0x210, 0x001,
   0x001, 0x001, 0x001
 ]);
+
+const openCtx = buildLegacyViewContextRuntime({
+  dateD: 2,
+  dateM: 1,
+  hasWallTerrain: () => false,
+  isBackgroundObjectTile: () => false,
+  mapTileAt: () => 0,
+  objectsAt: null,
+  resolveAnimatedObjectTile: () => 0,
+  startX: 100,
+  startY: 200,
+  tileFlagsForTile: () => 0,
+  timeH: 12,
+  timeM: 0,
+  viewH: 3,
+  viewW: 3,
+  wz: 0
+});
+assert.equal(openCtx.visibleAtWorld(101, 201), true);
+assert.equal(openCtx.openAtWorld(101, 201), true);
+assert.equal(openCtx.wallAtWorld(101, 201), false);
+assert.equal(openCtx.visibleAtWorld(999, 999), true);
+assert.equal(openCtx.openAtWorld(999, 999), false);
+assert.equal(openCtx.areaLightAtWorld?.(101, 201), 4);
+
+const opaqueCtx = buildLegacyViewContextRuntime({
+  dateD: 2,
+  dateM: 1,
+  hasWallTerrain: () => false,
+  isBackgroundObjectTile: () => false,
+  mapTileAt: (wx, wy) => (wx === 101 && wy === 201 ? 0x020 : 0),
+  objectsAt: null,
+  resolveAnimatedObjectTile: () => 0,
+  startX: 100,
+  startY: 200,
+  tileFlagsForTile: (tileId) => tileId === 0x020 ? 0x04 : 0,
+  timeH: 12,
+  timeM: 0,
+  viewH: 3,
+  viewW: 3,
+  wz: 0
+});
+assert.equal(opaqueCtx.openAtWorld(101, 201), false);
+
+const objectCtx = buildLegacyViewContextRuntime({
+  dateD: 1,
+  dateM: 1,
+  hasWallTerrain: (tileId) => tileId === 0x030,
+  isBackgroundObjectTile: () => false,
+  mapTileAt: () => 0,
+  objectsAt: (wx, wy) => (wx === 101 && wy === 201
+    ? [{ baseTile: 0, frame: 0, order: 0, renderable: true, type: 0, x: wx, y: wy, z: 0 }]
+    : []),
+  resolveAnimatedObjectTile: () => 0x030,
+  startX: 100,
+  startY: 200,
+  tileFlagsForTile: (tileId) => tileId === 0x030 ? 0x03 : 0,
+  timeH: 12,
+  timeM: 0,
+  viewH: 3,
+  viewW: 3,
+  wz: 0
+});
+assert.equal(objectCtx.wallAtWorld(101, 201), true);
+assert.equal(objectCtx.areaLightAtWorld?.(101, 201), 4);
 
 console.log("legacy_view_tile_runtime_test: ok");

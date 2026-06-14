@@ -1,4 +1,5 @@
 export type LegacyViewContextRuntime = {
+  areaLightAtWorld?(wx: number, wy: number): number;
   openAtWorld(wx: number, wy: number): boolean;
   visibleAtWorld(wx: number, wy: number): boolean;
   wallAtWorld(wx: number, wy: number): boolean;
@@ -25,6 +26,289 @@ export type LegacyBaseTileBuffersRuntime = {
   displayTiles: Uint16Array;
   rawTiles: Uint16Array;
 };
+
+export function buildLegacyViewContextRuntime(args: {
+  dateD: number;
+  dateM: number;
+  hasWallTerrain(tileId: number): boolean;
+  isBackgroundObjectTile(tileId: number): boolean;
+  mapTileAt(wx: number, wy: number, wz: number): number;
+  objectsAt?: ((wx: number, wy: number, wz: number) => Iterable<LegacyViewObjectRuntime>) | null;
+  resolveAnimatedObjectTile(obj: LegacyViewObjectRuntime): number;
+  startX: number;
+  startY: number;
+  tileFlagsForTile(tileId: number): number;
+  timeH: number;
+  timeM: number;
+  viewH: number;
+  viewW: number;
+  wz: number;
+}): LegacyViewContextRuntime {
+  const startX = args.startX | 0;
+  const startY = args.startY | 0;
+  const wz = args.wz | 0;
+  const viewW = Math.max(0, args.viewW | 0);
+  const viewH = Math.max(0, args.viewH | 0);
+  const PAD = 4;
+  const W = viewW + (PAD * 2);
+  const H = viewH + (PAD * 2);
+  const C_X = PAD + (viewW >> 1);
+  const C_Y = PAD + (viewH >> 1);
+  const FLAG_BA = 0x04;
+  const FLAG_WALL = 0x08;
+  const FLAG_WIN = 0x10;
+  const FLAG_OPA = 0x20;
+  const FLAG_VISITED = 0x40;
+  const FLAG_VISIBLE = 0x80;
+
+  const baseTiles = Array.from({ length: H }, () => new Uint16Array(W));
+  const flags = Array.from({ length: H }, () => new Uint8Array(W));
+  const open = Array.from({ length: H }, () => new Uint8Array(W));
+  const areaLight = Array.from({ length: H }, () => new Uint8Array(W));
+  const LEGACY_LIGHT_FALLOFF = [
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [1, 1, 2, 3, 4, 5, 6, 7],
+    [2, 2, 3, 4, 5, 6, 6, 7],
+    [3, 3, 4, 4, 5, 6, 7, 8],
+    [4, 4, 5, 5, 6, 7, 7, 8],
+    [5, 5, 6, 6, 7, 7, 8, 9],
+    [6, 6, 6, 7, 7, 8, 8, 9],
+    [7, 7, 7, 8, 8, 9, 9, 10]
+  ];
+
+  const inBounds = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H;
+  const clampToLegacyLightRange = (n: number) => {
+    const v = n | 0;
+    if (v < 0) return 0;
+    if (v > 4) return 4;
+    return v;
+  };
+  const ambientLightLevel = () => {
+    const hour = Number(args.timeH) >>> 0;
+    const minute = Number(args.timeM) >>> 0;
+    const dateD = Number(args.dateD) >>> 0;
+    const dateM = Number(args.dateM) >>> 0;
+    const isEclipse = (dateD === 1) && ((dateM % 3) === 0);
+    if (isEclipse || !(hour >= 5 && hour <= 19) || (wz > 0 && wz < 5)) {
+      return 0;
+    }
+    if (hour === 5) {
+      return clampToLegacyLightRange(Math.floor(minute / 10) + 1);
+    }
+    if (hour === 19) {
+      return clampToLegacyLightRange(Math.floor((59 - minute) / 10) + 1);
+    }
+    return 7;
+  };
+  const legacyLightDistance = (dx: number, dy: number) => {
+    const ax = Math.min(7, Math.abs(dx | 0));
+    const ay = Math.min(7, Math.abs(dy | 0));
+    return LEGACY_LIGHT_FALLOFF[ax][ay] | 0;
+  };
+  const markFlag = (x: number, y: number, bit: number) => {
+    if (inBounds(x, y)) {
+      flags[y][x] |= bit;
+    }
+  };
+  const isTileOpa = (tileId: number) => (args.tileFlagsForTile(tileId) & 0x04) !== 0;
+  const isTileWin = (tileId: number) => (args.tileFlagsForTile(tileId) & 0x08) !== 0;
+  const isTileDoubleV = (tileId: number) => (args.tileFlagsForTile(tileId) & 0x40) !== 0;
+  const isTileDoubleH = (tileId: number) => (args.tileFlagsForTile(tileId) & 0x80) !== 0;
+
+  const applyObjFlags = (gx: number, gy: number, tileId: number) => {
+    if (!inBounds(gx, gy)) {
+      return;
+    }
+    if (isTileWin(tileId)) {
+      markFlag(gx, gy, FLAG_WIN);
+    } else if (isTileOpa(tileId)) {
+      markFlag(gx, gy, FLAG_OPA);
+    } else if (args.isBackgroundObjectTile(tileId)) {
+      markFlag(gx, gy, FLAG_BA);
+    }
+    if (isTileOpa(tileId - 1)) {
+      if (isTileDoubleV(tileId)) {
+        markFlag(gx, gy - 1, FLAG_OPA);
+      }
+      if (isTileDoubleH(tileId)) {
+        markFlag(gx - 1, gy, FLAG_OPA);
+      }
+    }
+    if (args.hasWallTerrain(tileId)) {
+      markFlag(gx, gy, FLAG_WALL);
+      if (isTileDoubleV(tileId)) {
+        markFlag(gx, gy - 1, FLAG_WALL);
+      }
+      if (isTileDoubleH(tileId)) {
+        markFlag(gx - 1, gy, FLAG_WALL);
+      }
+    }
+    const sourceLight = args.tileFlagsForTile(tileId) & 0x03;
+    if (sourceLight > 0 && inBounds(gx, gy)) {
+      const prior = flags[gy][gx] & 0x03;
+      if (prior < sourceLight) {
+        flags[gy][gx] = (flags[gy][gx] & ~0x03) | sourceLight;
+      }
+    }
+  };
+
+  for (let gy = 0; gy < H; gy += 1) {
+    for (let gx = 0; gx < W; gx += 1) {
+      const wx = startX + gx - PAD;
+      const wy = startY + gy - PAD;
+      baseTiles[gy][gx] = args.mapTileAt(wx, wy, wz);
+    }
+  }
+
+  if (args.objectsAt) {
+    for (let gy = 0; gy < H; gy += 1) {
+      for (let gx = 0; gx < W; gx += 1) {
+        const wx = startX + gx - PAD;
+        const wy = startY + gy - PAD;
+        const overlays = args.objectsAt(wx, wy, wz);
+        for (const o of overlays) {
+          const tileId = args.resolveAnimatedObjectTile(o);
+          applyObjFlags(gx, gy, tileId);
+        }
+      }
+    }
+  }
+
+  const isVisibleAt = (gx: number, gy: number) => {
+    if (!inBounds(gx, gy)) {
+      return false;
+    }
+    const tile = baseTiles[gy][gx];
+    const f = flags[gy][gx];
+    if (f & FLAG_OPA) {
+      return false;
+    }
+    if (isTileWin(tile) || (f & FLAG_WIN)) {
+      return (
+        (gx === C_X && Math.abs(gy - C_Y) < 2)
+        || (gy === C_Y && Math.abs(gx - C_X) < 2)
+      );
+    }
+    if (!(f & FLAG_BA) && isTileOpa(tile)) {
+      return false;
+    }
+    return true;
+  };
+
+  const q: Array<[number, number]> = [];
+  const pushVisit = (gx: number, gy: number) => {
+    if (!inBounds(gx, gy)) {
+      return;
+    }
+    if (flags[gy][gx] & FLAG_VISITED) {
+      return;
+    }
+    flags[gy][gx] |= FLAG_VISITED;
+    q.push([gx, gy]);
+  };
+
+  if (isVisibleAt(C_X, C_Y)) {
+    pushVisit(C_X, C_Y);
+  } else {
+    if (isVisibleAt(C_X + 1, C_Y)) pushVisit(C_X + 1, C_Y);
+    if (isVisibleAt(C_X, C_Y + 1)) pushVisit(C_X, C_Y + 1);
+  }
+
+  const stepX = [0, 1, 0, 0, -1, -1, 0, 0];
+  const stepY = [-1, 0, 1, 1, 0, 0, -1, -1];
+
+  while (q.length) {
+    const next = q.shift();
+    if (!next) {
+      break;
+    }
+    const [gx, gy] = next;
+    flags[gy][gx] |= FLAG_VISIBLE;
+    if (!isVisibleAt(gx, gy)) {
+      continue;
+    }
+    open[gy][gx] = 1;
+    let nx = gx;
+    let ny = gy;
+    for (let i = 0; i < stepX.length; i += 1) {
+      nx += stepX[i];
+      ny += stepY[i];
+      pushVisit(nx, ny);
+    }
+  }
+
+  const ambient = ambientLightLevel();
+  for (let gy = 0; gy < H; gy += 1) {
+    for (let gx = 0; gx < W; gx += 1) {
+      if ((flags[gy][gx] & FLAG_VISIBLE) === 0) {
+        continue;
+      }
+      const base = clampToLegacyLightRange(4 - legacyLightDistance(gx - C_X, gy - C_Y) + ambient);
+      areaLight[gy][gx] = (areaLight[gy][gx] + base) & 0xff;
+    }
+  }
+  if (ambient < 7) {
+    for (let sy = 0; sy < H; sy += 1) {
+      for (let sx = 0; sx < W; sx += 1) {
+        if ((flags[sy][sx] & FLAG_VISIBLE) === 0) {
+          continue;
+        }
+        const source = flags[sy][sx] & 0x03;
+        if (source <= 0) {
+          continue;
+        }
+        for (let gy = Math.max(0, sy - 3); gy <= Math.min(H - 1, sy + 3); gy += 1) {
+          for (let gx = Math.max(0, sx - 3); gx <= Math.min(W - 1, sx + 3); gx += 1) {
+            if ((flags[gy][gx] & FLAG_VISIBLE) === 0) {
+              continue;
+            }
+            const add = clampToLegacyLightRange(source - legacyLightDistance(gx - sx, gy - sy));
+            if (add > 0) {
+              areaLight[gy][gx] = (areaLight[gy][gx] + add) & 0xff;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const toGrid = (wx: number, wy: number) => ({
+    gx: (wx | 0) - startX + PAD,
+    gy: (wy | 0) - startY + PAD
+  });
+
+  return {
+    visibleAtWorld(wx: number, wy: number) {
+      const { gx, gy } = toGrid(wx, wy);
+      if (!inBounds(gx, gy)) {
+        return true;
+      }
+      return (flags[gy][gx] & FLAG_VISIBLE) !== 0;
+    },
+    wallAtWorld(wx: number, wy: number) {
+      const { gx, gy } = toGrid(wx, wy);
+      if (!inBounds(gx, gy)) {
+        return false;
+      }
+      return (flags[gy][gx] & FLAG_WALL) !== 0;
+    },
+    openAtWorld(wx: number, wy: number) {
+      const { gx, gy } = toGrid(wx, wy);
+      if (!inBounds(gx, gy)) {
+        return false;
+      }
+      return open[gy][gx] !== 0;
+    },
+    areaLightAtWorld(wx: number, wy: number) {
+      const { gx, gy } = toGrid(wx, wy);
+      if (!inBounds(gx, gy)) {
+        return 0;
+      }
+      return areaLight[gy][gx] | 0;
+    }
+  };
+}
+
 
 const LEGACY_CORNER_TABLE_RUNTIME = [
   0, 0, 1, 10,
