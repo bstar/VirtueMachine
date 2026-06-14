@@ -2,7 +2,9 @@ import {
   buildOverlayCellsModel,
   isLegacyPixelTransparent,
   measureActorOcclusionParityModel,
-  topInteractiveOverlayAtModel
+  topInteractiveOverlayAtModel,
+  type RenderOverlayCell,
+  type RenderOverlayGrid
 } from "./render_composition.ts";
 import {
   buildBaseTileTableRuntime,
@@ -362,7 +364,8 @@ import {
 } from "./ui/party_message_runtime.ts";
 import {
   CHARACTER_PANEL_SLOTS_RUNTIME,
-  projectCharacterPanelPicksRuntime
+  projectCharacterPanelPicksRuntime,
+  type CharacterPanelEntityRuntime
 } from "./ui/character_panel_runtime.ts";
 import {
   onOffPreferenceRuntime,
@@ -6387,11 +6390,14 @@ function paletteKeyForTile(tileId: number): string {
   return getRenderPaletteKey();
 }
 
-function renderCharacterStubPanel() {
+function renderCharacterStubPanel(): void {
   if (!charStubCanvas) {
     return;
   }
   const g = charStubCanvas.getContext("2d");
+  if (!g) {
+    return;
+  }
   g.imageSmoothingEnabled = false;
   g.clearRect(0, 0, charStubCanvas.width, charStubCanvas.height);
   g.fillStyle = "#090909";
@@ -6424,7 +6430,7 @@ function renderCharacterStubPanel() {
     playerX: px,
     playerY: py,
     playerZ: pz,
-    resolveAnimatedTile: (entity) => resolveAnimatedObjectTileAtTick(entity, tick),
+    resolveAnimatedTile: (entity: CharacterPanelEntityRuntime & { tileId: number }) => resolveAnimatedObjectTileAtTick(entity, tick),
     slotCount: slots.length
   });
 
@@ -6455,7 +6461,7 @@ function renderCharacterStubPanel() {
   }
 }
 
-function parseProbeTileHex(v) {
+function parseProbeTileHex(v: unknown): number | null {
   const s = String(v || "").trim().toLowerCase();
   const m = /^0x([0-9a-f]+)$/.exec(s);
   if (!m) {
@@ -6464,7 +6470,7 @@ function parseProbeTileHex(v) {
   return parseInt(m[1], 16) & 0xffff;
 }
 
-function uiProbeHitTest(logicalX, logicalY) {
+function uiProbeHitTest(logicalX: number, logicalY: number): LegacyHudPanelHitRuntime | null {
   const statusDisplay = Number(state.legacyStatusDisplay) | 0;
   const layout = buildLegacyInventoryPaperdollLayoutRuntime({
     statusDisplay,
@@ -6474,7 +6480,12 @@ function uiProbeHitTest(logicalX, logicalY) {
   return legacyInventoryPaperdollHitTestRuntime(layout, logicalX | 0, logicalY | 0);
 }
 
-function buildOverlayCells(startX, startY, wz, viewCtx) {
+function buildOverlayCells(
+  startX: number,
+  startY: number,
+  wz: number,
+  viewCtx: LegacyViewContextRuntime | null
+): ReturnType<typeof buildOverlayCellsModel<U6ObjectEntryRuntime>> {
   return buildOverlayCellsModel({
     viewW: VIEW_W,
     viewH: VIEW_H,
@@ -6493,15 +6504,27 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
   });
 }
 
-function topInteractiveOverlayAt(overlayCells, startX, startY, wx, wy) {
+function topInteractiveOverlayAt(
+  overlayCells: RenderOverlayGrid | null,
+  startX: number,
+  startY: number,
+  wx: number,
+  wy: number
+): RenderOverlayCell | null {
   return topInteractiveOverlayAtModel(overlayCells, VIEW_W, VIEW_H, startX, startY, wx, wy);
 }
 
-function measureActorOcclusionParity(overlayCells, startX, startY, viewCtx, entities) {
+function measureActorOcclusionParity(
+  overlayCells: RenderOverlayGrid | null,
+  startX: number,
+  startY: number,
+  viewCtx: LegacyViewContextRuntime | null,
+  entities: readonly U6EntityEntryRuntime[] | null | undefined
+): ReturnType<typeof measureActorOcclusionParityModel> {
   return measureActorOcclusionParityModel(overlayCells, VIEW_W, VIEW_H, startX, startY, viewCtx, entities);
 }
 
-function drawLegacySelectCellMarker(g, px, py, size) {
+function drawLegacySelectCellMarker(g: CanvasRenderingContext2D, px: number, py: number, size: number): void {
   /* Canonical world-target selector in seg_0A33:
      SelectRange < 0 => TIL_16C (direction), else TIL_16D (select). */
   const verb = String(state.targetVerb || "");
@@ -8084,7 +8107,7 @@ function getUiProbeForRender(): ReturnType<typeof buildUiProbeContract> {
   });
 }
 
-function handleLegacyHudClick(ev, surface) {
+function handleLegacyHudClick(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): boolean {
   if (!state.sessionStarted) {
     return false;
   }
@@ -8125,7 +8148,7 @@ function handleLegacyHudClick(ev, surface) {
   return true;
 }
 
-function runLegacyNonTargetAction(k) {
+function runLegacyNonTargetAction(k: string): boolean {
   if (k === "i") {
     /* Canonical keyboard-first panel selection: inventory/equipment (CMD_92). */
     state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_92;
@@ -8154,7 +8177,7 @@ function runLegacyNonTargetAction(k) {
   return false;
 }
 
-function runLegacyCommandKey(k) {
+function runLegacyCommandKey(k: string): boolean {
   if (state.legacyConversationActive) {
     return false;
   }
@@ -8169,7 +8192,7 @@ function runLegacyCommandKey(k) {
   return runLegacyNonTargetAction(k);
 }
 
-function runDebugHotkeys(ev) {
+function runDebugHotkeys(ev: KeyboardEvent): boolean {
   const k = String(ev.key || "").toLowerCase();
   if (ev.ctrlKey && k === "s") {
     saveWorldSnapshotHotkey();
