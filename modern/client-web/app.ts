@@ -81,6 +81,7 @@ import {
   conversationHeaderIsPlausibleCanonicalFallbackRuntime,
   conversationHeaderMatchesExpectedCanonicalDescRuntime,
   conversationHeaderMatchesExpectedCanonicalNameRuntime,
+  decompressU6LzwRuntime,
   decodeU6LzwWithKnownLengthRuntime,
   isLikelyValidConversationScriptRuntime,
   loadLegacyConversationScriptForNpcRuntime,
@@ -1032,88 +1033,8 @@ function getRenderPaletteKey() {
   return `palfx-${legacyPalettePhase()}`;
 }
 
-function decompressU6Lzw(bytes) {
-  if (!bytes || bytes.length < 4) {
-    return bytes;
-  }
-  const target = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
-  if (target <= 0) {
-    return bytes;
-  }
-  const src = bytes.slice(4);
-  const out = new Uint8Array(target);
-  let outPos = 0;
-  let bitPos = 0;
-  let codeSize = 9;
-  let nextCode = 258;
-  const CLEAR = 256;
-  const END = 257;
-  const table = new Array(4096);
-  for (let i = 0; i < 256; i += 1) {
-    table[i] = new Uint8Array([i]);
-  }
-  let prev = null;
-
-  function readCode(n) {
-    let outOff = 0;
-    for (let i = 0; i < n; i += 1) {
-      const bi = (bitPos + i) >> 3;
-      const bt = (bitPos + i) & 7;
-      if (bi >= src.length) {
-        return -1;
-      }
-      outOff |= ((src[bi] >> bt) & 1) << i;
-    }
-    bitPos += n;
-    return outOff;
-  }
-
-  while (outPos < out.length) {
-    const code = readCode(codeSize);
-    if (code < 0) {
-      break;
-    }
-    if (code === CLEAR) {
-      for (let i = 258; i < table.length; i += 1) {
-        table[i] = undefined;
-      }
-      codeSize = 9;
-      nextCode = 258;
-      prev = null;
-      continue;
-    }
-    if (code === END) {
-      break;
-    }
-
-    let entry;
-    if (table[code]) {
-      entry = table[code];
-    } else if (code === nextCode && prev) {
-      entry = new Uint8Array(prev.length + 1);
-      entry.set(prev, 0);
-      entry[prev.length] = prev[0];
-    } else {
-      break;
-    }
-
-    out.set(entry.slice(0, Math.max(0, out.length - outPos)), outPos);
-    outPos += entry.length;
-
-    if (prev && nextCode < 4096) {
-      const n = new Uint8Array(prev.length + 1);
-      n.set(prev, 0);
-      n[prev.length] = entry[0];
-      table[nextCode] = n;
-      nextCode += 1;
-      if ((nextCode === 512 || nextCode === 1024 || nextCode === 2048) && codeSize < 12) {
-        codeSize += 1;
-      }
-    }
-    prev = entry;
-  }
-
-  return out;
+function decompressU6Lzw(bytes: Uint8Array) {
+  return decompressU6LzwRuntime(bytes) ?? bytes;
 }
 
 function legacyLookupTileString(tileId) {
