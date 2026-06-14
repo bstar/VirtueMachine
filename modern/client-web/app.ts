@@ -9,6 +9,13 @@ import {
   fallbackTileColorRuntime,
   tilePaletteIndexRuntime
 } from "./render/indexed_pixels_runtime.ts";
+import {
+  drawLegacyContinueArrowRuntime,
+  drawU6CompactTextRuntime,
+  drawU6MainTextRuntime,
+  measureU6TextWidthRuntime,
+  u6GlyphSpanRuntime
+} from "./render/legacy_text_render_runtime.ts";
 import { U6TileSetRuntime } from "./render/tile_set_runtime.ts";
 import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
@@ -2204,111 +2211,23 @@ function canvasFromIndexedPixels(pixmap, palette, transparentIndex = null) {
 }
 
 function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
-  if (!state.u6MainFont) {
-    g.fillStyle = color;
-    g.font = `${Math.max(8, 8 * scale)}px monospace`;
-    g.fillText(String(text || ""), sx, sy + (7 * scale));
-    return;
-  }
-  const msg = String(text || "");
-  g.fillStyle = color;
-  for (let i = 0; i < msg.length; i += 1) {
-    let code = msg.charCodeAt(i) & 0xff;
-    let off = code * 8;
-    /* Preserve the caller's casing exactly; do not auto-upcase glyphs. */
-    for (let row = 0; row < 8; row += 1) {
-      const bits = state.u6MainFont[off + row] ?? 0;
-      for (let col = 0; col < 8; col += 1) {
-        if (bits & (0x80 >> col)) {
-          g.fillRect(
-            sx + ((i * 8 + col) * scale),
-            sy + (row * scale),
-            scale,
-            scale
-          );
-        }
-      }
-    }
-  }
+  drawU6MainTextRuntime(g, state.u6MainFont, text, sx, sy, scale, color);
 }
 
 function u6GlyphSpan(code) {
-  if (!state.u6MainFont) {
-    return { left: 0, right: 7, advance: 8 };
-  }
-  const ch = Number(code) & 0xff;
-  if (ch === 32) {
-    return { left: 0, right: 2, advance: 3 };
-  }
-  const off = ch * 8;
-  let left = 8;
-  let right = -1;
-  for (let row = 0; row < 8; row += 1) {
-    const bits = state.u6MainFont[off + row] ?? 0;
-    for (let col = 0; col < 8; col += 1) {
-      if (bits & (0x80 >> col)) {
-        if (col < left) left = col;
-        if (col > right) right = col;
-      }
-    }
-  }
-  if (right < left) {
-    return { left: 0, right: 2, advance: 3 };
-  }
-  return {
-    left,
-    right,
-    advance: Math.max(1, (right - left + 1))
-  };
+  return u6GlyphSpanRuntime(state.u6MainFont, code);
 }
 
 function measureU6TextWidth(text, compact = false) {
-  const msg = String(text || "");
-  if (!compact || !state.u6MainFont) {
-    return msg.length * 8;
-  }
-  let width = 0;
-  for (let i = 0; i < msg.length; i += 1) {
-    width += u6GlyphSpan(msg.charCodeAt(i)).advance;
-  }
-  return width;
+  return measureU6TextWidthRuntime(state.u6MainFont, text, compact);
 }
 
 function drawU6CompactText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
-  if (!state.u6MainFont) {
-    drawU6MainText(g, text, sx, sy, scale, color);
-    return;
-  }
-  const msg = String(text || "");
-  g.fillStyle = color;
-  let cursor = 0;
-  for (let i = 0; i < msg.length; i += 1) {
-    const code = msg.charCodeAt(i) & 0xff;
-    const off = code * 8;
-    const glyph = u6GlyphSpan(code);
-    for (let row = 0; row < 8; row += 1) {
-      const bits = state.u6MainFont[off + row] ?? 0;
-      for (let col = glyph.left; col <= glyph.right; col += 1) {
-        if (bits & (0x80 >> col)) {
-          g.fillRect(
-            sx + ((cursor + (col - glyph.left)) * scale),
-            sy + (row * scale),
-            scale,
-            scale
-          );
-        }
-      }
-    }
-    cursor += glyph.advance;
-  }
+  drawU6CompactTextRuntime(g, state.u6MainFont, text, sx, sy, scale, color);
 }
 
 function drawLegacyContinueArrow(g, sx, sy, scale = 1, color = "#e7dcc0") {
-  /*
-    Canonical pager cue from `u6.ch`: glyph codepoint 1 (thick down-arrow).
-    Avoid hand-drawn variants so shape exactly matches legacy font styling.
-  */
-  drawU6MainText(g, String.fromCharCode(1), sx, sy, Math.max(1, scale | 0), color);
+  drawLegacyContinueArrowRuntime(g, state.u6MainFont, sx, sy, scale, color);
 }
 
 function applyLegacyFrameLayout() {
