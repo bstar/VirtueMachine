@@ -66,8 +66,17 @@ const {
   smtpDeliverRuntime
 } = require("./email_runtime.ts");
 const {
+  ensureUserSchemaRuntime,
+  findUserByUsernameRuntime,
+  findUserForBearerTokenRuntime,
   issueEmailVerificationCodeRuntime,
+  issueTokenRuntime,
+  isValidEmailRuntime,
   listUserCharactersRuntime,
+  newUserIdRuntime,
+  normalizeEmailRuntime,
+  normalizeUsernameRuntime,
+  parseAuthHeaderRuntime,
   sixDigitEmailVerificationCodeRuntime
 } = require("./server_account_runtime.ts");
 const {
@@ -174,53 +183,31 @@ function readJsonLines(filePath) {
 }
 
 function normalizeUsername(raw) {
-  return String(raw || "").trim().toLowerCase();
+  return normalizeUsernameRuntime(raw);
 }
 
 function normalizeEmail(raw) {
-  return String(raw || "").trim().toLowerCase();
+  return normalizeEmailRuntime(raw);
 }
 
 function isValidEmail(raw) {
-  const v = normalizeEmail(raw);
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  return isValidEmailRuntime(raw);
 }
 
 function newUserId(state) {
-  for (;;) {
-    const id = `usr_${nodeCrypto.randomBytes(8).toString("hex")}`;
-    if (!state.users.find((u) => u.user_id === id)) {
-      return id;
-    }
-  }
+  return newUserIdRuntime(state.users, (bytes) => nodeCrypto.randomBytes(bytes).toString("hex"));
 }
 
 function findUserByUsername(state, username) {
-  const wanted = normalizeUsername(username);
-  return state.users.find((u) => normalizeUsername(u.username) === wanted) || null;
+  return findUserByUsernameRuntime(state.users, username);
 }
 
 function ensureUserSchema(user) {
-  if (!user || typeof user !== "object") {
-    return;
-  }
-  if (!Object.prototype.hasOwnProperty.call(user, "email")) {
-    user.email = "";
-  }
-  if (!Object.prototype.hasOwnProperty.call(user, "email_verified")) {
-    user.email_verified = false;
-  }
-  if (!user.email_verification || typeof user.email_verification !== "object") {
-    user.email_verification = null;
-  }
+  ensureUserSchemaRuntime(user);
 }
 
 function parseAuth(req) {
-  const header = req.headers.authorization || "";
-  if (!header.startsWith("Bearer ")) {
-    return null;
-  }
-  return header.slice("Bearer ".length).trim();
+  return parseAuthHeaderRuntime(req.headers.authorization || "");
 }
 
 function runtimeContractFromHeaders(req) {
@@ -649,30 +636,30 @@ function requireUser(state, req, res) {
     sendError(res, 401, "auth_required", "Missing bearer token");
     return null;
   }
-  const now = Date.now();
-  const row = state.tokens.find((t) => t.token === token && t.expires_at_ms > now);
-  if (!row) {
+  const auth = findUserForBearerTokenRuntime({
+    nowMs: Date.now(),
+    token,
+    tokens: state.tokens,
+    users: state.users
+  });
+  if (auth.code === "invalid") {
     sendError(res, 401, "auth_invalid", "Invalid or expired token");
     return null;
   }
-  const user = state.users.find((u) => u.user_id === row.user_id);
-  if (!user) {
+  if (auth.code === "user_not_found") {
     sendError(res, 401, "auth_invalid", "Token user not found");
     return null;
   }
-  return user;
+  return auth.user;
 }
 
 function issueToken(state, userId) {
-  const token = nodeCrypto.randomBytes(24).toString("hex");
-  const ttlMs = 1000 * 60 * 60 * 24 * 7;
-  state.tokens.push({
-    token,
-    user_id: userId,
-    issued_at: nowIso(),
-    expires_at_ms: Date.now() + ttlMs
+  return issueTokenRuntime(state.tokens, {
+    nowIso: nowIso(),
+    nowMs: Date.now(),
+    randomHex: (bytes) => nodeCrypto.randomBytes(bytes).toString("hex"),
+    userId
   });
-  return token;
 }
 
 function issueEmailVerificationCode(user) {
