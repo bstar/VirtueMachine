@@ -5,6 +5,7 @@ import {
   loadNetProfilesFromStorage,
   populateNetAccountSelectRuntime,
   profileKey,
+  profileSourcesFromJsonRuntime,
   saveNetProfilesToStorage,
   sanitizeProfile,
   upsertNetProfileFromControlsRuntime,
@@ -73,6 +74,12 @@ globalThis.document = {
 } as Document;
 
 assert.equal(profileKey({ apiBase: "HTTP://NET ", username: " Avatar " }), "http://net|avatar");
+assert.deepEqual(profileSourcesFromJsonRuntime(null), []);
+assert.equal(profileSourcesFromJsonRuntime([
+  { apiBase: "http://net", username: "avatar" },
+  null,
+  "bad"
+]).length, 1);
 assert.deepEqual(sanitizeProfile({
   apiBase: " http://net ",
   username: " Avatar ",
@@ -108,6 +115,8 @@ assert.deepEqual(profiles.map((p) => `${p.username}:${p.password}`), ["avatar:ne
   ]);
   assert.equal(countSavedProfilesRuntime("profiles"), 1);
   assert.deepEqual(loadNetProfilesFromStorage("profiles").map((p) => p.username), ["avatar"]);
+  saveNetProfilesToStorage("profiles", null);
+  assert.deepEqual(loadNetProfilesFromStorage("profiles"), []);
 }
 
 {

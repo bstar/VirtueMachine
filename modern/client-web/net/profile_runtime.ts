@@ -6,18 +6,29 @@ export type NetProfile = {
   email: string;
 };
 
+export type NetProfileSource = object & {
+  apiBase?: unknown;
+  username?: unknown;
+  password?: unknown;
+  characterName?: unknown;
+  email?: unknown;
+};
+
 export function profileKey(profile: { apiBase?: string; username?: string }): string {
   const apiBase = String(profile?.apiBase || "").trim().toLowerCase();
   const username = String(profile?.username || "").trim().toLowerCase();
   return `${apiBase}|${username}`;
 }
 
-function profileRecord(profile: unknown): Partial<NetProfile> {
-  return profile && typeof profile === "object" ? profile as Partial<NetProfile> : {};
+export function profileSourcesFromJsonRuntime(profiles: unknown): NetProfileSource[] {
+  if (!Array.isArray(profiles)) {
+    return [];
+  }
+  return profiles.filter((profile): profile is NetProfileSource => !!profile && typeof profile === "object");
 }
 
-export function sanitizeProfile(profile: unknown): NetProfile | null {
-  const src = profileRecord(profile);
+export function sanitizeProfile(profile: NetProfileSource | null | undefined): NetProfile | null {
+  const src = profile || {};
   const apiBase = String(src.apiBase || "").trim();
   const username = String(src.username || "").trim().toLowerCase();
   if (!apiBase || !username) {
@@ -39,10 +50,7 @@ export function loadNetProfilesFromStorage(storageKey: string): NetProfile[] {
       return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
+    return profileSourcesFromJsonRuntime(parsed)
       .map((entry) => sanitizeProfile(entry))
       .filter((entry): entry is NetProfile => !!entry);
   } catch (_err) {
@@ -50,12 +58,13 @@ export function loadNetProfilesFromStorage(storageKey: string): NetProfile[] {
   }
 }
 
-export function saveNetProfilesToStorage(storageKey: string, profiles: unknown[]): void {
-  const safe = Array.isArray(profiles)
-    ? profiles
-      .map((entry) => sanitizeProfile(entry))
-      .filter((entry): entry is NetProfile => !!entry)
-    : [];
+export function saveNetProfilesToStorage(
+  storageKey: string,
+  profiles: readonly NetProfileSource[] | null | undefined
+): void {
+  const safe = (profiles || [])
+    .map((entry) => sanitizeProfile(entry))
+    .filter((entry): entry is NetProfile => !!entry);
   try {
     localStorage.setItem(storageKey, JSON.stringify(safe));
   } catch (_err) {
@@ -138,7 +147,7 @@ export function populateNetAccountSelectRuntime(args: {
 }
 
 export function applyNetProfileToControlsRuntime(args: {
-  profile: unknown;
+  profile: NetProfileSource | null | undefined;
   controls: NetProfileControls;
   selectedKeyStorageKey: string;
 }): boolean {
