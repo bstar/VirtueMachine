@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "modern/client-web/sim/app_state_runtime.ts",
+    "modern/client-web/sim/hash_runtime.ts",
+    "modern/client-web/sim/inventory_runtime.ts",
+    "modern/common/**/*.ts"
+  ]
+}

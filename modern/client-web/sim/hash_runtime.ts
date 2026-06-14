@@ -79,30 +79,33 @@ export function simStateHashRuntime(sim: SimHashStateRuntime, ctx: HashCtx): big
   const avatarPose = sim.avatarPose === "sleep" ? 2 : (sim.avatarPose === "sit" ? 1 : 0);
   h = hashMixU32Runtime(h, avatarPose, ctx);
   if (sim.avatarPoseAnchor) {
+    const anchor = sim.avatarPoseAnchor;
     h = hashMixU32Runtime(h, 1, ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(sim.avatarPoseAnchor.x), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(sim.avatarPoseAnchor.y), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(sim.avatarPoseAnchor.z), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(sim.avatarPoseAnchor.order), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(sim.avatarPoseAnchor.type), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(anchor.x)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(anchor.y)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(anchor.z)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(anchor.order)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(anchor.type)), ctx);
   } else {
     h = hashMixU32Runtime(h, 0, ctx);
   }
-  const doorKeys = Object.keys(sim.doorOpenStates ?? {}).sort();
+  const doorOpenStates = sim.doorOpenStates ?? {};
+  const doorKeys = Object.keys(doorOpenStates).sort();
   h = hashMixU32Runtime(h, doorKeys.length, ctx);
   for (const k of doorKeys) {
     for (let i = 0; i < k.length; i += 1) {
       h = hashMixU32Runtime(h, k.charCodeAt(i), ctx);
     }
-    h = hashMixU32Runtime(h, sim.doorOpenStates[k] ? 1 : 0, ctx);
+    h = hashMixU32Runtime(h, doorOpenStates[k] ? 1 : 0, ctx);
   }
-  const removedKeys = Object.keys(sim.removedObjectKeys ?? {}).sort();
+  const removedObjectKeys = sim.removedObjectKeys ?? {};
+  const removedKeys = Object.keys(removedObjectKeys).sort();
   h = hashMixU32Runtime(h, removedKeys.length, ctx);
   for (const k of removedKeys) {
     for (let i = 0; i < k.length; i += 1) {
       h = hashMixU32Runtime(h, k.charCodeAt(i), ctx);
     }
-    h = hashMixU32Runtime(h, sim.removedObjectKeys[k] ? 1 : 0, ctx);
+    h = hashMixU32Runtime(h, removedObjectKeys[k] ? 1 : 0, ctx);
   }
   const removedAtTick = sim.removedObjectAtTick ?? {};
   h = hashMixU32Runtime(h, removedKeys.length, ctx);
@@ -110,23 +113,24 @@ export function simStateHashRuntime(sim: SimHashStateRuntime, ctx: HashCtx): big
     h = hashMixU32Runtime(h, Number(removedAtTick[k]) >>> 0, ctx);
   }
   h = hashMixU32Runtime(h, Number(sim.removedObjectCount) >>> 0, ctx);
-  const inventoryKeys = Object.keys(sim.inventory ?? {}).sort();
+  const inventory = sim.inventory ?? {};
+  const inventoryKeys = Object.keys(inventory).sort();
   h = hashMixU32Runtime(h, inventoryKeys.length, ctx);
   for (const k of inventoryKeys) {
     for (let i = 0; i < k.length; i += 1) {
       h = hashMixU32Runtime(h, k.charCodeAt(i), ctx);
     }
-    h = hashMixU32Runtime(h, Number(sim.inventory[k]) >>> 0, ctx);
+    h = hashMixU32Runtime(h, Number(inventory[k]) >>> 0, ctx);
   }
   const spawned = Array.isArray(sim.spawnedWorldObjects) ? sim.spawnedWorldObjects : [];
   h = hashMixU32Runtime(h, spawned.length, ctx);
   for (const o of spawned) {
-    h = hashMixU32Runtime(h, asU32SignedRuntime(o?.x), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(o?.y), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(o?.z), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(o?.type), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(o?.frame), ctx);
-    h = hashMixU32Runtime(h, asU32SignedRuntime(o?.order), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(o?.x)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(o?.y)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(o?.z)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(o?.type)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(o?.frame)), ctx);
+    h = hashMixU32Runtime(h, asU32SignedRuntime(Number(o?.order)), ctx);
   }
   h = hashMixU32Runtime(h, Number(sim.spawnedWorldSeq) >>> 0, ctx);
   return h;
