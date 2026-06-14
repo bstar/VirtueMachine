@@ -327,7 +327,8 @@ import {
 import { isTypingContextRuntime } from "./ui/input_runtime.ts";
 import {
   buildLegacyInventoryPaperdollLayoutRuntime,
-  legacyInventoryPaperdollHitTestRuntime
+  legacyInventoryPaperdollHitTestRuntime,
+  type LegacyHudPanelHitRuntime
 } from "./ui/inventory_paperdoll_layout_runtime.ts";
 import { projectLegacyEquipmentSlotsRuntime } from "./ui/paperdoll_equipment_runtime.ts";
 import {
@@ -503,6 +504,30 @@ type LegacyPortraitStateView = {
   portraitArchiveA: Uint8Array | null;
   portraitArchiveB: Uint8Array | null;
   portraitCanvasCache: Map<string, HTMLCanvasElement>;
+};
+type LegacyPanelSlotEntry = {
+  key?: unknown;
+  slot?: unknown;
+  tile_hex?: unknown;
+};
+type LegacyInventoryDisplayEntry = {
+  key: string;
+  count: number;
+  tile_hex?: unknown;
+};
+type LegacyBackdropRenderStateView = {
+  basePalette: RgbPaletteRuntime | null;
+  legacyBackdropBaseCanvas: HTMLCanvasElement | null;
+  legacyConversationEquipmentSlots: LegacyPanelSlotEntry[];
+  legacyConversationShowInventory: boolean;
+  legacyConversationTargetName: string | null;
+  legacyHudLayerHidden: boolean;
+  legacyHudSelection: LegacyHudPanelHitRuntime | null;
+  legacyPaperPixmap: IndexedPixmapRuntime | null;
+  legacyScaleMode: string;
+  legacyStatusDisplay: number;
+  objectLayer: U6ObjectLayerRuntime | null;
+  tileSet: U6TileSetRuntime | null;
 };
 
 function byId<T = HTMLElement>(id: string): T {
@@ -1830,6 +1855,7 @@ function drawLegacyContinueArrow(
 }
 
 function applyLegacyFrameLayout() {
+  const renderState = state as LegacyBackdropRenderStateView;
   if (!legacyBackdropCanvas || !legacyWorldSurface || !canvas || !legacyViewportCanvas) {
     return;
   }
@@ -1849,8 +1875,8 @@ function applyLegacyFrameLayout() {
     return;
   }
 
-  const pixmap = state.legacyPaperPixmap;
-  const pal = state.basePalette;
+  const pixmap = renderState.legacyPaperPixmap;
+  const pal = renderState.basePalette;
   if (!pixmap || !pal || pal.length < 256) {
     return;
   }
@@ -1863,8 +1889,8 @@ function applyLegacyFrameLayout() {
   const fitScaleY = Math.floor((hostRect.height || srcH) / srcH);
   const fitScale = Math.max(1, Math.min(fitScaleX, fitScaleY));
   let scale = fitScale;
-  if (state.legacyScaleMode !== "fit") {
-    const fixed = Number.parseInt(state.legacyScaleMode, 10);
+  if (renderState.legacyScaleMode !== "fit") {
+    const fixed = Number.parseInt(renderState.legacyScaleMode, 10);
     if (Number.isFinite(fixed) && fixed >= 1) {
       scale = fixed;
     }
@@ -1876,6 +1902,9 @@ function applyLegacyFrameLayout() {
   src.width = srcW;
   src.height = srcH;
   const sg = src.getContext("2d");
+  if (!sg) {
+    return;
+  }
   const id = sg.createImageData(srcW, srcH);
   for (let i = 0, p = 0; i < pixmap.pixels.length; i += 1, p += 4) {
     const c = pal[pixmap.pixels[i] & 0xff] ?? [0, 0, 0];
@@ -1889,15 +1918,22 @@ function applyLegacyFrameLayout() {
   legacyBackdropCanvas.width = outW;
   legacyBackdropCanvas.height = outH;
   const bg = legacyBackdropCanvas.getContext("2d");
+  if (!bg) {
+    return;
+  }
   bg.imageSmoothingEnabled = false;
   bg.clearRect(0, 0, outW, outH);
   bg.drawImage(src, 0, 0, srcW, srcH, 0, 0, outW, outH);
-  if (!state.legacyBackdropBaseCanvas) {
-    state.legacyBackdropBaseCanvas = document.createElement("canvas");
+  if (!renderState.legacyBackdropBaseCanvas) {
+    renderState.legacyBackdropBaseCanvas = document.createElement("canvas");
   }
-  state.legacyBackdropBaseCanvas.width = outW;
-  state.legacyBackdropBaseCanvas.height = outH;
-  const bb = state.legacyBackdropBaseCanvas.getContext("2d");
+  const baseCanvas = renderState.legacyBackdropBaseCanvas;
+  baseCanvas.width = outW;
+  baseCanvas.height = outH;
+  const bb = baseCanvas.getContext("2d");
+  if (!bb) {
+    return;
+  }
   bb.imageSmoothingEnabled = false;
   bb.clearRect(0, 0, outW, outH);
   bb.drawImage(legacyBackdropCanvas, 0, 0);
@@ -1915,6 +1951,7 @@ function applyLegacyFrameLayout() {
 }
 
 function renderLegacyHudStubOnBackdrop() {
+  const renderState = state as LegacyBackdropRenderStateView;
   if (!legacyBackdropCanvas) {
     return;
   }
@@ -1923,44 +1960,53 @@ function renderLegacyHudStubOnBackdrop() {
     return;
   }
   const g = legacyBackdropCanvas.getContext("2d");
+  if (!g) {
+    return;
+  }
   const w = legacyBackdropCanvas.width | 0;
   const h = legacyBackdropCanvas.height | 0;
   if (w <= 0 || h <= 0) {
     return;
   }
   g.imageSmoothingEnabled = false;
-  if (state.legacyBackdropBaseCanvas
-    && state.legacyBackdropBaseCanvas.width === w
-    && state.legacyBackdropBaseCanvas.height === h) {
+  if (renderState.legacyBackdropBaseCanvas
+    && renderState.legacyBackdropBaseCanvas.width === w
+    && renderState.legacyBackdropBaseCanvas.height === h) {
     g.clearRect(0, 0, w, h);
-    g.drawImage(state.legacyBackdropBaseCanvas, 0, 0);
+    g.drawImage(renderState.legacyBackdropBaseCanvas, 0, 0);
   }
-  if (state.legacyHudLayerHidden) {
+  if (renderState.legacyHudLayerHidden) {
     return;
   }
 
   const scale = Math.max(1, Math.floor(w / 320));
-  const x = (v) => v * scale;
-  const y = (v) => v * scale;
-  const drawTile = (tileId, sx, sy) => {
-    if (!state.tileSet) {
+  const x = (v: number): number => v * scale;
+  const y = (v: number): number => v * scale;
+  const drawTile = (tileId: number, sx: number, sy: number): void => {
+    if (!renderState.tileSet) {
       return;
     }
     const pal = paletteForTile(tileId);
+    if (!pal) {
+      return;
+    }
     const key = paletteKeyForTile(tileId);
-    const tc = state.tileSet.tileCanvas(tileId, pal, key);
+    const tc = renderState.tileSet.tileCanvas(tileId, pal, key);
     if (!tc) {
       return;
     }
     g.drawImage(tc, x(sx), y(sy), x(16), y(16));
   };
-  const drawTilePx = (tileId, px, py) => {
-    if (!state.tileSet) {
+  const drawTilePx = (tileId: number, px: number, py: number): void => {
+    if (!renderState.tileSet) {
       return;
     }
     const pal = paletteForTile(tileId);
+    if (!pal) {
+      return;
+    }
     const key = paletteKeyForTile(tileId);
-    const tc = state.tileSet.tileCanvas(tileId, pal, key);
+    const tc = renderState.tileSet.tileCanvas(tileId, pal, key);
     if (!tc) {
       return;
     }
@@ -1999,8 +2045,8 @@ function renderLegacyHudStubOnBackdrop() {
       }
 
       /* Moons: BaseTile[OBJ_049] + phase, x=(phasePos<<3), y=D_2BFA[phasePos]. */
-      if (!isEclipse && state.objectLayer?.baseTiles) {
-        const moonBase = Number(state.objectLayer.baseTiles[0x49]) | 0;
+      if (!isEclipse && renderState.objectLayer?.baseTiles) {
+        const moonBase = Number(renderState.objectLayer.baseTiles[0x49]) | 0;
         if (moonBase > 0) {
           const phasePair = LEGACY_MOON_PHASE_BY_DAY[(dateD - 1) % LEGACY_MOON_PHASE_BY_DAY.length];
           const phase1 = phasePair[0] | 0;
@@ -2038,34 +2084,34 @@ function renderLegacyHudStubOnBackdrop() {
     );
   };
 
-  const invFromKey = (key) => {
+  const invFromKey = (key: unknown): number | null => {
     const src = String(key || "").trim();
     let m = /^0x([0-9a-f]+):0x?([0-9a-f]+)$/i.exec(src);
     if (!m) {
       /* Back-compat for pre-fix local runtime keys. */
       m = /^obj_([0-9a-f]+)_([0-9a-f]+)$/i.exec(src);
     }
-    if (!m || !state.objectLayer || !state.objectLayer.baseTiles) {
+    if (!m || !renderState.objectLayer?.baseTiles) {
       return null;
     }
     const type = parseInt(m[1], 16) & 0x03ff;
     const frame = parseInt(m[2], 16) & 0x00ff;
-    const base = state.objectLayer.baseTiles[type] ?? 0;
+    const base = renderState.objectLayer.baseTiles[type] ?? 0;
     if (!base) {
       return null;
     }
     return (base + frame) & 0xffff;
   };
-  const invTileFromEntry = (entry) => {
+  const invTileFromEntry = (entry: LegacyInventoryDisplayEntry | null | undefined): number | null => {
     const direct = parseProbeTileHex(entry?.tile_hex);
     if (direct != null) {
       return direct;
     }
     return invFromKey(entry?.key);
   };
-  const buildDisplayInventoryEntries = () => {
-    const out = [];
-    const seen = new Set();
+  const buildDisplayInventoryEntries = (): LegacyInventoryDisplayEntry[] => {
+    const out: LegacyInventoryDisplayEntry[] = [];
+    const seen = new Set<string>();
     const inv = state.sim && state.sim.inventory ? state.sim.inventory : null;
     if (inv) {
       /* Prefer local runtime state so Get/Drop feedback is immediately visible. */
@@ -2082,7 +2128,7 @@ function renderLegacyHudStubOnBackdrop() {
         }
       }
     }
-    const baseEntries = probe.canonical_ui?.inventory_panel?.entries || [];
+    const baseEntries = (probe.canonical_ui?.inventory_panel?.entries || []) as LegacyInventoryDisplayEntry[];
     for (const e of baseEntries) {
       if (!e || !e.key) continue;
       const key = String(e.key);
@@ -2095,7 +2141,7 @@ function renderLegacyHudStubOnBackdrop() {
     }
     return out;
   };
-  const statusDisplay = Number(state.legacyStatusDisplay) | 0;
+  const statusDisplay = Number(renderState.legacyStatusDisplay) | 0;
   const showVista = (
     statusDisplay === LEGACY_STATUS_DISPLAY.CMD_91
     || statusDisplay === LEGACY_STATUS_DISPLAY.CMD_9E
@@ -2110,7 +2156,7 @@ function renderLegacyHudStubOnBackdrop() {
   const panelLayout = buildLegacyInventoryPaperdollLayoutRuntime({
     statusDisplay,
     talkStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
-    talkShowInventory: state.legacyConversationShowInventory !== false
+    talkShowInventory: renderState.legacyConversationShowInventory !== false
   });
   const inTalkPanel = panelLayout.inTalkPanel;
   const panelShowEquipment = panelLayout.showEquipment;
@@ -2123,7 +2169,7 @@ function renderLegacyHudStubOnBackdrop() {
     const labelX = 176 + Math.max(0, Math.floor((136 - (avatarLabel.length * 8)) / 2));
     drawU6MainText(g, avatarLabel, x(labelX), y(8), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   } else if (inTalkPanel) {
-    const talkLabel = sanitizeLegacyHudLabelText(String(conversationPanel.target_name || state.legacyConversationTargetName || "Converse")) || "Converse";
+    const talkLabel = sanitizeLegacyHudLabelText(String(conversationPanel.target_name || renderState.legacyConversationTargetName || "Converse")) || "Converse";
     const labelX = 176 + Math.max(0, Math.floor((136 - (talkLabel.length * 8)) / 2));
     drawU6MainText(g, talkLabel, x(labelX), y(88), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
   }
@@ -2164,7 +2210,7 @@ function renderLegacyHudStubOnBackdrop() {
   }
 
   /* Canonical equipment layout from C_155D_08F4/C_155D_130E, with probe-driven payload tiles. */
-  const slotByKey = new Map();
+  const slotByKey = new Map<string, LegacyPanelSlotEntry>();
   const slotKeyByIndex = [
     "head",
     "neck",
@@ -2176,7 +2222,7 @@ function renderLegacyHudStubOnBackdrop() {
     "feet"
   ];
   const panelSlots = inTalkPanel
-    ? (Array.isArray(state.legacyConversationEquipmentSlots) ? state.legacyConversationEquipmentSlots : [])
+    ? (Array.isArray(renderState.legacyConversationEquipmentSlots) ? renderState.legacyConversationEquipmentSlots : [])
     : (probe.canonical_ui?.paperdoll_panel?.slots || []);
   for (const s of panelSlots) {
     if (s && s.key != null) {
@@ -2225,10 +2271,10 @@ function renderLegacyHudStubOnBackdrop() {
     }
   }
 
-  if (state.legacyHudSelection) {
+  if (renderState.legacyHudSelection) {
     g.strokeStyle = "#f59e0b";
     g.lineWidth = Math.max(1, scale);
-    const sel = state.legacyHudSelection;
+    const sel = renderState.legacyHudSelection;
     if (sel.kind === "inventory") {
       const cell = panelLayout.inventoryCells.find((it) => (it.index | 0) === (sel.index | 0));
       if (cell) {
