@@ -4,6 +4,13 @@ import {
   abortBootIntroRuntime,
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
+  bootIntroTvAddSpriteRuntime,
+  bootIntroTvRandRuntime,
+  bootIntroTvStateAtRuntime,
+  bootIntroWouCharWidthRuntime,
+  createBootIntroTvMachineRuntime,
+  decodeBootIntroWouFontRuntime,
+  measureBootIntroTextWidthRuntime,
   bootIntroOverlayAlphaRuntime,
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
@@ -75,10 +82,50 @@ function testZeroFadeSceneHasNoOverlay() {
   assert.equal(bootIntroOverlayAlphaRuntime(state), 0, "ordinary live intro scenes should not get a default fade overlay");
 }
 
+function testTvMachine() {
+  const randCtx = { seed: 0x6d2b79f5 };
+  const firstRand = bootIntroTvRandRuntime(randCtx, 1, 4);
+  assert.ok(firstRand >= 1 && firstRand <= 4, "TV rand should stay inside inclusive bounds");
+
+  const machine = createBootIntroTvMachineRuntime();
+  assert.equal(machine.program, 2, "TV starts on canonical program");
+  bootIntroTvAddSpriteRuntime(machine, 5);
+  assert.deepEqual(machine.sprites[0], { frame: 0x15, xOff: 0x1f, yOff: 0x02 });
+
+  const firstState = bootIntroTvStateAtRuntime(0);
+  assert.equal(firstState.staticVisible, true, "initial TV frame should include static");
+  assert.equal(firstState.fingerVisible, true, "initial TV frame should include finger overlay");
+
+  const laterState = bootIntroTvStateAtRuntime(12);
+  assert.ok(laterState.program >= 0, "TV state should remain valid after stepping");
+  assert.ok(laterState.sprites.length <= 5, "TV sprite list is capped");
+}
+
+function testWouFontHelpers() {
+  const decoded = new Uint8Array(0x304);
+  decoded[0] = 8;
+  decoded[2] = 0x7f;
+  decoded[0x04 + 65] = 5;
+  const font = decodeBootIntroWouFontRuntime(new Uint8Array([1, 2, 3]), () => decoded);
+  assert.ok(font, "valid WOU font should decode");
+  assert.equal(font?.height, 8);
+  assert.equal(font?.pixelChar, 0x7f);
+  assert.equal(bootIntroWouCharWidthRuntime(font, 65), 5);
+  assert.equal(measureBootIntroTextWidthRuntime(font, "AA", () => 99), 10);
+  assert.equal(measureBootIntroTextWidthRuntime(null, "AA", (text) => String(text).length * 8), 16);
+  assert.equal(decodeBootIntroWouFontRuntime(new Uint8Array([1]), () => null), null);
+  assert.equal(decodeBootIntroWouFontRuntime(new Uint8Array([1]), () => new Uint8Array(8)), null);
+  const invalidHeight = new Uint8Array(0x304);
+  invalidHeight[0] = 40;
+  assert.equal(decodeBootIntroWouFontRuntime(new Uint8Array([1]), () => invalidHeight), null);
+}
+
 testStartAndAdvance();
 testInputAdvance();
 testAbort();
 testOverlayAlpha();
 testZeroFadeSceneHasNoOverlay();
+testTvMachine();
+testWouFontHelpers();
 
 console.log("ui_boot_intro_runtime_test: ok");

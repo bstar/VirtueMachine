@@ -239,9 +239,13 @@ import {
   abortBootIntroRuntime,
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
+  bootIntroTvStateAtRuntime,
+  bootIntroWouCharWidthRuntime,
+  decodeBootIntroWouFontRuntime,
   bootIntroOverlayAlphaRuntime,
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
+  measureBootIntroTextWidthRuntime,
   startBootIntroRuntime
 } from "./ui/boot_intro_runtime.ts";
 import {
@@ -2947,141 +2951,8 @@ function drawBootIntroSprite(g, bankName, frameIdx, lx, ly, scale, scene = null,
   g.globalAlpha = prevAlpha;
 }
 
-const BOOT_INTRO_TV_PROGRAMS = Object.freeze([
-  Object.freeze([0x82, 0x82, 0x80, 0x03, 0x02, 0x8a, 0x02, 0x8a, 0x01, 0x8a, 0x01, 0x8a, 0x00, 0x8a, 0x00, 0x8a, 0x01, 0x8a, 0x01, 0x81]),
-  Object.freeze([0x82, 0x82, 0x80, 0x28, 0x03, 0x8b, 0x81]),
-  Object.freeze([0x82, 0x82, 0x80, 0x04, 0x04, 0x81, 0x80, 0x04, 0x08, 0x81, 0x80, 0x04, 0x09, 0x81, 0x80, 0x04, 0x0a, 0x81, 0x80, 0x04, 0x0b, 0x81, 0x80, 0x04, 0x0c, 0x81]),
-  Object.freeze([0x82, 0x82, 0x87, 0x80, 0x46, 0x0f, 0x86, 0x84, 0x09, 0x10, 0x10, 0x10, 0x11, 0x11, 0x11, 0x12, 0x12, 0x12, 0x81]),
-  Object.freeze([0x82, 0x82, 0x80, 0x32, 0x83, 0x81]),
-  Object.freeze([0x82, 0x82, 0x80, 0x05, 0x27, 0x8a, 0x28, 0x8a, 0x29, 0x81, 0x80, 0x06, 0x2a, 0x8a, 0x2a, 0x8a, 0x2b, 0x8a, 0x2b, 0x8a, 0x2c, 0x8a, 0x2c, 0x8a, 0x2d, 0x8a, 0x2d, 0x81, 0x80, 0x0a, 0x2e, 0x8a, 0x2f, 0x8a, 0x30, 0x8a, 0x84, 0x09, 0x2e, 0x2e, 0x2e, 0x2f, 0x2f, 0x2f, 0x30, 0x30, 0x30, 0x8a, 0x2e, 0x8a, 0x2f, 0x8a, 0x30, 0x81]),
-  Object.freeze([0x82, 0x82, 0x80, 0x55, 0x16, 0x17, 0x84, 0x0c, 0x13, 0x13, 0x13, 0x13, 0x14, 0x14, 0x14, 0x14, 0x15, 0x15, 0x15, 0x15, 0x88, 0x81, 0x80, 0x0f, 0x16, 0x84, 0x02, 0x1a, 0x1b, 0x89, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1a, 0x89, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1c, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1d, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1e, 0x88, 0x81, 0x80, 0x03, 0x16, 0x23, 0x88, 0x81, 0x80, 0x03, 0x16, 0x24, 0x88, 0x81, 0x80, 0x32, 0x16, 0x88, 0x81])
-]);
-
-const BOOT_INTRO_TV_X_OFF = Object.freeze([
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x1f, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x1f,
-  0x00, 0x09, 0x09, 0x09, 0x0c, 0x0c, 0x0c, 0x00, 0x04, 0x1f, 0x1f, 0x04, 0x00, 0x04,
-  0x04, 0x04, 0x1f, 0x1f, 0x00, 0x00, 0x06, 0x06, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-]);
-
-const BOOT_INTRO_TV_Y_OFF = Object.freeze([
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x07, 0x07,
-  0x07, 0x03, 0x03, 0x03, 0x00, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x03,
-  0x08, 0x1d, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-]);
-
-const BOOT_INTRO_TV_NEWS_IMAGES = Object.freeze([0x05, 0x06, 0x07, 0x0d, 0x0e, 0x18, 0x19, 0x1f, 0x20]);
-
-function bootIntroTvRand(ctx, min, max) {
-  ctx.seed = ((ctx.seed * 1664525) + 1013904223) >>> 0;
-  const lo = Math.min(min | 0, max | 0);
-  const hi = Math.max(min | 0, max | 0);
-  return lo + (ctx.seed % ((hi - lo) + 1));
-}
-
-function createBootIntroTvMachine() {
-  return {
-    program: 2,
-    pos: 0,
-    loopPos: 0,
-    loopCnt: 0,
-    newsImage: 0,
-    pledgeCounter: 0,
-    pledgeImage: 37,
-    roadOffset: 0x0e,
-    seed: 0x6d2b79f5,
-    sprites: [],
-    fingerVisible: false,
-    staticVisible: false
-  };
-}
-
-function bootIntroTvAddSprite(ctx, imageNum, yOverride = null) {
-  if (ctx.sprites.length >= 5) {
-    return;
-  }
-  const num = Math.max(0, Number(imageNum) | 0);
-  ctx.sprites.push({
-    frame: 0x10 + num,
-    xOff: BOOT_INTRO_TV_X_OFF[num] || 0,
-    yOff: yOverride == null ? (BOOT_INTRO_TV_Y_OFF[num] || 0) : yOverride
-  });
-}
-
-function bootIntroTvDisplay(ctx) {
-  ctx.sprites = [];
-  ctx.fingerVisible = false;
-  ctx.staticVisible = false;
-  let shouldExit = false;
-  let guard = 0;
-  while (!shouldExit && guard < 80) {
-    guard += 1;
-    const program = BOOT_INTRO_TV_PROGRAMS[ctx.program] || BOOT_INTRO_TV_PROGRAMS[0];
-    const item = program[ctx.pos] ?? 0x81;
-    if (item < 0x80) {
-      bootIntroTvAddSprite(ctx, item);
-    } else if (item === 0x82) {
-      ctx.staticVisible = true;
-      ctx.fingerVisible = true;
-      shouldExit = true;
-    } else if (item === 0x80) {
-      ctx.pos += 1;
-      ctx.loopCnt = program[ctx.pos] || 0;
-      ctx.loopPos = ctx.pos;
-    } else if (item === 0x81) {
-      if (ctx.loopCnt > 0) {
-        ctx.pos = ctx.loopPos;
-        ctx.loopCnt -= 1;
-      }
-      shouldExit = true;
-    } else if (item === 0x83) {
-      ctx.roadOffset -= 1;
-      if (ctx.roadOffset === 0) ctx.roadOffset = 0x0e;
-      bootIntroTvAddSprite(ctx, 0x22, 0x15 - ctx.roadOffset);
-      bootIntroTvAddSprite(ctx, 0x22, 0x24 - ctx.roadOffset);
-      bootIntroTvAddSprite(ctx, 0x21);
-    } else if (item === 0x84) {
-      const randLen = program[ctx.pos + 1] || 0;
-      const choice = bootIntroTvRand(ctx, 1, Math.max(1, randLen));
-      bootIntroTvAddSprite(ctx, program[ctx.pos + choice + 1] || 0);
-      ctx.pos += 1 + randLen;
-    } else if (item === 0x86) {
-      bootIntroTvAddSprite(ctx, ctx.newsImage);
-    } else if (item === 0x87) {
-      ctx.newsImage = BOOT_INTRO_TV_NEWS_IMAGES[bootIntroTvRand(ctx, 0, BOOT_INTRO_TV_NEWS_IMAGES.length - 1)] || 0;
-    } else if (item === 0x88) {
-      ctx.pledgeCounter += 1;
-      if ((ctx.pledgeCounter % 4) === 0) {
-        bootIntroTvAddSprite(ctx, ctx.pledgeImage);
-      }
-      if (ctx.pledgeCounter === 16) {
-        ctx.pledgeImage = ctx.pledgeImage === 37 ? 38 : 37;
-        ctx.pledgeCounter = 0;
-      }
-    } else if (item === 0x89) {
-      bootIntroTvAddSprite(ctx, bootIntroTvRand(ctx, 50, 52));
-    } else if (item === 0x8a) {
-      shouldExit = true;
-    }
-    ctx.pos += 1;
-    const currentProgram = BOOT_INTRO_TV_PROGRAMS[ctx.program] || BOOT_INTRO_TV_PROGRAMS[0];
-    if (ctx.pos >= currentProgram.length) {
-      ctx.program += 1;
-      ctx.pos = 0;
-      if (ctx.program >= BOOT_INTRO_TV_PROGRAMS.length) {
-        ctx.program = 0;
-      }
-    }
-  }
-}
-
 function bootIntroTvStateAt(updateCount) {
-  const ctx = createBootIntroTvMachine();
-  const count = Math.max(0, Math.min(2400, Number(updateCount) | 0));
-  for (let i = 0; i <= count; i += 1) {
-    bootIntroTvDisplay(ctx);
-  }
-  return ctx;
+  return bootIntroTvStateAtRuntime(updateCount);
 }
 
 function drawBootIntroClippedSprite(g, bankName, frameIdx, lx, ly, scale, scene, clipX, clipY, clipW, clipH) {
@@ -3111,36 +2982,15 @@ function drawBootIntroTvStatic(g, x, y, scale, seed) {
 }
 
 function decodeBootIntroWouFont(bytes) {
-  const decoded = decompressU6Lzw(bytes);
-  if (!decoded || decoded.length < 0x304) {
-    return null;
-  }
-  const height = decoded[0] | 0;
-  const pixelChar = decoded[2] & 0xff;
-  if (height <= 0 || height > 32) {
-    return null;
-  }
-  return { bytes: decoded, height, pixelChar };
+  return decodeBootIntroWouFontRuntime(bytes, decompressU6Lzw);
 }
 
 function bootIntroWouCharWidth(font, code) {
-  if (!font || !font.bytes) {
-    return 0;
-  }
-  return font.bytes[0x04 + (code & 0xff)] || 0;
+  return bootIntroWouCharWidthRuntime(font, code);
 }
 
 function measureBootIntroTextWidth(text) {
-  const font = state.bootIntroFont;
-  if (!font) {
-    return measureU6TextWidth(text, true);
-  }
-  const msg = String(text || "");
-  let width = 0;
-  for (let i = 0; i < msg.length; i += 1) {
-    width += bootIntroWouCharWidth(font, msg.charCodeAt(i));
-  }
-  return width;
+  return measureBootIntroTextWidthRuntime(state.bootIntroFont, text, (fallbackText) => measureU6TextWidth(fallbackText, true));
 }
 
 function drawBootIntroWouText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {

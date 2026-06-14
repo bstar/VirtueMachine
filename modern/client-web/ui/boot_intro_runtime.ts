@@ -33,8 +33,60 @@ export type BootIntroRuntimeState = {
   aborting: boolean;
 };
 
+export type BootIntroTvSpriteRuntime = {
+  frame: number;
+  xOff: number;
+  yOff: number;
+};
+
+export type BootIntroTvMachineRuntime = {
+  fingerVisible: boolean;
+  loopCnt: number;
+  loopPos: number;
+  newsImage: number;
+  pledgeCounter: number;
+  pledgeImage: number;
+  pos: number;
+  program: number;
+  roadOffset: number;
+  seed: number;
+  sprites: BootIntroTvSpriteRuntime[];
+  staticVisible: boolean;
+};
+
+export type BootIntroWouFontRuntime = {
+  bytes: Uint8Array;
+  height: number;
+  pixelChar: number;
+};
+
 const NUVIE_FADE_MS = Math.ceil(0x100 / 3) * 25;
 const DEFAULT_FADE_MS = 0;
+
+const BOOT_INTRO_TV_PROGRAMS = Object.freeze([
+  Object.freeze([0x82, 0x82, 0x80, 0x03, 0x02, 0x8a, 0x02, 0x8a, 0x01, 0x8a, 0x01, 0x8a, 0x00, 0x8a, 0x00, 0x8a, 0x01, 0x8a, 0x01, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x28, 0x03, 0x8b, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x04, 0x04, 0x81, 0x80, 0x04, 0x08, 0x81, 0x80, 0x04, 0x09, 0x81, 0x80, 0x04, 0x0a, 0x81, 0x80, 0x04, 0x0b, 0x81, 0x80, 0x04, 0x0c, 0x81]),
+  Object.freeze([0x82, 0x82, 0x87, 0x80, 0x46, 0x0f, 0x86, 0x84, 0x09, 0x10, 0x10, 0x10, 0x11, 0x11, 0x11, 0x12, 0x12, 0x12, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x32, 0x83, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x05, 0x27, 0x8a, 0x28, 0x8a, 0x29, 0x81, 0x80, 0x06, 0x2a, 0x8a, 0x2a, 0x8a, 0x2b, 0x8a, 0x2b, 0x8a, 0x2c, 0x8a, 0x2c, 0x8a, 0x2d, 0x8a, 0x2d, 0x81, 0x80, 0x0a, 0x2e, 0x8a, 0x2f, 0x8a, 0x30, 0x8a, 0x84, 0x09, 0x2e, 0x2e, 0x2e, 0x2f, 0x2f, 0x2f, 0x30, 0x30, 0x30, 0x8a, 0x2e, 0x8a, 0x2f, 0x8a, 0x30, 0x81]),
+  Object.freeze([0x82, 0x82, 0x80, 0x55, 0x16, 0x17, 0x84, 0x0c, 0x13, 0x13, 0x13, 0x13, 0x14, 0x14, 0x14, 0x14, 0x15, 0x15, 0x15, 0x15, 0x88, 0x81, 0x80, 0x0f, 0x16, 0x84, 0x02, 0x1a, 0x1b, 0x89, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1a, 0x89, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1c, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1d, 0x88, 0x81, 0x80, 0x03, 0x16, 0x1e, 0x88, 0x81, 0x80, 0x03, 0x16, 0x23, 0x88, 0x81, 0x80, 0x03, 0x16, 0x24, 0x88, 0x81, 0x80, 0x32, 0x16, 0x88, 0x81])
+]);
+
+const BOOT_INTRO_TV_X_OFF = Object.freeze([
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x1f, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x1f,
+  0x00, 0x09, 0x09, 0x09, 0x0c, 0x0c, 0x0c, 0x00, 0x04, 0x1f, 0x1f, 0x04, 0x00, 0x04,
+  0x04, 0x04, 0x1f, 0x1f, 0x00, 0x00, 0x06, 0x06, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+]);
+
+const BOOT_INTRO_TV_Y_OFF = Object.freeze([
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x07, 0x07,
+  0x07, 0x03, 0x03, 0x03, 0x00, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x03,
+  0x08, 0x1d, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+]);
+
+const BOOT_INTRO_TV_NEWS_IMAGES = Object.freeze([0x05, 0x06, 0x07, 0x0d, 0x0e, 0x18, 0x19, 0x1f, 0x20]);
 
 export const BOOT_INTRO_SCENES: readonly BootIntroSceneSpec[] = Object.freeze([
   { id: "logo_1", kind: "splash", splashFrame: 0x45, autoAdvanceMs: 0, fadeInMs: NUVIE_FADE_MS, fadeOutMs: NUVIE_FADE_MS },
@@ -499,4 +551,166 @@ export function bootIntroOverlayAlphaRuntime(
     return Math.round(t * 255);
   }
   return 0;
+}
+
+export function bootIntroTvRandRuntime(
+  ctx: Pick<BootIntroTvMachineRuntime, "seed">,
+  min: number,
+  max: number
+): number {
+  ctx.seed = ((ctx.seed * 1664525) + 1013904223) >>> 0;
+  const lo = Math.min(min | 0, max | 0);
+  const hi = Math.max(min | 0, max | 0);
+  return lo + (ctx.seed % ((hi - lo) + 1));
+}
+
+export function createBootIntroTvMachineRuntime(): BootIntroTvMachineRuntime {
+  return {
+    program: 2,
+    pos: 0,
+    loopPos: 0,
+    loopCnt: 0,
+    newsImage: 0,
+    pledgeCounter: 0,
+    pledgeImage: 37,
+    roadOffset: 0x0e,
+    seed: 0x6d2b79f5,
+    sprites: [],
+    fingerVisible: false,
+    staticVisible: false
+  };
+}
+
+export function bootIntroTvAddSpriteRuntime(
+  ctx: BootIntroTvMachineRuntime,
+  imageNum: number,
+  yOverride: number | null = null
+): void {
+  if (ctx.sprites.length >= 5) {
+    return;
+  }
+  const num = Math.max(0, Number(imageNum) | 0);
+  ctx.sprites.push({
+    frame: 0x10 + num,
+    xOff: BOOT_INTRO_TV_X_OFF[num] || 0,
+    yOff: yOverride == null ? (BOOT_INTRO_TV_Y_OFF[num] || 0) : yOverride
+  });
+}
+
+export function bootIntroTvDisplayRuntime(ctx: BootIntroTvMachineRuntime): void {
+  ctx.sprites = [];
+  ctx.fingerVisible = false;
+  ctx.staticVisible = false;
+  let shouldExit = false;
+  let guard = 0;
+  while (!shouldExit && guard < 80) {
+    guard += 1;
+    const program = BOOT_INTRO_TV_PROGRAMS[ctx.program] || BOOT_INTRO_TV_PROGRAMS[0];
+    const item = program[ctx.pos] ?? 0x81;
+    if (item < 0x80) {
+      bootIntroTvAddSpriteRuntime(ctx, item);
+    } else if (item === 0x82) {
+      ctx.staticVisible = true;
+      ctx.fingerVisible = true;
+      shouldExit = true;
+    } else if (item === 0x80) {
+      ctx.pos += 1;
+      ctx.loopCnt = program[ctx.pos] || 0;
+      ctx.loopPos = ctx.pos;
+    } else if (item === 0x81) {
+      if (ctx.loopCnt > 0) {
+        ctx.pos = ctx.loopPos;
+        ctx.loopCnt -= 1;
+      }
+      shouldExit = true;
+    } else if (item === 0x83) {
+      ctx.roadOffset -= 1;
+      if (ctx.roadOffset === 0) ctx.roadOffset = 0x0e;
+      bootIntroTvAddSpriteRuntime(ctx, 0x22, 0x15 - ctx.roadOffset);
+      bootIntroTvAddSpriteRuntime(ctx, 0x22, 0x24 - ctx.roadOffset);
+      bootIntroTvAddSpriteRuntime(ctx, 0x21);
+    } else if (item === 0x84) {
+      const randLen = program[ctx.pos + 1] || 0;
+      const choice = bootIntroTvRandRuntime(ctx, 1, Math.max(1, randLen));
+      bootIntroTvAddSpriteRuntime(ctx, program[ctx.pos + choice + 1] || 0);
+      ctx.pos += 1 + randLen;
+    } else if (item === 0x86) {
+      bootIntroTvAddSpriteRuntime(ctx, ctx.newsImage);
+    } else if (item === 0x87) {
+      ctx.newsImage = BOOT_INTRO_TV_NEWS_IMAGES[bootIntroTvRandRuntime(ctx, 0, BOOT_INTRO_TV_NEWS_IMAGES.length - 1)] || 0;
+    } else if (item === 0x88) {
+      ctx.pledgeCounter += 1;
+      if ((ctx.pledgeCounter % 4) === 0) {
+        bootIntroTvAddSpriteRuntime(ctx, ctx.pledgeImage);
+      }
+      if (ctx.pledgeCounter === 16) {
+        ctx.pledgeImage = ctx.pledgeImage === 37 ? 38 : 37;
+        ctx.pledgeCounter = 0;
+      }
+    } else if (item === 0x89) {
+      bootIntroTvAddSpriteRuntime(ctx, bootIntroTvRandRuntime(ctx, 50, 52));
+    } else if (item === 0x8a) {
+      shouldExit = true;
+    }
+    ctx.pos += 1;
+    const currentProgram = BOOT_INTRO_TV_PROGRAMS[ctx.program] || BOOT_INTRO_TV_PROGRAMS[0];
+    if (ctx.pos >= currentProgram.length) {
+      ctx.program += 1;
+      ctx.pos = 0;
+      if (ctx.program >= BOOT_INTRO_TV_PROGRAMS.length) {
+        ctx.program = 0;
+      }
+    }
+  }
+}
+
+export function bootIntroTvStateAtRuntime(updateCount: number): BootIntroTvMachineRuntime {
+  const ctx = createBootIntroTvMachineRuntime();
+  const count = Math.max(0, Math.min(2400, Number(updateCount) | 0));
+  for (let i = 0; i <= count; i += 1) {
+    bootIntroTvDisplayRuntime(ctx);
+  }
+  return ctx;
+}
+
+export function decodeBootIntroWouFontRuntime(
+  bytes: Uint8Array | null | undefined,
+  decompress: (bytes: Uint8Array | null | undefined) => Uint8Array | null | undefined
+): BootIntroWouFontRuntime | null {
+  const decoded = decompress(bytes);
+  if (!decoded || decoded.length < 0x304) {
+    return null;
+  }
+  const height = decoded[0] | 0;
+  const pixelChar = decoded[2] & 0xff;
+  if (height <= 0 || height > 32) {
+    return null;
+  }
+  return { bytes: decoded, height, pixelChar };
+}
+
+export function bootIntroWouCharWidthRuntime(
+  font: BootIntroWouFontRuntime | null | undefined,
+  code: number
+): number {
+  if (!font || !font.bytes) {
+    return 0;
+  }
+  return font.bytes[0x04 + (code & 0xff)] || 0;
+}
+
+export function measureBootIntroTextWidthRuntime(
+  font: BootIntroWouFontRuntime | null | undefined,
+  text: unknown,
+  fallbackMeasure: (text: unknown) => number
+): number {
+  if (!font) {
+    return fallbackMeasure(text);
+  }
+  const msg = String(text || "");
+  let width = 0;
+  for (let i = 0; i < msg.length; i += 1) {
+    width += bootIntroWouCharWidthRuntime(font, msg.charCodeAt(i));
+  }
+  return width;
 }
