@@ -42,6 +42,7 @@ const {
   buildWorldObjectStateRuntime,
   compareLegacyWorldObjectOrder,
   findActiveObjectByKey,
+  normalizeWorldObjectDeltas,
   parseBaseTileMapRuntime,
   parseObjBlkRecordsRuntime,
   persistPatchedObject,
@@ -484,7 +485,7 @@ function normalizePresenceRows(raw) {
 
 function loadState() {
   ensureDataDir();
-  const rawWorldObjectDeltas = readJson(FILES.worldObjectDeltas, null);
+  const rawWorldObjectDeltas = readJsonValidated(FILES.worldObjectDeltas, null, normalizeWorldObjectDeltas);
   const worldObjects = buildWorldObjectState(RUNTIME_DIR, rawWorldObjectDeltas);
   const npcBaseline = loadNpcBaselineRuntime(RUNTIME_DIR);
   const scheduleRuntime = loadScheduleRuntime(RUNTIME_DIR);
@@ -497,7 +498,7 @@ function loadState() {
     worldClock: readJsonValidated(FILES.worldClock, defaultWorldClock(), normalizeWorldClock),
     npcBaseline,
     scheduleRuntime,
-    npcRuntimePersist: normalizeNpcRuntimeState(readJson(FILES.npcRuntime, null), npcBaseline),
+    npcRuntimePersist: readJsonValidated(FILES.npcRuntime, defaultNpcRuntimeState(npcBaseline), (raw) => normalizeNpcRuntimeState(raw, npcBaseline)),
     introState: {
       phase: INTRO_PHASE_POST
     },
