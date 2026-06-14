@@ -29,6 +29,14 @@ const {
 } = require("./world_interaction_bridge.ts");
 const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge.ts");
 const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.ts");
+const { U6MapRuntime, loadTerrainTypeMap, loadTileFlagMap } = require("./world_map_runtime.ts");
+const {
+  DEFAULT_PICKUP_RESPAWN_MS,
+  inventoryCloneKeyForTake,
+  isBaselineWorldObject,
+  pickupRespawnPolicyForObject,
+  pushSpawnedWorldObject
+} = require("./world_object_policy.ts");
 const {
   loadNpcBaselineRuntime,
   loadScheduleRuntime,
@@ -45,8 +53,6 @@ const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
 const DATA_DIR = process.env.VM_NET_DATA_DIR || path.join(__dirname, "data");
 const RUNTIME_DIR = process.env.VM_NET_RUNTIME_DIR || path.join(__dirname, "..", "assets", "runtime");
 const OBJECT_BASELINE_DIR = process.env.VM_NET_OBJECT_BASELINE_DIR || path.join(__dirname, "..", "assets", "runtime", "savegame");
-const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
-const LOOT_PICKUP_RESPAWN_MS = 60 * 60 * 1000;
 const MAX_BODY = 1024 * 1024;
 const SERVER_TICK_MS = Math.max(50, Number.parseInt(process.env.VM_NET_TICK_MS || "100", 10) || 100);
 // Ultima VI Online documents this schedule cadence as one in-game day per real hour.
@@ -426,103 +432,6 @@ function loadBaseTileMap(runtimeDir) {
   }
 }
 
-function loadTileFlagMap(runtimeDir) {
-  const tileflagPath = path.join(runtimeDir, "tileflag");
-  try {
-    const buf = fs.readFileSync(tileflagPath);
-    if (buf.length >= 0x1000) {
-      return new Uint8Array(buf.slice(0x800, 0x1000));
-    }
-    return new Uint8Array(buf.slice(0, 0x800));
-  } catch (_err) {
-    return new Uint8Array(0x800);
-  }
-}
-
-function loadTerrainTypeMap(runtimeDir) {
-  const tileflagPath = path.join(runtimeDir, "tileflag");
-  try {
-    const buf = fs.readFileSync(tileflagPath);
-    return new Uint8Array(buf.slice(0, Math.min(buf.length, 0x800)));
-  } catch (_err) {
-    return new Uint8Array(0x800);
-  }
-}
-
-class U6MapRuntime {
-  map: Buffer;
-  chunks: Buffer;
-  window: Buffer;
-  loadedZ: number;
-  loadedMapId0: number;
-
-  constructor(runtimeDir) {
-    this.map = fs.readFileSync(path.join(runtimeDir, "map"));
-    this.chunks = fs.readFileSync(path.join(runtimeDir, "chunks"));
-    this.window = Buffer.alloc(0x600);
-    this.loadedZ = -1;
-    this.loadedMapId0 = -1;
-  }
-
-  mkMapId(x, y) {
-    return (x >> 7) + ((y >> 4) & 0x38);
-  }
-
-  loadWindow(x, y, z) {
-    x &= 0x3ff;
-    y &= 0x3ff;
-    if (z !== 0) {
-      const off = ((z + z + z) << 9) + 0x5a00;
-      this.map.copy(this.window, 0, off, off + 0x600);
-      this.loadedZ = z;
-      this.loadedMapId0 = -1;
-      return;
-    }
-    const mapId = this.mkMapId(x, y);
-    const ids = [mapId, (mapId + 1) & 0x3f, (mapId + 8) & 0x3f, (mapId + 9) & 0x3f];
-    for (let i = 0; i < 4; i += 1) {
-      const src = ids[i] * 0x180;
-      const dst = i * 0x180;
-      this.map.copy(this.window, dst, src, src + 0x180);
-    }
-    this.loadedZ = 0;
-    this.loadedMapId0 = mapId;
-  }
-
-  chunkIndexAt(x, y, z) {
-    this.loadWindow(x, y, z);
-    x &= 0x3ff;
-    y &= 0x3ff;
-    let si = 0;
-    if (z !== 0) {
-      si = ((x >> 3) & 0x1f) + ((y << 2) & 0x3e0);
-      si += si >> 1;
-    } else {
-      const mapId = this.mkMapId(x, y);
-      let bp02 = 0;
-      if ((mapId - this.loadedMapId0) & 1) bp02 = 0x100;
-      if ((mapId - this.loadedMapId0) & 8) bp02 += 0x200;
-      si = ((x >> 3) & 0x0f) + bp02;
-      si += (y << 1) & 0x0f0;
-      si += si >> 1;
-    }
-    if (si < 0 || si + 1 >= this.window.length) {
-      return 0;
-    }
-    const v = parseU16LE(this.window, si);
-    return (x & 8) ? (v >> 4) : (v & 0x0fff);
-  }
-
-  tileAt(x, y, z) {
-    const ci = this.chunkIndexAt(x, y, z);
-    const co = ci * 0x40;
-    if (co < 0 || co + 0x40 > this.chunks.length) {
-      return 0;
-    }
-    return this.chunks[co + ((y & 7) * 8) + (x & 7)] & 0xff;
-  }
-}
-
 function assertObjBaselineDir(dir) {
   const names = fs.readdirSync(dir);
   const objblkCount = names.filter((name) => /^objblk[a-h][a-h]$/i.test(name)).length;
@@ -779,60 +688,6 @@ function objectFootprintCells(obj, tileFlags) {
 
 function objectAnchorIndexKey(x, y, z) {
   return `${Number(x) & 0x3ff},${Number(y) & 0x3ff},${Number(z) & 0x0f}`;
-}
-
-function isSlowRespawnLootObject(obj) {
-  const type = Number(obj?.type) & 0x3ff;
-  /*
-    Legacy U6 object ids: 88=gold coin, 89=gold nugget, 98=chest.
-    Keep this deliberately narrow until the object-name table is wired in.
-  */
-  return type === 88 || type === 89 || type === 98;
-}
-
-function pickupRespawnPolicyForObject(obj) {
-  if (isSlowRespawnLootObject(obj)) {
-    return {
-      policy: "loot_slow",
-      respawn_ms: LOOT_PICKUP_RESPAWN_MS
-    };
-  }
-  return {
-    policy: "default",
-    respawn_ms: DEFAULT_PICKUP_RESPAWN_MS
-  };
-}
-
-function isBaselineWorldObject(obj) {
-  const kind = String(obj?.source_kind || "baseline");
-  return kind === "baseline" || kind === "baseline_moved" || kind === "";
-}
-
-function inventoryCloneKeyForTake(state, target, actorId) {
-  const nextSeq = (Number(state?.worldInteractionLog?.seq || 0) + 1) >>> 0;
-  const source = String(target?.object_key || "object").replace(/[^a-zA-Z0-9:_-]+/g, "_");
-  const actor = String(actorId || "actor").replace(/[^a-zA-Z0-9:_-]+/g, "_");
-  return `inv:${source}:${actor}:${nextSeq}`;
-}
-
-function pushSpawnedWorldObject(state, obj) {
-  state.worldObjects.deltas.spawned.push({
-    object_key: String(obj.object_key || ""),
-    source_area: Number(obj.source_area) >>> 0,
-    source_index: Number(obj.source_index) >>> 0,
-    status: Number(obj.status) & 0xff,
-    shape_type: Number(obj.shape_type) & 0xffff,
-    amount: Number(obj.amount) & 0xffff,
-    type: Number(obj.type) & 0x3ff,
-    frame: Number(obj.frame) & 0x3f,
-    tile_id: Number(obj.tile_id) & 0xffff,
-    x: Number(obj.x) | 0,
-    y: Number(obj.y) | 0,
-    z: Number(obj.z) | 0,
-    holder_kind: String(obj.holder_kind || "none"),
-    holder_id: String(obj.holder_id || ""),
-    holder_key: String(obj.holder_key || "")
-  });
 }
 
 function buildObjectAnchorIndex(objects) {

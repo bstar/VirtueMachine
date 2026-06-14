@@ -3,4 +3,5 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 bun "$ROOT_DIR/modern/net/tests/world_assoc_chain_bridge_test.ts"
+bun "$ROOT_DIR/modern/net/tests/world_object_policy_test.ts"
 bun "$ROOT_DIR/modern/net/tests/server_contract_test.ts"
