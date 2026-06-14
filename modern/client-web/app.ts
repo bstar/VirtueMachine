@@ -6,6 +6,7 @@ import {
 } from "./render_composition.ts";
 import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
+import { errorMessageRuntime } from "./error_runtime.ts";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
 import {
@@ -2590,7 +2591,7 @@ function handleLegacyConversationKeydown(ev) {
   if (state.legacyConversationAuthoritative && !state.legacyConversationPaging && String(ev?.key || "") === "Enter") {
     submitAuthoritativeConversationInput().catch((err) => {
       diagBox.className = "diag warn";
-      diagBox.textContent = `Conversation reply failed: ${String((err as any)?.message || err)}`;
+      diagBox.textContent = `Conversation reply failed: ${errorMessageRuntime(err)}`;
       pushLedgerMessage("No response.");
       pushLegacyConversationPrompt();
     });
@@ -5315,10 +5316,10 @@ async function netLogoutAndPersist() {
     diagBox.className = "diag warn";
     const parts = [];
     if (saveErr) {
-      parts.push(`position save failed: ${String((saveErr as any)?.message || saveErr)}`);
+      parts.push(`position save failed: ${errorMessageRuntime(saveErr)}`);
     }
     if (leaveErr) {
-      parts.push(`presence cleanup failed: ${String((leaveErr as any)?.message || leaveErr)}`);
+      parts.push(`presence cleanup failed: ${errorMessageRuntime(leaveErr)}`);
     }
     diagBox.textContent = `Logged out with warnings (${parts.join("; ")}).`;
   } else {
@@ -5698,9 +5699,9 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
       } catch (err) {
-        setNetStatus("error", `Login failed: ${String(err.message || err)}`);
+        setNetStatus("error", `Login failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
-        diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+        diagBox.textContent = `Net login failed: ${errorMessageRuntime(err)}`;
       }
     });
   }
@@ -5713,9 +5714,9 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Auto-login ok: ${state.net.username}/${state.net.characterName}`;
       } catch (err) {
-        setNetStatus("error", `Auto-login failed: ${String(err.message || err)}`);
+        setNetStatus("error", `Auto-login failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
-        diagBox.textContent = `Auto-login failed: ${String(err.message || err)}`;
+        diagBox.textContent = `Auto-login failed: ${errorMessageRuntime(err)}`;
       }
     })();
   }
@@ -5807,9 +5808,9 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
       } catch (err) {
-        setNetStatus("error", `Save failed: ${String(err.message || err)}`);
+        setNetStatus("error", `Save failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
-        diagBox.textContent = `Remote save failed: ${String(err.message || err)}`;
+        diagBox.textContent = `Remote save failed: ${errorMessageRuntime(err)}`;
       }
     });
   }
@@ -5821,9 +5822,9 @@ function initNetPanel() {
         diagBox.className = "diag ok";
         diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
       } catch (err) {
-        setNetStatus("error", `Load failed: ${String(err.message || err)}`);
+        setNetStatus("error", `Load failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
-        diagBox.textContent = `Remote load failed: ${String(err.message || err)}`;
+        diagBox.textContent = `Remote load failed: ${errorMessageRuntime(err)}`;
       }
     });
   }
@@ -5832,9 +5833,9 @@ function initNetPanel() {
       try {
         await netRunCriticalMaintenance({ silent: false });
       } catch (err) {
-        setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+        setNetStatus("error", `Maintenance failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
-        diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
+        diagBox.textContent = `Critical maintenance failed: ${errorMessageRuntime(err)}`;
       }
     });
   }
@@ -5866,9 +5867,9 @@ function initNetPanel() {
         diagBox.textContent = `Intro phase set to ${String(out?.intro_state?.phase || state.net.introPhase)}.`;
         setNetStatus("online", `Intro phase: ${String(out?.intro_state?.phase || state.net.introPhase)}`);
       } catch (err) {
-        setNetStatus("error", `Intro phase update failed: ${String((err as any)?.message || err)}`);
+        setNetStatus("error", `Intro phase update failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
-        diagBox.textContent = `Intro phase update failed: ${String((err as any)?.message || err)}`;
+        diagBox.textContent = `Intro phase update failed: ${errorMessageRuntime(err)}`;
       }
     });
   }
@@ -6174,7 +6175,7 @@ function tryTalkAtCell(sim, tx, ty) {
     diagBox.textContent = `Talk: contacting authoritative conversation service for actor ${Number(actor.id) | 0}...`;
     netStartConversation(actor, tx, ty, tz).catch((err) => {
       diagBox.className = "diag warn";
-      diagBox.textContent = `Talk failed: ${String((err as any)?.message || err)}`;
+      diagBox.textContent = `Talk failed: ${errorMessageRuntime(err)}`;
       pushLedgerMessage("No one responds.");
       showLegacyLedgerPrompt();
     });
@@ -6372,7 +6373,7 @@ function tryGetAtCell(sim, tx, ty) {
     diagBox.textContent = `Get: taking 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
     void netTakeWorldObject(obj, tx, ty, tz).catch((err) => {
       diagBox.className = "diag warn";
-      diagBox.textContent = `Get failed: ${String(err?.message || err)}`;
+      diagBox.textContent = `Get failed: ${errorMessageRuntime(err)}`;
     });
     return true;
   }
@@ -6937,7 +6938,7 @@ function startSessionFromTitle() {
     : "Journey Onward: loaded at the legacy avatar start position.";
   void netSyncInventoryProjection().catch((err) => {
     diagBox.className = "diag warn";
-    diagBox.textContent = `Inventory sync failed: ${String(err?.message || err)}`;
+    diagBox.textContent = `Inventory sync failed: ${errorMessageRuntime(err)}`;
   });
 }
 
@@ -6949,9 +6950,9 @@ function returnToTitleMenu(opts: any = {}) {
   state.net.resumeFromSnapshot = true;
   if (saveRemote && isNetAuthenticated()) {
     netSaveSnapshot().catch((err) => {
-      setNetStatus("error", `Save failed: ${String(err.message || err)}`);
+      setNetStatus("error", `Save failed: ${errorMessageRuntime(err)}`);
       diagBox.className = "diag warn";
-      diagBox.textContent = `Return-to-title save failed: ${String(err.message || err)}`;
+      diagBox.textContent = `Return-to-title save failed: ${errorMessageRuntime(err)}`;
     });
   }
   state.queue.length = 0;
@@ -9420,7 +9421,7 @@ function tickLoop(ts) {
         netRunCriticalMaintenance({ silent: true }).catch((err) => {
           recordBackgroundNetFailure(err, "Maintenance");
           diagBox.className = "diag warn";
-          diagBox.textContent = `Critical maintenance failed: ${String((err as any)?.message || err)}`;
+          diagBox.textContent = `Critical maintenance failed: ${errorMessageRuntime(err)}`;
         });
       }
       if (
@@ -9445,7 +9446,7 @@ function tickLoop(ts) {
     state.accMs = 0;
     state.lastTs = performance.now();
     diagBox.className = "diag warn";
-    diagBox.textContent = `Frame loop recovered from error: ${String((err as any)?.message || err)}`;
+    diagBox.textContent = `Frame loop recovered from error: ${errorMessageRuntime(err)}`;
     console.error("tickLoop error", err);
   }
   requestAnimationFrame(tickLoop);
@@ -9697,7 +9698,7 @@ async function refreshPristineBaseline(force = false) {
     return true;
   } catch (err) {
     diagBox.className = "diag warn";
-    diagBox.textContent = `Pristine baseline reload failed: ${String(err.message || err)}`;
+    diagBox.textContent = `Pristine baseline reload failed: ${errorMessageRuntime(err)}`;
     return false;
   } finally {
     state.pristineBaselinePollInFlight = false;
@@ -10050,7 +10051,7 @@ async function loadRuntimeAssets() {
     applyLegacyFrameLayout();
     statSource.textContent = "synthetic fallback";
     diagBox.className = "diag warn";
-    diagBox.textContent = `Fallback active: ${String(err.message || err)}. Run ./modern/tools/validate_assets.sh and ./modern/tools/sync_assets.sh.`;
+    diagBox.textContent = `Fallback active: ${errorMessageRuntime(err)}. Run ./modern/tools/validate_assets.sh and ./modern/tools/sync_assets.sh.`;
   }
 }
 
@@ -10201,9 +10202,9 @@ function promptNetLoginLogout() {
     diagBox.className = "diag ok";
     diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
   }).catch((err) => {
-    setNetStatus("error", `Login failed: ${String(err.message || err)}`);
+    setNetStatus("error", `Login failed: ${errorMessageRuntime(err)}`);
     diagBox.className = "diag warn";
-    diagBox.textContent = `Net login failed: ${String(err.message || err)}`;
+    diagBox.textContent = `Net login failed: ${errorMessageRuntime(err)}`;
   });
 }
 
@@ -10213,9 +10214,9 @@ function saveWorldSnapshotHotkey() {
     diagBox.className = "diag ok";
     diagBox.textContent = `World snapshot saved at tick ${state.sim.tick >>> 0}.`;
   }).catch((err) => {
-    setNetStatus("error", `Save failed: ${String(err.message || err)}`);
+    setNetStatus("error", `Save failed: ${errorMessageRuntime(err)}`);
     diagBox.className = "diag warn";
-    diagBox.textContent = `World save failed: ${String(err.message || err)}`;
+    diagBox.textContent = `World save failed: ${errorMessageRuntime(err)}`;
   });
 }
 
@@ -10225,9 +10226,9 @@ function loadWorldSnapshotHotkey() {
     diagBox.className = "diag ok";
     diagBox.textContent = `World snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
   }).catch((err) => {
-    setNetStatus("error", `Load failed: ${String(err.message || err)}`);
+    setNetStatus("error", `Load failed: ${errorMessageRuntime(err)}`);
     diagBox.className = "diag warn";
-    diagBox.textContent = `World load failed: ${String(err.message || err)}`;
+    diagBox.textContent = `World load failed: ${errorMessageRuntime(err)}`;
   });
 }
 
@@ -10469,9 +10470,9 @@ function runDebugHotkeys(ev) {
   }
   if (k === "n") {
     netRunCriticalMaintenance({ silent: false }).catch((err) => {
-      setNetStatus("error", `Maintenance failed: ${String(err.message || err)}`);
+      setNetStatus("error", `Maintenance failed: ${errorMessageRuntime(err)}`);
       diagBox.className = "diag warn";
-      diagBox.textContent = `Critical maintenance failed: ${String(err.message || err)}`;
+      diagBox.textContent = `Critical maintenance failed: ${errorMessageRuntime(err)}`;
     });
     return true;
   }
