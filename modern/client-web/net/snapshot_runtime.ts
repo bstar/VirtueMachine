@@ -59,6 +59,14 @@ export function shouldAutosaveSnapshotRuntime(args: {
   return (currentTick - lastSavedTick) >= intervalTicks;
 }
 
+export function snapshotSavedTickRuntime(payload: SnapshotRuntimePayload | null | undefined): number {
+  return Number(payload?.snapshot_meta?.saved_tick || 0) >>> 0;
+}
+
+export function snapshotBase64Runtime(payload: SnapshotRuntimePayload | null | undefined): string {
+  return String(payload?.snapshot_base64 || "").trim();
+}
+
 export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<SnapshotRuntimePayload> {
   deps.setStatus("sync", "Saving world snapshot...");
   if (!deps.isAuthenticated()) {
@@ -77,7 +85,7 @@ export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<Sn
     })
   }, true);
   deps.resetBackgroundFailures();
-  const tickOut = Number(out?.snapshot_meta?.saved_tick || 0) >>> 0;
+  const tickOut = snapshotSavedTickRuntime(out);
   deps.onSavedTick(tickOut);
   deps.setStatus("online", `Saved tick ${tickOut}`);
   return out || {};
@@ -90,15 +98,16 @@ export async function performNetLoadSnapshot(deps: SnapshotLoadDeps): Promise<Sn
   }
   const route = typeof deps.snapshotRoute === "function" ? deps.snapshotRoute() : "/api/world/snapshot";
   const out = await deps.request(route || "/api/world/snapshot", { method: "GET" }, true);
-  if (!out?.snapshot_base64) {
+  const snapshotBase64 = snapshotBase64Runtime(out);
+  if (!snapshotBase64) {
     throw new Error("No world snapshot is saved yet");
   }
-  const loaded = deps.decodeSnapshot(String(out.snapshot_base64));
+  const loaded = deps.decodeSnapshot(snapshotBase64);
   if (!loaded) {
     throw new Error("Snapshot payload is invalid");
   }
   deps.applyLoadedSim(loaded);
   deps.resetBackgroundFailures();
-  deps.setStatus("online", `Loaded tick ${Number(out?.snapshot_meta?.saved_tick || 0)}`);
+  deps.setStatus("online", `Loaded tick ${snapshotSavedTickRuntime(out)}`);
   return out || {};
 }

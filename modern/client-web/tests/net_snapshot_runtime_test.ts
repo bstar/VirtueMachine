@@ -8,7 +8,9 @@ import {
 import {
   performNetLoadSnapshot,
   performNetSaveSnapshot,
-  shouldAutosaveSnapshotRuntime
+  shouldAutosaveSnapshotRuntime,
+  snapshotBase64Runtime,
+  snapshotSavedTickRuntime
 } from "../net/snapshot_runtime.ts";
 
 const sim: SimSnapshotRuntime = {
@@ -52,6 +54,10 @@ assert.equal(decoded?.removedObjectAtTick.obj, 10);
 assert.equal(decoded?.inventory["0x088:0x00"], 2);
 assert.equal(decoded?.spawnedWorldObjects[0].type, 88);
 assert.deepEqual(decoded?.partyMembers, [1, 12, 23]);
+assert.equal(snapshotSavedTickRuntime({ snapshot_meta: { saved_tick: 12 } }), 12);
+assert.equal(snapshotSavedTickRuntime(null), 0);
+assert.equal(snapshotBase64Runtime({ snapshot_base64: " encoded " }), "encoded");
+assert.equal(snapshotBase64Runtime({}), "");
 
 assert.equal(normalizeLoadedSimStateRuntime({}), null);
 assert.equal(shouldAutosaveSnapshotRuntime({
@@ -127,7 +133,7 @@ assert.equal(shouldAutosaveSnapshotRuntime({
     resetBackgroundFailures: () => {},
     setStatus: (level, text) => statuses.push(`${level}:${text}`)
   });
-  assert.equal(out.snapshot_meta?.saved_tick, 10);
+  assert.equal(snapshotSavedTickRuntime(out), 10);
   assert.equal(savedTick, 10);
   assert.deepEqual(statuses, ["sync:Saving world snapshot...", "online:Saved tick 10"]);
 }
@@ -144,7 +150,7 @@ assert.equal(shouldAutosaveSnapshotRuntime({
     resetBackgroundFailures: () => {},
     setStatus: () => {}
   });
-  assert.equal(out.snapshot_meta?.saved_tick, 10);
+  assert.equal(snapshotSavedTickRuntime(out), 10);
   assert.equal(applied?.tick, 10);
 }
 

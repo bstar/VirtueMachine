@@ -128,6 +128,7 @@ import {
   performNetLoadSnapshot,
   performNetSaveSnapshot,
   shouldAutosaveSnapshotRuntime,
+  snapshotSavedTickRuntime,
   type SnapshotRuntimePayload
 } from "./net/snapshot_runtime.ts";
 import {
@@ -4614,7 +4615,7 @@ function initNetPanel(): void {
         const out = await netLoadSnapshot();
         updateNetSessionStat();
         diagBox.className = "diag ok";
-        diagBox.textContent = `Remote snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
+        diagBox.textContent = `Remote snapshot loaded at tick ${snapshotSavedTickRuntime(out)}.`;
       } catch (err) {
         setNetStatus("error", `Load failed: ${errorMessageRuntime(err)}`);
         diagBox.className = "diag warn";
@@ -8195,7 +8196,7 @@ function loadWorldSnapshotHotkey(): void {
   netLoadSnapshot().then((out) => {
     updateNetSessionStat();
     diagBox.className = "diag ok";
-    diagBox.textContent = `World snapshot loaded at tick ${Number(out?.snapshot_meta?.saved_tick || 0)}.`;
+    diagBox.textContent = `World snapshot loaded at tick ${snapshotSavedTickRuntime(out)}.`;
   }).catch((err) => {
     setNetStatus("error", `Load failed: ${errorMessageRuntime(err)}`);
     diagBox.className = "diag warn";
