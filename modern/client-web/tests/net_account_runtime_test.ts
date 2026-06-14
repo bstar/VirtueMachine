@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import {
+  netAccountEmailRuntime,
+  netAccountEmailVerifiedRuntime,
+  netAccountUsernameRuntime,
   performNetChangePassword,
   performNetRecoverPassword,
   performNetSetEmail,
@@ -14,6 +17,13 @@ import {
 function statusRecorder(): string[] {
   return [];
 }
+
+assert.equal(netAccountEmailRuntime({ user: { email: "avatar@example.com" } }, "fallback"), "avatar@example.com");
+assert.equal(netAccountEmailRuntime({}, "fallback@example.com"), "fallback@example.com");
+assert.equal(netAccountEmailVerifiedRuntime({ user: { email_verified: true } }), true);
+assert.equal(netAccountEmailVerifiedRuntime({}), false);
+assert.equal(netAccountUsernameRuntime({ user: { username: "avatar" } }, "fallback"), "avatar");
+assert.equal(netAccountUsernameRuntime({}, "fallback"), "fallback");
 
 {
   const netState: NetSessionState = {
@@ -64,14 +74,14 @@ function statusRecorder(): string[] {
       assert.equal(route, "/api/auth/set-email");
       assert.equal(auth, true);
       assert.deepEqual(JSON.parse(String(init?.body || "{}")), { email: "user@example.com" });
-      return { user: { email: "user@example.com", email_verified: false } };
+      return { user: { email_verified: false } };
     },
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     applyEmail: (email, verified) => applied.push(`${email}:${verified}`),
     persistEmail: (email) => applied.push(`persist:${email}`),
     onProfileUpdated: () => applied.push("profile")
   });
-  assert.equal(out.user?.email, "user@example.com");
+  assert.equal(netAccountEmailRuntime(out, "user@example.com"), "user@example.com");
   assert.deepEqual(applied, ["user@example.com:false", "persist:user@example.com", "profile"]);
   assert.deepEqual(statuses, ["sync:Saving recovery email...", "online:Email set (verification required)"]);
 }
@@ -85,15 +95,19 @@ function statusRecorder(): string[] {
       assert.equal(route, "/api/auth/verify-email");
       assert.equal(auth, true);
       assert.deepEqual(JSON.parse(String(init?.body || "{}")), { code: "123456" });
-      return { user: { email: "user@example.com", email_verified: true } };
+      return { user: { email_verified: true } };
     },
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     applyEmail: () => {},
-    currentEmail: () => "",
-    onVerified: () => {}
+    currentEmail: () => "current@example.com",
+    onVerified: (email) => statuses.push(`verified:${email}`)
   });
-  assert.equal(out.user?.email_verified, true);
-  assert.deepEqual(statuses, ["sync:Verifying recovery email...", "online:Recovery email verified"]);
+  assert.equal(netAccountEmailVerifiedRuntime(out), true);
+  assert.deepEqual(statuses, [
+    "sync:Verifying recovery email...",
+    "verified:current@example.com",
+    "online:Recovery email verified"
+  ]);
 }
 
 {

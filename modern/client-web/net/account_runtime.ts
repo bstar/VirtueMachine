@@ -22,6 +22,18 @@ export type NetAccountCommonDeps = {
   setStatus: (level: string, text: string) => void;
 };
 
+export function netAccountEmailRuntime(payload: NetAccountPayload | null | undefined, fallback = ""): string {
+  return String(payload?.user?.email || fallback || "");
+}
+
+export function netAccountEmailVerifiedRuntime(payload: NetAccountPayload | null | undefined): boolean {
+  return !!payload?.user?.email_verified;
+}
+
+export function netAccountUsernameRuntime(payload: NetAccountPayload | null | undefined, fallback = ""): string {
+  return String(payload?.user?.username || fallback || "");
+}
+
 export async function performNetSetEmail(
   emailRaw: string,
   deps: NetAccountCommonDeps & {
@@ -43,8 +55,8 @@ export async function performNetSetEmail(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email })
   }, true);
-  const nextEmail = String(out?.user?.email || email);
-  const verified = !!out?.user?.email_verified;
+  const nextEmail = netAccountEmailRuntime(out, email);
+  const verified = netAccountEmailVerifiedRuntime(out);
   deps.applyEmail(nextEmail, verified);
   deps.persistEmail(nextEmail);
   deps.onProfileUpdated();
@@ -87,8 +99,8 @@ export async function performNetVerifyEmail(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ code })
   }, true);
-  const nextEmail = String(out?.user?.email || deps.currentEmail() || "");
-  const verified = !!out?.user?.email_verified;
+  const nextEmail = netAccountEmailRuntime(out, deps.currentEmail());
+  const verified = netAccountEmailVerifiedRuntime(out);
   deps.applyEmail(nextEmail, verified);
   deps.onVerified(nextEmail);
   deps.setStatus("online", "Recovery email verified");
@@ -121,7 +133,7 @@ export async function performNetRecoverPassword(
     { method: "GET" },
     false
   );
-  deps.setStatus("online", `Recovery email sent for ${out?.user?.username || username}`);
+  deps.setStatus("online", `Recovery email sent for ${netAccountUsernameRuntime(out, username)}`);
   return out;
 }
 
