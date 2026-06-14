@@ -7792,15 +7792,26 @@ async function loadRuntimeAssets() {
   }
 }
 
-function viewStartX() {
+type MoveDeltaRuntime = readonly [number, number];
+type HoveredWorldCellRuntime = {
+  gx: number;
+  gy: number;
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+function viewStartX(): number {
   return (state.sim.world.map_x | 0) - (VIEW_W >> 1);
 }
 
-function viewStartY() {
+function viewStartY(): number {
   return (state.sim.world.map_y | 0) - (VIEW_H >> 1);
 }
 
-function clampUseCursorToView() {
+function clampUseCursorToView(): void {
   const startX = viewStartX();
   const startY = viewStartY();
   const maxX = startX + VIEW_W - 1;
@@ -7825,7 +7836,7 @@ function clampUseCursorToView() {
   }
 }
 
-function beginTargetCursor(verb) {
+function beginTargetCursor(verb: unknown): void {
   if (state.movementMode !== "avatar") {
     return;
   }
@@ -7849,7 +7860,7 @@ function beginTargetCursor(verb) {
   }
 }
 
-function moveUseCursor(dx, dy) {
+function moveUseCursor(dx: number, dy: number): void {
   if (!state.useCursorActive) {
     return;
   }
@@ -7870,7 +7881,7 @@ function moveUseCursor(dx, dy) {
   clampUseCursorToView();
 }
 
-function commitUseCursorInteract() {
+function commitUseCursorInteract(): void {
   if (!state.useCursorActive) {
     return;
   }
@@ -7886,7 +7897,7 @@ function commitUseCursorInteract() {
   state.targetVerb = "";
 }
 
-function cancelTargetCursor() {
+function cancelTargetCursor(): void {
   if (!state.useCursorActive) {
     return;
   }
@@ -7896,7 +7907,7 @@ function cancelTargetCursor() {
   diagBox.textContent = "Targeting cancelled.";
 }
 
-function moveDeltaFromKey(ev, allowDiagonal) {
+function moveDeltaFromKey(ev: KeyboardEvent, allowDiagonal: boolean): MoveDeltaRuntime | null {
   const k = String(ev.key || "").toLowerCase();
   const code = String(ev.code || "");
   /* Canonical keyboard verbs use A/C/T/L/G/D/M/U; movement stays on arrows/numpad only. */
@@ -7914,7 +7925,7 @@ function moveDeltaFromKey(ev, allowDiagonal) {
   return null;
 }
 
-function beginLegacyVerbTarget(verb) {
+function beginLegacyVerbTarget(verb: unknown): boolean {
   if (state.movementMode !== "avatar") {
     diagBox.className = "diag warn";
     diagBox.textContent = "Legacy targeting requires Avatar mode.";
@@ -7924,7 +7935,7 @@ function beginLegacyVerbTarget(verb) {
   return state.useCursorActive;
 }
 
-function promptNetLoginLogout() {
+function promptNetLoginLogout(): void {
   if (isNetAuthenticated()) {
     netLogout();
     return;
@@ -7945,7 +7956,7 @@ function promptNetLoginLogout() {
   });
 }
 
-function saveWorldSnapshotHotkey() {
+function saveWorldSnapshotHotkey(): void {
   netSaveSnapshot().then(() => {
     updateNetSessionStat();
     diagBox.className = "diag ok";
@@ -7957,7 +7968,7 @@ function saveWorldSnapshotHotkey() {
   });
 }
 
-function loadWorldSnapshotHotkey() {
+function loadWorldSnapshotHotkey(): void {
   netLoadSnapshot().then((out) => {
     updateNetSessionStat();
     diagBox.className = "diag ok";
@@ -7969,7 +7980,7 @@ function loadWorldSnapshotHotkey() {
   });
 }
 
-function runtimePartyMembersForUiProbe() {
+function runtimePartyMembersForUiProbe(): number[] {
   const members = normalizePartyMemberIdsRuntime(state.partyMembers, 1);
   state.partyMembers = members.slice();
   state.sim.partySize = members.length >>> 0;
@@ -7979,7 +7990,7 @@ function runtimePartyMembersForUiProbe() {
   return members;
 }
 
-function captureUiProbeHotkey() {
+function captureUiProbeHotkey(): void {
   const partyMembers = runtimePartyMembersForUiProbe();
   const probe = buildUiProbeContract({
     mode: state.uiProbeMode === "sample" ? "sample" : "live",
@@ -8018,13 +8029,13 @@ function captureUiProbeHotkey() {
   diagBox.textContent = `UI probe captured (${digest}) and downloaded as ${filename}.`;
 }
 
-function cycleUiProbeMode() {
+function cycleUiProbeMode(): void {
   state.uiProbeMode = state.uiProbeMode === "live" ? "sample" : "live";
   diagBox.className = "diag ok";
   diagBox.textContent = `Canonical UI probe mode: ${state.uiProbeMode}.`;
 }
 
-function toggleLegacyHudLayer() {
+function toggleLegacyHudLayer(): void {
   state.legacyHudLayerHidden = !state.legacyHudLayerHidden;
   diagBox.className = "diag ok";
   diagBox.textContent = state.legacyHudLayerHidden
@@ -8032,7 +8043,7 @@ function toggleLegacyHudLayer() {
     : "Legacy HUD layer visible.";
 }
 
-function getUiProbeForRender() {
+function getUiProbeForRender(): ReturnType<typeof buildUiProbeContract> {
   const partyMembers = runtimePartyMembersForUiProbe();
   return buildUiProbeContract({
     mode: state.uiProbeMode === "sample" ? "sample" : "live",
@@ -8444,7 +8455,7 @@ window.addEventListener("keydown", (ev) => {
   }
 }, true);
 
-function startupMenuIndexAtEvent(ev, surface) {
+function startupMenuIndexAtEvent(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): number {
   const s = surface || canvas;
   const rect = s.getBoundingClientRect();
   return startupMenuIndexAtSurfacePointRuntime(
@@ -8456,7 +8467,7 @@ function startupMenuIndexAtEvent(ev, surface) {
   );
 }
 
-function hoveredWorldCellFromMouse() {
+function hoveredWorldCellFromMouse(): HoveredWorldCellRuntime | null {
   if (!state.sessionStarted || !state.mouseInCanvas || !state.mapCtx) {
     return null;
   }
@@ -8498,13 +8509,13 @@ function hoveredWorldCellFromMouse() {
   return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
 }
 
-function hex(value, width = 0) {
+function hex(value: unknown, width = 0): string {
   const n = Number(value) >>> 0;
   const s = n.toString(16);
   return `0x${width > 0 ? s.padStart(width, "0") : s}`;
 }
 
-function buildHoverReportText() {
+function buildHoverReportText(): string | null {
   let cell = hoveredWorldCellFromMouse();
   if (!cell && state.sessionStarted && state.mapCtx && state.sim && state.sim.world) {
     const wz = state.sim.world.map_z | 0;
@@ -8571,7 +8582,7 @@ function buildHoverReportText() {
   return lines.join("\n");
 }
 
-async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}) {
+async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}): Promise<void> {
   const enrich = options.enrich !== false;
   const report = buildHoverReportText();
   if (!report) {
@@ -8627,14 +8638,14 @@ async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}) {
   }
 }
 
-function handleShiftContextMenu(ev, surface) {
+function handleShiftContextMenu(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {
   if (!ev.shiftKey) {
     return;
   }
   ev.preventDefault();
 }
 
-function handleShiftRightMouseDownCopy(ev, surface) {
+function handleShiftRightMouseDownCopy(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {
   if (!ev.shiftKey || ev.button !== 2) {
     return;
   }
@@ -8663,7 +8674,7 @@ function handleShiftRightMouseDownCopy(ev, surface) {
   setCopyStatus(false, sync.reason || "copy blocked");
 }
 
-function activeCursorSurface() {
+function activeCursorSurface(): HTMLCanvasElement {
   if (isLegacyFramePreviewOn()) {
     if (legacyBackdropCanvas) {
       return legacyBackdropCanvas;
@@ -8672,7 +8683,7 @@ function activeCursorSurface() {
   return canvas;
 }
 
-function updateCanvasMouseFromEvent(ev, surface) {
+function updateCanvasMouseFromEvent(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {
   const s = activeCursorSurface() || surface || canvas;
   const rect = s.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) {
