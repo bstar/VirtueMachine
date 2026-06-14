@@ -94,6 +94,13 @@ const {
   recordWorldInteractionEventRuntime,
   runCriticalItemMaintenanceRuntime
 } = require("./server_runtime.ts");
+const {
+  appendJsonLineRuntime,
+  ensureServerDataDirRuntime,
+  readJsonFileRuntime,
+  readJsonLinesRuntime,
+  writeJsonFileRuntime
+} = require("./server_file_store.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -144,42 +151,23 @@ function nowIso() {
 }
 
 function ensureDataDir() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureServerDataDirRuntime(DATA_DIR);
 }
 
 function readJson(filePath, fallback) {
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch (_err) {
-    return fallback;
-  }
+  return readJsonFileRuntime(filePath, fallback);
 }
 
 function writeJson(filePath, value) {
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  writeJsonFileRuntime(filePath, value);
 }
 
 function appendJsonLine(filePath, value) {
-  fs.appendFileSync(filePath, `${JSON.stringify(value)}\n`, "utf8");
+  appendJsonLineRuntime(filePath, value);
 }
 
 function readJsonLines(filePath) {
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const parsed = [];
-    for (const line of lines) {
-      try {
-        parsed.push(JSON.parse(line));
-      } catch (_err) {
-        // Ignore malformed lines to keep the log append-only and resilient.
-      }
-    }
-    return parsed;
-  } catch (_err) {
-    return [];
-  }
+  return readJsonLinesRuntime(filePath);
 }
 
 function normalizeUsername(raw) {
