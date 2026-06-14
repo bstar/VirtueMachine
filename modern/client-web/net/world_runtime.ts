@@ -1,3 +1,5 @@
+import { inventoryKeyForObjectRuntime } from "../sim/inventory_runtime.ts";
+
 export type WorldRuntimeRequest = (
   route: string,
   init?: RequestInit,
@@ -9,6 +11,11 @@ export interface WorldRuntimeJson {
 }
 
 export interface WorldRuntimeObject {
+  frame?: number;
+  index?: number;
+  objectKey?: string;
+  object_key?: string;
+  sourceArea?: number;
   type?: number;
   x?: number;
   y?: number;
@@ -27,6 +34,35 @@ export interface CriticalMaintenanceWorldItem {
 
 export interface CriticalMaintenanceEvent {
   [key: string]: unknown;
+}
+
+export function serverObjectKeyForWorldObjectRuntime(obj: unknown): string {
+  const row = obj && typeof obj === "object" ? obj as Record<string, unknown> : {};
+  const direct = String(row.object_key || row.objectKey || "").trim();
+  if (direct) {
+    return direct;
+  }
+  const sourceArea = Number(row.sourceArea);
+  const index = Number(row.index);
+  if (Number.isFinite(sourceArea) && Number.isFinite(index)) {
+    return `objblk:${sourceArea | 0}:${index | 0}`;
+  }
+  return "";
+}
+
+export function inventoryProjectionFromServerObjectsRuntime(objects: unknown): Record<string, number> {
+  const next: Record<string, number> = {};
+  for (const obj of Array.isArray(objects) ? objects : []) {
+    const row = obj && typeof obj === "object" ? obj as { frame?: unknown; type?: unknown } : {};
+    const type = Number(row.type);
+    const frame = Number(row.frame);
+    if (!Number.isFinite(type) || !Number.isFinite(frame)) {
+      continue;
+    }
+    const key = inventoryKeyForObjectRuntime({ type, frame });
+    next[key] = ((Number(next[key]) >>> 0) + 1) >>> 0;
+  }
+  return next;
 }
 
 export function normalizeIntroPhaseRuntime(phase: unknown): "pre_intro" | "post_intro" {

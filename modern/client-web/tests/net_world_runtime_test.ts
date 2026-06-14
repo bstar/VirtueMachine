@@ -1,11 +1,31 @@
 import assert from "node:assert/strict";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  inventoryProjectionFromServerObjectsRuntime,
   normalizeIntroPhaseRuntime,
   requestIntroPhaseRuntime,
+  serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime,
   runCriticalMaintenanceRuntime
 } from "../net/world_runtime.ts";
+
+assert.equal(serverObjectKeyForWorldObjectRuntime({ object_key: " direct " }), "direct");
+assert.equal(serverObjectKeyForWorldObjectRuntime({ objectKey: "camel" }), "camel");
+assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: 5, index: 9 }), "objblk:5:9");
+assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: "bad", index: 9 }), "");
+assert.equal(serverObjectKeyForWorldObjectRuntime(null), "");
+
+assert.deepEqual(inventoryProjectionFromServerObjectsRuntime([
+  { type: 0x123, frame: 0 },
+  { type: 0x123, frame: 0 },
+  { type: 0x123, frame: 1 },
+  { type: "bad", frame: 1 },
+  null
+]), {
+  "0x123:0x00": 2,
+  "0x123:0x01": 1
+});
+assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(null), {});
 
 assert.equal(normalizeIntroPhaseRuntime("pre_intro"), "pre_intro");
 assert.equal(normalizeIntroPhaseRuntime("PRE_INTRO"), "pre_intro");

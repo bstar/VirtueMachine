@@ -123,9 +123,11 @@ import {
 } from "./net/presence_runtime.ts";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  inventoryProjectionFromServerObjectsRuntime,
   requestIntroPhaseRuntime,
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
+  serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
@@ -5001,33 +5003,14 @@ function tryTalkAtCell(sim, tx, ty) {
 }
 
 function serverObjectKeyForLocalObject(obj) {
-  const direct = String(obj?.object_key || obj?.objectKey || "").trim();
-  if (direct) {
-    return direct;
-  }
-  const sourceArea = Number(obj?.sourceArea);
-  const index = Number(obj?.index);
-  if (Number.isFinite(sourceArea) && Number.isFinite(index)) {
-    return `objblk:${sourceArea | 0}:${index | 0}`;
-  }
-  return "";
+  return serverObjectKeyForWorldObjectRuntime(obj);
 }
 
 function applyInventoryProjectionFromServerObjects(sim, objects) {
   if (!sim) {
     return;
   }
-  const next = {};
-  for (const obj of Array.isArray(objects) ? objects : []) {
-    const type = Number(obj?.type);
-    const frame = Number(obj?.frame);
-    if (!Number.isFinite(type) || !Number.isFinite(frame)) {
-      continue;
-    }
-    const key = inventoryKeyForObjectRuntime({ type, frame });
-    next[key] = (Number(next[key]) + 1) >>> 0;
-  }
-  sim.inventory = next;
+  sim.inventory = inventoryProjectionFromServerObjectsRuntime(objects);
 }
 
 async function netSyncInventoryProjection() {
