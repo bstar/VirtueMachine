@@ -9,6 +9,9 @@ import {
   listUserCharactersRuntime,
   newUserIdRuntime,
   normalizeEmailRuntime,
+  normalizeServerCharactersRuntime,
+  normalizeServerTokensRuntime,
+  normalizeServerUsersRuntime,
   normalizeUsernameRuntime,
   parseAuthHeaderRuntime,
   type ServerCharacterRuntime,
@@ -26,6 +29,71 @@ assert.equal(normalizeUsernameRuntime(" Avatar "), "avatar");
 assert.equal(normalizeEmailRuntime(" Avatar@Example.COM "), "avatar@example.com");
 assert.equal(isValidEmailRuntime("avatar@example.com"), true);
 assert.equal(isValidEmailRuntime("avatar.example.com"), false);
+
+assert.deepEqual(normalizeServerUsersRuntime([
+  {
+    user_id: " u1 ",
+    username: " Avatar ",
+    password_plaintext: "quest",
+    email: " Avatar@Example.COM ",
+    email_verified: true,
+    email_verification: {
+      code: "123456",
+      issued_at: "issued",
+      expires_at_ms: 42
+    },
+    created_at: "created"
+  },
+  { user_id: "u1", username: "duplicate" },
+  { user_id: "", username: "missing" },
+  "bad"
+]), [{
+  user_id: "u1",
+  username: "avatar",
+  password_plaintext: "quest",
+  email: "avatar@example.com",
+  email_verified: true,
+  email_verification: {
+    code: "123456",
+    issued_at: "issued",
+    expires_at_ms: 42
+  },
+  created_at: "created"
+}]);
+
+assert.deepEqual(normalizeServerTokensRuntime([
+  { token: " tok ", user_id: " u1 ", issued_at: "issued", expires_at_ms: 200 },
+  { token: "tok", user_id: "u2", expires_at_ms: 300 },
+  { token: "", user_id: "u1", expires_at_ms: 200 },
+  { token: "bad", user_id: "u1", expires_at_ms: -1 }
+]), [{
+  token: "tok",
+  user_id: "u1",
+  issued_at: "issued",
+  expires_at_ms: 200
+}]);
+
+assert.deepEqual(normalizeServerCharactersRuntime([
+  {
+    character_id: " c1 ",
+    user_id: " u1 ",
+    name: " Avatar ",
+    created_at: "created",
+    updated_at: "updated",
+    snapshot_meta: { saved_tick: 9 },
+    snapshot_base64: "abc"
+  },
+  { character_id: "c1", user_id: "u2", name: "duplicate" },
+  { character_id: "c2", user_id: "", name: "missing-user" }
+]), [{
+  character_id: "c1",
+  user_id: "u1",
+  name: "Avatar",
+  created_at: "created",
+  updated_at: "updated",
+  snapshot_meta: { saved_tick: 9 },
+  snapshot_base64: "abc"
+}]);
 
 const legacyUser: ServerUserRuntime = { username: "Avatar" };
 ensureUserSchemaRuntime(legacyUser);

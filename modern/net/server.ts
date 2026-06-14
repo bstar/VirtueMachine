@@ -75,6 +75,9 @@ const {
   listUserCharactersRuntime,
   newUserIdRuntime,
   normalizeEmailRuntime,
+  normalizeServerCharactersRuntime,
+  normalizeServerTokensRuntime,
+  normalizeServerUsersRuntime,
   normalizeUsernameRuntime,
   parseAuthHeaderRuntime,
   sixDigitEmailVerificationCodeRuntime
@@ -479,9 +482,9 @@ function loadState() {
   const npcBaseline = loadNpcBaselineRuntime(RUNTIME_DIR);
   const scheduleRuntime = loadScheduleRuntime(RUNTIME_DIR);
   const state = {
-    users: readJson(FILES.users, []),
-    tokens: readJson(FILES.tokens, []),
-    characters: readJson(FILES.characters, []),
+    users: readJsonValidated(FILES.users, [], normalizeServerUsersRuntime),
+    tokens: readJsonValidated(FILES.tokens, [], normalizeServerTokensRuntime),
+    characters: readJsonValidated(FILES.characters, [], normalizeServerCharactersRuntime),
     worldSnapshot: readJson(FILES.worldSnapshot, {
       snapshot_meta: {
         schema_version: 1,

@@ -2,6 +2,7 @@ export type ServerCharacterRuntime = {
   character_id?: unknown;
   created_at?: unknown;
   name?: unknown;
+  snapshot_base64?: unknown;
   snapshot_meta?: unknown;
   updated_at?: unknown;
   user_id?: unknown;
@@ -15,6 +16,7 @@ export type ServerUserRuntime = {
     expires_at_ms: number;
     issued_at: string;
   } | null;
+  password_plaintext?: unknown;
   user_id?: unknown;
   username?: unknown;
 };
@@ -25,6 +27,120 @@ export type ServerTokenRuntime = {
   token?: unknown;
   user_id?: unknown;
 };
+
+function recordOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function normalizeEmailVerificationRuntime(raw: unknown): ServerUserRuntime["email_verification"] {
+  const row = recordOrNull(raw);
+  if (!row) {
+    return null;
+  }
+  const code = String(row.code || "").trim();
+  const issuedAt = String(row.issued_at || "").trim();
+  const expiresAtMs = Number(row.expires_at_ms);
+  if (!code || !issuedAt || !Number.isFinite(expiresAtMs)) {
+    return null;
+  }
+  return {
+    code,
+    issued_at: issuedAt,
+    expires_at_ms: expiresAtMs
+  };
+}
+
+export function normalizeServerUsersRuntime(raw: unknown): ServerUserRuntime[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: ServerUserRuntime[] = [];
+  const seen = new Set<string>();
+  for (const value of raw) {
+    const row = recordOrNull(value);
+    if (!row) {
+      continue;
+    }
+    const userId = String(row.user_id || "").trim();
+    const username = normalizeUsernameRuntime(row.username);
+    if (!userId || !username || seen.has(userId)) {
+      continue;
+    }
+    seen.add(userId);
+    const user: ServerUserRuntime = {
+      user_id: userId,
+      username,
+      password_plaintext: String(row.password_plaintext || ""),
+      email: normalizeEmailRuntime(row.email),
+      email_verified: row.email_verified === true,
+      email_verification: normalizeEmailVerificationRuntime(row.email_verification)
+    };
+    if (row.created_at != null) {
+      (user as ServerUserRuntime & { created_at?: unknown }).created_at = String(row.created_at || "");
+    }
+    out.push(user);
+  }
+  return out;
+}
+
+export function normalizeServerTokensRuntime(raw: unknown): ServerTokenRuntime[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: ServerTokenRuntime[] = [];
+  const seen = new Set<string>();
+  for (const value of raw) {
+    const row = recordOrNull(value);
+    if (!row) {
+      continue;
+    }
+    const token = String(row.token || "").trim();
+    const userId = String(row.user_id || "").trim();
+    const expiresAtMs = Number(row.expires_at_ms);
+    if (!token || !userId || !Number.isFinite(expiresAtMs) || expiresAtMs <= 0 || seen.has(token)) {
+      continue;
+    }
+    seen.add(token);
+    out.push({
+      token,
+      user_id: userId,
+      issued_at: String(row.issued_at || ""),
+      expires_at_ms: expiresAtMs
+    });
+  }
+  return out;
+}
+
+export function normalizeServerCharactersRuntime(raw: unknown): ServerCharacterRuntime[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: ServerCharacterRuntime[] = [];
+  const seen = new Set<string>();
+  for (const value of raw) {
+    const row = recordOrNull(value);
+    if (!row) {
+      continue;
+    }
+    const characterId = String(row.character_id || "").trim();
+    const userId = String(row.user_id || "").trim();
+    const name = String(row.name || "").trim();
+    if (!characterId || !userId || !name || seen.has(characterId)) {
+      continue;
+    }
+    seen.add(characterId);
+    out.push({
+      character_id: characterId,
+      user_id: userId,
+      name,
+      created_at: String(row.created_at || ""),
+      updated_at: String(row.updated_at || ""),
+      snapshot_meta: recordOrNull(row.snapshot_meta) || null,
+      snapshot_base64: row.snapshot_base64 == null ? null : String(row.snapshot_base64 || "")
+    });
+  }
+  return out;
+}
 
 export function issueEmailVerificationCodeRuntime(
   user: ServerUserRuntime,
