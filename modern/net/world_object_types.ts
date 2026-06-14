@@ -1,6 +1,7 @@
 import type { U6MapRuntime } from "./world_map_runtime.ts";
 
 export interface WorldObject {
+  index?: number;
   object_key?: string;
   source_area?: number;
   source_index?: number;
@@ -8,6 +9,8 @@ export interface WorldObject {
   legacy_order?: number;
   assoc_child_count?: number;
   assoc_child_0010_count?: number;
+  assoc_index?: number;
+  assoc_obj?: WorldObject;
   status?: number;
   shape_type?: number;
   amount?: number;

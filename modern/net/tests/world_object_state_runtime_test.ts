@@ -3,10 +3,81 @@ import {
   compareLegacyWorldObjectOrder,
   findActiveObjectByKey,
   normalizeWorldObjectDeltas,
+  parseBaseTileMapRuntime,
+  parseObjBlkRecordsRuntime,
   persistPatchedObject,
   worldObjectMeta
 } from "../world_object_state_runtime.ts";
 import type { WorldObjectStateContainer } from "../world_object_types.ts";
+
+function writeU16LE(bytes: Uint8Array, off: number, value: number) {
+  bytes[off] = value & 0xff;
+  bytes[off + 1] = (value >> 8) & 0xff;
+}
+
+function encodePackedCoord(x: number, y: number, z: number): [number, number, number] {
+  return [
+    x & 0xff,
+    ((x >> 8) & 0x03) | ((y & 0x3f) << 2),
+    ((y >> 6) & 0x0f) | ((z & 0x0f) << 4)
+  ];
+}
+
+function writeObjRecord(bytes: Uint8Array, index: number, args: {
+  amount?: number;
+  assocIndex?: number;
+  frame?: number;
+  status: number;
+  type: number;
+  x?: number;
+  y?: number;
+  z?: number;
+}) {
+  const off = 2 + (index * 8);
+  bytes[off] = args.status & 0xff;
+  if ((args.status & 0x18) !== 0) {
+    writeU16LE(bytes, off + 1, args.assocIndex ?? 0);
+    bytes[off + 3] = 0;
+  } else {
+    const [raw0, raw1, raw2] = encodePackedCoord(args.x ?? 0, args.y ?? 0, args.z ?? 0);
+    bytes[off + 1] = raw0;
+    bytes[off + 2] = raw1;
+    bytes[off + 3] = raw2;
+  }
+  writeU16LE(bytes, off + 4, ((args.frame ?? 0) << 10) | (args.type & 0x3ff));
+  writeU16LE(bytes, off + 6, args.amount ?? 0);
+}
+
+const baseTileMap = parseBaseTileMapRuntime(new Uint8Array([0x00, 0x02, 0x34, 0x12]));
+assert.equal(baseTileMap.length, 0x400);
+assert.equal(baseTileMap[0], 0x0200);
+assert.equal(baseTileMap[1], 0x1234);
+assert.equal(parseBaseTileMapRuntime(null)[0], 0);
+
+const objblk = new Uint8Array(2 + (3 * 8));
+writeU16LE(objblk, 0, 5);
+writeObjRecord(objblk, 0, { status: 0, type: 10, frame: 2, amount: 7, x: 5, y: 6, z: 0 });
+writeObjRecord(objblk, 1, { status: 0x10, type: 11, assocIndex: 0 });
+writeObjRecord(objblk, 2, { status: 0, type: 12, x: 3, y: 4, z: 0 });
+const objectBaseTiles = new Uint16Array(0x400);
+objectBaseTiles[10] = 0x200;
+objectBaseTiles[11] = 0x300;
+objectBaseTiles[12] = 0x400;
+const parsedObjblk = parseObjBlkRecordsRuntime(objblk, 0x2a, objectBaseTiles);
+assert.equal(parsedObjblk.length, 2);
+assert.equal(parsedObjblk[0].object_key, "a2ai000");
+assert.equal(parsedObjblk[0].type, 10);
+assert.equal(parsedObjblk[0].frame, 2);
+assert.equal(parsedObjblk[0].tile_id, 0x202);
+assert.equal(parsedObjblk[0].amount, 7);
+assert.equal(parsedObjblk[0].x, 5);
+assert.equal(parsedObjblk[0].y, 6);
+assert.equal(parsedObjblk[0].assoc_child_count, 1);
+assert.equal(parsedObjblk[0].assoc_child_0010_count, 1);
+assert.equal(parsedObjblk[0].legacy_order, 2);
+assert.equal(parsedObjblk[1].object_key, "a2ai002");
+assert.equal(parsedObjblk[1].legacy_order, 1);
+assert.deepEqual(parseObjBlkRecordsRuntime(new Uint8Array([0]), 0, objectBaseTiles), []);
 
 const deltas = normalizeWorldObjectDeltas({
   schema_version: 1,

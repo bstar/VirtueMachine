@@ -39,6 +39,8 @@ const {
   compareLegacyWorldObjectOrder,
   findActiveObjectByKey,
   normalizeWorldObjectDeltas,
+  parseBaseTileMapRuntime,
+  parseObjBlkRecordsRuntime,
   persistPatchedObject,
   worldObjectMeta: buildWorldObjectMeta
 } = require("./world_object_state_runtime.ts");
@@ -67,7 +69,6 @@ const {
   advanceWorldClockMinuteRuntime,
   clampIntRuntime,
   computeSnapshotHashRuntime,
-  decodePackedCoordRuntime,
   defaultCriticalPolicyRuntime,
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
@@ -75,7 +76,6 @@ const {
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
-  parseU16LERuntime,
   queryIntOrRuntime,
   recordWorldInteractionEventRuntime,
   runCriticalItemMaintenanceRuntime
@@ -372,14 +372,6 @@ function normalizeWorldClock(raw) {
   return normalizeWorldClockRuntime(raw);
 }
 
-function parseU16LE(bytes, off) {
-  return parseU16LERuntime(bytes, off);
-}
-
-function decodePackedCoord(raw0, raw1, raw2) {
-  return decodePackedCoordRuntime(raw0, raw1, raw2);
-}
-
 function clampInt(n, lo, hi) {
   return clampIntRuntime(n, lo, hi);
 }
@@ -392,14 +384,9 @@ function loadBaseTileMap(runtimeDir) {
   const basetilePath = path.join(runtimeDir, "basetile");
   try {
     const buf = fs.readFileSync(basetilePath);
-    const map = new Uint16Array(0x400);
-    const n = Math.min(0x400, Math.floor(buf.length / 2));
-    for (let i = 0; i < n; i += 1) {
-      map[i] = parseU16LE(buf, i * 2) & 0xffff;
-    }
-    return map;
+    return parseBaseTileMapRuntime(buf);
   } catch (_err) {
-    return new Uint16Array(0x400);
+    return parseBaseTileMapRuntime(null);
   }
 }
 
@@ -416,105 +403,7 @@ function assertObjBaselineDir(dir) {
 }
 
 function parseObjBlkRecords(bytes, areaId, baseTileMap) {
-  if (!bytes || bytes.length < 2) {
-    return [];
-  }
-  let count = parseU16LE(bytes, 0);
-  const maxCount = Math.min(0x0c00, Math.floor((bytes.length - 2) / 8));
-  if (count > maxCount) {
-    count = maxCount;
-  }
-  const decoded = [];
-  for (let i = 0; i < count; i += 1) {
-    const off = 2 + (i * 8);
-    const status = bytes[off + 0] >>> 0;
-    const pos = decodePackedCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
-    const shapeType = parseU16LE(bytes, off + 4);
-    const type = shapeType & 0x03ff;
-    const frame = (shapeType >> 10) & 0x003f;
-    const amount = parseU16LE(bytes, off + 6);
-    const baseTile = baseTileMap[type] ?? 0;
-    const tileId = (baseTile + frame) & 0xffff;
-    const coordUse = status & 0x18;
-    const assocIndex = ((bytes[off + 1] | (bytes[off + 2] << 8)) & 0xffff) >>> 0;
-    decoded.push({
-      index: i >>> 0,
-      coord_use: coordUse >>> 0,
-      assoc_index: assocIndex >>> 0,
-      object_key: `a${areaId.toString(16).padStart(2, "0")}i${i.toString(16).padStart(3, "0")}`,
-      source_area: areaId >>> 0,
-      source_index: i >>> 0,
-      status: status & 0xff,
-      shape_type: shapeType & 0xffff,
-      amount: amount & 0xffff,
-      type: type & 0x3ff,
-      frame: frame & 0x3f,
-      tile_id: tileId & 0xffff,
-      x: pos.x & 0x3ff,
-      y: pos.y & 0x3ff,
-      z: pos.z & 0x0f,
-      holder_kind: "none",
-      holder_id: "",
-      holder_key: ""
-    });
-  }
-  for (const row of decoded) {
-    const ai = row.assoc_index | 0;
-    if (ai >= 0 && ai < decoded.length) {
-      row.assoc_obj = decoded[ai];
-    }
-  }
-  const childCounts = new Uint16Array(count);
-  const child0010Counts = new Uint16Array(count);
-  for (const row of decoded) {
-    if ((row.coord_use | 0) === 0) {
-      continue;
-    }
-    const ai = row.assoc_index | 0;
-    if (ai < 0 || ai >= count) {
-      continue;
-    }
-    childCounts[ai] = (childCounts[ai] + 1) & 0xffff;
-    if ((row.status & 0x10) !== 0) {
-      child0010Counts[ai] = (child0010Counts[ai] + 1) & 0xffff;
-    }
-  }
-  const out = [];
-  const ordered = decoded.slice().sort((a, b) => {
-    const aUse = (a.status & 0x18) >>> 0;
-    const bUse = (b.status & 0x18) >>> 0;
-    if (aUse !== 0 && bUse === 0) return -1;
-    if (bUse !== 0 && aUse === 0) return 1;
-    if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
-    if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
-    if ((a.z | 0) !== (b.z | 0)) return (b.z | 0) - (a.z | 0);
-    if (((a.status & 0x10) !== 0) !== ((b.status & 0x10) !== 0)) {
-      return (a.status & 0x10) !== 0 ? -1 : 1;
-    }
-    if ((a.source_area | 0) !== (b.source_area | 0)) return (a.source_area | 0) - (b.source_area | 0);
-    if ((a.source_index | 0) !== (b.source_index | 0)) return (a.source_index | 0) - (b.source_index | 0);
-    return (a.index | 0) - (b.index | 0);
-  });
-  const legacyOrderByIndex = new Int32Array(count);
-  legacyOrderByIndex.fill(-1);
-  for (let i = 0; i < ordered.length; i += 1) {
-    const idx = ordered[i].index | 0;
-    if (idx >= 0 && idx < count) {
-      legacyOrderByIndex[idx] = i;
-    }
-  }
-  for (const row of decoded) {
-    if ((row.coord_use | 0) !== 0) {
-      continue;
-    }
-    out.push({
-      ...row,
-      legacy_order: legacyOrderByIndex[row.index] | 0,
-      assoc_child_count: Number(childCounts[row.index] || 0) >>> 0,
-      assoc_child_0010_count: Number(child0010Counts[row.index] || 0) >>> 0
-    });
-  }
-  return out;
+  return parseObjBlkRecordsRuntime(bytes, areaId, baseTileMap);
 }
 
 function loadWorldObjectBaseline(runtimeDir) {

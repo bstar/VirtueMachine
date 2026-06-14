@@ -9,8 +9,138 @@ import type {
   WorldObjectStateContainer
 } from "./world_object_types.ts";
 
+function parseU16LE(bytes: Uint8Array, off: number): number {
+  return (bytes[off] | (bytes[off + 1] << 8)) >>> 0;
+}
+
 function objectRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function decodePackedCoord(raw0: number, raw1: number, raw2: number): { x: number; y: number; z: number } {
+  return {
+    x: (raw0 | ((raw1 & 0x03) << 8)) >>> 0,
+    y: ((raw1 >> 2) | ((raw2 & 0x0f) << 6)) >>> 0,
+    z: ((raw2 >> 4) & 0x0f) >>> 0
+  };
+}
+
+export function parseBaseTileMapRuntime(bytes: Uint8Array | Buffer | null | undefined): Uint16Array {
+  const map = new Uint16Array(0x400);
+  if (!bytes) {
+    return map;
+  }
+  const n = Math.min(0x400, Math.floor(bytes.length / 2));
+  for (let i = 0; i < n; i += 1) {
+    map[i] = parseU16LE(bytes, i * 2) & 0xffff;
+  }
+  return map;
+}
+
+export function parseObjBlkRecordsRuntime(
+  bytes: Uint8Array | Buffer | null | undefined,
+  areaId: number,
+  baseTileMap: Uint16Array | readonly number[]
+): WorldObject[] {
+  if (!bytes || bytes.length < 2) {
+    return [];
+  }
+  let count = parseU16LE(bytes, 0);
+  const maxCount = Math.min(0x0c00, Math.floor((bytes.length - 2) / 8));
+  if (count > maxCount) {
+    count = maxCount;
+  }
+  const decoded: WorldObject[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const off = 2 + (i * 8);
+    const status = bytes[off + 0] >>> 0;
+    const pos = decodePackedCoord(bytes[off + 1], bytes[off + 2], bytes[off + 3]);
+    const shapeType = parseU16LE(bytes, off + 4);
+    const type = shapeType & 0x03ff;
+    const frame = (shapeType >> 10) & 0x003f;
+    const amount = parseU16LE(bytes, off + 6);
+    const baseTile = baseTileMap[type] ?? 0;
+    const tileId = (baseTile + frame) & 0xffff;
+    const coordUse = status & 0x18;
+    const assocIndex = ((bytes[off + 1] | (bytes[off + 2] << 8)) & 0xffff) >>> 0;
+    decoded.push({
+      index: i >>> 0,
+      coord_use: coordUse >>> 0,
+      assoc_index: assocIndex >>> 0,
+      object_key: `a${(areaId >>> 0).toString(16).padStart(2, "0")}i${i.toString(16).padStart(3, "0")}`,
+      source_area: areaId >>> 0,
+      source_index: i >>> 0,
+      status: status & 0xff,
+      shape_type: shapeType & 0xffff,
+      amount: amount & 0xffff,
+      type: type & 0x3ff,
+      frame: frame & 0x3f,
+      tile_id: tileId & 0xffff,
+      x: pos.x & 0x3ff,
+      y: pos.y & 0x3ff,
+      z: pos.z & 0x0f,
+      holder_kind: "none",
+      holder_id: "",
+      holder_key: ""
+    });
+  }
+  for (const row of decoded) {
+    const ai = Number(row.assoc_index) | 0;
+    if (ai >= 0 && ai < decoded.length) {
+      row.assoc_obj = decoded[ai];
+    }
+  }
+  const childCounts = new Uint16Array(count);
+  const child0010Counts = new Uint16Array(count);
+  for (const row of decoded) {
+    if ((Number(row.coord_use) | 0) === 0) {
+      continue;
+    }
+    const ai = Number(row.assoc_index) | 0;
+    if (ai < 0 || ai >= count) {
+      continue;
+    }
+    childCounts[ai] = (childCounts[ai] + 1) & 0xffff;
+    if ((Number(row.status) & 0x10) !== 0) {
+      child0010Counts[ai] = (child0010Counts[ai] + 1) & 0xffff;
+    }
+  }
+  const out: WorldObject[] = [];
+  const ordered = decoded.slice().sort((a, b) => {
+    const aUse = (Number(a.status) & 0x18) >>> 0;
+    const bUse = (Number(b.status) & 0x18) >>> 0;
+    if (aUse !== 0 && bUse === 0) return -1;
+    if (bUse !== 0 && aUse === 0) return 1;
+    if ((Number(a.y) | 0) !== (Number(b.y) | 0)) return (Number(a.y) | 0) - (Number(b.y) | 0);
+    if ((Number(a.x) | 0) !== (Number(b.x) | 0)) return (Number(a.x) | 0) - (Number(b.x) | 0);
+    if ((Number(a.z) | 0) !== (Number(b.z) | 0)) return (Number(b.z) | 0) - (Number(a.z) | 0);
+    if (isStatus0010(a.status) !== isStatus0010(b.status)) {
+      return isStatus0010(a.status) ? -1 : 1;
+    }
+    if ((Number(a.source_area) | 0) !== (Number(b.source_area) | 0)) return (Number(a.source_area) | 0) - (Number(b.source_area) | 0);
+    if ((Number(a.source_index) | 0) !== (Number(b.source_index) | 0)) return (Number(a.source_index) | 0) - (Number(b.source_index) | 0);
+    return (Number(a.index) | 0) - (Number(b.index) | 0);
+  });
+  const legacyOrderByIndex = new Int32Array(count);
+  legacyOrderByIndex.fill(-1);
+  for (let i = 0; i < ordered.length; i += 1) {
+    const idx = Number(ordered[i].index) | 0;
+    if (idx >= 0 && idx < count) {
+      legacyOrderByIndex[idx] = i;
+    }
+  }
+  for (const row of decoded) {
+    if ((Number(row.coord_use) | 0) !== 0) {
+      continue;
+    }
+    out.push({
+      ...row,
+      legacy_order: legacyOrderByIndex[Number(row.index) | 0] | 0,
+      assoc_child_count: Number(childCounts[Number(row.index) | 0] || 0) >>> 0,
+      assoc_child_0010_count: Number(child0010Counts[Number(row.index) | 0] || 0) >>> 0
+    });
+  }
+  return out;
 }
 
 function spawnedDeltaFromRecord(value: Record<string, unknown>, index: number): SpawnedWorldObjectDelta {
