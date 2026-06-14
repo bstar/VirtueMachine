@@ -4,6 +4,9 @@ import {
   abortBootIntroRuntime,
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
+  bootIntroWindowRandRuntime,
+  bootIntroWindowSceneBaseRuntime,
+  bootIntroWindowStateAtRuntime,
   bootIntroTvAddSpriteRuntime,
   bootIntroTvRandRuntime,
   bootIntroTvStateAtRuntime,
@@ -14,7 +17,9 @@ import {
   bootIntroOverlayAlphaRuntime,
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
-  startBootIntroRuntime
+  startBootIntroRuntime,
+  wrapBootIntroTextPixelsRuntime,
+  wrapBootIntroTextRuntime
 } from "../ui/boot_intro_runtime.ts";
 
 function testStartAndAdvance() {
@@ -120,6 +125,46 @@ function testWouFontHelpers() {
   assert.equal(decodeBootIntroWouFontRuntime(new Uint8Array([1]), () => invalidHeight), null);
 }
 
+function testWindowHelpers() {
+  const randCtx = { seed: 0x51f15eED };
+  const rand = bootIntroWindowRandRuntime(randCtx, -5, 5);
+  assert.ok(rand >= -5 && rand <= 5, "window rand should stay inside inclusive bounds");
+
+  assert.equal(bootIntroWindowSceneBaseRuntime("window_lightning"), 80);
+  assert.equal(bootIntroWindowSceneBaseRuntime("window_strike"), 160);
+  assert.equal(bootIntroWindowSceneBaseRuntime("window_pan"), 240);
+  assert.equal(bootIntroWindowSceneBaseRuntime("window_door_open"), 405);
+  assert.equal(bootIntroWindowSceneBaseRuntime("window_run"), 475);
+  assert.equal(bootIntroWindowSceneBaseRuntime("unknown"), 20);
+
+  const initial = bootIntroWindowStateAtRuntime({ id: "window_storm" }, 0, false);
+  assert.equal(initial.clouds.length, 5, "window scene should preserve cloud list");
+  assert.equal(initial.clouds[0].x, -214, "first update should move clouds");
+  assert.ok(initial.rain.length <= 100, "rain list should stay capped");
+
+  const forced = bootIntroWindowStateAtRuntime({ id: "window_storm" }, 0, true);
+  assert.equal(forced.windowFrame, 27, "force strike should open lit window frame");
+  assert.ok(forced.flash >= 0, "force strike should maintain flash counter");
+
+  const late = bootIntroWindowStateAtRuntime({ id: "window_storm" }, 1300, false);
+  assert.ok(late.rain.length <= 100, "clamped late state should keep rain capped");
+  assert.ok(late.clouds.every((cloud) => Number.isFinite(cloud.x) && Number.isFinite(cloud.y)));
+}
+
+function testTextWrapHelpers() {
+  assert.deepEqual(wrapBootIntroTextRuntime("  one   two three  ", 7), ["one two", "three"]);
+  assert.deepEqual(wrapBootIntroTextRuntime("", 7), []);
+  assert.deepEqual(
+    wrapBootIntroTextPixelsRuntime("one two three", 24, (text) => text.length * 4),
+    ["one", "two", "three"]
+  );
+  assert.deepEqual(
+    wrapBootIntroTextPixelsRuntime("one two", 0, (text) => text.length * 4),
+    ["one", "two"]
+  );
+  assert.deepEqual(wrapBootIntroTextPixelsRuntime("   ", 24, () => 4), []);
+}
+
 testStartAndAdvance();
 testInputAdvance();
 testAbort();
@@ -127,5 +172,7 @@ testOverlayAlpha();
 testZeroFadeSceneHasNoOverlay();
 testTvMachine();
 testWouFontHelpers();
+testWindowHelpers();
+testTextWrapHelpers();
 
 console.log("ui_boot_intro_runtime_test: ok");

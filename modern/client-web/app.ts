@@ -239,6 +239,8 @@ import {
   abortBootIntroRuntime,
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
+  bootIntroWindowSceneBaseRuntime,
+  bootIntroWindowStateAtRuntime,
   bootIntroTvStateAtRuntime,
   bootIntroWouCharWidthRuntime,
   decodeBootIntroWouFontRuntime,
@@ -246,7 +248,8 @@ import {
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
   measureBootIntroTextWidthRuntime,
-  startBootIntroRuntime
+  startBootIntroRuntime,
+  wrapBootIntroTextPixelsRuntime
 } from "./ui/boot_intro_runtime.ts";
 import {
   normalizeStartupMenuIndexRuntime,
@@ -3121,151 +3124,16 @@ function drawBootIntroClock(g, scene, scale, scrollPx) {
   drawBootIntroSprite(g, "intro1", frames[3], 0xeb - xOff, 0x14, scale, scene);
 }
 
-function bootIntroWindowRand(ctx, min, max) {
-  ctx.seed = ((ctx.seed * 1664525) + 1013904223) >>> 0;
-  const lo = Math.min(min | 0, max | 0);
-  const hi = Math.max(min | 0, max | 0);
-  return lo + (ctx.seed % ((hi - lo) + 1));
-}
-
 function bootIntroWindowSceneBase(sceneId) {
-  if (sceneId === "window_lightning") return 80;
-  if (sceneId === "window_strike") return 160;
-  if (sceneId === "window_pan") return 240;
-  if (sceneId === "window_door_open") return 405;
-  if (sceneId === "window_run") return 475;
-  return 20;
+  return bootIntroWindowSceneBaseRuntime(sceneId);
 }
 
 function bootIntroWindowStateAt(scene, updateCount, forceStrike) {
-  const ctx = {
-    seed: 0x51f15eED,
-    cloudX: -400,
-    clouds: [
-      { frame: 2, x: -216, y: 6 },
-      { frame: 3, x: -149, y: 18 },
-      { frame: 2, x: -88, y: 4 },
-      { frame: 3, x: 7, y: 23 },
-      { frame: 2, x: 58, y: 11 }
-    ],
-    lightningCounter: 0,
-    lightningFrame: 11,
-    lightningX: 0,
-    lightningY: 0,
-    lightningDrawX: 0,
-    lightningDrawY: 0,
-    lightningVisible: false,
-    strikeFrame: 19,
-    flash: 0,
-    windowFrame: 26,
-    rain: []
-  };
-  const count = Math.max(0, Math.min(1200, Number(updateCount) | 0));
-  for (let step = 0; step <= count; step += 1) {
-    for (const cloud of ctx.clouds) {
-      if (cloud.x > 320) {
-        cloud.x = bootIntroWindowRand(ctx, 0, 320) - 320;
-        cloud.y = bootIntroWindowRand(ctx, 0, 30);
-      }
-      cloud.x += 2;
-    }
-    ctx.cloudX += 1;
-    if (ctx.cloudX === 320) {
-      ctx.cloudX = 0;
-    }
-    if (bootIntroWindowRand(ctx, 0, 6) === 0 && ctx.lightningCounter === 0) {
-      ctx.lightningCounter = bootIntroWindowRand(ctx, 1, 4);
-      ctx.lightningFrame = bootIntroWindowRand(ctx, 11, 18);
-      ctx.lightningX = bootIntroWindowRand(ctx, -5, 320);
-      ctx.lightningY = bootIntroWindowRand(ctx, -5, 200);
-      ctx.lightningVisible = true;
-    }
-    if (ctx.lightningCounter > 0) {
-      ctx.lightningVisible = true;
-      ctx.lightningDrawX = ctx.lightningX + bootIntroWindowRand(ctx, 0, 3);
-      ctx.lightningDrawY = ctx.lightningY + bootIntroWindowRand(ctx, 0, 3);
-    } else {
-      ctx.lightningVisible = false;
-    }
-    if (bootIntroWindowRand(ctx, 0, 1) === 0) {
-      ctx.strikeFrame = bootIntroWindowRand(ctx, 19, 23);
-    }
-    if (ctx.flash > 0) {
-      ctx.flash -= 1;
-    } else if (bootIntroWindowRand(ctx, 0, 5) === 0 || forceStrike) {
-      ctx.windowFrame = 27;
-      ctx.flash = bootIntroWindowRand(ctx, 1, 5);
-    } else {
-      ctx.windowFrame = 26;
-    }
-    if (ctx.rain.length < 100 && bootIntroWindowRand(ctx, 0, Math.max(1, 20 - Math.floor(ctx.rain.length / 8))) === 0) {
-      ctx.rain.push({
-        frame: bootIntroWindowRand(ctx, 4, 7),
-        x: bootIntroWindowRand(ctx, 0, 320),
-        y: -4
-      });
-    }
-    for (const drop of ctx.rain) {
-      drop.x += 2;
-      drop.y += 8;
-      if (drop.x > 320 || drop.y > 200) {
-        drop.frame = bootIntroWindowRand(ctx, 4, 7);
-        drop.x = bootIntroWindowRand(ctx, 0, 320);
-        drop.y = -4;
-      }
-    }
-    if (ctx.lightningCounter > 0) {
-      ctx.lightningCounter -= 1;
-    }
-  }
-  return ctx;
-}
-
-function wrapBootIntroText(text, maxChars) {
-  const src = String(text || "").replace(/\s+/g, " ").trim();
-  if (!src) {
-    return [];
-  }
-  const words = src.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > maxChars && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) {
-    lines.push(line);
-  }
-  return lines;
+  return bootIntroWindowStateAtRuntime(scene, updateCount, forceStrike);
 }
 
 function wrapBootIntroTextPixels(text, maxWidthPx) {
-  const src = String(text || "").replace(/\s+/g, " ").trim();
-  if (!src) {
-    return [];
-  }
-  const limit = Math.max(8, Number(maxWidthPx) || 0);
-  const words = src.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && measureBootIntroTextWidth(next) > limit) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) {
-    lines.push(line);
-  }
-  return lines;
+  return wrapBootIntroTextPixelsRuntime(text, maxWidthPx, measureBootIntroTextWidth);
 }
 
 function renderBootIntroTextCard(g, scale, scene, card) {

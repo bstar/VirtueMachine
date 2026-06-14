@@ -60,6 +60,35 @@ export type BootIntroWouFontRuntime = {
   pixelChar: number;
 };
 
+export type BootIntroWindowSpriteRuntime = {
+  frame: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroWindowRainRuntime = {
+  frame: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroWindowStateRuntime = {
+  cloudX: number;
+  clouds: BootIntroWindowSpriteRuntime[];
+  flash: number;
+  lightningCounter: number;
+  lightningDrawX: number;
+  lightningDrawY: number;
+  lightningFrame: number;
+  lightningVisible: boolean;
+  lightningX: number;
+  lightningY: number;
+  rain: BootIntroWindowRainRuntime[];
+  seed: number;
+  strikeFrame: number;
+  windowFrame: number;
+};
+
 const NUVIE_FADE_MS = Math.ceil(0x100 / 3) * 25;
 const DEFAULT_FADE_MS = 0;
 
@@ -713,4 +742,164 @@ export function measureBootIntroTextWidthRuntime(
     width += bootIntroWouCharWidthRuntime(font, msg.charCodeAt(i));
   }
   return width;
+}
+
+export function bootIntroWindowRandRuntime(
+  ctx: Pick<BootIntroWindowStateRuntime, "seed">,
+  min: number,
+  max: number
+): number {
+  ctx.seed = ((ctx.seed * 1664525) + 1013904223) >>> 0;
+  const lo = Math.min(min | 0, max | 0);
+  const hi = Math.max(min | 0, max | 0);
+  return lo + (ctx.seed % ((hi - lo) + 1));
+}
+
+export function bootIntroWindowSceneBaseRuntime(sceneId: unknown): number {
+  if (sceneId === "window_lightning") return 80;
+  if (sceneId === "window_strike") return 160;
+  if (sceneId === "window_pan") return 240;
+  if (sceneId === "window_door_open") return 405;
+  if (sceneId === "window_run") return 475;
+  return 20;
+}
+
+export function bootIntroWindowStateAtRuntime(
+  scene: { id?: unknown } | null | undefined,
+  updateCount: number,
+  forceStrike: boolean
+): BootIntroWindowStateRuntime {
+  const ctx: BootIntroWindowStateRuntime = {
+    seed: 0x51f15eED,
+    cloudX: -400,
+    clouds: [
+      { frame: 2, x: -216, y: 6 },
+      { frame: 3, x: -149, y: 18 },
+      { frame: 2, x: -88, y: 4 },
+      { frame: 3, x: 7, y: 23 },
+      { frame: 2, x: 58, y: 11 }
+    ],
+    lightningCounter: 0,
+    lightningFrame: 11,
+    lightningX: 0,
+    lightningY: 0,
+    lightningDrawX: 0,
+    lightningDrawY: 0,
+    lightningVisible: false,
+    strikeFrame: 19,
+    flash: 0,
+    windowFrame: 26,
+    rain: []
+  };
+  const count = Math.max(0, Math.min(1200, Number(updateCount) | 0));
+  for (let step = 0; step <= count; step += 1) {
+    for (const cloud of ctx.clouds) {
+      if (cloud.x > 320) {
+        cloud.x = bootIntroWindowRandRuntime(ctx, 0, 320) - 320;
+        cloud.y = bootIntroWindowRandRuntime(ctx, 0, 30);
+      }
+      cloud.x += 2;
+    }
+    ctx.cloudX += 1;
+    if (ctx.cloudX === 320) {
+      ctx.cloudX = 0;
+    }
+    if (bootIntroWindowRandRuntime(ctx, 0, 6) === 0 && ctx.lightningCounter === 0) {
+      ctx.lightningCounter = bootIntroWindowRandRuntime(ctx, 1, 4);
+      ctx.lightningFrame = bootIntroWindowRandRuntime(ctx, 11, 18);
+      ctx.lightningX = bootIntroWindowRandRuntime(ctx, -5, 320);
+      ctx.lightningY = bootIntroWindowRandRuntime(ctx, -5, 200);
+      ctx.lightningVisible = true;
+    }
+    if (ctx.lightningCounter > 0) {
+      ctx.lightningVisible = true;
+      ctx.lightningDrawX = ctx.lightningX + bootIntroWindowRandRuntime(ctx, 0, 3);
+      ctx.lightningDrawY = ctx.lightningY + bootIntroWindowRandRuntime(ctx, 0, 3);
+    } else {
+      ctx.lightningVisible = false;
+    }
+    if (bootIntroWindowRandRuntime(ctx, 0, 1) === 0) {
+      ctx.strikeFrame = bootIntroWindowRandRuntime(ctx, 19, 23);
+    }
+    if (ctx.flash > 0) {
+      ctx.flash -= 1;
+    } else if (bootIntroWindowRandRuntime(ctx, 0, 5) === 0 || forceStrike) {
+      ctx.windowFrame = 27;
+      ctx.flash = bootIntroWindowRandRuntime(ctx, 1, 5);
+    } else {
+      ctx.windowFrame = 26;
+    }
+    if (ctx.rain.length < 100 && bootIntroWindowRandRuntime(ctx, 0, Math.max(1, 20 - Math.floor(ctx.rain.length / 8))) === 0) {
+      ctx.rain.push({
+        frame: bootIntroWindowRandRuntime(ctx, 4, 7),
+        x: bootIntroWindowRandRuntime(ctx, 0, 320),
+        y: -4
+      });
+    }
+    for (const drop of ctx.rain) {
+      drop.x += 2;
+      drop.y += 8;
+      if (drop.x > 320 || drop.y > 200) {
+        drop.frame = bootIntroWindowRandRuntime(ctx, 4, 7);
+        drop.x = bootIntroWindowRandRuntime(ctx, 0, 320);
+        drop.y = -4;
+      }
+    }
+    if (ctx.lightningCounter > 0) {
+      ctx.lightningCounter -= 1;
+    }
+  }
+  void scene;
+  return ctx;
+}
+
+export function wrapBootIntroTextRuntime(text: unknown, maxChars: number): string[] {
+  const src = String(text || "").replace(/\s+/g, " ").trim();
+  if (!src) {
+    return [];
+  }
+  const words = src.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) {
+    lines.push(line);
+  }
+  return lines;
+}
+
+export function wrapBootIntroTextPixelsRuntime(
+  text: unknown,
+  maxWidthPx: number,
+  measureTextWidth: (text: string) => number
+): string[] {
+  const src = String(text || "").replace(/\s+/g, " ").trim();
+  if (!src) {
+    return [];
+  }
+  const limit = Math.max(8, Number(maxWidthPx) || 0);
+  const words = src.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && measureTextWidth(next) > limit) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) {
+    lines.push(line);
+  }
+  return lines;
 }
