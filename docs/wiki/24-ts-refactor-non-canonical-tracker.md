@@ -24,11 +24,11 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 ### 2) Net panel event wiring split
 
-- Status: `temporary`
+- Status: `verified`
 - Location: `modern/client-web/net/panel_bindings_runtime.ts`
-- Note: repetitive localStorage/listener wiring extracted from `initNetPanel`.
-- Risk: UI event timing parity (especially auto-login and maintenance toggle side effects) can drift if bindings are reordered.
-- Exit criteria: verify panel behavior sequence against intended canonical UX flow and lock with tests.
+- Note: repetitive localStorage/listener wiring is extracted from `initNetPanel`, and the runtime test now covers preference application, password visibility persistence, auto-login status messaging, maintenance toggle persistence, and profile-change application.
+- Risk: broader account modal orchestration still lives in `app.ts` and is covered by the app-shell tracker items.
+- Exit criteria: satisfied for extracted event bindings.
 
 ### 3) Runtime adapter wrappers in `app.ts`
 
