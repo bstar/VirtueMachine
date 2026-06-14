@@ -801,7 +801,12 @@ const LEGACY_MOON_PHASE_BY_DAY = Object.freeze([
 const LEGACY_POSTURE_ICONS = Object.freeze([0x183, 0x180, 0x181, 0x184, 0x187]);
 const LEGACY_HUD_TEXT_COLOR = "#8b3f24";
 const LEGACY_AVATAR_PORTRAIT_INDEX = 0;
-const STARTUP_MENU = Object.freeze([
+type StartupMenuItem = {
+  enabled: boolean;
+  id: string;
+  label: string;
+};
+const STARTUP_MENU: readonly StartupMenuItem[] = Object.freeze([
   { id: "intro", label: "Introduction", enabled: false },
   { id: "create", label: "Create Character", enabled: false },
   { id: "transfer", label: "Transfer Character", enabled: false },
@@ -874,7 +879,14 @@ const THEMES = [
   "ash"
 ];
 const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
-const CAPTURE_PRESETS = [
+type CapturePreset = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+};
+const CAPTURE_PRESETS: readonly CapturePreset[] = Object.freeze([
   { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
   { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
   { id: "wood_corner_a", label: "Wood Corner A (355,411,0)", x: 355, y: 411, z: 0 },
@@ -883,7 +895,7 @@ const CAPTURE_PRESETS = [
   { id: "farmland", label: "Farmland Props (292,431,0)", x: 292, y: 431, z: 0 },
   { id: "anim_fire", label: "Animation Test Fire (360,397,0)", x: 360, y: 397, z: 0 },
   { id: "anim_wheels", label: "Animation Test Wheels (307,384,0)", x: 307, y: 384, z: 0 }
-];
+]);
 const INITIAL_WORLD = Object.freeze({
   is_on_quest: 0,
   next_sleep: 0,
@@ -5080,7 +5092,7 @@ function tryInteractFacing(sim: AppSimState, dx: number, dy: number): boolean {
   return false;
 }
 
-function initCapturePresets() {
+function initCapturePresets(): void {
   if (!locationSelect) {
     return;
   }
@@ -5093,12 +5105,12 @@ function initCapturePresets() {
   }
 }
 
-function activeCapturePreset() {
+function activeCapturePreset(): CapturePreset | undefined {
   const id = locationSelect ? locationSelect.value : "";
   return CAPTURE_PRESETS.find((p) => p.id === id) ?? CAPTURE_PRESETS[0];
 }
 
-function setStartupMenuIndex(nextIndex) {
+function setStartupMenuIndex(nextIndex: number): void {
   const idx = normalizeStartupMenuIndexRuntime(nextIndex, STARTUP_MENU.length);
   if (state.startupMenuIndex !== idx) {
     state.startupCanvasCache.clear();
@@ -5106,11 +5118,11 @@ function setStartupMenuIndex(nextIndex) {
   state.startupMenuIndex = idx;
 }
 
-function isNetAuthenticated() {
+function isNetAuthenticated(): boolean {
   return !!(state.net && state.net.token && state.net.userId);
 }
 
-function activateStartupMenuSelection() {
+function activateStartupMenuSelection(): void {
   if (!STARTUP_MENU.length) {
     return;
   }
@@ -5131,7 +5143,7 @@ function activateStartupMenuSelection() {
   }
 }
 
-function placeCameraAtPresetId(presetId) {
+function placeCameraAtPresetId(presetId: string): void {
   const p = CAPTURE_PRESETS.find((v) => v.id === presetId) ?? CAPTURE_PRESETS[0];
   if (!p) {
     return;
@@ -5145,7 +5157,7 @@ function placeCameraAtPresetId(presetId) {
   }
 }
 
-function startSessionFromTitle() {
+function startSessionFromTitle(): void {
   if (state.sessionStarted) {
     return;
   }
@@ -5216,7 +5228,7 @@ function returnToTitleMenu(opts: { saveRemote?: boolean } = {}) {
   diagBox.textContent = "Returned to title menu.";
 }
 
-function cycleCursor(delta) {
+function cycleCursor(delta: number): void {
   if (!state.cursorPixmaps || !state.cursorPixmaps.length) {
     return;
   }
@@ -5230,7 +5242,7 @@ function cycleCursor(delta) {
   diagBox.textContent = `Cursor ${idx + 1}/${n}`;
 }
 
-function jumpToPreset() {
+function jumpToPreset(): void {
   const p = activeCapturePreset();
   if (!p) {
     return;
@@ -5243,8 +5255,8 @@ function jumpToPreset() {
   diagBox.textContent = `Moved camera focus to preset ${p.label}.`;
 }
 
-function captureViewportPng() {
-  const composeCapture = () => {
+function captureViewportPng(): void {
+  const composeCapture = (): HTMLCanvasElement => {
     const margin = 14;
     const gap = 12;
     const frameBorder = 14;
@@ -5260,6 +5272,9 @@ function captureViewportPng() {
     out.width = outW;
     out.height = outH;
     const g = out.getContext("2d");
+    if (!g) {
+      return out;
+    }
     g.imageSmoothingEnabled = false;
 
     const frameX = margin;
@@ -5310,7 +5325,7 @@ function captureViewportPng() {
     g.fillText("mode: legacy", textX, y);
     y = panelY + headerH + 24;
 
-    const drawRow = (label, value) => {
+    const drawRow = (label: string, value: unknown): void => {
       g.fillStyle = "#7f99bd";
       g.font = "11px Inter, sans-serif";
       g.fillText(label, textX, y);
@@ -5364,7 +5379,7 @@ function captureViewportPng() {
   diagBox.textContent = `Captured ${filename}`;
 }
 
-function captureWorldHudPng() {
+function captureWorldHudPng(): void {
   drawTileGrid();
   composeLegacyViewportFromModernGrid();
   renderLegacyHudStubOnBackdrop();
@@ -5378,6 +5393,9 @@ function captureWorldHudPng() {
     out.width = 320;
     out.height = 200;
     const g = out.getContext("2d");
+    if (!g) {
+      return;
+    }
     g.imageSmoothingEnabled = false;
     g.drawImage(
       legacyBackdropCanvas,
@@ -5412,6 +5430,9 @@ function captureWorldHudPng() {
     out.width = 320;
     out.height = 200;
     const g = out.getContext("2d");
+    if (!g) {
+      return;
+    }
     g.imageSmoothingEnabled = false;
     g.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 320, 200);
   }
@@ -5426,7 +5447,7 @@ function captureWorldHudPng() {
   diagBox.textContent = `Captured ${filename}`;
 }
 
-function clampParityRadius(value) {
+function clampParityRadius(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n)) {
     return 12;
@@ -5434,7 +5455,7 @@ function clampParityRadius(value) {
   return Math.max(1, Math.min(32, Math.floor(n)));
 }
 
-function downloadJsonFile(filename, data) {
+function downloadJsonFile(filename: string, data: unknown): void {
   const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -5446,7 +5467,7 @@ function downloadJsonFile(filename, data) {
   URL.revokeObjectURL(url);
 }
 
-async function captureParitySnapshotJson() {
+async function captureParitySnapshotJson(): Promise<void> {
   if (!state.sessionStarted || !state.mapCtx) {
     diagBox.className = "diag warn";
     diagBox.textContent = "Parity snapshot unavailable: session not started.";
