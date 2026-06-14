@@ -33,14 +33,18 @@ export interface TargetWorldRuntime {
   map_z: number;
 }
 
+export interface TargetSimRuntime {
+  removedObjectKeys?: Record<string, number>;
+}
+
 export type TargetLookupDepsRuntime = {
-  isObjectRemoved: (sim: unknown, obj: TargetWorldObjectRuntime) => boolean;
+  isObjectRemoved: (sim: TargetSimRuntime | null | undefined, obj: TargetWorldObjectRuntime) => boolean;
   isLikelyPickupObjectType: (type: number) => boolean;
 };
 
 export function topWorldObjectAtCellRuntime(
   objectLayer: TargetObjectLayerRuntime | null | undefined,
-  sim: unknown,
+  sim: TargetSimRuntime | null | undefined,
   tx: number,
   ty: number,
   tz: number,
@@ -111,7 +115,7 @@ export function resolveLookTargetAtCellRuntime(args: {
   objectLayer: TargetObjectLayerRuntime | null | undefined;
   entityEntries: TargetEntityRuntime[] | null | undefined;
   mapTileAt: (x: number, y: number, z: number) => number;
-  sim: unknown;
+  sim: TargetSimRuntime | null | undefined;
   tx: number;
   ty: number;
   avatarEntityId: number;
@@ -235,7 +239,7 @@ export type PickupTargetResolutionRuntime = {
 export function resolvePickupTargetAtCellRuntime(args: {
   world: TargetWorldRuntime;
   objectLayer: TargetObjectLayerRuntime | null | undefined;
-  sim: unknown;
+  sim: TargetSimRuntime | null | undefined;
   tx: number;
   ty: number;
   deps: TargetLookupDepsRuntime;
@@ -305,7 +309,7 @@ export function buildTargetResolverRegressionProbesRuntime(): {
   });
   const removedSet = new Set<string>();
   const deps = {
-    isObjectRemoved: (_sim: unknown, obj: TargetWorldObjectRuntime) => removedSet.has(String(obj?.key || "")),
+    isObjectRemoved: (_sim: TargetSimRuntime | null | undefined, obj: TargetWorldObjectRuntime) => removedSet.has(String(obj?.key || "")),
     isLikelyPickupObjectType: (type: number) => ((Number(type) & 0x3ff) !== 0x129)
   };
 

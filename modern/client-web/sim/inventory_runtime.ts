@@ -20,14 +20,13 @@ export function objectAnchorKeyRuntime(obj: InventoryObjectRuntime): string {
 }
 
 export function isObjectRemovedRuntime(
-  sim: unknown,
+  sim: SimInventoryRuntimeState | null | undefined,
   obj: InventoryObjectRuntime | null | undefined
 ): boolean {
-  if (!sim || typeof sim !== "object" || !obj) {
+  if (!sim || !obj) {
     return false;
   }
-  const state = sim as SimInventoryRuntimeState;
-  return !!(state.removedObjectKeys && state.removedObjectKeys[objectAnchorKeyRuntime(obj)]);
+  return !!(sim.removedObjectKeys && sim.removedObjectKeys[objectAnchorKeyRuntime(obj)]);
 }
 
 export function markObjectRemovedRuntime(
