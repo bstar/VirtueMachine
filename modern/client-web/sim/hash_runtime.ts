@@ -4,6 +4,49 @@ type HashCtx = {
   mask: bigint;
 };
 
+interface SimHashWorldRuntime {
+  is_on_quest: number;
+  next_sleep: number;
+  time_m: number;
+  time_h: number;
+  date_d: number;
+  date_m: number;
+  date_y: number;
+  wind_dir: number;
+  active: number;
+  map_x: number;
+  map_y: number;
+  map_z: number;
+  in_combat: number;
+  sound_enabled: number;
+}
+
+interface SimHashAnchorRuntime {
+  x?: number;
+  y?: number;
+  z?: number;
+  order?: number;
+  type?: number;
+  frame?: number;
+}
+
+interface SimHashStateRuntime {
+  tick: number;
+  rngState: number;
+  worldFlags: number;
+  commandsApplied: number;
+  world: SimHashWorldRuntime;
+  avatarPose?: string;
+  avatarPoseAnchor?: SimHashAnchorRuntime | null;
+  doorOpenStates?: Record<string, unknown>;
+  removedObjectKeys?: Record<string, unknown>;
+  removedObjectAtTick?: Record<string, unknown>;
+  removedObjectCount?: number;
+  inventory?: Record<string, unknown>;
+  spawnedWorldObjects?: SimHashAnchorRuntime[];
+  spawnedWorldSeq?: number;
+}
+
 export function hashMixU32Runtime(h: bigint, value: number, ctx: HashCtx): bigint {
   const mixed = (h ^ BigInt(value >>> 0)) * ctx.prime;
   return mixed & ctx.mask;
@@ -13,7 +56,7 @@ export function asU32SignedRuntime(value: number): number {
   return (value | 0) >>> 0;
 }
 
-export function simStateHashRuntime(sim: any, ctx: HashCtx): bigint {
+export function simStateHashRuntime(sim: SimHashStateRuntime, ctx: HashCtx): bigint {
   let h = ctx.offset;
   h = hashMixU32Runtime(h, sim.tick, ctx);
   h = hashMixU32Runtime(h, sim.rngState, ctx);

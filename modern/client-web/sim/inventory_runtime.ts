@@ -1,21 +1,39 @@
-export function objectAnchorKeyRuntime(obj: {
-  x: number;
-  y: number;
-  z: number;
-  order: number;
+export interface InventoryObjectRuntime {
+  x?: number;
+  y?: number;
+  z?: number;
+  order?: number;
   type: number;
-}): string {
-  return `${obj.x & 0x3ff},${obj.y & 0x3ff},${obj.z & 0x0f},${obj.order & 0xffff},${obj.type & 0x3ff}`;
+  frame?: number;
 }
 
-export function isObjectRemovedRuntime(sim: any, obj: any): boolean {
-  if (!sim || !obj) {
+export interface SimInventoryRuntimeState {
+  tick?: number;
+  inventory?: Record<string, number>;
+  removedObjectKeys?: Record<string, number>;
+  removedObjectAtTick?: Record<string, number>;
+  removedObjectCount?: number;
+}
+
+export function objectAnchorKeyRuntime(obj: InventoryObjectRuntime): string {
+  return `${Number(obj.x) & 0x3ff},${Number(obj.y) & 0x3ff},${Number(obj.z) & 0x0f},${Number(obj.order) & 0xffff},${Number(obj.type) & 0x3ff}`;
+}
+
+export function isObjectRemovedRuntime(
+  sim: unknown,
+  obj: InventoryObjectRuntime | null | undefined
+): boolean {
+  if (!sim || typeof sim !== "object" || !obj) {
     return false;
   }
-  return !!(sim.removedObjectKeys && sim.removedObjectKeys[objectAnchorKeyRuntime(obj)]);
+  const state = sim as SimInventoryRuntimeState;
+  return !!(state.removedObjectKeys && state.removedObjectKeys[objectAnchorKeyRuntime(obj)]);
 }
 
-export function markObjectRemovedRuntime(sim: any, obj: any): void {
+export function markObjectRemovedRuntime(
+  sim: SimInventoryRuntimeState | null | undefined,
+  obj: InventoryObjectRuntime | null | undefined
+): void {
   if (!sim || !obj) {
     return;
   }
@@ -39,7 +57,7 @@ export function inventoryKeyForObjectRuntime(obj: { type: number; frame: number 
   return `0x${typeHex}:0x${frameHex}`;
 }
 
-export function addObjectToInventoryRuntime(sim: any, obj: { type: number; frame: number }): string {
+export function addObjectToInventoryRuntime(sim: SimInventoryRuntimeState, obj: { type: number; frame: number }): string {
   if (!sim.inventory) {
     sim.inventory = {};
   }
@@ -49,7 +67,7 @@ export function addObjectToInventoryRuntime(sim: any, obj: { type: number; frame
   return key;
 }
 
-export function firstInventoryKeyRuntime(sim: any): string {
+export function firstInventoryKeyRuntime(sim: SimInventoryRuntimeState | null | undefined): string {
   const inv = sim && sim.inventory ? sim.inventory : null;
   if (!inv) {
     return "";
@@ -64,7 +82,7 @@ export function firstInventoryKeyRuntime(sim: any): string {
   return "";
 }
 
-export function decrementInventoryKeyRuntime(sim: any, key: string): number {
+export function decrementInventoryKeyRuntime(sim: SimInventoryRuntimeState | null | undefined, key: string): number {
   if (!sim || !sim.inventory || !key) {
     return 0;
   }

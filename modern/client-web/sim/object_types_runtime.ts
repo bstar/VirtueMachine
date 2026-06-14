@@ -19,11 +19,16 @@ function asType(type: number): number {
   return type & 0x03ff;
 }
 
+export interface ObjectTypeRuntimeObject {
+  type?: number;
+  frame?: number;
+}
+
 export function isCloseableDoorTypeRuntime(type: number): boolean {
   return OBJECT_TYPES_CLOSEABLE_DOOR.has(asType(type));
 }
 
-export function isCloseableDoorObjectRuntime(obj: any): boolean {
+export function isCloseableDoorObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
   return !!obj && isCloseableDoorTypeRuntime(obj.type);
 }
 
@@ -31,7 +36,7 @@ export function isChairTypeRuntime(type: number): boolean {
   return OBJECT_TYPES_CHAIR.has(asType(type));
 }
 
-export function isChairObjectRuntime(obj: any): boolean {
+export function isChairObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
   if (!obj) {
     return false;
   }
@@ -52,7 +57,7 @@ export function isBedTypeRuntime(type: number): boolean {
   return OBJECT_TYPES_BED.has(asType(type));
 }
 
-export function isBedObjectRuntime(obj: any): boolean {
+export function isBedObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
   return !!obj && isBedTypeRuntime(obj.type);
 }
 
@@ -60,7 +65,7 @@ export function isSolidEnvTypeRuntime(type: number): boolean {
   return OBJECT_TYPES_SOLID_ENV.has(asType(type));
 }
 
-export function isSolidEnvObjectRuntime(obj: any): boolean {
+export function isSolidEnvObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
   return !!obj && isSolidEnvTypeRuntime(obj.type);
 }
 
