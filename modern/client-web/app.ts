@@ -160,6 +160,8 @@ import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 import {
   appendCommandLogRuntime,
   enqueueCommandRuntime,
+  filterFutureCommandsOfTypeRuntime,
+  partitionCommandsForTickRuntime,
   shouldSuppressRepeatedMoveRuntime,
   upsertMoveCommandForTickRuntime
 } from "./sim/queue_runtime.ts";
@@ -5960,13 +5962,7 @@ function clearPendingAvatarMoveCommands(sim) {
   if (!Array.isArray(state.queue) || !sim) {
     return;
   }
-  const now = Number(sim.tick) | 0;
-  state.queue = state.queue.filter((cmd) => {
-    if (!cmd || (cmd.type | 0) !== LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
-      return true;
-    }
-    return (Number(cmd.tick) | 0) <= now;
-  });
+  state.queue = filterFutureCommandsOfTypeRuntime(state.queue, sim.tick, LEGACY_COMMAND_TYPE.MOVE_AVATAR);
 }
 
 function chairFrameForCell(obj, tx, ty) {
@@ -6738,14 +6734,9 @@ function applyCommand(sim, cmd) {
 
 function stepSimTick(sim, queue) {
   const nextTick = (sim.tick + 1) >>> 0;
-  const pending = [];
-
-  for (const cmd of queue) {
-    if (cmd.tick === nextTick) {
-      applyCommand(sim, cmd);
-      continue;
-    }
-    pending.push(cmd);
+  const { due, pending } = partitionCommandsForTickRuntime(queue, nextTick);
+  for (const cmd of due) {
+    applyCommand(sim, cmd);
   }
 
   sim.rngState = xorshift32Runtime(sim.rngState);

@@ -82,3 +82,35 @@ export function enqueueCommandRuntime(args: {
   args.queue.push(args.cmd);
   appendCommandLogRuntime(args.commandLog, args.cmd, args.commandLogMax);
 }
+
+export function filterFutureCommandsOfTypeRuntime(
+  queue: readonly SimCommandRuntime[],
+  currentTick: number,
+  commandType: number
+): SimCommandRuntime[] {
+  const now = Number(currentTick) | 0;
+  const type = commandType | 0;
+  return queue.filter((cmd) => {
+    if (!cmd || (cmd.type | 0) !== type) {
+      return true;
+    }
+    return (Number(cmd.tick) | 0) <= now;
+  });
+}
+
+export function partitionCommandsForTickRuntime(
+  queue: readonly SimCommandRuntime[],
+  tick: number
+): { due: SimCommandRuntime[]; pending: SimCommandRuntime[] } {
+  const targetTick = tick >>> 0;
+  const due: SimCommandRuntime[] = [];
+  const pending: SimCommandRuntime[] = [];
+  for (const cmd of queue) {
+    if ((cmd.tick >>> 0) === targetTick) {
+      due.push(cmd);
+    } else {
+      pending.push(cmd);
+    }
+  }
+  return { due, pending };
+}
