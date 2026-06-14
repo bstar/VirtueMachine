@@ -44,8 +44,8 @@ export function advanceWorldMinuteRuntime(world: {
 
 export function expireRemovedWorldPropsRuntime(
   sim: {
-    removedObjectKeys: Record<string, unknown>;
-    removedObjectAtTick: Record<string, unknown>;
+    removedObjectKeys: Record<string, number | boolean>;
+    removedObjectAtTick: Record<string, number>;
     removedObjectCount: number;
   },
   tickNow: number,
