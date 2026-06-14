@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_PICKUP_RESPAWN_MS,
   LOOT_PICKUP_RESPAWN_MS,
+  canTakeWorldObject,
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
@@ -27,6 +28,9 @@ assert.deepEqual(
   pickupRespawnPolicyForObject({ type: 98 }),
   { policy: "loot_slow", respawn_ms: LOOT_PICKUP_RESPAWN_MS }
 );
+assert.equal(canTakeWorldObject({ type: 0x113 }), true, "potions should be takeable");
+assert.equal(canTakeWorldObject({ type: 0x117 }), false, "tables must not be takeable");
+assert.equal(canTakeWorldObject({ type: 0x104 }), false, "structural shadows must not be takeable");
 
 assert.equal(isBaselineWorldObject({ source_kind: "baseline" }), true);
 assert.equal(isBaselineWorldObject({ source_kind: "baseline_moved" }), true);

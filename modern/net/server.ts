@@ -61,6 +61,7 @@ const {
   refreshWorldObjectIndexes
 } = require("./world_object_collision.ts");
 const {
+  canTakeWorldObject,
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
@@ -1324,6 +1325,10 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     const container = containerKey ? findActiveObjectByKey(state, containerKey) : null;
     if (verb === "put" && !container) {
       sendError(res, 404, "container_not_found", "container_key not found");
+      return;
+    }
+    if (verb === "take" && !canTakeWorldObject(target)) {
+      sendError(res, 409, "object_not_takeable", "target object is not portable");
       return;
     }
 

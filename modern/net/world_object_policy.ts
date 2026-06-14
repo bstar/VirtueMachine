@@ -1,8 +1,27 @@
 import type { SpawnedWorldObjectDelta, WorldObject, WorldObjectRuntimeState, WorldObjectStateContainer } from "./world_object_types.ts";
-import { coordUseOfStatus } from "../common/u6_object_constants.ts";
+import {
+  OBJECT_TYPE_BED_VALUES,
+  OBJECT_TYPE_CHAIR_VALUES,
+  OBJECT_TYPE_DOOR_VALUES,
+  OBJECT_TYPE_SOLID_ENV_VALUES,
+  OBJECT_TYPE_TOP_DECOR_VALUES,
+  coordUseOfStatus,
+  u6ObjectTypeSet
+} from "../common/u6_object_constants.ts";
 
 export const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
 export const LOOT_PICKUP_RESPAWN_MS = 60 * 60 * 1000;
+const OBJECT_TYPES_NON_PICKUP = u6ObjectTypeSet([
+  ...OBJECT_TYPE_DOOR_VALUES,
+  ...OBJECT_TYPE_CHAIR_VALUES,
+  ...OBJECT_TYPE_BED_VALUES,
+  ...OBJECT_TYPE_SOLID_ENV_VALUES,
+  ...OBJECT_TYPE_TOP_DECOR_VALUES,
+  0x103, /* table leg */
+  0x104, /* shadow */
+  0x105, /* table leg */
+  0x106  /* shadow */
+]);
 
 export interface PickupRespawnPolicy {
   policy: string;
@@ -29,6 +48,11 @@ export function pickupRespawnPolicyForObject(obj: Pick<WorldObject, "type"> | nu
     policy: "default",
     respawn_ms: DEFAULT_PICKUP_RESPAWN_MS
   };
+}
+
+export function canTakeWorldObject(obj: Pick<WorldObject, "type"> | null | undefined): boolean {
+  const type = Number(obj?.type) & 0x3ff;
+  return !OBJECT_TYPES_NON_PICKUP.has(type);
 }
 
 export function isBaselineWorldObject(obj: Pick<WorldObject, "source_kind"> | null | undefined): boolean {
