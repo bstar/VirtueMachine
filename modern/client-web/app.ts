@@ -9,6 +9,7 @@ import {
   fallbackTileColorRuntime,
   tilePaletteIndexRuntime
 } from "./render/indexed_pixels_runtime.ts";
+import { U6TileSetRuntime } from "./render/tile_set_runtime.ts";
 import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
 import {
@@ -965,145 +966,6 @@ function getRenderPaletteKey() {
     return "pal-static";
   }
   return `palfx-${legacyPalettePhase()}`;
-}
-
-class U6TileSetJS {
-  tileIndex: DataView;
-  maskType: Uint8Array;
-  tiles: Uint8Array;
-  cache: Map<string, HTMLCanvasElement>;
-  pixelCache: Map<number, Uint8Array>;
-  fxBandCache: Map<number, boolean>;
-
-  constructor(tileIndexBytes, maskTypeBytes, mapTilesBytes, objTilesBytes) {
-    this.tileIndex = new DataView(tileIndexBytes.buffer, tileIndexBytes.byteOffset, tileIndexBytes.byteLength);
-    this.maskType = maskTypeBytes.slice(0, 2048);
-    this.tiles = new Uint8Array(mapTilesBytes.length + objTilesBytes.length);
-    this.tiles.set(mapTilesBytes, 0);
-    this.tiles.set(objTilesBytes, mapTilesBytes.length);
-    this.cache = new Map();
-    this.pixelCache = new Map();
-    this.fxBandCache = new Map();
-  }
-
-  maskTypeFor(tileId) {
-    return tileId >= 0 && tileId < this.maskType.length ? this.maskType[tileId] : 0;
-  }
-
-  getTileOffset(tileId) {
-    if (tileId < 0 || tileId >= (this.tileIndex.byteLength / 2)) {
-      return -1;
-    }
-    return this.tileIndex.getUint16(tileId * 2, true) * 16;
-  }
-
-  decodePixelBlockTile(tileId, srcOff) {
-    const out = new Uint8Array(256);
-    out.fill(0xff);
-
-    let ptr = srcOff + 1;
-    let dataPtr = 0;
-    let guard = 0;
-    while (guard < 4096 && ptr + 2 < this.tiles.length) {
-      guard += 1;
-      const disp = this.tiles[ptr + 0] | (this.tiles[ptr + 1] << 8);
-      const x = (disp % 160) + (disp >= 1760 ? 160 : 0);
-      const len = this.tiles[ptr + 2];
-      if (len === 0) {
-        break;
-      }
-      dataPtr += x;
-      for (let i = 0; i < len && (ptr + 3 + i) < this.tiles.length; i += 1) {
-        const d = dataPtr + i;
-        if (d >= 0 && d < 256) {
-          out[d] = this.tiles[ptr + 3 + i];
-        }
-      }
-      dataPtr += len;
-      ptr += 3 + len;
-    }
-    return out;
-  }
-
-  decodeTilePixels(tileId) {
-    if (this.pixelCache.has(tileId)) {
-      return this.pixelCache.get(tileId);
-    }
-    const out = new Uint8Array(256);
-    const off = this.getTileOffset(tileId);
-    if (off < 0 || off >= this.tiles.length) {
-      this.pixelCache.set(tileId, out);
-      return out;
-    }
-
-    const mask = this.maskTypeFor(tileId);
-    if (mask === 10) {
-      const decoded = this.decodePixelBlockTile(tileId, off);
-      this.pixelCache.set(tileId, decoded);
-      return decoded;
-    }
-
-    const max = Math.min(256, this.tiles.length - off);
-    out.set(this.tiles.slice(off, off + max), 0);
-    this.pixelCache.set(tileId, out);
-    return out;
-  }
-
-  buildTileCanvas(tileId, palette) {
-    const tilePixels = this.decodeTilePixels(tileId);
-    const mask = this.maskTypeFor(tileId);
-    const c = document.createElement("canvas");
-    c.width = 16;
-    c.height = 16;
-    const g = c.getContext("2d");
-    const img = g.createImageData(16, 16);
-
-    for (let i = 0; i < 256; i += 1) {
-      const palIdx = tilePixels[i];
-      const rgb = palette[palIdx] ?? [0, 0, 0];
-      const a = isLegacyPixelTransparent(mask, tileId, palIdx) ? 0 : 255;
-      const p = i * 4;
-      img.data[p + 0] = rgb[0];
-      img.data[p + 1] = rgb[1];
-      img.data[p + 2] = rgb[2];
-      img.data[p + 3] = a;
-    }
-
-    g.putImageData(img, 0, 0);
-    return c;
-  }
-
-  tileCanvas(tileId, palette, paletteKey = "static") {
-    const key = `${paletteKey}:${tileId}`;
-    if (!this.cache.has(key)) {
-      this.cache.set(key, this.buildTileCanvas(tileId, palette));
-    }
-    return this.cache.get(key);
-  }
-
-  tileUsesLegacyPaletteFx(tileId) {
-    if (this.fxBandCache.has(tileId)) {
-      return this.fxBandCache.get(tileId);
-    }
-    const mask = this.maskTypeFor(tileId);
-    const zeroIsTransparent = tileId <= 0x1ff;
-    const px = this.decodeTilePixels(tileId);
-    let uses = false;
-    for (let i = 0; i < px.length; i += 1) {
-      const palIdx = px[i];
-      if (mask === 10 || mask === 5) {
-        if (palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00)) {
-          continue;
-        }
-      }
-      if ((palIdx >= 0xe0 && palIdx <= 0xef) || (palIdx >= 0xf0 && palIdx <= 0xfb)) {
-        uses = true;
-        break;
-      }
-    }
-    this.fxBandCache.set(tileId, uses);
-    return uses;
-  }
 }
 
 type U6ObjectEntry = {
@@ -9737,11 +9599,13 @@ async function loadRuntimeAssets() {
     ) {
       const maskDecoded = decompressU6Lzw(new Uint8Array(maskBuf));
       const mapDecoded = decompressU6Lzw(new Uint8Array(mapTileBuf));
-      state.tileSet = new U6TileSetJS(
+      state.tileSet = new U6TileSetRuntime(
         new Uint8Array(idxBuf),
         maskDecoded,
         mapDecoded,
-        new Uint8Array(objTileBuf)
+        new Uint8Array(objTileBuf),
+        document,
+        isLegacyPixelTransparent
       );
     } else {
       state.tileSet = null;
