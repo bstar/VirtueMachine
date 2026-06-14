@@ -306,6 +306,10 @@ import {
   resolvePartySwitchDigitRuntime
 } from "./ui/party_message_runtime.ts";
 import {
+  CHARACTER_PANEL_SLOTS_RUNTIME,
+  projectCharacterPanelPicksRuntime
+} from "./ui/character_panel_runtime.ts";
+import {
   onOffPreferenceRuntime,
   readStoredChoicePreferenceRuntime,
   writeStoredStringPreferenceRuntime
@@ -6434,12 +6438,7 @@ function renderCharacterStubPanel() {
   g.fillStyle = "#090909";
   g.fillRect(0, 0, charStubCanvas.width, charStubCanvas.height);
 
-  const slots = [
-    { x: 8, y: 8, w: 76, h: 96 },
-    { x: 90, y: 8, w: 76, h: 96 },
-    { x: 172, y: 8, w: 76, h: 96 },
-    { x: 254, y: 8, w: 76, h: 96 }
-  ];
+  const slots = CHARACTER_PANEL_SLOTS_RUNTIME;
   for (const s of slots) {
     g.fillStyle = "#111827";
     g.fillRect(s.x, s.y, s.w, s.h);
@@ -6459,31 +6458,18 @@ function renderCharacterStubPanel() {
   const py = state.sim.world.map_y | 0;
   const pz = state.sim.world.map_z | 0;
   const tick = animationTick();
-  const nearest = state.entityLayer.entries
-    .filter((e) => e.z === pz && e.id !== AVATAR_ENTITY_ID)
-    .map((e) => ({
-      ...e,
-      dist: Math.abs((e.x | 0) - px) + Math.abs((e.y | 0) - py)
-    }))
-    .sort((a, b) => {
-      if (a.dist !== b.dist) return a.dist - b.dist;
-      return a.id - b.id;
-    })
-    .slice(0, 3);
+  const picks = projectCharacterPanelPicksRuntime({
+    avatarEntityId: AVATAR_ENTITY_ID,
+    avatarTileId: avatarTile,
+    entities: state.entityLayer.entries,
+    playerX: px,
+    playerY: py,
+    playerZ: pz,
+    resolveAnimatedTile: (entity) => resolveAnimatedObjectTileAtTick(entity, tick),
+    slotCount: slots.length
+  });
 
-  const picks = [{ label: "AVATAR", tileId: avatarTile }];
-  for (const e of nearest) {
-    const t = resolveAnimatedObjectTileAtTick(
-      { ...e, tileId: (e.baseTile + (e.frame | 0)) & 0xffff },
-      tick
-    );
-    picks.push({ label: `NPC ${e.id}`, tileId: t });
-  }
-  while (picks.length < 4) {
-    picks.push({ label: "EMPTY", tileId: null });
-  }
-
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < slots.length; i += 1) {
     const slot = slots[i];
     const pick = picks[i];
     g.fillStyle = "#9ca3af";
