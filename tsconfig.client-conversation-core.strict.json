@@ -22,6 +22,7 @@
     "modern/client-web/conversation/dialog_runtime.ts",
     "modern/client-web/conversation/presentation_runtime.ts",
     "modern/client-web/conversation/rules_runtime.ts",
+    "modern/client-web/conversation/session_runtime.ts",
     "modern/client-web/conversation/text_runtime.ts",
     "modern/common/**/*.ts"
   ]

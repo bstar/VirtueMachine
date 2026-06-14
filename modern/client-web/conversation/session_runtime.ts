@@ -389,8 +389,9 @@ export function handleLegacyConversationKeydown(
     return { handled: true, kind: "submit" };
   }
   if (key === "Backspace") {
-    if (state.legacyConversationInput.length > 0) {
-      state.legacyConversationInput = state.legacyConversationInput.slice(0, -1);
+    const input = String(state.legacyConversationInput || "");
+    if (input.length > 0) {
+      state.legacyConversationInput = input.slice(0, -1);
     }
     return { handled: true, kind: "backspace" };
   }
@@ -399,8 +400,9 @@ export function handleLegacyConversationKeydown(
   }
   if (key.length === 1 && !ev?.ctrlKey && !ev?.metaKey && !ev?.altKey) {
     const maxChars = Math.max(1, Number(deps.maxChars) | 0);
-    if (state.legacyConversationInput.length < maxChars) {
-      state.legacyConversationInput += key;
+    const input = String(state.legacyConversationInput || "");
+    if (input.length < maxChars) {
+      state.legacyConversationInput = input + key;
     }
     return { handled: true, kind: "char" };
   }
