@@ -165,6 +165,7 @@ import {
   renderNetSessionStatRuntime
 } from "./net/status_runtime.ts";
 import {
+  legacyAttackVerbRuntime,
   legacyCastVerbRuntime,
   legacyDropVerbRuntime,
   legacyMoveVerbRuntime
@@ -5085,15 +5086,13 @@ function tryGetAtCell(sim, tx, ty) {
 function tryAttackAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
   const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
-  if (actor) {
+  const result = legacyAttackVerbRuntime(actor, tx, ty, tz);
+  if (result.playSfx === "attack_swing") {
     playSfx(U6_SFX.ATTACK_SWING);
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Attack: target 0x${(actor.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (combat resolution pending).`;
-    return true;
   }
-  diagBox.className = "diag warn";
-  diagBox.textContent = `Attack: no valid target at ${tx},${ty},${tz}.`;
-  return false;
+  diagBox.className = `diag ${result.diagClass}`;
+  diagBox.textContent = result.text;
+  return result.ok;
 }
 
 function tryCastAtCell(sim, tx, ty) {

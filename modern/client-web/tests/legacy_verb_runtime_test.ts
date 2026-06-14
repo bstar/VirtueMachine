@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
 import {
+  legacyAttackVerbRuntime,
   legacyCastVerbRuntime,
   legacyDropVerbRuntime,
   legacyMoveVerbRuntime
 } from "../gameplay/legacy_verb_runtime.ts";
+
+assert.deepEqual(legacyAttackVerbRuntime({ type: 0x456 }, 1, 2, 0), {
+  diagClass: "ok",
+  ok: true,
+  playSfx: "attack_swing",
+  text: "Attack: target 0x56 at 1,2,0 (combat resolution pending)."
+});
+
+assert.deepEqual(legacyAttackVerbRuntime(null, 1, 2, 0), {
+  diagClass: "warn",
+  ok: false,
+  text: "Attack: no valid target at 1,2,0."
+});
 
 assert.deepEqual(legacyCastVerbRuntime(10, 11, 1), {
   diagClass: "ok",

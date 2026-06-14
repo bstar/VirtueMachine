@@ -34,6 +34,27 @@ export function legacyMoveVerbRuntime(tx: number, ty: number, tz: number): Legac
   };
 }
 
+export function legacyAttackVerbRuntime(
+  actor: { type?: unknown } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number
+): LegacyVerbRuntimeResult {
+  if (actor) {
+    return {
+      diagClass: "ok",
+      ok: true,
+      playSfx: "attack_swing",
+      text: `Attack: target 0x${(Number(actor.type) & 0x3ff).toString(16)} at ${tx},${ty},${tz} (combat resolution pending).`
+    };
+  }
+  return {
+    diagClass: "warn",
+    ok: false,
+    text: `Attack: no valid target at ${tx},${ty},${tz}.`
+  };
+}
+
 export function legacyDropVerbRuntime(
   sim: LegacyVerbSimRuntime,
   tx: number,
