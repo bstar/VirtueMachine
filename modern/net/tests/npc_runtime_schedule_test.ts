@@ -180,6 +180,37 @@ const firstScheduleStep = buildScheduledNpcStatesRuntime(
 assert.equal(firstScheduleStep[0].x, 1, "first movement after startup should advance through pathing");
 assert.equal(firstScheduleStep[0].y, 0);
 
+const farSchedule: U6ScheduleTableRuntime = {
+  npcOffsets,
+  entryCount: 1,
+  entries: [
+    {
+      time: 0,
+      action: AI_SIT,
+      xyz_raw: 0,
+      x: 80,
+      y: 0,
+      z: 0
+    }
+  ]
+};
+const farPrevious: ScheduledNpcStateRuntime[] = [{
+  ...previous[0],
+  target_x: 80,
+  target_y: 0
+}];
+const farStep = buildScheduledNpcStatesRuntime(
+  baseline,
+  farSchedule,
+  { time_h: 0, date_d: 1, tick: 8 },
+  farPrevious,
+  1,
+  { canStep: () => true }
+);
+
+assert.equal(farStep[0].x, 1, "far schedule target should move toward best reachable frontier");
+assert.equal(farStep[0].path_status, "walking");
+
 const furniturePermissive = buildScheduledNpcStatesRuntime(
   baseline,
   schedule,

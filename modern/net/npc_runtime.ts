@@ -479,6 +479,8 @@ function findCollisionAwareNextStep(
     { x: 0, y: -1 }
   ];
   let foundKey: string | null = null;
+  let bestKey = startKey;
+  let bestScore = Math.abs(targetX - startX) + Math.abs(targetY - startY);
   for (let qi = 0; qi < queue.length; qi += 1) {
     const cur = queue[qi];
     if ((cur.x | 0) === targetX && (cur.y | 0) === targetY) {
@@ -500,10 +502,18 @@ function findCollisionAwareNextStep(
       }
       cameFrom.set(nk, key(cur.x, cur.y));
       queue.push({ x: nx, y: ny });
+      const score = Math.abs(targetX - nx) + Math.abs(targetY - ny);
+      if (score < bestScore) {
+        bestScore = score;
+        bestKey = nk;
+      }
     }
   }
   if (!foundKey) {
-    return null;
+    if (bestKey === startKey) {
+      return null;
+    }
+    foundKey = bestKey;
   }
   let stepKey = foundKey;
   let prevKey = cameFrom.get(stepKey) || "";
