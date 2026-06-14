@@ -50,6 +50,7 @@ const sim: SimSnapshotRuntime = {
 const encoded = encodeSimSnapshotBase64Runtime(sim);
 const decoded = decodeSimSnapshotBase64Runtime(encoded);
 assert.equal(decoded?.tick, 10);
+assert.deepEqual(decoded?.doorOpenStates, { door: 1 });
 assert.equal(decoded?.removedObjectAtTick.obj, 10);
 assert.equal(decoded?.inventory["0x088:0x00"], 2);
 assert.equal(decoded?.spawnedWorldObjects[0].type, 88);

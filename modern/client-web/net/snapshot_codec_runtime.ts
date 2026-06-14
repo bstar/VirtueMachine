@@ -40,7 +40,7 @@ export interface SimSnapshotRuntime {
   rngState: number;
   worldFlags: number;
   commandsApplied: number;
-  doorOpenStates: Record<string, unknown>;
+  doorOpenStates: Record<string, number | boolean>;
   removedObjectKeys: Record<string, number>;
   removedObjectAtTick: Record<string, number>;
   removedObjectCount: number;
@@ -100,6 +100,14 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     }
     normalizedInventory[key] = Number(v) >>> 0;
   }
+  const normalizedDoorOpenStates: Record<string, number> = {};
+  for (const [k, v] of Object.entries(asRecord(src.doorOpenStates) ?? {})) {
+    const key = String(k || "").trim();
+    if (!key) {
+      continue;
+    }
+    normalizedDoorOpenStates[key] = Number(v) ? 1 : 0;
+  }
   const normalizedRemoved: Record<string, number> = {};
   for (const [k, v] of Object.entries(asRecord(src.removedObjectKeys) ?? {})) {
     const key = String(k || "").trim();
@@ -150,7 +158,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     rngState: Number(src.rngState) >>> 0,
     worldFlags: Number(src.worldFlags) >>> 0,
     commandsApplied: Number(src.commandsApplied) >>> 0,
-    doorOpenStates: { ...(asRecord(src.doorOpenStates) ?? {}) },
+    doorOpenStates: normalizedDoorOpenStates,
     removedObjectKeys: normalizedRemoved,
     removedObjectAtTick: normalizedRemovedAtTick,
     removedObjectCount: normalizedRemovedCount >>> 0,
