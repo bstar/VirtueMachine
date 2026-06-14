@@ -4,6 +4,10 @@ import {
   abortBootIntroRuntime,
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
+  activeBootIntroPaletteRuntime,
+  bootIntroPaletteCacheKeyRuntime,
+  bootIntroScenePaletteIndexRuntime,
+  bootIntroStonesPaletteShiftRuntime,
   bootIntroWindowRandRuntime,
   bootIntroWindowSceneBaseRuntime,
   bootIntroWindowStateAtRuntime,
@@ -76,6 +80,67 @@ function testOverlayAlpha() {
   advanceBootIntroRuntime(state, Math.floor((BOOT_INTRO_SCENES[0].fadeInMs || 0) / 3));
   const midAlpha = bootIntroOverlayAlphaRuntime(state);
   assert.ok(midAlpha < startAlpha, "fade alpha should decrease during fade in");
+}
+
+function makePalette(offset = 0) {
+  return Array.from({ length: 256 }, (_v, i) => [i + offset, i + offset + 1, i + offset + 2] as [number, number, number]);
+}
+
+function testPaletteHelpers() {
+  assert.equal(bootIntroScenePaletteIndexRuntime(null), 0);
+  assert.equal(bootIntroScenePaletteIndexRuntime({ kind: "lounge" }), 1);
+  assert.equal(bootIntroScenePaletteIndexRuntime({ kind: "window" }), 2);
+  assert.equal(bootIntroScenePaletteIndexRuntime({ kind: "stones" }), 3);
+  assert.equal(bootIntroScenePaletteIndexRuntime({ kind: "other" }), 0);
+
+  assert.equal(bootIntroStonesPaletteShiftRuntime({ kind: "lounge" }, 1000), 0);
+  assert.equal(bootIntroStonesPaletteShiftRuntime({ kind: "stones" }, 0), 0);
+  assert.equal(bootIntroStonesPaletteShiftRuntime({ kind: "stones" }, 250), 2);
+  assert.equal(bootIntroStonesPaletteShiftRuntime({ kind: "stones" }, 16 * 125), 0);
+
+  assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "window", id: "window_lightning" }, 0), "p2:storm");
+  assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "stones", id: "stones_enter" }, 250), "p3:enter:r2");
+  assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "stones", id: "stones_gate" }, 125), "p3:r1");
+  assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "splash" }, 0), "p0");
+
+  const base = makePalette(0);
+  const intro = [makePalette(10), makePalette(20), makePalette(30), makePalette(40)];
+  const storm = activeBootIntroPaletteRuntime({
+    basePalette: base,
+    fallbackPalette: null,
+    introPalettes: intro,
+    scene: { kind: "window", id: "window_lightning" },
+    sceneElapsedMs: 0
+  });
+  assert.deepEqual(storm?.[0x58], [0x40, 0x94, 0xfc], "storm scene should tint hot blues");
+  assert.deepEqual(storm?.[0], [30, 31, 32], "window scene should use intro palette index 2");
+  assert.notEqual(storm, intro[2], "active palette should clone source");
+
+  const stones = activeBootIntroPaletteRuntime({
+    basePalette: base,
+    fallbackPalette: null,
+    introPalettes: intro,
+    scene: { kind: "stones", id: "stones_enter" },
+    sceneElapsedMs: 125
+  });
+  assert.deepEqual(stones?.[0x19], [0, 0, 0], "stones_enter should mask palette slot 0x19");
+  assert.deepEqual(stones?.[0x90], intro[3][0x9f], "stones palette should rotate the animated range");
+
+  const fallback = activeBootIntroPaletteRuntime({
+    basePalette: null,
+    fallbackPalette: base,
+    introPalettes: [],
+    scene: { kind: "splash" },
+    sceneElapsedMs: 0
+  });
+  assert.deepEqual(fallback?.[0], [0, 1, 2]);
+  assert.equal(activeBootIntroPaletteRuntime({
+    basePalette: [],
+    fallbackPalette: null,
+    introPalettes: [],
+    scene: null,
+    sceneElapsedMs: 0
+  }), null);
 }
 
 function testZeroFadeSceneHasNoOverlay() {
@@ -169,6 +234,7 @@ testStartAndAdvance();
 testInputAdvance();
 testAbort();
 testOverlayAlpha();
+testPaletteHelpers();
 testZeroFadeSceneHasNoOverlay();
 testTvMachine();
 testWouFontHelpers();

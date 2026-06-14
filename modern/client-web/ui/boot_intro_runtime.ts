@@ -1,3 +1,9 @@
+import {
+  cloneRgbPaletteRuntime,
+  rotatePaletteRangeInPlaceRuntime,
+  type RgbPaletteRuntime
+} from "../assets/palette_runtime.ts";
+
 export type BootIntroSceneKind = "splash" | "lounge" | "window" | "stones";
 
 export type BootIntroTextCard = {
@@ -580,6 +586,79 @@ export function bootIntroOverlayAlphaRuntime(
     return Math.round(t * 255);
   }
   return 0;
+}
+
+export function bootIntroScenePaletteIndexRuntime(scene: { kind?: unknown } | null | undefined): number {
+  if (!scene || typeof scene !== "object") {
+    return 0;
+  }
+  if (scene.kind === "lounge") {
+    return 1;
+  }
+  if (scene.kind === "window") {
+    return 2;
+  }
+  if (scene.kind === "stones") {
+    return 3;
+  }
+  return 0;
+}
+
+export function bootIntroStonesPaletteShiftRuntime(
+  scene: { kind?: unknown } | null | undefined,
+  elapsedMs: number
+): number {
+  if (scene?.kind !== "stones") {
+    return 0;
+  }
+  return Math.floor((Number(elapsedMs) | 0) / 125) & 0x0f;
+}
+
+export function bootIntroPaletteCacheKeyRuntime(
+  scene: { id?: unknown; kind?: unknown } | null | undefined,
+  elapsedMs: number
+): string {
+  const idx = bootIntroScenePaletteIndexRuntime(scene);
+  let suffix = "";
+  if (
+    scene?.kind === "window"
+    && (scene.id === "window_lightning" || scene.id === "window_strike" || scene.id === "window_pan")
+  ) {
+    suffix = ":storm";
+  } else if (scene?.kind === "stones") {
+    suffix = `${scene?.id === "stones_enter" ? ":enter" : ""}:r${bootIntroStonesPaletteShiftRuntime(scene, elapsedMs)}`;
+  }
+  return `p${idx}${suffix}`;
+}
+
+export function activeBootIntroPaletteRuntime(args: {
+  basePalette: RgbPaletteRuntime | null | undefined;
+  fallbackPalette: RgbPaletteRuntime | null | undefined;
+  introPalettes: readonly RgbPaletteRuntime[] | null | undefined;
+  scene: { id?: unknown; kind?: unknown } | null | undefined;
+  sceneElapsedMs: number;
+}): RgbPaletteRuntime | null {
+  const idx = bootIntroScenePaletteIndexRuntime(args.scene);
+  const paletteSrc = args.introPalettes?.[idx] || args.basePalette || args.fallbackPalette;
+  if (!paletteSrc || paletteSrc.length < 256) {
+    return null;
+  }
+  const palette = cloneRgbPaletteRuntime(paletteSrc);
+  if (args.scene?.kind === "window") {
+    const hot = args.scene.id === "window_lightning" || args.scene.id === "window_strike" || args.scene.id === "window_pan";
+    if (hot) {
+      palette[0x58] = [0x40, 0x94, 0xfc];
+      palette[0x5a] = [0x40, 0x94, 0xfc];
+      palette[0x5c] = [0x40, 0x94, 0xfc];
+    }
+  }
+  if (args.scene?.id === "stones_enter") {
+    palette[0x19] = [0, 0, 0];
+  }
+  if (args.scene?.kind === "stones") {
+    rotatePaletteRangeInPlaceRuntime(palette, 0x90, 16, bootIntroStonesPaletteShiftRuntime(args.scene, args.sceneElapsedMs));
+  }
+  return palette;
 }
 
 export function bootIntroTvRandRuntime(

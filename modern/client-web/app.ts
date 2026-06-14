@@ -33,9 +33,7 @@ import {
   buildLegacyPaletteFrameRuntime,
   buildPackedIntroPalettesRuntime,
   buildPaletteFromU6PalRuntime,
-  buildStartupPaletteForMenuRuntime,
-  cloneRgbPaletteRuntime,
-  rotatePaletteRangeInPlaceRuntime
+  buildStartupPaletteForMenuRuntime
 } from "./assets/palette_runtime.ts";
 import { errorMessageRuntime } from "./error_runtime.ts";
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
@@ -239,6 +237,8 @@ import {
   abortBootIntroRuntime,
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
+  activeBootIntroPaletteRuntime,
+  bootIntroPaletteCacheKeyRuntime,
   bootIntroWindowSceneBaseRuntime,
   bootIntroWindowStateAtRuntime,
   bootIntroTvStateAtRuntime,
@@ -2837,63 +2837,18 @@ function buildStartupPaletteForMenu() {
   return buildStartupPaletteForMenuRuntime(state.basePalette, state.startupMenuIndex);
 }
 
-function bootIntroScenePaletteIndex(scene) {
-  if (!scene || typeof scene !== "object") {
-    return 0;
-  }
-  if (scene.kind === "lounge") {
-    return 1;
-  }
-  if (scene.kind === "window") {
-    return 2;
-  }
-  if (scene.kind === "stones") {
-    return 3;
-  }
-  return 0;
-}
-
-function bootIntroStonesPaletteShift(scene = null) {
-  if (scene?.kind !== "stones") {
-    return 0;
-  }
-  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
-  return Math.floor(elapsed / 125) & 0x0f;
-}
-
 function activeTitleIntroPalette(scene = null) {
-  const idx = bootIntroScenePaletteIndex(scene);
-  const paletteSrc = state.bootIntroPalettes?.[idx] || state.basePalette || buildStartupPaletteForMenu();
-  if (!paletteSrc || paletteSrc.length < 256) {
-    return null;
-  }
-  const palette = cloneRgbPaletteRuntime(paletteSrc);
-  if (scene?.kind === "window") {
-    const hot = scene.id === "window_lightning" || scene.id === "window_strike" || scene.id === "window_pan";
-    if (hot) {
-      palette[0x58] = [0x40, 0x94, 0xfc];
-      palette[0x5a] = [0x40, 0x94, 0xfc];
-      palette[0x5c] = [0x40, 0x94, 0xfc];
-    }
-  }
-  if (scene?.id === "stones_enter") {
-    palette[0x19] = [0, 0, 0];
-  }
-  if (scene?.kind === "stones") {
-    rotatePaletteRangeInPlaceRuntime(palette, 0x90, 16, bootIntroStonesPaletteShift(scene));
-  }
-  return palette;
+  return activeBootIntroPaletteRuntime({
+    basePalette: state.basePalette,
+    fallbackPalette: buildStartupPaletteForMenu(),
+    introPalettes: state.bootIntroPalettes,
+    scene,
+    sceneElapsedMs: Number(state.bootIntro?.sceneElapsedMs) | 0
+  });
 }
 
 function bootIntroPaletteCacheKey(scene = null) {
-  const idx = bootIntroScenePaletteIndex(scene);
-  let suffix = "";
-  if (scene?.kind === "window" && (scene.id === "window_lightning" || scene.id === "window_strike" || scene.id === "window_pan")) {
-    suffix = ":storm";
-  } else if (scene?.kind === "stones") {
-    suffix = `${scene?.id === "stones_enter" ? ":enter" : ""}:r${bootIntroStonesPaletteShift(scene)}`;
-  }
-  return `p${idx}${suffix}`;
+  return bootIntroPaletteCacheKeyRuntime(scene, Number(state.bootIntro?.sceneElapsedMs) | 0);
 }
 
 function bootIntroSceneSpriteCanvas(bankName, frameIdx, scene = null) {
