@@ -264,6 +264,10 @@ import {
   legacyLookupTileStringRuntime,
   sanitizeLegacyHudLabelTextRuntime
 } from "./ui/legacy_text_runtime.ts";
+import {
+  cursorDrawRectRuntime,
+  cursorLogicalWidthRuntime
+} from "./ui/cursor_runtime.ts";
 import { isTypingContextRuntime } from "./ui/input_runtime.ts";
 import {
   buildLegacyInventoryPaperdollLayoutRuntime,
@@ -3371,22 +3375,28 @@ function drawCustomCursorOnContext(g, targetW, targetH, opts = null) {
   }
   const logicalW = (opts && Number.isFinite(opts.logicalW) && opts.logicalW > 0)
     ? opts.logicalW
-    : (state.sessionStarted ? (isLegacyFramePreviewOn() ? 320 : (VIEW_W * 16)) : 320);
-  const scale = Math.max(1, Math.floor(targetW / Math.max(1, logicalW)));
-  const scaleX = scale * CURSOR_ASPECT_X;
-  const scaleY = scale * CURSOR_ASPECT_Y;
-  const hotX = Math.min(cursorShape.width - 1, Math.max(0, cursorShape.hotX ?? Math.floor(cursorShape.width * 0.5)));
-  const hotY = Math.min(cursorShape.height - 1, Math.max(0, cursorShape.hotY ?? Math.floor(cursorShape.height * 0.5)));
-  const mouseX = (opts && Number.isFinite(opts.mouseX)) ? Math.floor(opts.mouseX) : Math.floor(state.mouseNormX * targetW);
-  const mouseY = (opts && Number.isFinite(opts.mouseY)) ? Math.floor(opts.mouseY) : Math.floor(state.mouseNormY * targetH);
-  const drawW = Math.max(1, Math.round(cursorShape.width * scaleX));
-  const drawH = Math.max(1, Math.round(cursorShape.height * scaleY));
-  let px = mouseX - Math.round(hotX * scaleX);
-  let py = mouseY - Math.round(hotY * scaleY);
-  px = Math.max(0, Math.min(targetW - drawW, px));
-  py = Math.max(0, Math.min(targetH - drawH, py));
+    : cursorLogicalWidthRuntime({
+      isLegacyFramePreview: isLegacyFramePreviewOn(),
+      sessionStarted: state.sessionStarted,
+      viewWidthTiles: VIEW_W
+    });
+  const drawRect = cursorDrawRectRuntime({
+    aspectX: CURSOR_ASPECT_X,
+    aspectY: CURSOR_ASPECT_Y,
+    logicalW,
+    mouseNormX: state.mouseNormX,
+    mouseNormY: state.mouseNormY,
+    mouseX: opts && Number.isFinite(opts.mouseX) ? opts.mouseX : undefined,
+    mouseY: opts && Number.isFinite(opts.mouseY) ? opts.mouseY : undefined,
+    shape: cursorShape,
+    targetH,
+    targetW
+  });
+  if (!drawRect) {
+    return;
+  }
   g.imageSmoothingEnabled = false;
-  g.drawImage(cursorCanvas, px, py, drawW, drawH);
+  g.drawImage(cursorCanvas, drawRect.px, drawRect.py, drawRect.drawW, drawRect.drawH);
 }
 
 function drawCustomCursorLayer() {
