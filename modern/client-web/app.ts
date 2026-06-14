@@ -100,11 +100,17 @@ import {
   conversationHeaderMatchesExpectedCanonicalNameRuntime,
   decompressU6LzwRuntime,
   isLikelyValidConversationScriptRuntime,
-  loadLegacyConversationScriptFromArchiveRuntime,
   loadLegacyConversationScriptForNpcRuntime,
-  normalizedConversationNameRuntime,
   parseConversationHeaderAndDescRuntime
 } from "./conversation/archive_runtime.ts";
+import {
+  conversationArchiveCandidatePathsRuntime as conversationArchiveCandidatePaths,
+  fetchConversationArchiveAnyRuntime as fetchConversationArchiveAny,
+  fetchConversationArchiveAWithValidationRuntime as fetchConversationArchiveAWithValidation,
+  fetchRuntimeAssetWithFallbackRuntime as fetchRuntimeAssetWithFallback,
+  looksLikeConversationArchiveRuntime as looksLikeConversationArchive,
+  validateConversationArchiveARuntime as validateConversationArchiveA
+} from "./conversation/archive_loader_runtime.ts";
 import {
   DEFAULT_RUNTIME_EXTENSIONS,
   RUNTIME_PROFILE_CANONICAL_STRICT,
@@ -1685,10 +1691,6 @@ function isLikelyValidConversationScript(
 
 function canonicalConversationHintIdFromSpeaker(speaker: unknown): number {
   return canonicalConversationHintIdFromSpeakerRuntime(speaker);
-}
-
-function normalizedNameForCompare(name: unknown): string {
-  return normalizedConversationNameRuntime(name);
 }
 
 function headerMatchesExpectedCanonicalName(header: LegacyConversationHeader | null | undefined, objNum: number): boolean {
@@ -7489,149 +7491,6 @@ async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise
     }
   }
   throw (lastErr || new Error("no valid object baseline path"));
-}
-
-async function fetchRuntimeAssetWithFallback(paths: ReadonlyArray<unknown>, minBytes = 1): Promise<Uint8Array | null> {
-  const list = Array.isArray(paths) ? paths : [];
-  for (const p of list) {
-    const path = String(p || "").trim();
-    if (!path) continue;
-    try {
-      const res = await fetch(path, { cache: "no-store" });
-      if (!res.ok) continue;
-      const buf = await res.arrayBuffer();
-      if (buf.byteLength >= (Number(minBytes) | 0)) {
-        return new Uint8Array(buf);
-      }
-    } catch (_err) {
-      /* ignore and continue fallback chain */
-    }
-  }
-  return null;
-}
-
-function looksLikeConversationArchive(bytes: unknown, minIndexCount = 8): boolean {
-  if (!(bytes instanceof Uint8Array) || bytes.length < 512) {
-    return false;
-  }
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const count = Math.max(4, Number(minIndexCount) | 0);
-  let validCount = 0;
-  for (let i = 0; i < count; i += 1) {
-    const offPtr = i << 2;
-    if ((offPtr + 4) > bytes.length) {
-      return false;
-    }
-    const offset = dv.getUint32(offPtr, true) >>> 0;
-    if (offset && (offset + 4) <= bytes.length) {
-      validCount += 1;
-    }
-  }
-  /* converse.a may have zero offsets in early entries; require enough valid pointers, not all. */
-  return validCount >= Math.max(2, Math.floor(count / 4));
-}
-
-function archiveHasRecoverableCanonicalTriplet(archive: unknown): boolean {
-  if (!(archive instanceof Uint8Array)) {
-    return false;
-  }
-  const triplet = [2, 5, 6]; /* Dupre, Lord British, Nystul */
-  for (const idx of triplet) {
-    const script = loadLegacyConversationScriptFromArchiveRuntime(archive, idx);
-    const header = parseConversationHeaderAndDesc(script);
-    if (!isLikelyValidConversationScript(script, header)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function validateConversationArchiveA(archive: Uint8Array): boolean {
-  const checks = [
-    { index: 5, name: "lord british", descTokens: ["ruler", "britannia"] },
-    { index: 6, name: "nystul", descTokens: ["concerned", "mage"] },
-    { index: 2, name: "dupre", descTokens: ["handsome", "man"] }
-  ];
-  for (const check of checks) {
-    const script = loadLegacyConversationScriptFromArchiveRuntime(archive, check.index);
-    const header = parseConversationHeaderAndDesc(script);
-    if (!isLikelyValidConversationScript(script, header)) {
-      return false;
-    }
-    const gotName = normalizedNameForCompare(header?.name || "");
-    if (!gotName.includes(check.name)) {
-      return false;
-    }
-    const gotDesc = normalizedNameForCompare(header?.desc || "");
-    for (const tok of check.descTokens) {
-      if (!gotDesc.includes(tok)) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-async function fetchConversationArchiveAWithValidation(paths: ReadonlyArray<unknown>, minBytes = 256): Promise<Uint8Array | null> {
-  const list = Array.isArray(paths) ? paths : [];
-  for (const p of list) {
-    const path = String(p || "").trim();
-    if (!path) continue;
-    try {
-      const res = await fetch(path, { cache: "no-store" });
-      if (!res.ok) continue;
-      const buf = await res.arrayBuffer();
-      if (buf.byteLength < (Number(minBytes) | 0)) {
-        continue;
-      }
-      const bytes = new Uint8Array(buf);
-      if (validateConversationArchiveA(bytes)) {
-        return bytes;
-      }
-    } catch (_err) {
-      /* keep trying fallback paths */
-    }
-  }
-  return null;
-}
-
-async function fetchConversationArchiveAny(paths: ReadonlyArray<unknown>, minBytes = 256): Promise<Uint8Array | null> {
-  const list = Array.isArray(paths) ? paths : [];
-  for (const p of list) {
-    const path = String(p || "").trim();
-    if (!path) continue;
-    try {
-      const res = await fetch(path, { cache: "no-store" });
-      if (!res.ok) continue;
-      const buf = await res.arrayBuffer();
-      if (buf.byteLength < (Number(minBytes) | 0)) continue;
-      const bytes = new Uint8Array(buf);
-      if (looksLikeConversationArchive(bytes, 8) && archiveHasRecoverableCanonicalTriplet(bytes)) {
-        return bytes;
-      }
-    } catch (_err) {
-      /* continue */
-    }
-  }
-  return null;
-}
-
-function conversationArchiveCandidatePaths(name: unknown): string[] {
-  const file = String(name || "").trim();
-  if (!file) return [];
-  const base = [
-    `../assets/runtime/${file}`,
-    `./assets/runtime/${file}`,
-    `assets/runtime/${file}`,
-    `../../assets/runtime/${file}`,
-    `../runtime/${file}`,
-    `./runtime/${file}`,
-    `/assets/runtime/${file}`,
-    `/modern/assets/runtime/${file}`,
-    `/modern/client-web/assets/runtime/${file}`,
-    `/runtime/${file}`
-  ];
-  return Array.from(new Set(base));
 }
 
 async function refreshPristineBaseline(force = false): Promise<boolean> {
