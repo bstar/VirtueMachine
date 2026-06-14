@@ -133,7 +133,8 @@ Clock note:
 - `/api/world/clock` is authoritative server time/tick.
 - connected clients are expected to sync local world time/date from this endpoint.
 - `/api/world/clock` includes `intro_state` so clients/debug tools can see whether early-story conversation bridging is in `pre_intro` or `post_intro`.
-- `/api/world/clock` now also carries `npc_overrides` for the current schedule pilot so browser NPC projection follows server-selected day-schedule positions.
+- `/api/world/clock` now carries `npc_states` for server-owned scheduled NPC positions and activity metadata; `npc_overrides` remains as a compatibility alias for older browser code.
+- Scheduled NPC clock cadence is configurable with `VM_NET_TICK_MS`, `VM_NET_TICKS_PER_MINUTE`, and `VM_NET_CLOCK_CATCHUP_MAX_MS`. Defaults follow the Ultima VI Online reference cadence of one in-game day per real hour and cap restart catch-up so NPCs do not leap through schedule transitions after server downtime.
 
 World object authority note:
 - server loads baseline world objects from `VM_NET_OBJECT_BASELINE_DIR` (`objblk??` + `objlist`) and uses runtime `basetile` for tile mapping
@@ -154,7 +155,8 @@ Conversation authority note:
 
 NPC runtime note:
 - the server now loads legacy NPC runtime arrays from `savegame/objlist` and the original `schedule` asset.
-- current schedule coverage is intentionally narrow: a castle pilot set receives authoritative `npc_overrides` based on legacy hour/day schedule selection.
+- current schedule coverage includes all valid scheduled NPCs with deterministic target stepping and safe render poses.
+- unsupported schedule actions such as thief/brawl are reported in metadata and do not trigger side effects until the corresponding gameplay systems have parity coverage.
 
 ## Contracts
 

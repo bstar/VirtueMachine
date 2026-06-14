@@ -191,6 +191,7 @@ const VIEW_H = 11;
 const COMMAND_WIRE_SIZE = 16;
 const COMMAND_LOG_MAX = 50000;
 const MOVE_INPUT_MIN_INTERVAL_MS = 120;
+const AVATAR_WALK_ANIM_WINDOW_MS = 280;
 const NET_PRESENCE_HEARTBEAT_TICKS = 4;
 const NET_PRESENCE_POLL_TICKS = 10;
 const NET_CLOCK_POLL_TICKS = 2;
@@ -240,6 +241,8 @@ const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
 const AVATAR_ENTITY_ID = 1;
 const LEGACY_SLEEP_SHAPE_TYPE = 0x092;
+const NPC_FLAG_DIRECTION_MASK = 0x07;
+const NPC_FLAG_WALKING = 0x80;
 const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
 const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
 const OBJECT_TYPES_CLOSEABLE_DOOR = new Set([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
@@ -677,6 +680,7 @@ const state: any = {
   avatarFacingDx: 0,
   avatarFacingDy: 1,
   avatarLastMoveTick: -1,
+  avatarWalkAnimUntilMs: -1,
   lastMoveQueueAtMs: -1,
   lastMoveInputDx: 0,
   lastMoveInputDy: 1,
@@ -1547,6 +1551,10 @@ class U6EntityLayerJS {
     const objPosOff = 0x0100;
     const objShapeOff = 0x0400;
     const npcStatusOff = 0x0800;
+    const npcModeOff = 0x11f1;
+    const npcComModeOff = 0x12f1;
+    const origShapeOff = 0x15f1;
+    const npcFlagOff = 0x19f1;
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const out = [];
     const assocEntries = [];
@@ -1560,6 +1568,12 @@ class U6EntityLayerJS {
       const coordUse = status & OBJ_COORD_USE_MASK;
       const type = shapeType & 0x03ff;
       const frame = shapeType >>> 10;
+      const origShapeType = origShapeOff + (id * 2) + 1 < bytes.length
+        ? dv.getUint16(origShapeOff + (id * 2), true)
+        : shapeType;
+      const npcMode = npcModeOff + id < bytes.length ? bytes[npcModeOff + id] : 0;
+      const npcComMode = npcComModeOff + id < bytes.length ? bytes[npcComModeOff + id] : 0;
+      const npcFlag = npcFlagOff + id < bytes.length ? bytes[npcFlagOff + id] : 0;
       const qual = bytes[0x0700 + id] & 0xff;
       const pos = objPosOff + (id * 3);
       const baseTile = this.baseTiles[type] ?? 0;
@@ -1577,6 +1591,13 @@ class U6EntityLayerJS {
             assocIndex,
             type,
             frame,
+            origType: origShapeType & 0x03ff,
+            origFrame: origShapeType >>> 10,
+            npcMode,
+            npcComMode,
+            npcFlag,
+            direction: npcFlag & NPC_FLAG_DIRECTION_MASK,
+            walkingFlag: (npcFlag & NPC_FLAG_WALKING) !== 0,
             baseTile,
             tileId: (baseTile + frame) & 0xffff,
             order: id
@@ -1600,6 +1621,13 @@ class U6EntityLayerJS {
         qual,
         type,
         frame,
+        origType: origShapeType & 0x03ff,
+        origFrame: origShapeType >>> 10,
+        npcMode,
+        npcComMode,
+        npcFlag,
+        direction: npcFlag & NPC_FLAG_DIRECTION_MASK,
+        walkingFlag: (npcFlag & NPC_FLAG_WALKING) !== 0,
         baseTile,
         tileId: (baseTile + frame) & 0xffff,
         order: id
@@ -1620,11 +1648,7 @@ class U6EntityLayerJS {
       e.authoritative = false;
       e.patrolPhase = e.id & 0x03;
       e.patrolRadius = 2;
-      e.movable = (
-        (e.type >= 0x178 && e.type <= 0x183)
-        || e.type === 0x187
-        || e.type === 0x188
-      );
+      e.movable = false;
     }
     this.totalLoaded = this.entries.length;
   }
@@ -1673,65 +1697,9 @@ class U6EntityLayerJS {
     return false;
   }
 
-  step(tick, mapCtx, tileFlags, terrainType, objectLayer, visibleAtWorld) {
-    if ((tick % 8) !== 0) {
-      return 0;
-    }
-    const dirs = [
-      [1, 0],
-      [0, 1],
-      [-1, 0],
-      [0, -1]
-    ];
-    const occupied = new Set();
-    for (const e of this.entries) {
-      occupied.add(`${e.x & 0x3ff},${e.y & 0x3ff},${e.z & 0x0f}`);
-    }
-
-    let blockedByOcclusion = 0;
-    const phase = (tick >> 3) & 0xff;
-    for (const e of this.entries) {
-      if (e.authoritative || !e.movable || e.z !== 0) {
-        continue;
-      }
-      const baseDir = (phase + e.patrolPhase) & 0x03;
-      const candidateDir = [
-        baseDir,
-        (baseDir + 1) & 0x03,
-        (baseDir + 3) & 0x03,
-        (baseDir + 2) & 0x03
-      ];
-      let moved = false;
-      for (const d of candidateDir) {
-        const nx = (e.x + dirs[d][0]) & 0x3ff;
-        const ny = (e.y + dirs[d][1]) & 0x3ff;
-        const dz = e.z & 0x0f;
-        if (Math.abs(nx - e.homeX) + Math.abs(ny - e.homeY) > e.patrolRadius) {
-          continue;
-        }
-        const k = `${nx},${ny},${dz}`;
-        if (occupied.has(k)) {
-          continue;
-        }
-        if (visibleAtWorld && !visibleAtWorld(nx, ny)) {
-          blockedByOcclusion += 1;
-          continue;
-        }
-        if (this.tileBlocks(nx, ny, dz, mapCtx, tileFlags, terrainType, objectLayer)) {
-          continue;
-        }
-        occupied.delete(`${e.x & 0x3ff},${e.y & 0x3ff},${dz}`);
-        e.x = nx;
-        e.y = ny;
-        occupied.add(k);
-        moved = true;
-        break;
-      }
-      if (!moved) {
-        continue;
-      }
-    }
-    return blockedByOcclusion;
+  step(_tick, _mapCtx, _tileFlags, _terrainType, _objectLayer, _visibleAtWorld) {
+    // Real legacy movement comes from schedule/AI state; do not apply placeholder patrol drift.
+    return 0;
   }
 }
 
@@ -5155,6 +5123,11 @@ async function netEnsureCharacter() {
   state.net.characterName = out.characterName;
 }
 
+function netSnapshotRoute() {
+  const characterId = String(state.net.characterId || "").trim();
+  return characterId ? `/api/characters/${characterId}/snapshot` : "/api/world/snapshot";
+}
+
 async function netLogin() {
   const out = await performNetLoginFlow({
     apiBaseInput: String(netApiBaseInput?.value || ""),
@@ -5173,6 +5146,7 @@ async function netLogin() {
       applyNetLoginState(state.net, login, username);
     },
     ensureCharacter: netEnsureCharacter,
+    snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
       state.sim = loaded;
@@ -5181,6 +5155,7 @@ async function netLogin() {
       state.accMs = 0;
       state.lastMoveQueueAtMs = -1;
       state.avatarLastMoveTick = -1;
+      state.avatarWalkAnimUntilMs = -1;
       state.interactionProbeTile = null;
     },
     pollWorldClock: netPollWorldClock,
@@ -5325,7 +5300,7 @@ async function netLogoutAndPersist() {
   clearNetSessionState(state.net);
   state.net.introPhase = "post_intro";
   if (state.sessionStarted) {
-    returnToTitleMenu();
+    returnToTitleMenu({ saveRemote: false });
   } else {
     setStartupMenuIndex(0);
   }
@@ -5353,6 +5328,7 @@ async function netSaveSnapshot() {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
     request: netRequest,
+    snapshotRoute: netSnapshotRoute,
     encodeSnapshot: () => encodeSimSnapshotBase64Runtime(state.sim),
     currentTick: () => state.sim.tick >>> 0,
     onSavedTick: (tick) => {
@@ -5368,6 +5344,7 @@ async function netLoadSnapshot() {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
     request: netRequest,
+    snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
       state.sim = loaded;
@@ -5376,6 +5353,7 @@ async function netLoadSnapshot() {
       state.accMs = 0;
       state.lastMoveQueueAtMs = -1;
       state.avatarLastMoveTick = -1;
+      state.avatarWalkAnimUntilMs = -1;
       state.interactionProbeTile = null;
     },
     resetBackgroundFailures,
@@ -5475,25 +5453,51 @@ async function netPollPresence() {
   });
 }
 
-function applyAuthoritativeNpcOverrides(overrides) {
+function applyAuthoritativeNpcStates(rows) {
   if (!state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
     return;
   }
-  const rows = Array.isArray(overrides) ? overrides : [];
-  const byId = new Map(rows.map((row) => [Number(row?.npc_id) | 0, row]));
+  const nowMs = performance.now();
+  const authoritativeRows = Array.isArray(rows) ? rows : [];
+  const byId = new Map(authoritativeRows.map((row) => [Number(row?.npc_id) | 0, row]));
   for (const e of state.entityLayer.entries) {
     const row = byId.get(Number(e.id) | 0);
     if (!row) {
       continue;
     }
-    e.x = Number(row.x) | 0;
-    e.y = Number(row.y) | 0;
-    e.z = Number(row.z) | 0;
+    const nextX = Number(row.x) | 0;
+    const nextY = Number(row.y) | 0;
+    const nextZ = Number(row.z) | 0;
+    const hadAuthoritativePosition = Number.isFinite(e.authoritativeLastX)
+      && Number.isFinite(e.authoritativeLastY)
+      && Number.isFinite(e.authoritativeLastZ);
+    const moved = hadAuthoritativePosition
+      && ((e.authoritativeLastX | 0) !== nextX || (e.authoritativeLastY | 0) !== nextY || (e.authoritativeLastZ | 0) !== nextZ);
+    e.x = nextX;
+    e.y = nextY;
+    e.z = nextZ;
     e.homeX = e.x;
     e.homeY = e.y;
     e.authoritative = true;
+    e.authoritativeLastX = nextX;
+    e.authoritativeLastY = nextY;
+    e.authoritativeLastZ = nextZ;
+    e.authoritativeUpdatedAtMs = nowMs;
+    if (moved || !Number.isFinite(e.authoritativeMovedAtMs)) {
+      e.authoritativeMovedAtMs = nowMs;
+    }
     e.movable = false;
+    e.authoritativeAction = Number(row.action) & 0xff;
+    e.authoritativeMode = Number(row.mode ?? row.action) & 0xff;
+    e.authoritativeDirection = Number(row.direction ?? 4) & 0x07;
+    e.authoritativePose = String(row.pose || "").trim().toLowerCase();
+    e.authoritativePathStatus = String(row.path_status || "").trim().toLowerCase();
+    e.authoritativeScheduleIndex = Number(row.schedule_index) | 0;
   }
+}
+
+function applyAuthoritativeNpcOverrides(overrides) {
+  applyAuthoritativeNpcStates(overrides);
 }
 
 function applyAuthoritativeWorldClock(clock) {
@@ -5508,7 +5512,7 @@ function applyAuthoritativeWorldClock(clock) {
   });
   state.net.introPhase = String(clock?.intro_state?.phase || state.net.introPhase || "post_intro");
   updateIntroPhaseUi();
-  applyAuthoritativeNpcOverrides(clock?.npc_overrides);
+  applyAuthoritativeNpcStates(Array.isArray(clock?.npc_states) ? clock.npc_states : clock?.npc_overrides);
 }
 
 async function netPollWorldClock() {
@@ -6286,6 +6290,75 @@ function tryTalkAtCell(sim, tx, ty) {
   return true;
 }
 
+function serverObjectKeyForLocalObject(obj) {
+  const direct = String(obj?.object_key || obj?.objectKey || "").trim();
+  if (direct) {
+    return direct;
+  }
+  const sourceArea = Number(obj?.sourceArea);
+  const index = Number(obj?.index);
+  if (Number.isFinite(sourceArea) && Number.isFinite(index)) {
+    return `objblk:${sourceArea | 0}:${index | 0}`;
+  }
+  return "";
+}
+
+function applyInventoryProjectionFromServerObjects(sim, objects) {
+  if (!sim) {
+    return;
+  }
+  const next = {};
+  for (const obj of Array.isArray(objects) ? objects : []) {
+    const type = Number(obj?.type);
+    const frame = Number(obj?.frame);
+    if (!Number.isFinite(type) || !Number.isFinite(frame)) {
+      continue;
+    }
+    const key = inventoryKeyForObjectRuntime({ type, frame });
+    next[key] = (Number(next[key]) + 1) >>> 0;
+  }
+  sim.inventory = next;
+}
+
+async function netSyncInventoryProjection() {
+  if (!isNetAuthenticated() || !state.sim) {
+    return null;
+  }
+  const actorId = String(state.net.characterId || state.net.userId || "Avatar");
+  const out = await netRequest(`/api/world/inventory?actor_id=${encodeURIComponent(actorId)}`, {
+    method: "GET"
+  }, true);
+  applyInventoryProjectionFromServerObjects(state.sim, out?.objects || []);
+  return out;
+}
+
+async function netTakeWorldObject(obj, tx, ty, tz) {
+  const targetKey = serverObjectKeyForLocalObject(obj);
+  if (!targetKey) {
+    throw new Error("target object has no authoritative key");
+  }
+  const out = await netRequest("/api/world/objects/interact", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      verb: "take",
+      target_key: targetKey,
+      actor_id: String(state.net.characterId || state.net.userId || "Avatar"),
+      actor_x: state.sim.world.map_x | 0,
+      actor_y: state.sim.world.map_y | 0,
+      actor_z: state.sim.world.map_z | 0
+    })
+  }, true);
+  const item = out?.inventory_item || out?.target || obj;
+  addObjectToInventoryRuntime(state.sim, item);
+  markObjectRemovedRuntime(state.sim, obj);
+  const invKey = inventoryKeyForObjectRuntime(item);
+  const count = Number(state.sim.inventory[invKey]) >>> 0;
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Get: picked 0x${(Number(item.type) & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${invKey}=${count}).`;
+  return out;
+}
+
 function tryGetAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
   if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
@@ -6306,6 +6379,15 @@ function tryGetAtCell(sim, tx, ty) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
     return false;
+  }
+  if (isNetAuthenticated()) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Get: taking 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
+    void netTakeWorldObject(obj, tx, ty, tz).catch((err) => {
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Get failed: ${String(err?.message || err)}`;
+    });
+    return true;
   }
   addObjectToInventoryRuntime(sim, obj);
   markObjectRemovedRuntime(sim, obj);
@@ -6543,20 +6625,59 @@ function clearPendingAvatarMoveCommands(sim) {
   });
 }
 
-function furnitureAtCell(sim, tx, ty) {
+function chairFrameForCell(obj, tx, ty) {
+  if (!obj) {
+    return null;
+  }
+  const type = (obj.type | 0) & 0x03ff;
+  if (type === 0x0fc) {
+    return (obj.frame | 0) & 0x03;
+  }
+  if (type !== 0x147) {
+    return null;
+  }
+  for (const cell of objectFootprintTiles(state.sim, obj, obj.x | 0, obj.y | 0)) {
+    if ((cell.x | 0) !== (tx | 0) || (cell.y | 0) !== (ty | 0)) {
+      continue;
+    }
+    const normalizedFrame = (((cell.tileId | 0) - (obj.baseTile | 0)) & 0x3f);
+    if (normalizedFrame === 2) {
+      return normalizedFrame;
+    }
+  }
+  return null;
+}
+
+function objectIsChairAtCell(obj, tx, ty) {
+  if (!obj) {
+    return false;
+  }
+  const type = (obj.type | 0) & 0x03ff;
+  if (type === 0x147) {
+    return chairFrameForCell(obj, tx, ty) !== null;
+  }
+  if (!isChairObjectRuntime(obj)) {
+    return false;
+  }
+  return furnitureOccupancyCells(obj).some((c) => (c.x | 0) === (tx | 0) && (c.y | 0) === (ty | 0));
+}
+
+function objectIsBedAtCell(obj, tx, ty) {
+  if (!obj || !isBedObjectRuntime(obj)) {
+    return false;
+  }
+  return furnitureOccupancyCells(obj).some((c) => (c.x | 0) === (tx | 0) && (c.y | 0) === (ty | 0));
+}
+
+function furnitureAtWorldCell(sim, tx, ty, tz) {
   if (!state.objectLayer) {
     return null;
   }
-  const tz = sim.world.map_z | 0;
   const overlays = [];
   const seen = new Set();
   const addCandidatesAt = (sx, sy) => {
     for (const o of state.objectLayer.objectsAt(sx, sy, tz)) {
-      if (!isChairObjectRuntime(o) && !isBedObjectRuntime(o)) {
-        continue;
-      }
-      const cells = furnitureOccupancyCells(o);
-      if (!cells.some((c) => (c.x | 0) === (tx | 0) && (c.y | 0) === (ty | 0))) {
+      if (!objectIsChairAtCell(o, tx, ty) && !objectIsBedAtCell(o, tx, ty)) {
         continue;
       }
       const key = `${o.order | 0}:${o.type | 0}:${o.x | 0}:${o.y | 0}:${o.z | 0}`;
@@ -6575,9 +6696,9 @@ function furnitureAtCell(sim, tx, ty) {
   const chairs = [];
   const beds = [];
   for (const o of overlays) {
-    if (isChairObjectRuntime(o)) {
+    if (objectIsChairAtCell(o, tx, ty)) {
       chairs.push(o);
-    } else if (isBedObjectRuntime(o)) {
+    } else if (objectIsBedAtCell(o, tx, ty)) {
       beds.push(o);
     }
   }
@@ -6604,6 +6725,10 @@ function furnitureAtCell(sim, tx, ty) {
     return beds[0];
   }
   return null;
+}
+
+function furnitureAtCell(sim, tx, ty) {
+  return furnitureAtWorldCell(sim, tx, ty, sim.world.map_z | 0);
 }
 
 function tryInteractFurnitureObject(sim, o) {
@@ -6823,11 +6948,24 @@ function startSessionFromTitle() {
   diagBox.textContent = resumed
     ? "Journey Onward: resumed at last saved position."
     : "Journey Onward: loaded at the legacy avatar start position.";
+  void netSyncInventoryProjection().catch((err) => {
+    diagBox.className = "diag warn";
+    diagBox.textContent = `Inventory sync failed: ${String(err?.message || err)}`;
+  });
 }
 
-function returnToTitleMenu() {
+function returnToTitleMenu(opts: any = {}) {
   if (!state.sessionStarted) {
     return;
+  }
+  const saveRemote = opts.saveRemote !== false;
+  state.net.resumeFromSnapshot = true;
+  if (saveRemote && isNetAuthenticated()) {
+    netSaveSnapshot().catch((err) => {
+      setNetStatus("error", `Save failed: ${String(err.message || err)}`);
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Return-to-title save failed: ${String(err.message || err)}`;
+    });
   }
   state.queue.length = 0;
   state.useCursorActive = false;
@@ -7204,6 +7342,7 @@ function applyCommand(sim, cmd) {
         sim.world.map_x = nx;
         sim.world.map_y = ny;
         state.avatarLastMoveTick = sim.tick >>> 0;
+        state.avatarWalkAnimUntilMs = performance.now() + AVATAR_WALK_ANIM_WINDOW_MS;
         /*
           Canonical-facing behavior: actor pose follows occupied furniture cell.
           NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
@@ -7538,6 +7677,7 @@ function queueMove(dx, dy) {
   state.lastMoveInputDy = dy;
   state.avatarFacingDx = dx;
   state.avatarFacingDy = dy;
+  state.avatarWalkAnimUntilMs = nowMs + AVATAR_WALK_ANIM_WINDOW_MS;
   const targetTick = (state.sim.tick + 1) >>> 0;
   const cmd = buildWireCommand(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy);
 
@@ -8143,6 +8283,68 @@ function avatarFacingFrameOffset() {
   return 3;
 }
 
+function isLegacyFourFrameActorType(type) {
+  const t = type & 0x03ff;
+  return (t >= 0x178 && t <= 0x183) || (t >= 0x199 && t <= 0x19a);
+}
+
+function isLegacyTwoFrameActorType(type) {
+  const t = type & 0x03ff;
+  return (
+    t === 0x15a
+    || t === 0x15c
+    || t === 0x15d
+    || t === 0x15e
+    || t === 0x15f
+    || t === 0x156
+    || t === 0x166
+    || t === 0x169
+    || (t >= 0x16f && t <= 0x174)
+    || t === 0x188
+    || t >= 0x1aa
+  );
+}
+
+function legacyActorFrameForDirection(type, dirGroup, moving, tick) {
+  const direction = ((dirGroup | 0) & 0x03);
+  if (isLegacyFourFrameActorType(type)) {
+    const cadence = moving ? 1 : 4;
+    const phase = (tick >> cadence) & 0x03;
+    const step = [1, 2, 1, 0][phase] | 0;
+    return (direction << 2) + step;
+  }
+  if ((type & 0x03ff) === 0x16b) {
+    const cadence = moving ? 1 : 4;
+    const phase = (tick >> cadence) & 0x03;
+    const step = [1, 2, 1, 0][phase] | 0;
+    return (direction * 3) + step;
+  }
+  if (isLegacyTwoFrameActorType(type)) {
+    const cadence = moving ? 1 : 4;
+    const step = (tick >> cadence) & 0x01;
+    return (direction << 1) + step;
+  }
+  return null;
+}
+
+function legacyActorDirectionGroup(entity) {
+  if (Number.isInteger(entity?.authoritativeDirection)) {
+    return ((Number(entity.authoritativeDirection) & NPC_FLAG_DIRECTION_MASK) >> 1) & 0x03;
+  }
+  if (Number.isInteger(entity?.direction)) {
+    return ((Number(entity.direction) & NPC_FLAG_DIRECTION_MASK) >> 1) & 0x03;
+  }
+  return (((Number(entity?.frame) | 0) >> 2) & 0x03);
+}
+
+function legacyActorStandingTileId(entity, dirGroup, moving) {
+  const frame = legacyActorFrameForDirection(entity.type | 0, dirGroup, moving, state.sim.tick >>> 0);
+  if (frame == null) {
+    return ((entity.baseTile | 0) + (entity.frame | 0)) & 0xffff;
+  }
+  return ((entity.baseTile | 0) + frame) & 0xffff;
+}
+
 function sleepFrameOffsetForBed(bedObj) {
   if (!bedObj) {
     return 0;
@@ -8294,7 +8496,7 @@ function avatarRenderTileId() {
     }
     return (sleepBase + 0) & 0xffff;
   }
-  const walkMoving = state.avatarLastMoveTick >= 0 && ((state.sim.tick - state.avatarLastMoveTick) & 0xff) < 4;
+  const walkMoving = Number(state.avatarWalkAnimUntilMs) >= performance.now();
   const dirGroup = avatarFacingFrameOffset();
   if (state.sim.avatarPose === "sit") {
     let chair = findObjectByAnchor(state.sim.avatarPoseAnchor);
@@ -8310,24 +8512,14 @@ function avatarRenderTileId() {
     }
     return (avatar.baseTile + (dirGroup << 2) + 0) & 0xffff;
   }
-  let frame = avatar.frame | 0;
-  /* Legacy actor classes (OBJ_178..183 and OBJ_199..19A) use 4 frames per direction:
-     dir*4 + {0,1,2,3}, with 1 as stable standing frame. */
-  if (
-    (avatar.type >= 0x178 && avatar.type <= 0x183)
-    || (avatar.type >= 0x199 && avatar.type <= 0x19a)
-  ) {
-    const step = walkMoving ? (((state.sim.tick >> 1) & 1) ? 0 : 2) : 1;
-    frame = (dirGroup << 2) + step;
-  } else {
-    /* Fallback for simpler actor frame families: two-frame directional groups. */
-    const step = walkMoving ? ((state.sim.tick >> 1) & 1) : 0;
-    frame = (dirGroup << 1) + step;
-  }
-  return (avatar.baseTile + frame) & 0xffff;
+  return legacyActorStandingTileId(avatar, dirGroup, walkMoving);
 }
 
 function entityPoseAt(entity) {
+  const explicitPose = String(entity?.authoritativePose || "").trim().toLowerCase();
+  if (explicitPose === "sleep" || explicitPose === "sit" || explicitPose === "eat" || explicitPose === "play" || explicitPose === "walk") {
+    return explicitPose;
+  }
   if (!state.objectLayer) {
     return "stand";
   }
@@ -8344,16 +8536,7 @@ function entityPoseAt(entity) {
 }
 
 function entityChairAt(entity) {
-  if (!state.objectLayer) {
-    return null;
-  }
-  const overlays = state.objectLayer.objectsAt(entity.x | 0, entity.y | 0, entity.z | 0);
-  for (const o of overlays) {
-    if (isChairObjectRuntime(o)) {
-      return o;
-    }
-  }
-  return null;
+  return furnitureAtWorldCell(state.sim, entity.x | 0, entity.y | 0, entity.z | 0);
 }
 
 function entityBedAt(entity) {
@@ -8379,10 +8562,31 @@ function entityRenderTileId(e) {
   if (pose === "sit") {
     const chair = entityChairAt(e);
     if (chair) {
-      const chairFrame = (chair.frame | 0) & 0x03;
+      const chairFrame = chairFrameForCell(chair, e.x | 0, e.y | 0) ?? ((chair.frame | 0) & 0x03);
       return (e.baseTile + 3 + (chairFrame << 2)) & 0xffff;
     }
     return (e.baseTile + 3) & 0xffff;
+  }
+  if (pose === "eat" || pose === "play") {
+    const chair = entityChairAt(e);
+    if (chair) {
+      const chairFrame = chairFrameForCell(chair, e.x | 0, e.y | 0) ?? ((chair.frame | 0) & 0x03);
+      return (e.baseTile + 3 + (chairFrame << 2)) & 0xffff;
+    }
+    /* Legacy AI_EAT/AI_PLAY still calls C_1E0F_0664 into a stable facing frame
+       even when table/chair lookup fails; do not fall through to walk animation. */
+    const dirGroup = ((Number(e.authoritativeDirection ?? e.direction ?? 4) & NPC_FLAG_DIRECTION_MASK) >> 1) & 0x03;
+    return legacyActorStandingTileId(e, dirGroup, false);
+  }
+  if (e.authoritative && (pose === "walk" || Number.isInteger(e.authoritativeDirection))) {
+    const dirGroup = ((Number(e.authoritativeDirection) & NPC_FLAG_DIRECTION_MASK) >> 1) & 0x03;
+    const recentAuthoritativeMove = Number.isFinite(e.authoritativeMovedAtMs)
+      && (performance.now() - Number(e.authoritativeMovedAtMs)) <= 2500;
+    const walking = pose === "walk" && e.authoritativePathStatus === "walking" && recentAuthoritativeMove;
+    return legacyActorStandingTileId(e, dirGroup, walking);
+  }
+  if ((e.type | 0) >= ENTITY_TYPE_ACTOR_MIN && (e.type | 0) <= ENTITY_TYPE_ACTOR_MAX) {
+    return legacyActorStandingTileId(e, legacyActorDirectionGroup(e), false);
   }
   return resolveAnimatedObjectTile(e);
 }
@@ -9107,6 +9311,7 @@ function resetRun() {
   state.targetVerb = "";
   endLegacyConversation();
   state.avatarLastMoveTick = -1;
+  state.avatarWalkAnimUntilMs = -1;
   state.lastMoveQueueAtMs = -1;
   state.lastMoveInputDx = 0;
   state.lastMoveInputDy = 1;

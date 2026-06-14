@@ -17,6 +17,7 @@ export async function performNetLoginFlow(
     request: NetLoginRequest;
     applyLogin: (login: any, username: string) => void;
     ensureCharacter: () => Promise<void>;
+    snapshotRoute: () => string;
     decodeSnapshot: (snapshotBase64: string) => any;
     applyLoadedSim: (loaded: any) => void;
     pollWorldClock: () => Promise<void>;
@@ -56,7 +57,8 @@ export async function performNetLoginFlow(
 
   let resumedFromSnapshot = false;
   try {
-    const out = await deps.request("/api/world/snapshot", { method: "GET" }, true);
+    const route = deps.snapshotRoute() || "/api/world/snapshot";
+    const out = await deps.request(route, { method: "GET" }, true);
     if (out?.snapshot_base64) {
       const loaded = deps.decodeSnapshot(out.snapshot_base64);
       if (loaded) {

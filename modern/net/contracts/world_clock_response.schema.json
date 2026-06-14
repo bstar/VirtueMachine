@@ -10,7 +10,47 @@
     "time_h": { "type": "integer", "minimum": 0 },
     "date_d": { "type": "integer", "minimum": 1 },
     "date_m": { "type": "integer", "minimum": 1 },
-    "date_y": { "type": "integer", "minimum": 1 }
+    "date_y": { "type": "integer", "minimum": 1 },
+    "intro_state": {
+      "type": "object",
+      "properties": {
+        "phase": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "npc_states": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["npc_id", "x", "y", "z", "target_x", "target_y", "target_z", "action", "mode", "direction", "pose", "schedule_index", "source", "path_status", "unsupported_action"],
+        "properties": {
+          "npc_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "x": { "type": "integer", "minimum": 0 },
+          "y": { "type": "integer", "minimum": 0 },
+          "z": { "type": "integer", "minimum": 0 },
+          "target_x": { "type": "integer", "minimum": 0 },
+          "target_y": { "type": "integer", "minimum": 0 },
+          "target_z": { "type": "integer", "minimum": 0 },
+          "action": { "type": "integer", "minimum": 0 },
+          "mode": { "type": "integer", "minimum": 0 },
+          "direction": { "type": "integer", "minimum": 0 },
+          "pose": { "type": "string" },
+          "schedule_index": { "type": "integer", "minimum": 0 },
+          "source": { "type": "string" },
+          "path_status": { "type": "string" },
+          "unsupported_action": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "npc_overrides": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "runtime_contract": {
+      "type": "object",
+      "additionalProperties": true
+    }
   },
   "additionalProperties": false
 }

@@ -70,8 +70,9 @@ This checklist is intentionally mutable.
 - `[ ]` Magic/casting systems
 - `[ ]` Combat systems
 - `[~]` NPC pathing and schedule behavior
-  - legacy `schedule` asset parsing and hour/day selection are active for the first castle pilot NPC set
-  - full pathfinding/action execution parity is still pending beyond direct schedule-position overrides
+  - legacy `schedule` asset parsing and hour/day selection are active for all valid scheduled NPCs
+  - server-owned `npc_states` now expose position, target, action, mode, direction, pose, and path status for browser rendering
+  - full pathfinding/action side-effect parity is still pending beyond deterministic schedule-target stepping and safe activity poses
 - `[ ]` Party control semantics and companion command behaviors
 - `[ ]` Character progression/stat effects and status-condition gameplay
 - `[ ]` Sleep/rest interactions and world-time side effects
@@ -206,8 +207,9 @@ This checklist is intentionally mutable.
   - `pre_intro` uses intro-compatible talk state for Lord British/Nystul/Dupre without requiring combat/start-sequence parity first
 - `[~]` Start the first legacy-schedule pilot:
   - server now parses the original `schedule` asset and selects entries by legacy hour/day rules
-  - castle pilot NPC overrides are exposed from the authoritative clock endpoint for browser projection
-  - full schedule action/path execution still needs deeper parity work
+  - authoritative clock responses now expose all scheduled NPCs via `npc_states`, with `npc_overrides` retained as a compatibility alias
+  - the browser consumes server-owned positions/poses and disables local patrol for scheduled NPCs
+  - full legacy path resistance, door use, and unsupported action side effects still need deeper parity work
 - `[~]` Refine canonical conversation presentation:
   - authoritative opening/response lines are now server-sourced
   - remaining work is transcript-quality wrapping/paging/blank-line alignment for Lord British, Nystul, and Dupre

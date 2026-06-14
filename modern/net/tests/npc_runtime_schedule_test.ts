@@ -1,0 +1,132 @@
+import assert from "node:assert/strict";
+import { buildScheduledNpcStatesRuntime } from "../npc_runtime.ts";
+
+const AI_SIT = 0x92;
+const AI_FINDPATH = 0x81;
+
+const baseline: any = {
+  entries: [
+    {
+      id: 2,
+      x: 0,
+      y: 0,
+      z: 0,
+      status: 0,
+      npcStatus: 0,
+      qual: 0,
+      type: 0x178,
+      frame: 1,
+      baseTile: 100,
+      tileId: 101,
+      order: 2,
+      source: "objlist"
+    }
+  ],
+  party: [],
+  partySize: 0
+};
+
+const npcOffsets = new Array(0x101).fill(0);
+npcOffsets[2] = 0;
+npcOffsets[3] = 1;
+
+const schedule: any = {
+  npcOffsets,
+  entryCount: 1,
+  entries: [
+    {
+      time: 0,
+      action: AI_SIT,
+      xyz_raw: 0,
+      x: 2,
+      y: 0,
+      z: 0
+    }
+  ]
+};
+
+const previous: any = [
+  {
+    npc_id: 2,
+    x: 0,
+    y: 0,
+    z: 0,
+    target_x: 2,
+    target_y: 0,
+    target_z: 0,
+    action: AI_SIT,
+    mode: AI_FINDPATH,
+    direction: 2,
+    pose: "walk",
+    schedule_index: 0,
+    source: "schedule",
+    path_status: "walking",
+    unsupported_action: false,
+    last_schedule_hour: 0,
+    last_schedule_date_d: 1
+  }
+];
+
+const blocked = buildScheduledNpcStatesRuntime(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 8 },
+  previous,
+  1,
+  { canStep: (step) => !(step.to_x === 1 && step.to_y === 0) }
+);
+
+assert.equal(blocked.length, 1);
+assert.equal(blocked[0].x, 0, "blocked schedule step must preserve x");
+assert.equal(blocked[0].y, 1, "schedule step should route around a blocked direct x step");
+assert.equal(blocked[0].path_status, "walking");
+assert.equal(blocked[0].pose, "walk");
+
+const fullyBlocked = buildScheduledNpcStatesRuntime(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 8 },
+  previous,
+  1,
+  { canStep: () => false }
+);
+
+assert.equal(fullyBlocked.length, 1);
+assert.equal(fullyBlocked[0].x, 0, "fully blocked schedule step must preserve x");
+assert.equal(fullyBlocked[0].y, 0, "fully blocked schedule step must preserve y");
+assert.equal(fullyBlocked[0].path_status, "blocked");
+assert.equal(fullyBlocked[0].pose, "walk");
+
+const allowed = buildScheduledNpcStatesRuntime(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 8 },
+  previous,
+  1,
+  { canStep: () => true }
+);
+
+assert.equal(allowed.length, 1);
+assert.equal(allowed[0].x, 1, "allowed schedule step should advance one tile");
+assert.equal(allowed[0].path_status, "walking");
+
+const furniturePermissive = buildScheduledNpcStatesRuntime(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 8 },
+  previous,
+  1,
+  {
+    canStep: (step) => {
+      // Mirrors scheduled NPC behavior: furniture cells may be passable, but walls remain blocked.
+      return !(step.to_x === 0 && step.to_y === 1);
+    }
+  }
+);
+
+assert.equal(furniturePermissive.length, 1);
+assert.equal(furniturePermissive[0].x, 1, "schedule pathing should be able to use a direct furniture-passable cell");
+assert.equal(furniturePermissive[0].y, 0);
+assert.equal(furniturePermissive[0].path_status, "walking");
+
+console.log("npc_runtime_schedule_test: ok");

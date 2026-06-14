@@ -298,6 +298,7 @@ async function main() {
     const actorZ = Number(targets[0].z) | 0;
 
     async function runInteractionLifecycle() {
+      let carriedKey = targetKey;
       const take = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,
@@ -314,17 +315,23 @@ async function main() {
       assert.equal(coordUseOfStatus(take.body?.target?.status), OBJ_COORD_USE_INVEN);
       assert.equal(String(take.body?.target?.holder_kind || ""), "npc");
       assert.equal(String(take.body?.target?.holder_id || ""), "contract-avatar");
+      assert.notEqual(String(take.body?.target?.object_key || ""), targetKey, "baseline take should return a cloned inventory object");
+      assert.equal(String(take.body?.target?.source_object_key || ""), targetKey);
+      assert.equal(String(take.body?.inventory_item?.object_key || ""), String(take.body?.target?.object_key || ""));
+      assert.equal(String(take.body?.respawn?.source_object_key || ""), targetKey);
+      assert.equal(Number(take.body?.respawn?.respawn_ms), 10 * 60 * 1000);
       assert.ok(Number(take.body?.interaction_checkpoint?.seq) >= 1);
       assert.ok(String(take.body?.interaction_checkpoint?.hash || "").length > 0);
       assert.equal(take.body?.runtime_contract?.profile, "canonical_plus");
       assert.deepEqual(take.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
+      carriedKey = String(take.body?.target?.object_key || "");
 
       const equip = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
           verb: "equip",
-          target_key: targetKey,
+          target_key: carriedKey,
           actor_id: "contract-avatar"
         })
       });
@@ -336,10 +343,26 @@ async function main() {
         headers: authHeaders
       });
       assert.equal(clockForNpcTalk.status, 200);
+      assert.ok(Array.isArray(clockForNpcTalk.body?.npc_states));
+      assert.ok(
+        clockForNpcTalk.body.npc_states.length > 3,
+        "expected all scheduled NPC state, not only the castle pilot"
+      );
       assert.ok(Array.isArray(clockForNpcTalk.body?.npc_overrides));
+      assert.equal(
+        clockForNpcTalk.body.npc_overrides.length,
+        clockForNpcTalk.body.npc_states.length,
+        "npc_overrides should remain a compatibility alias for npc_states"
+      );
       assert.equal(String(clockForNpcTalk.body?.intro_state?.phase || ""), "post_intro");
-      const lbNpc = (clockForNpcTalk.body?.npc_overrides || []).find((row: any) => Number(row?.npc_id) === 5);
-      assert.ok(lbNpc, "expected Lord British npc override in clock response");
+      const lbNpc = (clockForNpcTalk.body?.npc_states || []).find((row: any) => Number(row?.npc_id) === 5);
+      assert.ok(lbNpc, "expected Lord British npc state in clock response");
+      assert.equal(Number.isInteger(lbNpc.target_x), true, "scheduled NPC should expose target_x");
+      assert.equal(Number.isInteger(lbNpc.action), true, "scheduled NPC should expose action");
+      assert.equal(typeof lbNpc.pose, "string", "scheduled NPC should expose render pose");
+      const geoffreyNpc = (clockForNpcTalk.body?.npc_states || []).find((row: any) => Number(row?.npc_id) === 7);
+      assert.ok(geoffreyNpc, "expected Geoffrey npc state in clock response");
+      assert.notEqual(String(geoffreyNpc.path_status || ""), "walking", "Geoffrey should not start in patrol/walking state after initial schedule sync");
 
       const introStateGet = await jsonFetch(baseUrl, "/api/world/intro-state", {
         method: "GET",
@@ -439,8 +462,8 @@ async function main() {
         headers: authHeaders,
         body: JSON.stringify({
           verb: "put",
-          target_key: targetKey,
-          container_key: targetKey,
+          target_key: carriedKey,
+          container_key: carriedKey,
           actor_id: "contract-avatar"
         })
       });
@@ -457,7 +480,7 @@ async function main() {
         headers: authHeaders,
         body: JSON.stringify({
           verb: "put",
-          target_key: targetKey,
+          target_key: carriedKey,
           container_key: containerKey,
           actor_id: "contract-avatar"
         })
@@ -490,7 +513,7 @@ async function main() {
         headers: authHeaders,
         body: JSON.stringify({
           verb: "take",
-          target_key: targetKey,
+          target_key: carriedKey,
           actor_id: "contract-avatar",
           actor_x: actorX,
           actor_y: actorY,
@@ -525,7 +548,7 @@ async function main() {
         headers: authHeaders,
         body: JSON.stringify({
           verb: "take",
-          target_key: targetKey,
+          target_key: carriedKey,
           actor_id: "contract-avatar",
           actor_x: actorX,
           actor_y: actorY,
@@ -541,7 +564,7 @@ async function main() {
         headers: authHeaders,
         body: JSON.stringify({
           verb: "drop",
-          target_key: targetKey,
+          target_key: carriedKey,
           actor_id: "contract-avatar",
           actor_x: actorX,
           actor_y: actorY,
@@ -555,7 +578,8 @@ async function main() {
       assert.ok(String(drop.body?.interaction_checkpoint?.hash || "").length > 0);
       return {
         seq: Number(drop.body?.interaction_checkpoint?.seq) | 0,
-        hash: String(drop.body?.interaction_checkpoint?.hash || "")
+        hash: String(drop.body?.interaction_checkpoint?.hash || ""),
+        carriedKey
       };
     }
 
@@ -566,8 +590,10 @@ async function main() {
       headers: { authorization: `Bearer ${token}` }
     });
     assert.equal(worldObjectsAfterLifecycle.status, 200);
-    const targetAfter = findObjectByKey(worldObjectsAfterLifecycle.body?.objects, targetKey);
-    assert.ok(targetAfter, "target object must remain addressable by object_key after lifecycle");
+    const originalAfter = findObjectByKey(worldObjectsAfterLifecycle.body?.objects, targetKey);
+    assert.equal(originalAfter, null, "source object should stay hidden until its respawn timer matures");
+    const targetAfter = findObjectByKey(worldObjectsAfterLifecycle.body?.objects, lifecycleRun1.carriedKey);
+    assert.ok(targetAfter, "cloned inventory object must remain addressable by object_key after lifecycle");
     assert.equal(coordUseOfStatus(targetAfter.status), OBJ_COORD_USE_LOCXYZ);
     assert.equal(String(targetAfter.holder_kind || ""), "none");
 
@@ -767,6 +793,8 @@ async function main() {
     });
     assert.equal(clock2.status, 200);
     assert.ok(clock2.body.tick >= clock1.body.tick);
+    assert.ok(Array.isArray(clock2.body?.npc_states));
+    assert.ok(clock2.body.npc_states.length > 3);
 
     const clockDefaultContract = await jsonFetch(baseUrl, "/api/world/clock", {
       method: "GET",

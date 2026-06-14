@@ -25,7 +25,7 @@ const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.t
 const {
   loadNpcBaselineRuntime,
   loadScheduleRuntime,
-  buildCastlePilotNpcOverrides
+  buildScheduledNpcStatesRuntime
 } = require("./npc_runtime.ts");
 const {
   ensureConversationRuntimeState,
@@ -38,9 +38,13 @@ const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
 const DATA_DIR = process.env.VM_NET_DATA_DIR || path.join(__dirname, "data");
 const RUNTIME_DIR = process.env.VM_NET_RUNTIME_DIR || path.join(__dirname, "..", "assets", "runtime");
 const OBJECT_BASELINE_DIR = process.env.VM_NET_OBJECT_BASELINE_DIR || path.join(__dirname, "..", "assets", "runtime", "savegame");
+const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
+const LOOT_PICKUP_RESPAWN_MS = 60 * 60 * 1000;
 const MAX_BODY = 1024 * 1024;
-const SERVER_TICK_MS = 100;
-const SERVER_TICKS_PER_MINUTE = 4;
+const SERVER_TICK_MS = Math.max(50, Number.parseInt(process.env.VM_NET_TICK_MS || "100", 10) || 100);
+// Ultima VI Online documents this schedule cadence as one in-game day per real hour.
+const SERVER_TICKS_PER_MINUTE = Math.max(1, Number.parseInt(process.env.VM_NET_TICKS_PER_MINUTE || "25", 10) || 25);
+const SERVER_CLOCK_CATCHUP_MAX_MS = Math.max(0, Number.parseInt(process.env.VM_NET_CLOCK_CATCHUP_MAX_MS || "5000", 10) || 5000);
 const SERVER_MINUTES_PER_HOUR = 60;
 const SERVER_HOURS_PER_DAY = 24;
 const SERVER_DAYS_PER_MONTH = 28;
@@ -74,6 +78,14 @@ const FILES = {
 };
 const INTRO_PHASE_PRE = "pre_intro";
 const INTRO_PHASE_POST = "post_intro";
+const OBJECT_TYPES_DOOR = new Set([0x10f, 0x129, 0x12a, 0x12b, 0x12c, 0x12d, 0x14e]);
+const OBJECT_TYPES_CLOSEABLE_DOOR = new Set([0x129, 0x12a, 0x12b, 0x12c, 0x14e]);
+const OBJECT_TYPES_TOP_DECOR = new Set([0x05f, 0x060, 0x080, 0x081, 0x084, 0x07a, 0x0d1, 0x0ea]);
+const OBJECT_TYPES_SOLID_ENV = new Set([
+  0x0a3, 0x0a4, 0x0b0, 0x0b1, 0x0c6, 0x0d8, 0x0d9,
+  0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
+  0x147
+]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -307,15 +319,47 @@ function rebuildNpcRuntimeState(state) {
   for (const entry of state.npcRuntime.entries) {
     state.npcRuntimeById.set(Number(entry.id) | 0, entry);
   }
-  state.npcPilot = buildCastlePilotNpcOverrides(state.npcRuntime, state.scheduleRuntime, state.worldClock);
-  state.npcPilotById = new Map();
-  for (const row of state.npcPilot) {
-    state.npcPilotById.set(Number(row.npc_id) | 0, row);
+  if (!Array.isArray(state.npcStates)) {
+    state.npcStates = buildScheduledNpcStatesRuntime(
+      state.npcRuntime,
+      state.scheduleRuntime,
+      state.worldClock,
+      [],
+      0,
+      { canStep: (step) => canNpcStepInto(state, step) }
+    );
   }
+  rebuildNpcScheduleIndex(state);
   state.npcRuntimePersist = {
     intro_phase: introPhase,
     talk_flags: state.npcRuntime.talkFlags
   };
+}
+
+function rebuildNpcScheduleIndex(state) {
+  state.npcPilot = Array.isArray(state.npcStates) ? state.npcStates : [];
+  state.npcPilotById = new Map();
+  state.npcScheduleById = new Map();
+  for (const row of state.npcPilot) {
+    const npcId = Number(row.npc_id) | 0;
+    state.npcPilotById.set(npcId, row);
+    state.npcScheduleById.set(npcId, row);
+  }
+}
+
+function updateNpcScheduleStates(state, elapsedTicks) {
+  if (!state?.npcRuntime || !state?.scheduleRuntime || !state?.worldClock) {
+    return;
+  }
+  state.npcStates = buildScheduledNpcStatesRuntime(
+    state.npcRuntime,
+    state.scheduleRuntime,
+    state.worldClock,
+    Array.isArray(state.npcStates) ? state.npcStates : [],
+    elapsedTicks,
+    { canStep: (step) => canNpcStepInto(state, step) }
+  );
+  rebuildNpcScheduleIndex(state);
 }
 
 function normalizeWorldClock(raw) {
@@ -389,6 +433,90 @@ function loadTileFlagMap(runtimeDir) {
     return new Uint8Array(buf.slice(0, 0x800));
   } catch (_err) {
     return new Uint8Array(0x800);
+  }
+}
+
+function loadTerrainTypeMap(runtimeDir) {
+  const tileflagPath = path.join(runtimeDir, "tileflag");
+  try {
+    const buf = fs.readFileSync(tileflagPath);
+    return new Uint8Array(buf.slice(0, Math.min(buf.length, 0x800)));
+  } catch (_err) {
+    return new Uint8Array(0x800);
+  }
+}
+
+class U6MapRuntime {
+  map: Buffer;
+  chunks: Buffer;
+  window: Buffer;
+  loadedZ: number;
+  loadedMapId0: number;
+
+  constructor(runtimeDir) {
+    this.map = fs.readFileSync(path.join(runtimeDir, "map"));
+    this.chunks = fs.readFileSync(path.join(runtimeDir, "chunks"));
+    this.window = Buffer.alloc(0x600);
+    this.loadedZ = -1;
+    this.loadedMapId0 = -1;
+  }
+
+  mkMapId(x, y) {
+    return (x >> 7) + ((y >> 4) & 0x38);
+  }
+
+  loadWindow(x, y, z) {
+    x &= 0x3ff;
+    y &= 0x3ff;
+    if (z !== 0) {
+      const off = ((z + z + z) << 9) + 0x5a00;
+      this.map.copy(this.window, 0, off, off + 0x600);
+      this.loadedZ = z;
+      this.loadedMapId0 = -1;
+      return;
+    }
+    const mapId = this.mkMapId(x, y);
+    const ids = [mapId, (mapId + 1) & 0x3f, (mapId + 8) & 0x3f, (mapId + 9) & 0x3f];
+    for (let i = 0; i < 4; i += 1) {
+      const src = ids[i] * 0x180;
+      const dst = i * 0x180;
+      this.map.copy(this.window, dst, src, src + 0x180);
+    }
+    this.loadedZ = 0;
+    this.loadedMapId0 = mapId;
+  }
+
+  chunkIndexAt(x, y, z) {
+    this.loadWindow(x, y, z);
+    x &= 0x3ff;
+    y &= 0x3ff;
+    let si = 0;
+    if (z !== 0) {
+      si = ((x >> 3) & 0x1f) + ((y << 2) & 0x3e0);
+      si += si >> 1;
+    } else {
+      const mapId = this.mkMapId(x, y);
+      let bp02 = 0;
+      if ((mapId - this.loadedMapId0) & 1) bp02 = 0x100;
+      if ((mapId - this.loadedMapId0) & 8) bp02 += 0x200;
+      si = ((x >> 3) & 0x0f) + bp02;
+      si += (y << 1) & 0x0f0;
+      si += si >> 1;
+    }
+    if (si < 0 || si + 1 >= this.window.length) {
+      return 0;
+    }
+    const v = parseU16LE(this.window, si);
+    return (x & 8) ? (v >> 4) : (v & 0x0fff);
+  }
+
+  tileAt(x, y, z) {
+    const ci = this.chunkIndexAt(x, y, z);
+    const co = ci * 0x40;
+    if (co < 0 || co + 0x40 > this.chunks.length) {
+      return 0;
+    }
+    return this.chunks[co + ((y & 7) * 8) + (x & 7)] & 0xff;
   }
 }
 
@@ -547,7 +675,8 @@ function normalizeWorldObjectDeltas(raw) {
     schema_version: 1,
     removed: {},
     moved: {},
-    spawned: []
+    spawned: [],
+    respawns: {}
   };
   if (!raw || typeof raw !== "object") {
     return out;
@@ -600,27 +729,251 @@ function normalizeWorldObjectDeltas(raw) {
         holder_key: String(v.holder_key || "")
       }));
   }
+  if (raw.respawns && typeof raw.respawns === "object") {
+    for (const [k, v] of Object.entries(raw.respawns)) {
+      if (!v || typeof v !== "object") {
+        continue;
+      }
+      const entry = v as any;
+      const dueAtMs = Number(entry.due_at_ms);
+      const takenAtMs = Number(entry.taken_at_ms);
+      const respawnMs = Number(entry.respawn_ms);
+      if (!Number.isFinite(dueAtMs) || dueAtMs <= 0) {
+        continue;
+      }
+      out.respawns[String(k)] = {
+        due_at_ms: Math.floor(dueAtMs),
+        taken_at_ms: Number.isFinite(takenAtMs) ? Math.floor(takenAtMs) : 0,
+        respawn_ms: Number.isFinite(respawnMs) ? Math.max(0, Math.floor(respawnMs)) : DEFAULT_PICKUP_RESPAWN_MS,
+        policy: String(entry.policy || "default")
+      };
+    }
+  }
   return out;
 }
 
 function objectFootprintCells(obj, tileFlags) {
-  const x = obj.x | 0;
-  const y = obj.y | 0;
+  const wrap10 = (v) => Number(v) & 0x3ff;
+  const x = wrap10(obj.x);
+  const y = wrap10(obj.y);
   const z = obj.z | 0;
-  const out = [{ x, y, z }];
-  const tf = tileFlags ? (tileFlags[obj.tile_id & 0x07ff] ?? 0) : 0;
+  const tileId = Number(obj.tile_id) & 0xffff;
+  const out = [{ x, y, z, tile_id: tileId }];
+  const tf = tileFlags ? (tileFlags[tileId & 0x07ff] ?? 0) : 0;
   const dblH = (tf & 0x80) !== 0;
   const dblV = (tf & 0x40) !== 0;
   if (dblH) {
-    out.push({ x: x - 1, y, z });
+    out.push({ x: wrap10(x - 1), y, z, tile_id: (tileId - 1) & 0xffff });
   }
   if (dblV) {
-    out.push({ x, y: y - 1, z });
+    out.push({ x, y: wrap10(y - 1), z, tile_id: (tileId - (dblH ? 2 : 1)) & 0xffff });
   }
   if (dblH && dblV) {
-    out.push({ x: x - 1, y: y - 1, z });
+    out.push({ x: wrap10(x - 1), y: wrap10(y - 1), z, tile_id: (tileId - 3) & 0xffff });
   }
   return out;
+}
+
+function objectAnchorIndexKey(x, y, z) {
+  return `${Number(x) & 0x3ff},${Number(y) & 0x3ff},${Number(z) & 0x0f}`;
+}
+
+function isSlowRespawnLootObject(obj) {
+  const type = Number(obj?.type) & 0x3ff;
+  /*
+    Legacy U6 object ids: 88=gold coin, 89=gold nugget, 98=chest.
+    Keep this deliberately narrow until the object-name table is wired in.
+  */
+  return type === 88 || type === 89 || type === 98;
+}
+
+function pickupRespawnPolicyForObject(obj) {
+  if (isSlowRespawnLootObject(obj)) {
+    return {
+      policy: "loot_slow",
+      respawn_ms: LOOT_PICKUP_RESPAWN_MS
+    };
+  }
+  return {
+    policy: "default",
+    respawn_ms: DEFAULT_PICKUP_RESPAWN_MS
+  };
+}
+
+function isBaselineWorldObject(obj) {
+  const kind = String(obj?.source_kind || "baseline");
+  return kind === "baseline" || kind === "baseline_moved" || kind === "";
+}
+
+function inventoryCloneKeyForTake(state, target, actorId) {
+  const nextSeq = (Number(state?.worldInteractionLog?.seq || 0) + 1) >>> 0;
+  const source = String(target?.object_key || "object").replace(/[^a-zA-Z0-9:_-]+/g, "_");
+  const actor = String(actorId || "actor").replace(/[^a-zA-Z0-9:_-]+/g, "_");
+  return `inv:${source}:${actor}:${nextSeq}`;
+}
+
+function pushSpawnedWorldObject(state, obj) {
+  state.worldObjects.deltas.spawned.push({
+    object_key: String(obj.object_key || ""),
+    source_area: Number(obj.source_area) >>> 0,
+    source_index: Number(obj.source_index) >>> 0,
+    status: Number(obj.status) & 0xff,
+    shape_type: Number(obj.shape_type) & 0xffff,
+    amount: Number(obj.amount) & 0xffff,
+    type: Number(obj.type) & 0x3ff,
+    frame: Number(obj.frame) & 0x3f,
+    tile_id: Number(obj.tile_id) & 0xffff,
+    x: Number(obj.x) | 0,
+    y: Number(obj.y) | 0,
+    z: Number(obj.z) | 0,
+    holder_kind: String(obj.holder_kind || "none"),
+    holder_id: String(obj.holder_id || ""),
+    holder_key: String(obj.holder_key || "")
+  });
+}
+
+function buildObjectAnchorIndex(objects) {
+  const out = new Map();
+  for (const obj of Array.isArray(objects) ? objects : []) {
+    if (!obj || (Number(obj.coord_use) | 0) !== OBJ_COORD_USE_LOCXYZ) {
+      continue;
+    }
+    const key = objectAnchorIndexKey(obj.x, obj.y, obj.z);
+    const bucket = out.get(key);
+    if (bucket) {
+      bucket.push(obj);
+    } else {
+      out.set(key, [obj]);
+    }
+  }
+  return out;
+}
+
+function refreshWorldObjectIndexes(state) {
+  if (!state?.worldObjects) {
+    return;
+  }
+  state.worldObjects.activeByAnchor = buildObjectAnchorIndex(state.worldObjects.active);
+}
+
+function activeObjectsAnchoredAt(state, x, y, z) {
+  const key = objectAnchorIndexKey(x, y, z);
+  const indexed = state?.worldObjects?.activeByAnchor;
+  if (indexed && typeof indexed.get === "function") {
+    return indexed.get(key) || [];
+  }
+  return (state?.worldObjects?.active || []).filter((obj) => (
+    (Number(obj?.coord_use) | 0) === OBJ_COORD_USE_LOCXYZ
+    && ((Number(obj.x) & 0x3ff) === (Number(x) & 0x3ff))
+    && ((Number(obj.y) & 0x3ff) === (Number(y) & 0x3ff))
+    && ((Number(obj.z) & 0x0f) === (Number(z) & 0x0f))
+  ));
+}
+
+function isCloseableDoorType(type) {
+  return OBJECT_TYPES_CLOSEABLE_DOOR.has(Number(type) & 0x03ff);
+}
+
+function isDoorFrameOpen(type, frame) {
+  const t = Number(type) & 0x03ff;
+  const f = Number(frame) | 0;
+  if (!isCloseableDoorType(t)) {
+    return false;
+  }
+  if (t === 0x14e) {
+    return (f & 1) !== 0;
+  }
+  return f >= 0 && f < 4;
+}
+
+function isSolidEnvObject(obj) {
+  return !!obj && OBJECT_TYPES_SOLID_ENV.has(Number(obj.type) & 0x03ff);
+}
+
+function isImplicitSolidObjectTile(obj, tileId, tileFlags) {
+  const type = Number(obj?.type) & 0x03ff;
+  if (OBJECT_TYPES_DOOR.has(type)) {
+    return false;
+  }
+  const tf = tileFlags ? (tileFlags[Number(tileId) & 0x07ff] ?? 0) : 0;
+  if ((tf & 0x20) !== 0) {
+    return true;
+  }
+  if ((tf & 0xc0) !== 0) {
+    if ((tf & 0x10) !== 0) {
+      return false;
+    }
+    if (OBJECT_TYPES_TOP_DECOR.has(type)) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+function objectBlocksCell(obj, tx, ty, tz, tileFlags) {
+  if (!obj || (Number(obj.coord_use) | 0) !== OBJ_COORD_USE_LOCXYZ || (Number(obj.z) | 0) !== (tz | 0)) {
+    return false;
+  }
+  const isDoor = OBJECT_TYPES_DOOR.has(Number(obj.type) & 0x03ff);
+  const doorOpen = isDoor ? isDoorFrameOpen(obj.type, obj.frame) : false;
+  for (const cell of objectFootprintCells(obj, tileFlags)) {
+    if ((cell.x | 0) !== (tx | 0) || (cell.y | 0) !== (ty | 0) || (cell.z | 0) !== (tz | 0)) {
+      continue;
+    }
+    if (isDoor) {
+      if (!doorOpen) {
+        return true;
+      }
+      const ctf = tileFlags ? (tileFlags[Number(cell.tile_id) & 0x07ff] ?? 0) : 0;
+      if ((ctf & 0x04) !== 0 || (ctf & 0x20) !== 0) {
+        return true;
+      }
+      continue;
+    }
+    if (isSolidEnvObject(obj)) {
+      return true;
+    }
+    if (isImplicitSolidObjectTile(obj, cell.tile_id, tileFlags)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function canNpcStepInto(state, step) {
+  const tx = Number(step?.to_x) | 0;
+  const ty = Number(step?.to_y) | 0;
+  const tz = Number(step?.to_z) | 0;
+  if (!state?.worldObjects || !state?.mapRuntime) {
+    return true;
+  }
+  const rawTile = state.mapRuntime.tileAt(tx, ty, tz) & 0x07ff;
+  const terrain = state.worldObjects.terrainType ? (state.worldObjects.terrainType[rawTile] ?? 0) : 0;
+  const tileFlag = state.worldObjects.tileFlags ? (state.worldObjects.tileFlags[rawTile] ?? 0) : 0;
+  if ((terrain & 0x04) !== 0 || (tileFlag & 0x04) !== 0 || (tileFlag & 0x20) !== 0) {
+    return false;
+  }
+  const sources = [
+    [tx, ty],
+    [tx + 1, ty],
+    [tx, ty + 1],
+    [tx + 1, ty + 1]
+  ];
+  const seen = new Set();
+  for (const [sx, sy] of sources) {
+    for (const obj of activeObjectsAnchoredAt(state, sx, sy, tz)) {
+      const key = String(obj.object_key || `${obj.source_area}:${obj.source_index}`);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      if (objectBlocksCell(obj, tx, ty, tz, state.worldObjects.tileFlags)) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function isStatus0010(status) {
@@ -663,10 +1016,15 @@ function compareLegacyWorldObjectOrder(a, b) {
 function buildWorldObjectState(runtimeDir, rawDeltas) {
   const baseline = loadWorldObjectBaseline(runtimeDir);
   const tileFlags = loadTileFlagMap(runtimeDir);
+  const terrainType = loadTerrainTypeMap(runtimeDir);
   const deltas = normalizeWorldObjectDeltas(rawDeltas);
   const active = [];
+  const nowMs = Date.now();
   for (const b of baseline.objects) {
-    if (deltas.removed[b.object_key]) {
+    const respawn = deltas.respawns[b.object_key];
+    const hiddenByPickup = deltas.removed[b.object_key]
+      && !(respawn && Number(respawn.due_at_ms) <= nowMs);
+    if (hiddenByPickup) {
       continue;
     }
     const moved = deltas.moved[b.object_key];
@@ -693,8 +1051,10 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
   return {
     baseline,
     tileFlags,
+    terrainType,
     deltas,
-    active
+    active,
+    activeByAnchor: buildObjectAnchorIndex(active)
   };
 }
 
@@ -849,6 +1209,7 @@ function recordWorldInteractionEvent(state, event) {
 
 function reloadWorldObjectBaseline(state) {
   state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
+  state.mapRuntime = new U6MapRuntime(RUNTIME_DIR);
   writeJson(FILES.worldObjectDeltas, []);
   state.worldInteractionLog = defaultWorldInteractionLog();
   writeJson(FILES.worldInteractionLog, state.worldInteractionLog);
@@ -880,6 +1241,9 @@ function updateAuthoritativeClock(state) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     deltaMs = 0;
   }
+  if (SERVER_CLOCK_CATCHUP_MAX_MS > 0 && deltaMs > SERVER_CLOCK_CATCHUP_MAX_MS) {
+    deltaMs = SERVER_CLOCK_CATCHUP_MAX_MS;
+  }
   const steps = Math.floor(deltaMs / SERVER_TICK_MS);
   if (steps <= 0) {
     return clock;
@@ -892,6 +1256,7 @@ function updateAuthoritativeClock(state) {
   }
   clock.last_advanced_at_ms = nowMs - (deltaMs % SERVER_TICK_MS);
   rebuildNpcRuntimeState(state);
+  updateNpcScheduleStates(state, steps);
   return clock;
 }
 
@@ -951,12 +1316,15 @@ function loadState() {
     },
     npcRuntime: null,
     npcRuntimeById: new Map(),
+    npcStates: [],
+    npcScheduleById: new Map(),
     npcPilot: [],
     npcPilotById: new Map(),
     conversationArchives: null,
     conversationSessions: Object.create(null),
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
     worldObjects,
+    mapRuntime: new U6MapRuntime(RUNTIME_DIR),
     worldInteractionLog: normalizeWorldInteractionLog(readJson(FILES.worldInteractionLog, defaultWorldInteractionLog()))
   };
   if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
@@ -1881,6 +2249,7 @@ const server = http.createServer(async (req, res) => {
       date_m: clock.date_m >>> 0,
       date_y: clock.date_y >>> 0,
       intro_state: state.introState,
+      npc_states: Array.isArray(state.npcStates) ? state.npcStates : [],
       npc_overrides: Array.isArray(state.npcPilot) ? state.npcPilot : [],
       runtime_contract: runtimeContract
     });
@@ -2141,49 +2510,143 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    Object.assign(target, applied.patch || {});
-    persistPatchedObject(state, target);
+    let responseTarget = target;
+    let sourceTarget = null;
+    let respawn = null;
+    const baselineTakeCreatesClone = verb === "take" && isBaselineWorldObject(target);
+    if (baselineTakeCreatesClone) {
+      const clone = {
+        ...target,
+        object_key: inventoryCloneKeyForTake(state, target, actorId),
+        source_kind: "spawned"
+      };
+      Object.assign(clone, applied.patch || {});
+      pushSpawnedWorldObject(state, clone);
+      state.worldObjects.active.push(clone);
+
+      const policy = pickupRespawnPolicyForObject(target);
+      const takenAtMs = Date.now();
+      state.worldObjects.deltas.removed[String(target.object_key)] = true;
+      state.worldObjects.deltas.respawns[String(target.object_key)] = {
+        due_at_ms: takenAtMs + policy.respawn_ms,
+        taken_at_ms: takenAtMs,
+        respawn_ms: policy.respawn_ms,
+        policy: policy.policy
+      };
+      state.worldObjects.active = state.worldObjects.active.filter(
+        (obj) => String(obj.object_key || "") !== String(target.object_key || "")
+      );
+      sourceTarget = target;
+      responseTarget = clone;
+      respawn = {
+        source_object_key: String(target.object_key || ""),
+        due_at_ms: takenAtMs + policy.respawn_ms,
+        respawn_ms: policy.respawn_ms,
+        policy: policy.policy
+      };
+    } else {
+      Object.assign(target, applied.patch || {});
+      persistPatchedObject(state, target);
+    }
     const event = recordWorldInteractionEvent(state, {
       verb,
       actor_id: actorId,
-      target_key: String(target.object_key || ""),
+      target_key: String(sourceTarget?.object_key || responseTarget.object_key || ""),
       container_key: String(container?.object_key || ""),
-      status: Number(target.status) & 0xff,
-      x: target.x | 0,
-      y: target.y | 0,
-      z: target.z | 0,
-      holder_kind: String(target.holder_kind || "none"),
-      holder_id: String(target.holder_id || ""),
-      holder_key: String(target.holder_key || ""),
+      status: Number(responseTarget.status) & 0xff,
+      x: responseTarget.x | 0,
+      y: responseTarget.y | 0,
+      z: responseTarget.z | 0,
+      holder_kind: String(responseTarget.holder_kind || "none"),
+      holder_id: String(responseTarget.holder_id || ""),
+      holder_key: String(responseTarget.holder_key || ""),
       runtime_profile: runtimeContract.profile,
       runtime_extensions: runtimeContract.extensions
     });
 
     state.worldObjects.active.sort(compareLegacyWorldObjectOrder);
+    refreshWorldObjectIndexes(state);
     persistState(state);
     sendJson(res, 200, {
       ok: true,
       verb,
       target: {
-        object_key: String(target.object_key || ""),
-        status: Number(target.status) & 0xff,
-        coord_use: coordUseOfStatus(target.status),
-        holder_kind: String(target.holder_kind || "none"),
-        holder_id: String(target.holder_id || ""),
-        holder_key: String(target.holder_key || ""),
-        x: target.x | 0,
-        y: target.y | 0,
-        z: target.z | 0,
+        object_key: String(responseTarget.object_key || ""),
+        source_object_key: sourceTarget ? String(sourceTarget.object_key || "") : "",
+        status: Number(responseTarget.status) & 0xff,
+        coord_use: coordUseOfStatus(responseTarget.status),
+        holder_kind: String(responseTarget.holder_kind || "none"),
+        holder_id: String(responseTarget.holder_id || ""),
+        holder_key: String(responseTarget.holder_key || ""),
+        type: Number(responseTarget.type) & 0x3ff,
+        frame: Number(responseTarget.frame) & 0x3f,
+        tile_id: Number(responseTarget.tile_id) & 0xffff,
+        x: responseTarget.x | 0,
+        y: responseTarget.y | 0,
+        z: responseTarget.z | 0,
         assoc_chain: targetChain.assoc_chain,
         root_anchor_key: targetChain.root_anchor_key,
         blocked_by: targetChain.blocked_by
       },
+      inventory_item: baselineTakeCreatesClone ? {
+        object_key: String(responseTarget.object_key || ""),
+        source_object_key: sourceTarget ? String(sourceTarget.object_key || "") : "",
+        status: Number(responseTarget.status) & 0xff,
+        coord_use: coordUseOfStatus(responseTarget.status),
+        holder_kind: String(responseTarget.holder_kind || "none"),
+        holder_id: String(responseTarget.holder_id || ""),
+        holder_key: String(responseTarget.holder_key || ""),
+        type: Number(responseTarget.type) & 0x3ff,
+        frame: Number(responseTarget.frame) & 0x3f,
+        tile_id: Number(responseTarget.tile_id) & 0xffff,
+        x: responseTarget.x | 0,
+        y: responseTarget.y | 0,
+        z: responseTarget.z | 0
+      } : null,
+      respawn,
       interaction_checkpoint: {
         seq: Number(state.worldInteractionLog?.seq || event.seq || 0) >>> 0,
         hash: String(state.worldInteractionLog?.checkpoint_hash || "")
       },
       runtime_contract: runtimeContract,
       meta: worldObjectMeta(state)
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/world/inventory") {
+    const actorId = String(url.searchParams.get("actor_id") || user.user_id || "").trim();
+    const objects = state.worldObjects.active
+      .filter((obj) => (
+        coordUseOfStatus(obj.status) === OBJ_COORD_USE_INVEN
+        && String(obj.holder_kind || "") === "npc"
+        && String(obj.holder_id || "") === actorId
+      ))
+      .sort(compareLegacyWorldObjectOrder)
+      .map((obj) => ({
+        object_key: String(obj.object_key || ""),
+        status: Number(obj.status) & 0xff,
+        coord_use: coordUseOfStatus(obj.status),
+        holder_kind: String(obj.holder_kind || "none"),
+        holder_id: String(obj.holder_id || ""),
+        holder_key: String(obj.holder_key || ""),
+        type: Number(obj.type) & 0x3ff,
+        frame: Number(obj.frame) & 0x3f,
+        tile_id: Number(obj.tile_id) & 0xffff,
+        amount: Number(obj.amount) & 0xffff,
+        x: Number(obj.x) | 0,
+        y: Number(obj.y) | 0,
+        z: Number(obj.z) | 0,
+        source_kind: String(obj.source_kind || "")
+      }));
+    sendJson(res, 200, {
+      ok: true,
+      actor_id: actorId,
+      objects,
+      meta: {
+        inventory_count: objects.length >>> 0,
+        ...worldObjectMeta(state)
+      }
     });
     return;
   }

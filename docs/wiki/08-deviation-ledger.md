@@ -127,9 +127,9 @@ Observed impact archetype:
 
 - Status: `known-gap`
 - Legacy anchor: `schedule` pointer table + per-hour/day selection drive NPC day routines across the world
-- Modern: the server parses the legacy `schedule` asset and applies legacy selection rules, but only a castle pilot NPC set currently receives projected overrides and these are direct placement updates rather than full path/action execution
-- Why acceptable now: it proves the original data/routine path can drive visible browser NPC behavior without inventing a client-local schedule system
-- Retirement/revision condition: replace pilot-only direct overrides with full authoritative schedule/path execution and expand coverage town-by-town
+- Modern: the server parses the legacy `schedule` asset, applies legacy selection rules for all valid scheduled NPCs, and exposes server-owned `npc_states` with position/target/action/pose/path metadata. Movement is currently deterministic target stepping, not full legacy resistance/path/action execution. The server clock now defaults to the Ultima VI Online documented cadence of one in-game day per real hour and caps restart catch-up to avoid schedule jumps after downtime.
+- Why acceptable now: it proves the original data/routine path can drive visible browser NPC behavior globally without inventing a client-local schedule system, while deferring thief/brawl/combat side effects safely.
+- Retirement/revision condition: replace deterministic target stepping with full authoritative legacy pathfinding/action execution, including door/path resistance behavior and supported schedule side effects.
 
 ## Open Gaps Requiring Deep Legacy Pass
 

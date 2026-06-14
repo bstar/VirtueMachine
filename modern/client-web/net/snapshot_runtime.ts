@@ -2,6 +2,7 @@ export type SnapshotSaveDeps = {
   ensureAuth: () => Promise<void>;
   isAuthenticated: () => boolean;
   request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+  snapshotRoute?: () => string;
   encodeSnapshot: () => string;
   currentTick: () => number;
   onSavedTick: (tick: number) => void;
@@ -13,6 +14,7 @@ export type SnapshotLoadDeps = {
   ensureAuth: () => Promise<void>;
   isAuthenticated: () => boolean;
   request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+  snapshotRoute?: () => string;
   decodeSnapshot: (snapshotBase64: string) => any;
   applyLoadedSim: (loaded: any) => void;
   resetBackgroundFailures: () => void;
@@ -25,7 +27,8 @@ export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<an
     await deps.ensureAuth();
   }
   const savedTick = deps.currentTick() >>> 0;
-  const out = await deps.request("/api/world/snapshot", {
+  const route = typeof deps.snapshotRoute === "function" ? deps.snapshotRoute() : "/api/world/snapshot";
+  const out = await deps.request(route || "/api/world/snapshot", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -47,7 +50,8 @@ export async function performNetLoadSnapshot(deps: SnapshotLoadDeps): Promise<an
   if (!deps.isAuthenticated()) {
     await deps.ensureAuth();
   }
-  const out = await deps.request("/api/world/snapshot", { method: "GET" }, true);
+  const route = typeof deps.snapshotRoute === "function" ? deps.snapshotRoute() : "/api/world/snapshot";
+  const out = await deps.request(route || "/api/world/snapshot", { method: "GET" }, true);
   if (!out?.snapshot_base64) {
     throw new Error("No world snapshot is saved yet");
   }
