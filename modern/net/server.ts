@@ -25,6 +25,7 @@ import type {
 } from "./server_account_runtime.ts";
 import type { U6MapRuntime as U6MapRuntimeType } from "./world_map_runtime.ts";
 import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
+import type { ConversationSessionMapRuntime } from "./conversation_runtime_types.ts";
 
 const http = require("node:http");
 const fs = require("node:fs");
@@ -192,7 +193,7 @@ const INTRO_PHASE_POST = INTRO_PHASE_POST_RUNTIME;
 type ServerState = {
   characters: ServerCharacterRuntime[];
   conversationArchives: unknown;
-  conversationSessions: Record<string, unknown>;
+  conversationSessions: ConversationSessionMapRuntime;
   criticalPolicy: CriticalItemPolicyRuntime[];
   introState: { phase: string };
   mapRuntime: U6MapRuntimeType;

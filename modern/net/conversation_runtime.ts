@@ -1,5 +1,17 @@
 "use strict";
 
+import type {
+  ConversationArchivesRuntime,
+  ConversationPositionRuntime,
+  ConversationRuntimeState,
+  ConversationSessionPayloadRuntime,
+  ConversationSessionRuntime,
+  ReplyAuthoritativeConversationInputRuntime,
+  ReplyAuthoritativeConversationResultRuntime,
+  StartAuthoritativeConversationInputRuntime,
+  StartAuthoritativeConversationResultRuntime
+} from "./conversation_runtime_types.ts";
+
 const fs = require("node:fs");
 const path = require("node:path");
 const nodeCrypto = require("node:crypto");
@@ -36,22 +48,26 @@ const INTRO_PHASE_PRE = "pre_intro";
 const INTRO_PHASE_POST = "post_intro";
 const INTRO_COMPAT_NPC_IDS = new Set([2, 5, 6]);
 
-function readConversationArchives(runtimeDir) {
-  const out = { a: null, b: null };
+function readConversationArchives(runtimeDir: unknown): ConversationArchivesRuntime {
+  const out: ConversationArchivesRuntime = { a: null, b: null };
+  const dir = typeof runtimeDir === "string" ? runtimeDir : "";
+  if (!dir) {
+    return out;
+  }
   try {
-    out.a = new Uint8Array(fs.readFileSync(path.join(runtimeDir, "converse.a")));
+    out.a = new Uint8Array(fs.readFileSync(path.join(dir, "converse.a")));
   } catch (_err) {
     out.a = null;
   }
   try {
-    out.b = new Uint8Array(fs.readFileSync(path.join(runtimeDir, "converse.b")));
+    out.b = new Uint8Array(fs.readFileSync(path.join(dir, "converse.b")));
   } catch (_err) {
     out.b = null;
   }
   return out;
 }
 
-function copyTalkFlagsBack(targetArray, sourceMap) {
+function copyTalkFlagsBack(targetArray: unknown, sourceMap: unknown): void {
   if (!Array.isArray(targetArray) || !sourceMap || typeof sourceMap !== "object") {
     return;
   }
@@ -61,7 +77,7 @@ function copyTalkFlagsBack(targetArray, sourceMap) {
   }
 }
 
-function effectiveTalkFlagsForSession(state, npcId) {
+function effectiveTalkFlagsForSession(state: ConversationRuntimeState, npcId: unknown): unknown[] {
   const actual = Array.isArray(state?.npcRuntime?.talkFlags) ? state.npcRuntime.talkFlags : [];
   const introPhase = String(state?.introState?.phase || INTRO_PHASE_POST).trim().toLowerCase();
   if (introPhase !== INTRO_PHASE_PRE || !INTRO_COMPAT_NPC_IDS.has(Number(npcId) | 0)) {
@@ -70,7 +86,7 @@ function effectiveTalkFlagsForSession(state, npcId) {
   return new Array(0x100).fill(0);
 }
 
-function inTalkRange(actorPos, targetPos) {
+function inTalkRange(actorPos: ConversationPositionRuntime | null | undefined, targetPos: ConversationPositionRuntime | null | undefined): boolean {
   if (!actorPos || !targetPos) {
     return false;
   }
@@ -82,7 +98,7 @@ function inTalkRange(actorPos, targetPos) {
   return (dx + dy) <= 2;
 }
 
-function buildVmContext(state, targetName, objNum, playerName) {
+function buildVmContext(state: ConversationRuntimeState, targetName: unknown, objNum: unknown, playerName: unknown) {
   return buildConversationVmContext({
     hour: Number(state?.worldClock?.time_h) | 0,
     player: String(playerName || "Avatar").trim() || "Avatar",
@@ -94,7 +110,11 @@ function buildVmContext(state, targetName, objNum, playerName) {
   });
 }
 
-function buildConversationSessionPayload(session, openingLines, desc) {
+function buildConversationSessionPayload(
+  session: ConversationSessionRuntime,
+  openingLines: unknown,
+  desc: unknown
+): ConversationSessionPayloadRuntime {
   return {
     session_id: String(session.sessionId || ""),
     npc_id: Number(session.npcId) | 0,
@@ -106,7 +126,7 @@ function buildConversationSessionPayload(session, openingLines, desc) {
   };
 }
 
-function resolveNpcConversation(state, npcId) {
+function resolveNpcConversation(state: ConversationRuntimeState, npcId: unknown) {
   const npc = state?.npcRuntimeById?.get(Number(npcId) | 0) || null;
   if (!npc) {
     return null;
@@ -121,7 +141,7 @@ function resolveNpcConversation(state, npcId) {
   };
 }
 
-function canonicalTargetName(header, npcId) {
+function canonicalTargetName(header: { name?: unknown } | null | undefined, npcId: unknown): string {
   const name = String(header?.name || "").trim();
   if (name) {
     return name;
@@ -132,7 +152,10 @@ function canonicalTargetName(header, npcId) {
   return `NPC ${Number(npcId) | 0}`;
 }
 
-function startAuthoritativeConversation(state, input) {
+function startAuthoritativeConversation(
+  state: ConversationRuntimeState,
+  input: StartAuthoritativeConversationInputRuntime
+): StartAuthoritativeConversationResultRuntime {
   const npcId = Number(input?.npcId) | 0;
   const actorPos = input?.actorPos || { x: 0, y: 0, z: 0 };
   const resolved = resolveNpcConversation(state, npcId);
@@ -159,7 +182,7 @@ function startAuthoritativeConversation(state, input) {
     .map((line) => renderConversationMacrosWithContext(String(line || "").trim(), vmContext))
     .filter(Boolean);
   const sessionId = nodeCrypto.randomUUID();
-  const session = {
+  const session: ConversationSessionRuntime = {
     sessionId,
     npcId,
     targetName,
@@ -191,7 +214,10 @@ function startAuthoritativeConversation(state, input) {
   };
 }
 
-function replyAuthoritativeConversation(state, input) {
+function replyAuthoritativeConversation(
+  state: ConversationRuntimeState,
+  input: ReplyAuthoritativeConversationInputRuntime
+): ReplyAuthoritativeConversationResultRuntime {
   const sessionId = String(input?.sessionId || "").trim();
   const typed = String(input?.typed || "").trim();
   const sessions = state?.conversationSessions;
@@ -285,7 +311,7 @@ function replyAuthoritativeConversation(state, input) {
   };
 }
 
-function ensureConversationRuntimeState(state, runtimeDir) {
+function ensureConversationRuntimeState(state: ConversationRuntimeState, runtimeDir: unknown): void {
   if (!state.conversationArchives) {
     state.conversationArchives = readConversationArchives(runtimeDir);
   }
