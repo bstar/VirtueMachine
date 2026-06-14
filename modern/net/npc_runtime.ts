@@ -24,6 +24,8 @@ const NPC_FLAG_OFF = 0x19f1;
 const OBJLIST_MIN_SIZE = 0x1bf1;
 
 export const CASTLE_PILOT_NPC_IDS = Object.freeze([2, 5, 6]);
+export const INTRO_PHASE_PRE_RUNTIME = "pre_intro";
+export const INTRO_PHASE_POST_RUNTIME = "post_intro";
 
 const AI_FINDPATH = 0x81;
 const AI_SCHEDULE = 0x86;
@@ -82,6 +84,11 @@ export type NpcBaselineRuntime = {
   origShapeType: number[];
 };
 
+export type NpcRuntimePersistRuntime = {
+  intro_phase: string;
+  talk_flags: number[];
+};
+
 export type U6ScheduleEntryRuntime = {
   time: number;
   action: number;
@@ -134,6 +141,35 @@ export type ScheduledNpcStepRuntime = {
 export type ScheduledNpcBuildOptionsRuntime = {
   canStep?: (step: ScheduledNpcStepRuntime) => boolean;
 };
+
+export function defaultNpcRuntimeStateRuntime(
+  baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined
+): NpcRuntimePersistRuntime {
+  return {
+    intro_phase: INTRO_PHASE_POST_RUNTIME,
+    talk_flags: Array.isArray(baseline?.talkFlags) ? baseline.talkFlags.slice(0, 0x100) : new Array(0x100).fill(0)
+  };
+}
+
+export function normalizeNpcRuntimeStateRuntime(
+  raw: unknown,
+  baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined
+): NpcRuntimePersistRuntime {
+  const out = defaultNpcRuntimeStateRuntime(baseline);
+  if (raw && typeof raw === "object") {
+    const row = raw as { intro_phase?: unknown; talk_flags?: unknown };
+    const phase = String(row.intro_phase || "").trim().toLowerCase();
+    if (phase === INTRO_PHASE_PRE_RUNTIME || phase === INTRO_PHASE_POST_RUNTIME) {
+      out.intro_phase = phase;
+    }
+    if (Array.isArray(row.talk_flags)) {
+      for (let i = 0; i < 0x100; i += 1) {
+        out.talk_flags[i] = Number(row.talk_flags[i]) & 0xff;
+      }
+    }
+  }
+  return out;
+}
 
 function parseU16LE(bytes: Uint8Array, off: number): number {
   return (bytes[off] | (bytes[off + 1] << 8)) >>> 0;

@@ -43,9 +43,13 @@ const {
   worldObjectMeta: buildWorldObjectMeta
 } = require("./world_object_state_runtime.ts");
 const {
+  INTRO_PHASE_POST_RUNTIME,
+  INTRO_PHASE_PRE_RUNTIME,
+  defaultNpcRuntimeStateRuntime,
   loadNpcBaselineRuntime,
   loadScheduleRuntime,
-  buildScheduledNpcStatesRuntime
+  buildScheduledNpcStatesRuntime,
+  normalizeNpcRuntimeStateRuntime
 } = require("./npc_runtime.ts");
 const {
   ensureConversationRuntimeState,
@@ -110,8 +114,8 @@ const FILES = {
   worldObjectDeltas: path.join(DATA_DIR, "world_object_deltas.json"),
   worldInteractionLog: path.join(DATA_DIR, "world_interaction_log.json")
 };
-const INTRO_PHASE_PRE = "pre_intro";
-const INTRO_PHASE_POST = "post_intro";
+const INTRO_PHASE_PRE = INTRO_PHASE_PRE_RUNTIME;
+const INTRO_PHASE_POST = INTRO_PHASE_POST_RUNTIME;
 
 function nowIso() {
   return new Date().toISOString();
@@ -297,26 +301,11 @@ function defaultWorldClock() {
 }
 
 function defaultNpcRuntimeState(baseline) {
-  return {
-    intro_phase: INTRO_PHASE_POST,
-    talk_flags: Array.isArray(baseline?.talkFlags) ? baseline.talkFlags.slice(0, 0x100) : new Array(0x100).fill(0)
-  };
+  return defaultNpcRuntimeStateRuntime(baseline);
 }
 
 function normalizeNpcRuntimeState(raw, baseline) {
-  const out = defaultNpcRuntimeState(baseline);
-  if (raw && typeof raw === "object") {
-    const phase = String(raw.intro_phase || "").trim().toLowerCase();
-    if (phase === INTRO_PHASE_PRE || phase === INTRO_PHASE_POST) {
-      out.intro_phase = phase;
-    }
-    if (Array.isArray(raw.talk_flags)) {
-      for (let i = 0; i < 0x100; i += 1) {
-        out.talk_flags[i] = Number(raw.talk_flags[i]) & 0xff;
-      }
-    }
-  }
-  return out;
+  return normalizeNpcRuntimeStateRuntime(raw, baseline);
 }
 
 function rebuildNpcRuntimeState(state) {

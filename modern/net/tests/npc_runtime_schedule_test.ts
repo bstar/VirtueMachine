@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { buildScheduledNpcStatesRuntime } from "../npc_runtime.ts";
+import {
+  INTRO_PHASE_POST_RUNTIME,
+  INTRO_PHASE_PRE_RUNTIME,
+  buildScheduledNpcStatesRuntime,
+  defaultNpcRuntimeStateRuntime,
+  normalizeNpcRuntimeStateRuntime
+} from "../npc_runtime.ts";
 
 const AI_SIT = 0x92;
 const AI_FINDPATH = 0x81;
@@ -22,9 +28,33 @@ const baseline: any = {
       source: "objlist"
     }
   ],
+  talkFlags: [1, 2, 3],
   party: [],
   partySize: 0
 };
+
+const defaultPersist = defaultNpcRuntimeStateRuntime(baseline);
+assert.equal(defaultPersist.intro_phase, INTRO_PHASE_POST_RUNTIME);
+assert.equal(defaultPersist.talk_flags.length, 3);
+assert.deepEqual(defaultPersist.talk_flags, [1, 2, 3]);
+
+const fallbackPersist = defaultNpcRuntimeStateRuntime(null);
+assert.equal(fallbackPersist.talk_flags.length, 0x100);
+assert.equal(fallbackPersist.talk_flags[0], 0);
+
+const normalizedPersist = normalizeNpcRuntimeStateRuntime({
+  intro_phase: " PRE_INTRO ",
+  talk_flags: [0x101, -1, "7"]
+}, baseline);
+assert.equal(normalizedPersist.intro_phase, INTRO_PHASE_PRE_RUNTIME);
+assert.deepEqual(normalizedPersist.talk_flags.slice(0, 3), [1, 0xff, 7]);
+
+const invalidPersist = normalizeNpcRuntimeStateRuntime({
+  intro_phase: "bad",
+  talk_flags: "bad"
+}, baseline);
+assert.equal(invalidPersist.intro_phase, INTRO_PHASE_POST_RUNTIME);
+assert.deepEqual(invalidPersist.talk_flags, [1, 2, 3]);
 
 const npcOffsets = new Array(0x101).fill(0);
 npcOffsets[2] = 0;
