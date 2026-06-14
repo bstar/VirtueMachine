@@ -140,6 +140,11 @@ function runLiveProbeFixture() {
   assert.equal(probe.canonical_ui.party_panel.members[1].id, 77, "live active party member id mismatch");
   assert.equal(probe.canonical_ui.party_panel.members[1].active, true, "live active party member flag mismatch");
   assert.equal(probe.canonical_ui.inventory_panel.entries.length, 2, "live inventory entries mismatch");
+  assert.deepEqual(
+    probe.canonical_ui.inventory_panel.entries.map((entry) => [entry.key, entry.count]),
+    [["0x073:0", 1], ["0x0fa:1", 2]],
+    "live inventory count projection mismatch"
+  );
   assert.equal(probe.canonical_ui.message_log_panel.entries.length, 2, "live message projection mismatch");
   assert.equal(
     probe.canonical_runtime.mechanics_capability.summary.partial,

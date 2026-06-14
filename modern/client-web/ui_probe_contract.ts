@@ -47,6 +47,7 @@ const LEGACY_EQUIP_SLOTS = Object.freeze([
 ]);
 
 type UnknownRecord = Record<string, unknown>;
+type ProbeInventoryCountMap = Record<string, number>;
 
 interface ProbeEquipmentEntry {
   tile_id?: unknown;
@@ -67,7 +68,7 @@ interface ProbeConversationInput {
 interface ProbeRuntimeInput {
   sim?: {
     tick?: unknown;
-    inventory?: Record<string, unknown>;
+    inventory?: ProbeInventoryCountMap;
     partyMembers?: unknown;
     world?: {
       active?: unknown;
@@ -107,7 +108,7 @@ function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
 
-function normalizeInventory(inventory: Record<string, unknown> | null | undefined) {
+function normalizeInventory(inventory: ProbeInventoryCountMap | null | undefined) {
   const out = [];
   for (const [k, v] of Object.entries(inventory || {})) {
     out.push({
@@ -250,7 +251,7 @@ function fromRuntime(runtime: ProbeRuntimeInput) {
     },
     party_members: partyMembers,
     active_party_index: activeIndex,
-    inventory: { ...(sim.inventory || {}) },
+    inventory: { ...(sim.inventory || {}) } as ProbeInventoryCountMap,
     equipment: [], // pending canonical equip-state bridge
     party: partyPanelMembers.length
       ? partyPanelMembers
