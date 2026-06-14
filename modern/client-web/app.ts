@@ -306,15 +306,33 @@ const WORLD_OBJECT_LOOKUP_DEPS = {
   isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
 };
 
-function byId<T = any>(id: string): T {
+type UiProbeContract = ReturnType<typeof buildUiProbeContract>;
+type UiProbeAvatarRuntime = {
+  equip_weight?: number;
+  total_weight?: number;
+  strength?: number;
+  party_index?: number;
+};
+type UiProbeContractRuntime = UiProbeContract & {
+  canonical_ui?: UiProbeContract["canonical_ui"] & {
+    conversation_panel?: { target_name?: string | null };
+    avatar_panel?: { avatar?: UiProbeAvatarRuntime };
+  };
+};
+type VmDebugWindow = Window & typeof globalThis & {
+  __vmLastUiProbe?: UiProbeContractRuntime;
+  __vmLastUiProbeDigest?: string;
+};
+
+function byId<T = HTMLElement>(id: string): T {
   return document.getElementById(id) as unknown as T;
 }
 
-const canvas = byId("viewport");
+const canvas = byId<HTMLCanvasElement>("viewport");
 const ctx = canvas.getContext("2d");
-const legacyBackdropCanvas = byId("legacyBackdrop");
-const legacyViewportCanvas = byId("legacyViewport");
-const legacyWorldSurface = byId("legacyWorldSurface");
+const legacyBackdropCanvas = byId<HTMLCanvasElement>("legacyBackdrop");
+const legacyViewportCanvas = byId<HTMLCanvasElement>("legacyViewport");
+const legacyWorldSurface = byId<HTMLCanvasElement>("legacyWorldSurface");
 
 const statTick = byId("statTick");
 const statPos = byId("statPos");
@@ -346,61 +364,61 @@ const topNetIndicator = byId("topNetIndicator");
 const topInputMode = byId("topInputMode");
 const topCopyStatus = byId("topCopyStatus");
 const netQuickStatus = byId("netQuickStatus");
-const netAccountOpenButton = byId("netAccountOpenButton");
+const netAccountOpenButton = byId<HTMLButtonElement>("netAccountOpenButton");
 const netAccountModal = byId("netAccountModal");
 const netAccountModalBackdrop = byId("netAccountModalBackdrop");
-const netAccountCloseButton = byId("netAccountCloseButton");
+const netAccountCloseButton = byId<HTMLButtonElement>("netAccountCloseButton");
 const diagBox = byId("diagBox");
-const replayDownload = byId("replayDownload");
-const themeSelect = byId("themeSelect");
-const wikiLink = byId("wikiLink");
-const fontSelect = byId("fontSelect");
-const gridToggle = byId("gridToggle");
-const debugOverlayToggle = byId("debugOverlayToggle");
-const animationToggle = byId("animationToggle");
-const paletteFxToggle = byId("paletteFxToggle");
-const movementModeToggle = byId("movementModeToggle");
-const capturePreviewToggle = byId("capturePreviewToggle");
-const legacyScaleModeToggle = byId("legacyScaleModeToggle");
-const charStubCanvas = byId("charStubCanvas");
-const locationSelect = byId("locationSelect");
-const jumpButton = byId("jumpButton");
-const captureButton = byId("captureButton");
-const captureWorldHudButton = byId("captureWorldHudButton");
-const audioMuteButton = byId("audioMuteButton");
-const pauseLoopButton = byId("pauseLoopButton");
-const parityRadiusInput = byId("parityRadiusInput");
-const paritySnapshotButton = byId("paritySnapshotButton");
-const netApiBaseInput = byId("netApiBaseInput");
-const netAccountSelect = byId("netAccountSelect");
-const netUsernameInput = byId("netUsernameInput");
-const netPasswordInput = byId("netPasswordInput");
-const netPasswordToggleButton = byId("netPasswordToggleButton");
-const netNewPasswordInput = byId("netNewPasswordInput");
-const netChangePasswordButton = byId("netChangePasswordButton");
-const netCharacterNameInput = byId("netCharacterNameInput");
-const netEmailInput = byId("netEmailInput");
-const netEmailCodeInput = byId("netEmailCodeInput");
-const netLoginButton = byId("netLoginButton");
-const netAutoLoginCheckbox = byId("netAutoLoginCheckbox");
-const netRecoverButton = byId("netRecoverButton");
-const netSetEmailButton = byId("netSetEmailButton");
-const netSendVerifyButton = byId("netSendVerifyButton");
-const netVerifyEmailButton = byId("netVerifyEmailButton");
-const netSaveButton = byId("netSaveButton");
-const netLoadButton = byId("netLoadButton");
-const netMaintenanceToggle = byId("netMaintenanceToggle");
-const netIntroPhaseSelect = byId("netIntroPhaseSelect");
-const netIntroPhaseButton = byId("netIntroPhaseButton");
-const netMaintenanceButton = byId("netMaintenanceButton");
-const debugTabRuntime = byId("debugTabRuntime");
-const debugTabChat = byId("debugTabChat");
+const replayDownload = byId<HTMLAnchorElement>("replayDownload");
+const themeSelect = byId<HTMLSelectElement>("themeSelect");
+const wikiLink = byId<HTMLAnchorElement>("wikiLink");
+const fontSelect = byId<HTMLSelectElement>("fontSelect");
+const gridToggle = byId<HTMLInputElement>("gridToggle");
+const debugOverlayToggle = byId<HTMLInputElement>("debugOverlayToggle");
+const animationToggle = byId<HTMLInputElement>("animationToggle");
+const paletteFxToggle = byId<HTMLInputElement>("paletteFxToggle");
+const movementModeToggle = byId<HTMLInputElement>("movementModeToggle");
+const capturePreviewToggle = byId<HTMLInputElement>("capturePreviewToggle");
+const legacyScaleModeToggle = byId<HTMLInputElement>("legacyScaleModeToggle");
+const charStubCanvas = byId<HTMLCanvasElement>("charStubCanvas");
+const locationSelect = byId<HTMLSelectElement>("locationSelect");
+const jumpButton = byId<HTMLButtonElement>("jumpButton");
+const captureButton = byId<HTMLButtonElement>("captureButton");
+const captureWorldHudButton = byId<HTMLButtonElement>("captureWorldHudButton");
+const audioMuteButton = byId<HTMLButtonElement>("audioMuteButton");
+const pauseLoopButton = byId<HTMLButtonElement>("pauseLoopButton");
+const parityRadiusInput = byId<HTMLInputElement>("parityRadiusInput");
+const paritySnapshotButton = byId<HTMLButtonElement>("paritySnapshotButton");
+const netApiBaseInput = byId<HTMLInputElement>("netApiBaseInput");
+const netAccountSelect = byId<HTMLSelectElement>("netAccountSelect");
+const netUsernameInput = byId<HTMLInputElement>("netUsernameInput");
+const netPasswordInput = byId<HTMLInputElement>("netPasswordInput");
+const netPasswordToggleButton = byId<HTMLButtonElement>("netPasswordToggleButton");
+const netNewPasswordInput = byId<HTMLInputElement>("netNewPasswordInput");
+const netChangePasswordButton = byId<HTMLButtonElement>("netChangePasswordButton");
+const netCharacterNameInput = byId<HTMLInputElement>("netCharacterNameInput");
+const netEmailInput = byId<HTMLInputElement>("netEmailInput");
+const netEmailCodeInput = byId<HTMLInputElement>("netEmailCodeInput");
+const netLoginButton = byId<HTMLButtonElement>("netLoginButton");
+const netAutoLoginCheckbox = byId<HTMLInputElement>("netAutoLoginCheckbox");
+const netRecoverButton = byId<HTMLButtonElement>("netRecoverButton");
+const netSetEmailButton = byId<HTMLButtonElement>("netSetEmailButton");
+const netSendVerifyButton = byId<HTMLButtonElement>("netSendVerifyButton");
+const netVerifyEmailButton = byId<HTMLButtonElement>("netVerifyEmailButton");
+const netSaveButton = byId<HTMLButtonElement>("netSaveButton");
+const netLoadButton = byId<HTMLButtonElement>("netLoadButton");
+const netMaintenanceToggle = byId<HTMLSelectElement>("netMaintenanceToggle");
+const netIntroPhaseSelect = byId<HTMLSelectElement>("netIntroPhaseSelect");
+const netIntroPhaseButton = byId<HTMLButtonElement>("netIntroPhaseButton");
+const netMaintenanceButton = byId<HTMLButtonElement>("netMaintenanceButton");
+const debugTabRuntime = byId<HTMLButtonElement>("debugTabRuntime");
+const debugTabChat = byId<HTMLButtonElement>("debugTabChat");
 const debugPanelRuntime = byId("debugPanelRuntime");
 const debugPanelChat = byId("debugPanelChat");
 const debugChatCount = byId("debugChatCount");
 const debugChatLedgerBody = byId("debugChatLedgerBody");
-const debugChatCopyButton = byId("debugChatCopyButton");
-const debugChatClearButton = byId("debugChatClearButton");
+const debugChatCopyButton = byId<HTMLButtonElement>("debugChatCopyButton");
+const debugChatClearButton = byId<HTMLButtonElement>("debugChatClearButton");
 
 const THEME_KEY = "vm_theme";
 const FONT_KEY = "vm_font";
@@ -560,15 +578,21 @@ const LEGACY_GENERIC_PORTRAIT_BY_TYPE = Object.freeze({
   0x17e: 0xc1, /* guard */
   0x16b: 0xc2  /* gargoyle */
 });
-const STARTUP_MENU_HITBOX = Object.freeze({
+type StartupMenuHitbox = {
+  x0: number;
+  x1: number;
+  rows: Array<[number, number]>;
+};
+
+const STARTUP_MENU_HITBOX: StartupMenuHitbox = Object.freeze({
   x0: 56,
   x1: 264,
   rows: [
-    [86, 108],
-    [107, 128],
-    [127, 149],
-    [148, 170],
-    [169, 196]
+    [86, 108] as [number, number],
+    [107, 128] as [number, number],
+    [127, 149] as [number, number],
+    [148, 170] as [number, number],
+    [169, 196] as [number, number]
   ]
 });
 const LEGACY_DIGIT_3X5 = Object.freeze([
@@ -868,12 +892,19 @@ const LEGACY_SCALE_MODES = Object.freeze(["fit", "1", "2", "3", "4"]);
 const CURSOR_ASPECT_X = 1.0;
 const CURSOR_ASPECT_Y = 1.2;
 
+type AnimDataEntry = {
+  baseTile: number;
+  startFrame: number;
+  mask: number;
+  shift: number;
+};
+
 class U6AnimDataJS {
-  entries: any[];
+  entries: AnimDataEntry[];
   state: Uint8Array;
   byBase: Map<number, number>;
 
-  constructor(entries) {
+  constructor(entries: AnimDataEntry[]) {
     this.entries = entries;
     this.state = new Uint8Array(entries.length);
     this.state.fill(1);
@@ -1121,9 +1152,9 @@ class U6TileSetJS {
   tileIndex: DataView;
   maskType: Uint8Array;
   tiles: Uint8Array;
-  cache: Map<any, any>;
-  pixelCache: Map<any, any>;
-  fxBandCache: Map<any, any>;
+  cache: Map<string, HTMLCanvasElement>;
+  pixelCache: Map<number, Uint8Array>;
+  fxBandCache: Map<number, boolean>;
 
   constructor(tileIndexBytes, maskTypeBytes, mapTilesBytes, objTilesBytes) {
     this.tileIndex = new DataView(tileIndexBytes.buffer, tileIndexBytes.byteOffset, tileIndexBytes.byteLength);
@@ -1256,15 +1287,43 @@ class U6TileSetJS {
   }
 }
 
+type U6ObjectEntry = {
+  [key: string]: unknown;
+  assocChild0010Count?: number;
+  assocChildCount?: number;
+  assocIndex: number;
+  assocObj?: U6ObjectEntry;
+  baseTile: number;
+  coordUse: number;
+  frame: number;
+  index: number;
+  legacyOrder?: number;
+  order: number;
+  renderable: boolean;
+  sourceArea: number;
+  sourceIndex: number;
+  status: number;
+  tileId: number;
+  type: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+type U6ObjectLayerParseResult = {
+  entries: U6ObjectEntry[];
+  assocEntries: U6ObjectEntry[];
+};
+
 class U6ObjectLayerJS {
-  baseTiles: any;
-  byCoord: Map<string, any[]>;
-  entries: any[];
-  assocEntries: any[];
+  baseTiles: ArrayLike<number>;
+  byCoord: Map<string, U6ObjectEntry[]>;
+  entries: U6ObjectEntry[];
+  assocEntries: U6ObjectEntry[];
   totalLoaded: number;
   filesLoaded: number;
 
-  constructor(baseTiles) {
+  constructor(baseTiles: ArrayLike<number>) {
     this.baseTiles = baseTiles;
     this.byCoord = new Map();
     this.entries = [];
@@ -1293,9 +1352,9 @@ class U6ObjectLayerJS {
     return compareLegacyObjectOrderStable(a, b);
   }
 
-  parseObjBlk(bytes, areaId = 0) {
+  parseObjBlk(bytes, areaId = 0): U6ObjectLayerParseResult {
     if (!bytes || bytes.length < 2) {
-      return [];
+      return { entries: [], assocEntries: [] };
     }
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let count = dv.getUint16(0, true);
@@ -1304,7 +1363,7 @@ class U6ObjectLayerJS {
       count = maxCount;
     }
 
-    const decoded = [];
+    const decoded: U6ObjectEntry[] = [];
     for (let i = 0; i < count; i += 1) {
       const off = 2 + (i * 8);
       const status = bytes[off + 0];
@@ -1370,8 +1429,8 @@ class U6ObjectLayerJS {
         legacyOrderByIndex[idx] = i;
       }
     }
-    const entries = [];
-    const assocEntries = [];
+    const entries: U6ObjectEntry[] = [];
+    const assocEntries: U6ObjectEntry[] = [];
     for (const row of decoded) {
       const normalized = {
         ...row,
@@ -1391,7 +1450,7 @@ class U6ObjectLayerJS {
     return { entries, assocEntries };
   }
 
-  addEntries(parsed) {
+  addEntries(parsed: U6ObjectLayerParseResult) {
     const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
     const assocEntries = Array.isArray(parsed?.assocEntries) ? parsed.assocEntries : [];
     for (const e of entries) {
@@ -1510,7 +1569,7 @@ class U6ObjectLayerJS {
     const removed = (removedCount && state?.sim?.removedObjectKeys && typeof state.sim.removedObjectKeys === "object")
       ? state.sim.removedObjectKeys
       : null;
-    const out = [];
+    const out: U6ObjectEntry[] = [];
     for (const o of this.entries) {
       if ((o.z | 0) !== targetZ) {
         continue;
@@ -1532,13 +1591,70 @@ class U6ObjectLayerJS {
   }
 }
 
+type U6EntityEntry = {
+  [key: string]: unknown;
+  assocIndex?: number;
+  authoritative?: boolean;
+  baseTile: number;
+  coordUse?: number;
+  direction: number;
+  frame: number;
+  homeX?: number;
+  homeY?: number;
+  id: number;
+  movable?: boolean;
+  npcComMode: number;
+  npcFlag: number;
+  npcMode: number;
+  npcStatus: number;
+  order: number;
+  origFrame: number;
+  origType: number;
+  patrolPhase?: number;
+  patrolRadius?: number;
+  qual?: number;
+  status: number;
+  tileId: number;
+  type: number;
+  walkingFlag: boolean;
+  x: number;
+  y: number;
+  z: number;
+};
+
+type U6EntityAssocEntry = {
+  [key: string]: unknown;
+  assocIndex: number;
+  baseTile: number;
+  coordUse: number;
+  direction: number;
+  frame: number;
+  id: number;
+  npcComMode: number;
+  npcFlag: number;
+  npcMode: number;
+  npcStatus: number;
+  order: number;
+  origFrame: number;
+  origType: number;
+  status: number;
+  tileId: number;
+  type: number;
+  walkingFlag: boolean;
+};
+
+type U6EntityLayerParseResult = {
+  entries: U6EntityEntry[];
+  assocEntries: U6EntityAssocEntry[];
+};
+
 class U6EntityLayerJS {
-  baseTiles: any;
-  entries: any[];
-  assocEntries: any[];
+  baseTiles: ArrayLike<number>;
+  entries: U6EntityEntry[];
+  assocEntries: U6EntityAssocEntry[];
   totalLoaded: number;
 
-  constructor(baseTiles) {
+  constructor(baseTiles: ArrayLike<number>) {
     this.baseTiles = baseTiles;
     this.entries = [];
     this.assocEntries = [];
@@ -1549,7 +1665,7 @@ class U6EntityLayerJS {
     return type >= ENTITY_TYPE_ACTOR_MIN && type <= ENTITY_TYPE_ACTOR_MAX;
   }
 
-  parseObjList(bytes) {
+  parseObjList(bytes): U6EntityLayerParseResult {
     if (!bytes || bytes.length < 0x0900) {
       return { entries: [], assocEntries: [] };
     }
@@ -1562,8 +1678,8 @@ class U6EntityLayerJS {
     const origShapeOff = 0x15f1;
     const npcFlagOff = 0x19f1;
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const out = [];
-    const assocEntries = [];
+    const out: U6EntityEntry[] = [];
+    const assocEntries: U6EntityAssocEntry[] = [];
     for (let id = 0; id < 0x100; id += 1) {
       const status = bytes[objStatusOff + id];
       const npcStatus = bytes[npcStatusOff + id];
@@ -1662,7 +1778,7 @@ class U6EntityLayerJS {
   entitiesInView(startX, startY, z, w, h) {
     const endX = startX + w;
     const endY = startY + h;
-    const out = [];
+    const out: U6EntityEntry[] = [];
     for (const e of this.entries) {
       if (e.z !== z) {
         continue;
@@ -2426,8 +2542,10 @@ function parseConversationRules(scriptBytes, mainPc) {
 
 function findConversationFirstKeyPc(scriptBytes, mainPc) {
   return findConversationFirstKeyPcImported(scriptBytes, mainPc, {
-    KEY: CONV_OP_KEY
-  } as any);
+    KEY: CONV_OP_KEY,
+    RES: CONV_OP_RES,
+    ENDRES: CONV_OP_ENDRES
+  });
 }
 
 function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
@@ -3319,8 +3437,10 @@ function renderLegacyHudStubOnBackdrop() {
   if (showVista) {
     drawLegacyVista();
   }
-  const probe: any = getUiProbeForRender();
-  const conversationPanel: any = probe.canonical_ui?.conversation_panel || {};
+  const probe: UiProbeContractRuntime = getUiProbeForRender();
+  const conversationPanel = (probe.canonical_ui?.conversation_panel || {}) as {
+    target_name?: string | null;
+  };
   const panelLayout = buildLegacyInventoryPaperdollLayoutRuntime({
     statusDisplay,
     talkStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
@@ -6942,7 +7062,7 @@ function startSessionFromTitle() {
   });
 }
 
-function returnToTitleMenu(opts: any = {}) {
+function returnToTitleMenu(opts: { saveRemote?: boolean } = {}) {
   if (!state.sessionStarted) {
     return;
   }
@@ -8258,8 +8378,15 @@ function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
   return { rawTiles, displayTiles };
 }
 
+type BaseTileBuffers = ReturnType<typeof buildBaseTileBuffersCurrent> & {
+  debug: unknown;
+};
+
 function buildBaseTileBuffers(startX, startY, wz, viewCtx) {
-  const base: any = buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx);
+  const base: BaseTileBuffers = {
+    ...buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx),
+    debug: null
+  };
   base.debug = null;
   return base;
 }
@@ -10270,8 +10397,9 @@ function captureUiProbeHotkey() {
   });
   const digest = uiProbeDigest(probe);
   const filename = `virtuemachine-ui-probe-${state.sim.tick >>> 0}.json`;
-  (window as any).__vmLastUiProbe = probe;
-  (window as any).__vmLastUiProbeDigest = digest;
+  const debugWindow = window as VmDebugWindow;
+  debugWindow.__vmLastUiProbe = probe;
+  debugWindow.__vmLastUiProbeDigest = digest;
   downloadJsonFile(filename, probe);
   if (topCopyStatus) {
     topCopyStatus.textContent = `probe ${digest}`;
@@ -10714,7 +10842,7 @@ function startupMenuIndexAtEvent(ev, surface) {
     ev.clientY,
     { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
     { width: s.width || 0, height: s.height || 0 },
-    STARTUP_MENU_HITBOX as any
+    STARTUP_MENU_HITBOX
   );
 }
 
@@ -10833,7 +10961,7 @@ function buildHoverReportText() {
   return lines.join("\n");
 }
 
-async function copyHoverReportToClipboard(options: any = {}) {
+async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}) {
   const enrich = options.enrich !== false;
   const report = buildHoverReportText();
   if (!report) {
