@@ -4169,7 +4169,7 @@ function setAccountModalOpen(open: boolean): void {
   setModalOpenRuntime(netAccountModal, !!open);
 }
 
-function initNetPanel() {
+function initNetPanel(): void {
   const prefs = loadNetPanelPrefs({
     apiBase: NET_API_BASE_KEY,
     username: NET_USERNAME_KEY,
@@ -4594,7 +4594,7 @@ function initLegacyScaleMode(): void {
   }
 }
 
-function initLegacyFramePreview() {
+function initLegacyFramePreview(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, LEGACY_FRAME_PREVIEW_KEY, "on", ["on", "off"]);
   setLegacyFramePreview(saved === "on");
   if (capturePreviewToggle) {
@@ -6558,7 +6558,7 @@ function drawLegacySelectCellMarker(g: CanvasRenderingContext2D, px: number, py:
   g.strokeRect(px + 2, py + 2, size - 4, size - 4);
 }
 
-function drawTileGrid() {
+function drawTileGrid(): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#0a0f13";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
