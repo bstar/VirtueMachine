@@ -53,8 +53,64 @@ export interface SimSnapshotRuntime {
   world: Required<SnapshotWorldRuntime>;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+type SnapshotMapSourceRuntime = Record<string, unknown>;
+
+type SnapshotWorldObjectSourceRuntime = {
+  frame?: unknown;
+  order?: unknown;
+  renderable?: unknown;
+  sourceKind?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type SnapshotAnchorSourceRuntime = {
+  order?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type SimSnapshotSourceRuntime = {
+  avatarPose?: unknown;
+  avatarPoseAnchor?: unknown;
+  avatarPoseSetTick?: unknown;
+  commandsApplied?: unknown;
+  doorOpenStates?: unknown;
+  inventory?: unknown;
+  partyMembers?: unknown;
+  removedObjectAtTick?: unknown;
+  removedObjectCount?: unknown;
+  removedObjectKeys?: unknown;
+  rngState?: unknown;
+  spawnedWorldObjects?: unknown;
+  spawnedWorldSeq?: unknown;
+  tick?: unknown;
+  world?: unknown;
+  worldFlags?: unknown;
+};
+
+function asSimSnapshotSourceRuntime(value: unknown): SimSnapshotSourceRuntime | null {
+  return value && typeof value === "object" ? value as SimSnapshotSourceRuntime : null;
+}
+
+function asSnapshotWorldRuntime(value: unknown): SnapshotWorldRuntime | null {
+  return value && typeof value === "object" ? value as SnapshotWorldRuntime : null;
+}
+
+function asSnapshotMapSourceRuntime(value: unknown): SnapshotMapSourceRuntime | null {
+  return value && typeof value === "object" ? value as SnapshotMapSourceRuntime : null;
+}
+
+function asSnapshotWorldObjectSourceRuntime(value: unknown): SnapshotWorldObjectSourceRuntime | null {
+  return value && typeof value === "object" ? value as SnapshotWorldObjectSourceRuntime : null;
+}
+
+function asSnapshotAnchorSourceRuntime(value: unknown): SnapshotAnchorSourceRuntime | null {
+  return value && typeof value === "object" ? value as SnapshotAnchorSourceRuntime : null;
 }
 
 export function cloneSimStateRuntime(sim: SimSnapshotRuntime): SimSnapshotRuntime {
@@ -83,16 +139,16 @@ export function cloneSimStateRuntime(sim: SimSnapshotRuntime): SimSnapshotRuntim
 }
 
 export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotRuntime | null {
-  const src = asRecord(candidate);
+  const src = asSimSnapshotSourceRuntime(candidate);
   if (!src) {
     return null;
   }
-  const world = asRecord(src.world);
+  const world = asSnapshotWorldRuntime(src.world);
   if (!world) {
     return null;
   }
   const normalizedInventory: Record<string, number> = {};
-  for (const [k, v] of Object.entries(asRecord(src.inventory) ?? {})) {
+  for (const [k, v] of Object.entries(asSnapshotMapSourceRuntime(src.inventory) ?? {})) {
     const key = String(k || "").trim();
     if (!key) {
       continue;
@@ -100,7 +156,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     normalizedInventory[key] = Number(v) >>> 0;
   }
   const normalizedDoorOpenStates: Record<string, number> = {};
-  for (const [k, v] of Object.entries(asRecord(src.doorOpenStates) ?? {})) {
+  for (const [k, v] of Object.entries(asSnapshotMapSourceRuntime(src.doorOpenStates) ?? {})) {
     const key = String(k || "").trim();
     if (!key) {
       continue;
@@ -108,7 +164,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     normalizedDoorOpenStates[key] = Number(v) ? 1 : 0;
   }
   const normalizedRemoved: Record<string, number> = {};
-  for (const [k, v] of Object.entries(asRecord(src.removedObjectKeys) ?? {})) {
+  for (const [k, v] of Object.entries(asSnapshotMapSourceRuntime(src.removedObjectKeys) ?? {})) {
     const key = String(k || "").trim();
     if (!key) {
       continue;
@@ -116,7 +172,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     normalizedRemoved[key] = Number(v) ? 1 : 0;
   }
   const normalizedRemovedAtTick: Record<string, number> = {};
-  for (const [k, v] of Object.entries(asRecord(src.removedObjectAtTick) ?? {})) {
+  for (const [k, v] of Object.entries(asSnapshotMapSourceRuntime(src.removedObjectAtTick) ?? {})) {
     const key = String(k || "").trim();
     if (!key) {
       continue;
@@ -135,7 +191,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
     : Object.keys(normalizedRemoved).length;
   const normalizedSpawned = Array.isArray(src.spawnedWorldObjects)
     ? src.spawnedWorldObjects.map((value) => {
-      const o = asRecord(value) ?? {};
+      const o = asSnapshotWorldObjectSourceRuntime(value) ?? {};
       return {
         x: Number(o.x) | 0,
         y: Number(o.y) | 0,
@@ -151,7 +207,7 @@ export function normalizeLoadedSimStateRuntime(candidate: unknown): SimSnapshotR
   const normalizedPartyMembers = Array.isArray(src.partyMembers)
     ? src.partyMembers.map((id) => Number(id) >>> 0).filter((id) => id > 0).slice(0, 10)
     : [];
-  const avatarPoseAnchor = asRecord(src.avatarPoseAnchor);
+  const avatarPoseAnchor = asSnapshotAnchorSourceRuntime(src.avatarPoseAnchor);
   return {
     tick: Number(src.tick) >>> 0,
     rngState: Number(src.rngState) >>> 0,

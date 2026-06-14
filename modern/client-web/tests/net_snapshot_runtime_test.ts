@@ -61,6 +61,27 @@ assert.equal(snapshotBase64Runtime({ snapshot_base64: " encoded " }), "encoded")
 assert.equal(snapshotBase64Runtime({}), "");
 
 assert.equal(normalizeLoadedSimStateRuntime({}), null);
+const malformedSnapshot = normalizeLoadedSimStateRuntime({
+  tick: 77,
+  doorOpenStates: "bad",
+  inventory: "bad",
+  removedObjectKeys: { stale: true },
+  removedObjectAtTick: "bad",
+  spawnedWorldObjects: ["bad"],
+  partyMembers: [],
+  world: {
+    map_x: 10,
+    map_y: 11,
+    map_z: 0
+  }
+});
+assert.equal(malformedSnapshot?.tick, 77);
+assert.deepEqual(malformedSnapshot?.doorOpenStates, {});
+assert.deepEqual(malformedSnapshot?.inventory, {});
+assert.deepEqual(malformedSnapshot?.removedObjectAtTick, { stale: 77 });
+assert.equal(malformedSnapshot?.spawnedWorldObjects[0].type, 0);
+assert.deepEqual(malformedSnapshot?.partyMembers, [1]);
+
 assert.equal(shouldAutosaveSnapshotRuntime({
   currentTick: 0,
   intervalTicks: 10,
