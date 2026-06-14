@@ -553,6 +553,23 @@ type BootIntroRenderStateView = {
   bootIntroFont: BootIntroWouFontRuntime | null;
   bootIntroPalettes: RgbPaletteRuntime[] | null;
 };
+type CursorDrawOptions = {
+  logicalW?: number;
+  mouseX?: number;
+  mouseY?: number;
+};
+type LegacyCompositionStateView = {
+  basePalette: RgbPaletteRuntime | null;
+  cursorIndex: number;
+  cursorPixmaps: U6ShapeRuntime[] | null;
+  legacyBackdropBaseCanvas: HTMLCanvasElement | null;
+  legacyComposeCanvas: HTMLCanvasElement | null;
+  mouseInCanvas: boolean;
+  mouseNormX: number;
+  mouseNormY: number;
+  sessionStarted: boolean;
+  tileSet: U6TileSetRuntime | null;
+};
 
 function byId<T = HTMLElement>(id: string): T {
   return document.getElementById(id) as unknown as T;
@@ -2993,9 +3010,10 @@ function renderBootIntroLayer(g: CanvasRenderingContext2D, scale: number): void 
   }
 }
 
-function renderStartupScreen() {
+function renderStartupScreen(): void {
   const mainScale = Math.max(1, Math.floor(canvas.width / 320));
   const introState = state as BootIntroRenderStateView;
+  const compositionState = state as LegacyCompositionStateView;
   if (!ctx) {
     return;
   }
@@ -3019,17 +3037,17 @@ function renderStartupScreen() {
     return;
   }
   g.imageSmoothingEnabled = false;
-  if (state.legacyBackdropBaseCanvas
-    && state.legacyBackdropBaseCanvas.width === w
-    && state.legacyBackdropBaseCanvas.height === h) {
+  if (compositionState.legacyBackdropBaseCanvas
+    && compositionState.legacyBackdropBaseCanvas.width === w
+    && compositionState.legacyBackdropBaseCanvas.height === h) {
     g.clearRect(0, 0, w, h);
-    g.drawImage(state.legacyBackdropBaseCanvas, 0, 0);
+    g.drawImage(compositionState.legacyBackdropBaseCanvas, 0, 0);
   } else {
     g.fillStyle = "#000";
     g.fillRect(0, 0, w, h);
   }
   const scale = Math.max(1, Math.floor(w / 320));
-  if (state.bootIntro && state.bootIntro.active) {
+  if (introState.bootIntro && introState.bootIntro.active) {
     renderBootIntroLayer(g, scale);
   } else {
     renderStartupMenuLayer(g, scale);
@@ -3038,38 +3056,48 @@ function renderStartupScreen() {
   legacyViewportCanvas.width = 160;
   legacyViewportCanvas.height = 160;
   const lv = legacyViewportCanvas.getContext("2d");
+  if (!lv) {
+    return;
+  }
   lv.imageSmoothingEnabled = false;
   lv.clearRect(0, 0, 160, 160);
   lv.drawImage(legacyBackdropCanvas, 8 * scale, 8 * scale, 160 * scale, 160 * scale, 0, 0, 160, 160);
 }
 
-function drawCustomCursorOnContext(g, targetW, targetH, opts = null) {
-  if (!state.mouseInCanvas || !state.cursorPixmaps || !state.cursorPixmaps.length) {
+function drawCustomCursorOnContext(
+  g: CanvasRenderingContext2D | null,
+  targetW: number,
+  targetH: number,
+  opts: CursorDrawOptions | null = null
+): void {
+  const cursorState = state as LegacyCompositionStateView;
+  const cursorPixmaps = cursorState.cursorPixmaps;
+  if (!cursorState.mouseInCanvas || !cursorPixmaps || !cursorPixmaps.length) {
     return;
   }
-  const cursorShape = state.cursorPixmaps[state.cursorIndex] || state.cursorPixmaps[0];
-  if (!cursorShape || !state.basePalette || !g || targetW <= 0 || targetH <= 0) {
+  const cursorShape = cursorPixmaps[cursorState.cursorIndex] || cursorPixmaps[0];
+  if (!cursorShape || !cursorState.basePalette || !g || targetW <= 0 || targetH <= 0) {
     return;
   }
-  const cursorCanvas = canvasFromIndexedPixels(cursorShape, getRenderPalette() || state.basePalette, 0xff);
+  const cursorCanvas = canvasFromIndexedPixels(cursorShape, getRenderPalette() || cursorState.basePalette, 0xff);
   if (!cursorCanvas) {
     return;
   }
-  const logicalW = (opts && Number.isFinite(opts.logicalW) && opts.logicalW > 0)
-    ? opts.logicalW
+  const logicalW = (opts && Number.isFinite(opts.logicalW) && Number(opts.logicalW) > 0)
+    ? Number(opts.logicalW)
     : cursorLogicalWidthRuntime({
       isLegacyFramePreview: isLegacyFramePreviewOn(),
-      sessionStarted: state.sessionStarted,
+      sessionStarted: cursorState.sessionStarted,
       viewWidthTiles: VIEW_W
     });
   const drawRect = cursorDrawRectRuntime({
     aspectX: CURSOR_ASPECT_X,
     aspectY: CURSOR_ASPECT_Y,
     logicalW,
-    mouseNormX: state.mouseNormX,
-    mouseNormY: state.mouseNormY,
-    mouseX: opts && Number.isFinite(opts.mouseX) ? opts.mouseX : undefined,
-    mouseY: opts && Number.isFinite(opts.mouseY) ? opts.mouseY : undefined,
+    mouseNormX: cursorState.mouseNormX,
+    mouseNormY: cursorState.mouseNormY,
+    mouseX: opts && Number.isFinite(opts.mouseX) ? Number(opts.mouseX) : undefined,
+    mouseY: opts && Number.isFinite(opts.mouseY) ? Number(opts.mouseY) : undefined,
     shape: cursorShape,
     targetH,
     targetW
@@ -3081,7 +3109,8 @@ function drawCustomCursorOnContext(g, targetW, targetH, opts = null) {
   g.drawImage(cursorCanvas, drawRect.px, drawRect.py, drawRect.drawW, drawRect.drawH);
 }
 
-function drawCustomCursorLayer() {
+function drawCustomCursorLayer(): void {
+  const cursorState = state as LegacyCompositionStateView;
   if (isLegacyFramePreviewOn()) {
     if (!legacyBackdropCanvas) {
       return;
@@ -3091,10 +3120,10 @@ function drawCustomCursorLayer() {
     if (bw <= 0 || bh <= 0) {
       return;
     }
-    const mx = Math.floor(state.mouseNormX * bw);
-    const my = Math.floor(state.mouseNormY * bh);
+    const mx = Math.floor(cursorState.mouseNormX * bw);
+    const my = Math.floor(cursorState.mouseNormY * bh);
 
-    if (state.sessionStarted && legacyViewportCanvas) {
+    if (cursorState.sessionStarted && legacyViewportCanvas) {
       const scale = Math.max(1, Math.floor(bw / 320));
       const mapX = LEGACY_UI_MAP_RECT.x * scale;
       const mapY = LEGACY_UI_MAP_RECT.y * scale;
@@ -3121,7 +3150,8 @@ function drawCustomCursorLayer() {
   drawCustomCursorOnContext(ctx, canvas.width | 0, canvas.height | 0);
 }
 
-function composeLegacyViewportFromModernGrid() {
+function composeLegacyViewportFromModernGrid(): void {
+  const compositionState = state as LegacyCompositionStateView;
   if (!legacyViewportCanvas || !canvas) {
     return;
   }
@@ -3130,23 +3160,29 @@ function composeLegacyViewportFromModernGrid() {
     return;
   }
 
-  if (!state.legacyComposeCanvas) {
-    state.legacyComposeCanvas = document.createElement("canvas");
-    state.legacyComposeCanvas.width = 176;
-    state.legacyComposeCanvas.height = 176;
+  if (!compositionState.legacyComposeCanvas) {
+    compositionState.legacyComposeCanvas = document.createElement("canvas");
+    compositionState.legacyComposeCanvas.width = 176;
+    compositionState.legacyComposeCanvas.height = 176;
   }
-  const compose = state.legacyComposeCanvas;
+  const compose = compositionState.legacyComposeCanvas;
   const cctx = compose.getContext("2d");
+  if (!cctx) {
+    return;
+  }
   cctx.imageSmoothingEnabled = false;
   cctx.clearRect(0, 0, 176, 176);
   /* 704 -> 176 is exact /4, keeping tile edge parity intact before crop. */
   cctx.drawImage(canvas, 0, 0, 704, 704, 0, 0, 176, 176);
 
-  if (state.tileSet) {
-    const drawFrameTile = (tileId, x, y) => {
+  if (compositionState.tileSet) {
+    const drawFrameTile = (tileId: number, x: number, y: number): void => {
       const pal = paletteForTile(tileId);
+      if (!pal) {
+        return;
+      }
       const key = paletteKeyForTile(tileId);
-      const tc = state.tileSet.tileCanvas(tileId, pal, key);
+      const tc = compositionState.tileSet?.tileCanvas(tileId, pal, key);
       if (tc) {
         cctx.drawImage(tc, x, y);
       }
@@ -3169,6 +3205,9 @@ function composeLegacyViewportFromModernGrid() {
   legacyViewportCanvas.width = 160;
   legacyViewportCanvas.height = 160;
   const lv = legacyViewportCanvas.getContext("2d");
+  if (!lv) {
+    return;
+  }
   lv.imageSmoothingEnabled = false;
   lv.clearRect(0, 0, 160, 160);
   /* Legacy map cutout sits at 8,8 with 160x160 size. */
