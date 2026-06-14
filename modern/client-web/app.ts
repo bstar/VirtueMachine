@@ -424,6 +424,24 @@ type U6TextCanvasApp = LegacyTextCanvasRuntime | {
   fillStyle?: unknown;
   fillRect(x: number, y: number, w: number, h: number): void;
 };
+type AnimationPaletteState = {
+  animData: U6AnimDataRuntime | null;
+  basePalette: RgbPaletteRuntime | null;
+  frozenAnimationTick: number | null;
+  paletteFrame: RgbPaletteRuntime | null;
+  paletteFrameTick: number;
+};
+type AnimatedTileObject = {
+  baseTile?: number;
+  frame?: number;
+  tileId?: number;
+  order?: number;
+  type?: number;
+  x?: number;
+  y?: number;
+  z?: number;
+  [key: string]: unknown;
+};
 
 function byId<T = HTMLElement>(id: string): T {
   return document.getElementById(id) as unknown as T;
@@ -932,69 +950,121 @@ const LEGACY_SCALE_MODES = Object.freeze(["fit", "1", "2", "3", "4"]);
 const CURSOR_ASPECT_X = 1.0;
 const CURSOR_ASPECT_Y = 1.2;
 
-function animationTick() {
+function animationTick(): number {
+  const animationState = state as AnimationPaletteState;
   if (state.animationFrozen) {
-    if (state.frozenAnimationTick === null) {
-      state.frozenAnimationTick = state.sim.tick >>> 0;
+    if (animationState.frozenAnimationTick === null) {
+      animationState.frozenAnimationTick = state.sim.tick >>> 0;
     }
-    return state.frozenAnimationTick;
+    return animationState.frozenAnimationTick;
   }
   return state.sim.tick >>> 0;
 }
 
-function resolveAnimatedTileAtTick(tileId, counter) {
-  if (!state.animData || !state.animData.hasBaseTile(tileId)) {
-    return tileId;
+function resolveAnimatedTileAtTick(tileId: number, counter: number): number {
+  const animData = (state as AnimationPaletteState).animData;
+  if (!animData || !animData.hasBaseTile(tileId)) {
+    return tileId & 0xffff;
   }
-  return state.animData.animatedTile(tileId, counter);
+  return animData.animatedTile(tileId, counter);
 }
 
-function resolveAnimatedTile(tileId) {
+function resolveAnimatedTile(tileId: number): number {
   return resolveAnimatedTileAtTick(tileId, animationTick());
 }
 
-function resolveAnimatedObjectTileAtTick(obj, counter) {
+function resolveAnimatedObjectTileAtTick(obj: AnimatedTileObject | null | undefined, counter: number): number {
   if (!obj) {
     return 0;
   }
-  const doorTileId = resolveDoorTileIdRuntime(state.sim, obj);
-  if (state.animData && state.animData.hasBaseTile(obj.baseTile)) {
-    const animBase = state.animData.animatedTile(obj.baseTile, counter);
-    return (animBase + (obj.frame | 0)) & 0xffff;
+  const baseTile = Number(obj.baseTile);
+  const frame = Number.isFinite(Number(obj.frame)) ? Number(obj.frame) | 0 : 0;
+  if (!Number.isFinite(baseTile)) {
+    return Number(obj.tileId) & 0xffff;
+  }
+  const hasDoorAnchor = Number.isFinite(Number(obj.type))
+    && Number.isFinite(Number(obj.x))
+    && Number.isFinite(Number(obj.y))
+    && Number.isFinite(Number(obj.z))
+    && Number.isFinite(Number(obj.order));
+  const doorTileId = hasDoorAnchor
+    ? resolveDoorTileIdRuntime(state.sim, {
+      baseTile: baseTile | 0,
+      frame,
+      order: Number(obj.order) | 0,
+      type: Number(obj.type) | 0,
+      x: Number(obj.x) | 0,
+      y: Number(obj.y) | 0,
+      z: Number(obj.z) | 0
+    })
+    : ((baseTile | 0) + frame) & 0xffff;
+  const animData = (state as AnimationPaletteState).animData;
+  if (animData && animData.hasBaseTile(baseTile | 0)) {
+    const animBase = animData.animatedTile(baseTile | 0, counter);
+    return (animBase + frame) & 0xffff;
   }
   return resolveAnimatedTileAtTick(doorTileId, counter);
 }
 
-function resolveAnimatedObjectTile(obj) {
+function resolveAnimatedObjectTile(obj: AnimatedTileObject | null | undefined): number {
   return resolveAnimatedObjectTileAtTick(obj, animationTick());
 }
 
-function renderPaletteTick() {
+function resolveFootprintObjectTile(obj: AnimatedTileObject | null | undefined): number {
+  if (!obj) {
+    return 0;
+  }
+  const baseTile = Number(obj.baseTile);
+  const frame = Number.isFinite(Number(obj.frame)) ? Number(obj.frame) | 0 : 0;
+  if (!Number.isFinite(baseTile)) {
+    return Number(obj.tileId) & 0xffff;
+  }
+  const hasDoorAnchor = Number.isFinite(Number(obj.type))
+    && Number.isFinite(Number(obj.x))
+    && Number.isFinite(Number(obj.y))
+    && Number.isFinite(Number(obj.z))
+    && Number.isFinite(Number(obj.order));
+  if (!hasDoorAnchor) {
+    return ((baseTile | 0) + frame) & 0xffff;
+  }
+  return resolveDoorTileIdRuntime(state.sim, {
+    baseTile: baseTile | 0,
+    frame,
+    order: Number(obj.order) | 0,
+    type: Number(obj.type) | 0,
+    x: Number(obj.x) | 0,
+    y: Number(obj.y) | 0,
+    z: Number(obj.z) | 0
+  });
+}
+
+function renderPaletteTick(): number {
   return animationTick();
 }
 
-function legacyPalettePhase() {
+function legacyPalettePhase(): number {
   /* Legacy VGA cycling repeats every 8 steps for the animated bands. */
   return renderPaletteTick() & 0x07;
 }
 
-function getRenderPalette() {
-  if (!state.basePalette) {
+function getRenderPalette(): RgbPaletteRuntime | null {
+  const paletteState = state as AnimationPaletteState;
+  if (!paletteState.basePalette) {
     return null;
   }
   if (!state.enablePaletteFx) {
-    return state.basePalette;
+    return paletteState.basePalette;
   }
   const phase = legacyPalettePhase();
-  if (state.paletteFrame && state.paletteFrameTick === phase) {
-    return state.paletteFrame;
+  if (paletteState.paletteFrame && paletteState.paletteFrameTick === phase) {
+    return paletteState.paletteFrame;
   }
-  state.paletteFrame = buildLegacyPaletteFrameRuntime(state.basePalette, phase);
-  state.paletteFrameTick = phase;
-  return state.paletteFrame;
+  paletteState.paletteFrame = buildLegacyPaletteFrameRuntime(paletteState.basePalette, phase);
+  paletteState.paletteFrameTick = phase;
+  return paletteState.paletteFrame;
 }
 
-function getRenderPaletteKey() {
+function getRenderPaletteKey(): string {
   if (!state.enablePaletteFx) {
     return "pal-static";
   }
@@ -4949,7 +5019,7 @@ async function captureParitySnapshotJson() {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
-    resolveFootprintTile: (obj) => resolveDoorTileIdRuntime(state.sim, obj),
+    resolveFootprintTile: resolveFootprintObjectTile,
     hasWallTerrain,
     injectLegacyOverlays: null,
     isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
@@ -5881,7 +5951,7 @@ function buildOverlayCells(startX, startY, wz, viewCtx) {
     objectLayer: state.tileSet ? state.objectLayer : null,
     tileFlags: state.tileFlags,
     resolveAnimatedObjectTile,
-    resolveFootprintTile: (obj) => resolveDoorTileIdRuntime(state.sim, obj),
+    resolveFootprintTile: resolveFootprintObjectTile,
     hasWallTerrain,
     // Canonical-only path: no client-side synthetic overlay injection.
     injectLegacyOverlays: null,
