@@ -18,12 +18,7 @@
     ]
   },
   "include": [
-    "modern/client-web/audio/adlib_music_runtime.ts",
-    "modern/client-web/audio/audio_runtime.ts",
-    "modern/client-web/audio/pc_speaker_sfx_runtime.ts",
-    "modern/client-web/audio/sfx_ids_runtime.ts",
-    "modern/client-web/audio/u6m_music_runtime.ts",
-    "modern/client-web/error_runtime.ts",
+    "modern/net/server_runtime.ts",
     "modern/common/**/*.ts"
   ]
 }
