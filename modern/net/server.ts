@@ -57,6 +57,13 @@ const {
   replyAuthoritativeConversation
 } = require("./conversation_runtime.ts");
 const {
+  boolEnvOnRuntime,
+  parseSmtpLineBufferRuntime,
+  sanitizeEmailAddressRuntime,
+  sanitizeHeaderValueRuntime,
+  smtpTextMessageRuntime
+} = require("./email_runtime.ts");
+const {
   advanceWorldClockMinuteRuntime,
   clampIntRuntime,
   computeSnapshotHashRuntime,
@@ -816,60 +823,23 @@ function issueEmailVerificationCode(user) {
 }
 
 function sanitizeHeaderValue(raw) {
-  return String(raw || "").replace(/[\r\n]+/g, " ").trim();
+  return sanitizeHeaderValueRuntime(raw);
 }
 
 function sanitizeEmailAddress(raw) {
-  return String(raw || "").replace(/[<>\r\n]/g, "").trim();
+  return sanitizeEmailAddressRuntime(raw);
 }
 
 function boolEnvOn(value, fallback = false) {
-  if (value == null) {
-    return fallback;
-  }
-  const v = String(value).trim().toLowerCase();
-  if (v === "1" || v === "true" || v === "on" || v === "yes") {
-    return true;
-  }
-  if (v === "0" || v === "false" || v === "off" || v === "no") {
-    return false;
-  }
-  return fallback;
+  return boolEnvOnRuntime(value, fallback);
 }
 
 function smtpTextMessage(fromEmail, toEmail, subject, bodyText) {
-  const from = sanitizeEmailAddress(fromEmail);
-  const to = sanitizeEmailAddress(toEmail);
-  const subj = sanitizeHeaderValue(subject);
-  const text = String(bodyText || "")
-    .replace(/\r?\n/g, "\r\n")
-    .split("\r\n")
-    .map((line) => (line.startsWith(".") ? `.${line}` : line))
-    .join("\r\n");
-  return [
-    `From: <${from}>`,
-    `To: <${to}>`,
-    `Subject: ${subj}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    text
-  ].join("\r\n");
+  return smtpTextMessageRuntime(fromEmail, toEmail, subject, bodyText);
 }
 
 function parseSmtpLineBuffer(buffer, onResponse) {
-  let rest = buffer;
-  for (;;) {
-    const idx = rest.indexOf("\n");
-    if (idx < 0) {
-      break;
-    }
-    const line = rest.slice(0, idx).replace(/\r$/, "");
-    rest = rest.slice(idx + 1);
-    onResponse(line);
-  }
-  return rest;
+  return parseSmtpLineBufferRuntime(buffer, onResponse);
 }
 
 interface SmtpResponse {
