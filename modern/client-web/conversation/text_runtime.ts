@@ -17,7 +17,17 @@ export type ConversationVmContext = {
   objNum: number;
 };
 
-export function buildConversationVmContext(input: Record<string, unknown> | null = null): ConversationVmContext {
+export type ConversationVmContextInput = {
+  greeting?: unknown;
+  hour?: unknown;
+  objNum?: unknown;
+  partySize?: unknown;
+  player?: unknown;
+  talkFlags?: Record<string, unknown> | readonly unknown[];
+  target?: unknown;
+};
+
+export function buildConversationVmContext(input: ConversationVmContextInput | null = null): ConversationVmContext {
   const src = (input && typeof input === "object") ? input : {};
   const varStr = new Array(64).fill("");
   const varInt = new Array(64).fill(0);
@@ -50,7 +60,7 @@ export function buildConversationVmContext(input: Record<string, unknown> | null
   };
 }
 
-export function renderConversationMacrosWithContext(text: unknown, vmContext: ConversationVmContext | Record<string, unknown> | null = null): string {
+export function renderConversationMacrosWithContext(text: unknown, vmContext: Partial<ConversationVmContext> | null = null): string {
   const ctx = (vmContext && typeof vmContext === "object") ? vmContext : {};
   const varStr = Array.isArray(ctx.varStr) ? ctx.varStr : [];
   return String(text || "")

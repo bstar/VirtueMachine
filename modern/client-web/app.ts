@@ -54,7 +54,8 @@ import {
   conversationMacroSymbolToIndex as conversationMacroSymbolToIndexImported,
   conversationWordMatchesPattern as conversationWordMatchesPatternImported,
   renderConversationMacrosWithContext as renderConversationMacrosWithContextImported,
-  splitConversationInputWords as splitConversationInputWordsImported
+  splitConversationInputWords as splitConversationInputWordsImported,
+  type ConversationVmContext as ConversationVmContextRuntime
 } from "./conversation/text_runtime.ts";
 import {
   decodeConversationOpeningLines as decodeConversationOpeningLinesImported,
@@ -62,8 +63,7 @@ import {
   decodeConversationResponseBytes as decodeConversationResponseBytesImported,
   decodeConversationResponseOpcodeAware as decodeConversationResponseOpcodeAwareImported,
   type ConversationDecodeOptionsRuntime,
-  type ConversationDecodeResultRuntime,
-  type ConversationVmContextRuntime
+  type ConversationDecodeResultRuntime
 } from "./conversation/vm_runtime.ts";
 import {
   findConversationFirstKeyPc as findConversationFirstKeyPcImported,

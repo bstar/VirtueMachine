@@ -1,4 +1,15 @@
-type ConversationVmContextRuntime = Record<string, unknown> | null;
+import type { ConversationVmContext } from "./text_runtime.ts";
+
+type ConversationVmContextRuntime = Partial<ConversationVmContext> | null;
+
+type ConversationOpcodeMapRuntime = {
+  ASKTOP?: unknown;
+  END?: unknown;
+  ENDRES?: unknown;
+  GET?: unknown;
+  KEY?: unknown;
+  RES?: unknown;
+};
 
 type ConversationRuleRuntime = {
   keys?: unknown;
@@ -74,7 +85,7 @@ type ConversationRunFromKeyCursorResult = {
 };
 
 function asVmContext(raw: unknown): ConversationVmContextRuntime {
-  return raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
+  return raw && typeof raw === "object" ? raw as Partial<ConversationVmContext> : null;
 }
 
 function asDecodeResponseBytes(raw: unknown): DecodeResponseBytesRuntime | null {
@@ -152,8 +163,8 @@ export function conversationRunFromKeyCursor(opts: ConversationRunFromKeyCursorO
   const renderMacros = asRenderMacros(opts.renderMacros);
   const keyMatchesInput = asKeyMatchesInput(opts.keyMatchesInput);
   const vmContext = asVmContext(opts.vmContext);
-  const op = (opts.opcodes && typeof opts.opcodes === "object")
-    ? opts.opcodes as Record<string, unknown>
+  const op: ConversationOpcodeMapRuntime = (opts.opcodes && typeof opts.opcodes === "object")
+    ? opts.opcodes as ConversationOpcodeMapRuntime
     : {};
   const OP_ASKTOP = Number(op.ASKTOP) & 0xff;
   const OP_GET = Number(op.GET) & 0xff;
