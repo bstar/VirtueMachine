@@ -142,6 +142,16 @@ export type ScheduledNpcBuildOptionsRuntime = {
   canStep?: (step: ScheduledNpcStepRuntime) => boolean;
 };
 
+export type CastlePilotNpcOverrideRuntime = {
+  action: number;
+  npc_id: number;
+  schedule_index: number;
+  source: "objlist" | "schedule";
+  x: number;
+  y: number;
+  z: number;
+};
+
 export function defaultNpcRuntimeStateRuntime(
   baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined
 ): NpcRuntimePersistRuntime {
@@ -647,8 +657,8 @@ export function buildCastlePilotNpcOverrides(
   baseline: NpcBaselineRuntime,
   schedule: U6ScheduleTableRuntime,
   clock: { time_h: number; date_d: number; tick: number }
-): Array<Record<string, unknown>> {
-  const out = [];
+): CastlePilotNpcOverrideRuntime[] {
+  const out: CastlePilotNpcOverrideRuntime[] = [];
   const byId = new Map<number, NpcRenderableEntry>();
   for (const entry of baseline.entries) {
     byId.set(Number(entry.id) | 0, entry);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   INTRO_PHASE_POST_RUNTIME,
   INTRO_PHASE_PRE_RUNTIME,
+  buildCastlePilotNpcOverrides,
   buildScheduledNpcStatesRuntime,
   defaultNpcRuntimeStateRuntime,
   normalizeNpcRuntimeStateRuntime,
@@ -170,5 +171,33 @@ assert.equal(furniturePermissive.length, 1);
 assert.equal(furniturePermissive[0].x, 1, "schedule pathing should be able to use a direct furniture-passable cell");
 assert.equal(furniturePermissive[0].y, 0);
 assert.equal(furniturePermissive[0].path_status, "walking");
+
+assert.deepEqual(buildCastlePilotNpcOverrides(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 0 }
+), [{
+  npc_id: 2,
+  x: 2,
+  y: 0,
+  z: 0,
+  action: AI_SIT,
+  schedule_index: 0,
+  source: "schedule"
+}]);
+
+assert.deepEqual(buildCastlePilotNpcOverrides(
+  baseline,
+  { npcOffsets: new Array(0x101).fill(0), entryCount: 0, entries: [] },
+  { time_h: 0, date_d: 1, tick: 0 }
+), [{
+  npc_id: 2,
+  x: 0,
+  y: 0,
+  z: 0,
+  action: 0,
+  schedule_index: 0,
+  source: "objlist"
+}]);
 
 console.log("npc_runtime_schedule_test: ok");
