@@ -30,6 +30,7 @@ import {
   summarizeVerbCapabilityBindingsRuntime,
   summarizeVerbCapabilityCoverageRuntime
 } from "./gameplay/verb_capability_runtime.ts";
+import type { RuntimeExtensions } from "../common/runtime_contract.ts";
 
 const UI_PROBE_SCHEMA_VERSION = 1;
 
@@ -47,6 +48,7 @@ const LEGACY_EQUIP_SLOTS = Object.freeze([
 ]);
 
 type UnknownRecord = Record<string, unknown>;
+type ProbeRuntimeExtensions = Partial<RuntimeExtensions>;
 type ProbeInventoryCountMap = Record<string, number>;
 
 interface ProbeEquipmentEntry {
@@ -81,7 +83,7 @@ interface ProbeRuntimeInput {
   partyMembers?: unknown;
   partyNameById?: Record<string, string> | null;
   runtimeProfile?: unknown;
-  runtimeExtensions?: UnknownRecord;
+  runtimeExtensions?: ProbeRuntimeExtensions;
   conversation?: unknown;
 }
 
@@ -170,7 +172,7 @@ function deterministicSample() {
     tick: 4242,
     mode: "sample",
     runtime_profile: "canonical_strict",
-    runtime_extensions: {},
+    runtime_extensions: {} as ProbeRuntimeExtensions,
     world: {
       map_x: 307,
       map_y: 347,
@@ -243,7 +245,7 @@ function fromRuntime(runtime: ProbeRuntimeInput) {
     tick: toU32(sim.tick || 0),
     mode: "live",
     runtime_profile: String(runtime.runtimeProfile || "canonical_strict"),
-    runtime_extensions: { ...(runtime.runtimeExtensions || {}) },
+    runtime_extensions: { ...(runtime.runtimeExtensions || {}) } as ProbeRuntimeExtensions,
     world: {
       map_x: toU32(world.map_x || 0),
       map_y: toU32(world.map_y || 0),
@@ -314,7 +316,7 @@ export function buildUiProbeContract(opts: BuildUiProbeOptions = {}) {
     mode: src.mode,
     tick: toU32(src.tick),
     runtime_profile: String(src.runtime_profile || "canonical_strict"),
-    runtime_extensions: { ...(src.runtime_extensions || {}) } as Record<string, unknown>,
+    runtime_extensions: { ...(src.runtime_extensions || {}) },
     canonical_ui: {
       avatar_panel: {
         avatar,

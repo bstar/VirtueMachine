@@ -1,3 +1,5 @@
+import type { RuntimeExtensions } from "../../common/runtime_contract.ts";
+
 export type MechanicsCapabilityStatusRuntime = "implemented" | "partial" | "planned";
 
 export type MechanicsCapabilityEntryRuntime = {
@@ -88,7 +90,7 @@ const BASE_CAPABILITIES: ReadonlyArray<MechanicsCapabilityEntryRuntime> = Object
   }
 ]);
 
-export function buildMechanicsCapabilityMatrixRuntime(runtimeExtensions: Record<string, unknown> | null | undefined = null): MechanicsCapabilityEntryRuntime[] {
+export function buildMechanicsCapabilityMatrixRuntime(runtimeExtensions: Partial<RuntimeExtensions> | null | undefined = null): MechanicsCapabilityEntryRuntime[] {
   const ext = (runtimeExtensions && typeof runtimeExtensions === "object")
     ? runtimeExtensions
     : {};
