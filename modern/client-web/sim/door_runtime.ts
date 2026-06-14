@@ -91,3 +91,62 @@ export function doorToggleMessageRuntime(args: {
   }
   return `Toggled door at ${x},${y},${z}`;
 }
+
+export type DoorToggleObjectRuntime = {
+  frame: number;
+  order: number;
+  type: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type ToggleDoorAtCellResultRuntime<TDoor extends DoorToggleObjectRuntime = DoorToggleObjectRuntime> = {
+  afterOpen: boolean;
+  beforeOpen: boolean;
+  door: TDoor;
+  message: string;
+  toggled: true;
+  x: number;
+  y: number;
+  z: number;
+} | {
+  toggled: false;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export function toggleDoorAtCellRuntime<TDoor extends DoorToggleObjectRuntime>(args: {
+  sim: { doorOpenStates?: Record<string, number> };
+  objectsAt: (x: number, y: number, z: number) => readonly TDoor[];
+  x: number;
+  y: number;
+  z: number;
+}): ToggleDoorAtCellResultRuntime<TDoor> {
+  const x = Number(args.x) | 0;
+  const y = Number(args.y) | 0;
+  const z = Number(args.z) | 0;
+  const overlays = args.objectsAt(x, y, z);
+  for (const door of overlays) {
+    if (!isCloseableDoorTypeRuntime(Number(door?.type) | 0)) {
+      continue;
+    }
+    const beforeFrame = resolvedDoorFrameRuntime(args.sim, door);
+    const beforeOpen = isDoorFrameOpenRuntime(door.type, beforeFrame);
+    toggleDoorStateRuntime(args.sim, door);
+    const afterFrame = resolvedDoorFrameRuntime(args.sim, door);
+    const afterOpen = isDoorFrameOpenRuntime(door.type, afterFrame);
+    return {
+      afterOpen,
+      beforeOpen,
+      door,
+      message: doorToggleMessageRuntime({ afterOpen, beforeOpen, x, y, z }),
+      toggled: true,
+      x,
+      y,
+      z
+    };
+  }
+  return { toggled: false, x, y, z };
+}

@@ -8,6 +8,7 @@ import {
   isDoorToggledRuntime,
   resolveDoorTileIdRuntime,
   resolvedDoorFrameRuntime,
+  toggleDoorAtCellRuntime,
   toggleDoorStateRuntime
 } from "../sim/door_runtime.ts";
 
@@ -45,5 +46,36 @@ assert.equal(
   doorToggleMessageRuntime({ afterOpen: true, beforeOpen: true, x: 1, y: 2, z: 0 }),
   "Toggled door at 1,2,0"
 );
+
+{
+  const sim = {};
+  const closedDoor = { baseTile: 0x500, frame: 5, order: 1, type: 0x129, x: 4, y: 5, z: 0 };
+  const result = toggleDoorAtCellRuntime({
+    sim,
+    objectsAt: (x, y, z) => [
+      { baseTile: 0x100, frame: 0, order: 0, type: 0x100, x, y, z },
+      closedDoor
+    ],
+    x: 4,
+    y: 5,
+    z: 0
+  });
+  assert.equal(result.toggled, true);
+  assert.equal(result.toggled && result.beforeOpen, false);
+  assert.equal(result.toggled && result.afterOpen, true);
+  assert.equal(result.toggled && result.message, "Opened door at 4,5,0");
+  assert.equal(isDoorToggledRuntime(sim, closedDoor), true);
+}
+
+{
+  const result = toggleDoorAtCellRuntime({
+    sim: {},
+    objectsAt: () => [{ baseTile: 0x100, frame: 0, order: 0, type: 0x100, x: 1, y: 2, z: 0 }],
+    x: 1,
+    y: 2,
+    z: 0
+  });
+  assert.deepEqual(result, { toggled: false, x: 1, y: 2, z: 0 });
+}
 
 console.log("door_runtime_test: ok");

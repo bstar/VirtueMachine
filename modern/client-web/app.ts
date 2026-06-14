@@ -278,11 +278,10 @@ import {
 } from "./sim/object_footprint_runtime.ts";
 import { isBlockedAtRuntime } from "./sim/collision_runtime.ts";
 import {
-  doorToggleMessageRuntime,
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
   resolvedDoorFrameRuntime,
-  toggleDoorStateRuntime
+  toggleDoorAtCellRuntime
 } from "./sim/door_runtime.ts";
 import {
   addObjectToInventoryRuntime,
@@ -5175,18 +5174,16 @@ function tryToggleDoorInFacingDirection(sim: AppSimState, dx: number, dy: number
   const tx = (sim.world.map_x + dx) | 0;
   const ty = (sim.world.map_y + dy) | 0;
   const tz = sim.world.map_z | 0;
-  const overlays = interactionState.objectLayer.objectsAt(tx, ty, tz);
-  for (const o of overlays) {
-    if (!isCloseableDoorObjectRuntime(o)) {
-      continue;
-    }
-    const beforeFrame = resolvedDoorFrameRuntime(sim, o);
-    const beforeOpen = isDoorFrameOpenRuntime(o?.type, beforeFrame);
-    toggleDoorStateRuntime(sim, o);
-    const afterFrame = resolvedDoorFrameRuntime(sim, o);
-    const afterOpen = isDoorFrameOpenRuntime(o?.type, afterFrame);
+  const result = toggleDoorAtCellRuntime({
+    sim,
+    objectsAt: (x, y, z) => interactionState.objectLayer?.objectsAt(x, y, z) ?? [],
+    x: tx,
+    y: ty,
+    z: tz
+  });
+  if (result.toggled) {
     diagBox.className = "diag ok";
-    diagBox.textContent = doorToggleMessageRuntime({ afterOpen, beforeOpen, x: tx, y: ty, z: tz });
+    diagBox.textContent = result.message;
     return true;
   }
   return false;
@@ -5270,18 +5267,16 @@ function tryToggleDoorAtCell(sim: AppSimState, tx: number, ty: number, tz: numbe
   if (!interactionState.objectLayer) {
     return false;
   }
-  const overlays = interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
-  for (const o of overlays) {
-    if (!isCloseableDoorObjectRuntime(o)) {
-      continue;
-    }
-    const beforeFrame = resolvedDoorFrameRuntime(sim, o);
-    const beforeOpen = isDoorFrameOpenRuntime(o?.type, beforeFrame);
-    toggleDoorStateRuntime(sim, o);
-    const afterFrame = resolvedDoorFrameRuntime(sim, o);
-    const afterOpen = isDoorFrameOpenRuntime(o?.type, afterFrame);
+  const result = toggleDoorAtCellRuntime({
+    sim,
+    objectsAt: (x, y, z) => interactionState.objectLayer?.objectsAt(x, y, z) ?? [],
+    x: tx,
+    y: ty,
+    z: tz
+  });
+  if (result.toggled) {
     diagBox.className = "diag ok";
-    diagBox.textContent = doorToggleMessageRuntime({ afterOpen, beforeOpen, x: tx, y: ty, z: tz });
+    diagBox.textContent = result.message;
     return true;
   }
   return false;
