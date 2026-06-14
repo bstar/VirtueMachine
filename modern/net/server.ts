@@ -50,9 +50,8 @@ const {
 } = require("./world_interaction_bridge.ts");
 const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge.ts");
 const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.ts");
-const { U6MapRuntime, loadTerrainTypeMap, loadTileFlagMap } = require("./world_map_runtime.ts");
+const { U6MapRuntime } = require("./world_map_runtime.ts");
 const {
-  buildObjectAnchorIndex,
   canNpcStepInto,
   objectFootprintCells,
   refreshWorldObjectIndexes
@@ -67,15 +66,15 @@ const {
   worldObjectTakeInventoryPayload
 } = require("./world_object_policy.ts");
 const {
-  buildWorldObjectStateRuntime,
   compareLegacyWorldObjectOrder,
   findActiveObjectByKey,
   normalizeWorldObjectDeltas,
-  parseBaseTileMapRuntime,
-  parseObjBlkRecordsRuntime,
   persistPatchedObject,
   worldObjectMeta: buildWorldObjectMeta
 } = require("./world_object_state_runtime.ts");
+const {
+  buildWorldObjectStateFromBaselineRuntime
+} = require("./world_object_baseline_runtime.ts");
 const {
   INTRO_PHASE_POST_RUNTIME,
   INTRO_PHASE_PRE_RUNTIME,
@@ -430,85 +429,13 @@ function queryIntOr(url: URL, key: string, fallback: number): number {
   return queryIntOrRuntime(url, key, fallback);
 }
 
-function loadBaseTileMap(runtimeDir: string): Uint16Array {
-  const basetilePath = path.join(runtimeDir, "basetile");
-  try {
-    const buf = fs.readFileSync(basetilePath);
-    return parseBaseTileMapRuntime(buf);
-  } catch (_err) {
-    return parseBaseTileMapRuntime(null);
-  }
-}
-
-function assertObjBaselineDir(dir: string): string {
-  const names: string[] = fs.readdirSync(dir);
-  const objblkCount = names.filter((name: string) => /^objblk[a-h][a-h]$/i.test(name)).length;
-  if (objblkCount < 64) {
-    throw new Error(`incomplete object baseline in ${dir}: expected >=64 objblk files, found ${objblkCount}`);
-  }
-  if (!names.some((name: string) => /^objlist$/i.test(name))) {
-    throw new Error(`missing objlist in object baseline dir: ${dir}`);
-  }
-  return dir;
-}
-
-function parseObjBlkRecords(bytes: Uint8Array | Buffer | null | undefined, areaId: number, baseTileMap: Uint16Array): WorldObject[] {
-  return parseObjBlkRecordsRuntime(bytes, areaId, baseTileMap);
-}
-
-function loadWorldObjectBaseline(runtimeDir: string): {
-  baseline_count: number;
-  files_loaded: number;
-  loaded_at: string;
-  objects: WorldObject[];
-  source_dir: string;
-} {
-  const sourceDir = assertObjBaselineDir(OBJECT_BASELINE_DIR);
-  const loadedAt = nowIso();
-  const baseTileMap = loadBaseTileMap(runtimeDir);
-  const objects: WorldObject[] = [];
-  let filesLoaded = 0;
-  for (let ay = 0; ay < 8; ay += 1) {
-    for (let ax = 0; ax < 8; ax += 1) {
-      const name = `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
-      const full = path.join(sourceDir, name);
-      let bytes = null;
-      try {
-        bytes = fs.readFileSync(full);
-      } catch (_err) {
-        bytes = null;
-      }
-      if (!bytes) {
-        continue;
-      }
-      const areaId = ((ay << 3) | ax) >>> 0;
-      const parsed = parseObjBlkRecords(bytes, areaId, baseTileMap);
-      for (const row of parsed) {
-        objects.push(row);
-      }
-      filesLoaded += 1;
-    }
-  }
-  return {
-    source_dir: sourceDir,
-    loaded_at: loadedAt,
-    files_loaded: filesLoaded >>> 0,
-    baseline_count: objects.length >>> 0,
-    objects
-  };
-}
-
 function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown): WorldObjectState {
-  const baseline = loadWorldObjectBaseline(runtimeDir);
-  const tileFlags = loadTileFlagMap(runtimeDir);
-  const terrainType = loadTerrainTypeMap(runtimeDir);
-  return buildWorldObjectStateRuntime({
-    baseline,
-    buildObjectAnchorIndex,
-    nowMs: Date.now(),
+  return buildWorldObjectStateFromBaselineRuntime({
+    nowIso,
+    nowMs: () => Date.now(),
+    objectBaselineDir: OBJECT_BASELINE_DIR,
     rawDeltas,
-    tileFlags,
-    terrainType
+    runtimeDir
   });
 }
 

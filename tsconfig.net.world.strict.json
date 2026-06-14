@@ -17,6 +17,9 @@
     ]
   },
   "include": [
+    "modern/net/world_map_runtime.ts",
+    "modern/net/world_object_baseline_runtime.ts",
+    "modern/net/world_object_collision.ts",
     "modern/net/world_object_policy.ts",
     "modern/net/world_object_state_runtime.ts",
     "modern/net/world_object_types.ts",

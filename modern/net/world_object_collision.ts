@@ -24,7 +24,7 @@ export function objectFootprintCells(obj: WorldObject, tileFlags: Uint8Array | n
   const wrap10 = (v: unknown) => Number(v) & 0x3ff;
   const x = wrap10(obj.x);
   const y = wrap10(obj.y);
-  const z = obj.z | 0;
+  const z = Number(obj.z) | 0;
   const tileId = Number(obj.tile_id) & 0xffff;
   const out = [{ x, y, z, tile_id: tileId }];
   const tf = tileFlags ? (tileFlags[tileId & 0x07ff] ?? 0) : 0;
