@@ -189,6 +189,7 @@ import {
   isImplicitSolidObjectTileRuntime,
   objectFootprintTilesRuntime
 } from "./sim/object_footprint_runtime.ts";
+import { isBlockedAtRuntime } from "./sim/collision_runtime.ts";
 import {
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
@@ -5903,78 +5904,22 @@ function isBlockedAt(sim, wx, wy, wz) {
   if (!state.mapCtx) {
     return false;
   }
-  const t = state.mapCtx.tileAt(wx, wy, wz);
-  if (state.tileFlags && ((state.tileFlags[t & 0x07ff] ?? 0) & 0x04)) {
-    return true;
-  }
-  if (state.terrainType && ((state.terrainType[t & 0x07ff] ?? 0) & 0x04)) {
-    return true;
-  }
-  if (state.objectLayer && state.tileFlags) {
-    const wrap10 = (v) => v & 0x3ff;
-    const tx = wrap10(wx);
-    const ty = wrap10(wy);
-    const checkObjectBlockAt = (o, ox, oy) => {
-      const cells = objectFootprintTiles(sim, o, ox, oy);
-      const isDoor = isCloseableDoorObjectRuntime(o);
-      const doorOpen = isDoor ? isDoorFrameOpenRuntime(o?.type, resolvedDoorFrameRuntime(sim, o)) : false;
-      for (const c of cells) {
-        if (c.x !== tx || c.y !== ty) {
-          continue;
-        }
-        if (isDoor) {
-          if (!doorOpen) {
-            return true;
-          }
-          const ctf = state.tileFlags ? (state.tileFlags[c.tileId & 0x07ff] ?? 0) : 0;
-          if ((ctf & 0x04) !== 0 || (ctf & 0x20) !== 0) {
-            return true;
-          }
-          continue;
-        }
-        if (isSolidEnvObjectRuntime(o)) {
-          return true;
-        }
-        if (isImplicitSolidObjectTileRuntime(o.type, c.tileId, tileFlagsForTile)) {
-          return true;
-        }
-      }
-      return false;
-    };
-
-    const sources = [
-      [wx, wy],         // main tile source
-      [wx + 1, wy],     // left spill source
-      [wx, wy + 1],     // up spill source
-      [wx + 1, wy + 1]  // up-left spill source
-    ];
-    for (const [ox, oy] of sources) {
-      const overlays = state.objectLayer.objectsAt(ox, oy, wz);
-      for (const o of overlays) {
-        if (!o.renderable) {
-          continue;
-        }
-        if (checkObjectBlockAt(o, ox, oy)) {
-          return true;
-        }
-      }
-    }
-  }
-  if (state.entityLayer && Array.isArray(state.entityLayer.entries)) {
-    for (const e of state.entityLayer.entries) {
-      if (e.z !== wz) {
-        continue;
-      }
-      if (e.x !== wx || e.y !== wy) {
-        continue;
-      }
-      if (e.id === AVATAR_ENTITY_ID) {
-        continue;
-      }
-      return true;
-    }
-  }
-  return false;
+  return isBlockedAtRuntime(wx, wy, wz, {
+    avatarEntityId: AVATAR_ENTITY_ID,
+    entities: state.entityLayer?.entries ?? null,
+    isDoorObject: isCloseableDoorObjectRuntime,
+    isDoorOpen: (o) => isDoorFrameOpenRuntime(
+      o?.type,
+      resolvedDoorFrameRuntime(sim, o as Parameters<typeof resolvedDoorFrameRuntime>[1])
+    ),
+    isImplicitSolidObjectTile: (objType, tileId) => isImplicitSolidObjectTileRuntime(objType, tileId, tileFlagsForTile),
+    isSolidEnvObject: isSolidEnvObjectRuntime,
+    mapTileAt: (x, y, z) => state.mapCtx.tileAt(x, y, z),
+    objectFootprintTiles: (o, ox, oy) => objectFootprintTiles(sim, o, ox, oy),
+    objectsAt: state.objectLayer && state.tileFlags ? (x, y, z) => state.objectLayer.objectsAt(x, y, z) : null,
+    terrainFlagsForTile: (tileId) => state.terrainType ? (state.terrainType[tileId & 0x07ff] ?? 0) : 0,
+    tileFlagsForTile
+  });
 }
 
 function tryToggleDoorInFacingDirection(sim, dx, dy) {

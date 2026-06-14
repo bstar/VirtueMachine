@@ -36,6 +36,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_legacy_actor_frame.sh"
   "$ROOT_DIR/modern/tools/test_client_web_furniture_pose.sh"
   "$ROOT_DIR/modern/tools/test_client_web_object_footprint.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_collision.sh"
   "$ROOT_DIR/modern/tools/test_client_web_conversation.sh"
   "$ROOT_DIR/modern/tools/test_client_web_error_runtime.sh"
   "$ROOT_DIR/modern/tools/test_client_web_app_state.sh"
