@@ -1,9 +1,9 @@
 export const NPC_FLAG_DIRECTION_MASK_RUNTIME = 0x07;
 
 export type LegacyActorFrameEntityRuntime = {
-  authoritativeDirection?: unknown;
+  authoritativeDirection?: number;
   baseTile: number;
-  direction?: unknown;
+  direction?: number;
   frame: number;
   type: number;
 };

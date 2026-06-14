@@ -29,6 +29,7 @@ assert.equal(legacyActorFrameForDirectionRuntime(0x100, 1, false, 16), null);
 assert.equal(legacyActorDirectionGroupRuntime({ authoritativeDirection: 6, direction: 2, frame: 0 }), 3);
 assert.equal(legacyActorDirectionGroupRuntime({ direction: 4, frame: 0 }), 2);
 assert.equal(legacyActorDirectionGroupRuntime({ frame: 12 }), 3);
+assert.equal(legacyActorDirectionGroupRuntime({ authoritativeDirection: Number.NaN, direction: Number.NaN, frame: 8 }), 2);
 assert.equal(legacyActorDirectionGroupRuntime(null), 0);
 
 assert.equal(
