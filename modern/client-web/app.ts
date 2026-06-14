@@ -4,6 +4,11 @@ import {
   measureActorOcclusionParityModel,
   topInteractiveOverlayAtModel
 } from "./render_composition.ts";
+import {
+  canvasFromIndexedPixelsRuntime,
+  fallbackTileColorRuntime,
+  tilePaletteIndexRuntime
+} from "./render/indexed_pixels_runtime.ts";
 import { createU6AudioRuntime } from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
 import {
@@ -242,12 +247,6 @@ const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 28;
 const MONTHS_PER_YEAR = 13;
 const REPLAY_CHECKPOINT_INTERVAL = 32;
-const TERRAIN_PALETTE_BASE = [
-  0x2c, 0x40, 0x58, 0x74,
-  0x88, 0x9c, 0xac, 0xbc,
-  0xc8, 0xd4, 0xe0, 0xe8,
-  0xf0, 0xf4, 0xf8, 0xfc
-];
 const LEGACY_CORNER_TABLE = [
   0, 0, 1, 10,
   0, 0, 2, 2,
@@ -2800,31 +2799,7 @@ function conversationPortraitCanvas(probeConversationPanel = null) {
 }
 
 function canvasFromIndexedPixels(pixmap, palette, transparentIndex = null) {
-  if (!pixmap || !palette) {
-    return null;
-  }
-  const c = document.createElement("canvas");
-  c.width = pixmap.width | 0;
-  c.height = pixmap.height | 0;
-  const g = c.getContext("2d");
-  const img = g.createImageData(c.width, c.height);
-  for (let i = 0, p = 0; i < pixmap.pixels.length; i += 1, p += 4) {
-    const index = pixmap.pixels[i] & 0xff;
-    if (transparentIndex !== null && index === (transparentIndex & 0xff)) {
-      img.data[p + 0] = 0;
-      img.data[p + 1] = 0;
-      img.data[p + 2] = 0;
-      img.data[p + 3] = 0;
-      continue;
-    }
-    const rgb = palette[index] ?? [0, 0, 0];
-    img.data[p + 0] = rgb[0] | 0;
-    img.data[p + 1] = rgb[1] | 0;
-    img.data[p + 2] = rgb[2] | 0;
-    img.data[p + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  return c;
+  return canvasFromIndexedPixelsRuntime(pixmap, palette, document, transparentIndex);
 }
 
 function drawU6MainText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
@@ -7569,21 +7544,11 @@ function buildBaseTileTable(bytes) {
 }
 
 function fallbackTileColor(t) {
-  const r = (t * 53) & 0xff;
-  const g = (t * 97) & 0xff;
-  const b = (t * 31) & 0xff;
-  return [r, g, b];
+  return fallbackTileColorRuntime(t);
 }
 
 function tilePaletteIndex(tileId) {
-  if (!state.terrainType || tileId < 0 || tileId >= state.terrainType.length) {
-    return tileId & 0xff;
-  }
-  const terrain = state.terrainType[tileId];
-  const cls = terrain & 0x0f;
-  const weight = (terrain >> 4) & 0x0f;
-  const base = TERRAIN_PALETTE_BASE[cls] ?? (tileId & 0xff);
-  return (base + (tileId & 0x03) + (weight >> 2)) & 0xff;
+  return tilePaletteIndexRuntime(tileId, state.terrainType);
 }
 
 function terrainOf(tileId) {

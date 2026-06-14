@@ -30,6 +30,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_map_runtime.sh"
   "$ROOT_DIR/modern/tools/test_client_web_legacy_pixmap.sh"
   "$ROOT_DIR/modern/tools/test_client_web_palette_runtime.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_indexed_pixels.sh"
   "$ROOT_DIR/modern/tools/test_client_web_conversation.sh"
   "$ROOT_DIR/modern/tools/test_client_web_error_runtime.sh"
   "$ROOT_DIR/modern/tools/test_client_web_app_state.sh"
