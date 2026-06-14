@@ -1,6 +1,28 @@
+export interface PresenceRuntimeJson {
+  [key: string]: unknown;
+}
+
+export interface RemotePresencePlayer {
+  session_id?: unknown;
+  user_id?: unknown;
+  username?: unknown;
+  updated_at_ms?: unknown;
+  [key: string]: unknown;
+}
+
+export interface WorldClockPayload {
+  tick?: unknown;
+  time_m?: unknown;
+  time_h?: unknown;
+  date_d?: unknown;
+  date_m?: unknown;
+  date_y?: unknown;
+  [key: string]: unknown;
+}
+
 export type PresenceCommonDeps = {
   isAuthenticated: () => boolean;
-  request: (route: string, init?: RequestInit, auth?: boolean) => Promise<any>;
+  request: (route: string, init?: RequestInit, auth?: boolean) => Promise<PresenceRuntimeJson | null>;
   resetBackgroundFailures: () => void;
 };
 
@@ -45,9 +67,9 @@ export async function performPresenceLeave(
 }
 
 export function projectRemotePresencePlayers(
-  playersRaw: any[],
+  playersRaw: RemotePresencePlayer[] | null | undefined,
   self: { sessionId: string; userId: string; username: string }
-): any[] {
+): RemotePresencePlayer[] {
   const players = Array.isArray(playersRaw) ? playersRaw : [];
   const filtered = players.filter((p) => {
     const sameSession = String(p.session_id || "") === String(self.sessionId || "");
@@ -55,7 +77,7 @@ export function projectRemotePresencePlayers(
     const sameUsername = String(p.username || "").toLowerCase() === String(self.username || "").toLowerCase();
     return !sameSession && !sameUser && !sameUsername;
   });
-  const newestByIdentity = new Map<string, any>();
+  const newestByIdentity = new Map<string, RemotePresencePlayer>();
   for (const p of filtered) {
     const key = String(p.user_id || p.username || p.session_id || "");
     const prev = newestByIdentity.get(key);
@@ -70,7 +92,7 @@ export async function performPresencePoll(
   deps: PresenceCommonDeps & {
     isPollInFlight: () => boolean;
     setPollInFlight: (inFlight: boolean) => void;
-    setRemotePlayers: (players: any[]) => void;
+    setRemotePlayers: (players: RemotePresencePlayer[]) => void;
     selfIdentity: () => { sessionId: string; userId: string; username: string };
   }
 ): Promise<void> {
@@ -93,7 +115,7 @@ export async function performPresencePoll(
 }
 
 export function applyAuthoritativeWorldClockToSim(
-  clock: any,
+  clock: WorldClockPayload | null | undefined,
   setTickAndClock: (next: {
     tick: number;
     time_m: number;
@@ -120,7 +142,7 @@ export async function performWorldClockPoll(
   deps: PresenceCommonDeps & {
     isPollInFlight: () => boolean;
     setPollInFlight: (inFlight: boolean) => void;
-    applyClock: (clock: any) => void;
+    applyClock: (clock: WorldClockPayload | null) => void;
   }
 ): Promise<void> {
   if (!deps.isAuthenticated()) {
