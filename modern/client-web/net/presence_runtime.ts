@@ -2,13 +2,17 @@ export interface PresenceRuntimeJson {
   [key: string]: unknown;
 }
 
-export interface RemotePresencePlayer {
+export type RemotePresencePlayer = object & {
+  facing_dx?: unknown;
+  facing_dy?: unknown;
+  map_x?: unknown;
+  map_y?: unknown;
+  map_z?: unknown;
   session_id?: unknown;
   user_id?: unknown;
   username?: unknown;
   updated_at_ms?: unknown;
-  [key: string]: unknown;
-}
+};
 
 export interface WorldClockPayload {
   tick?: unknown;
@@ -20,7 +24,7 @@ export interface WorldClockPayload {
   [key: string]: unknown;
 }
 
-export interface AuthoritativeNpcStateRow {
+export type AuthoritativeNpcStateRow = object & {
   action?: unknown;
   direction?: unknown;
   mode?: unknown;
@@ -31,8 +35,7 @@ export interface AuthoritativeNpcStateRow {
   x?: unknown;
   y?: unknown;
   z?: unknown;
-  [key: string]: unknown;
-}
+};
 
 export interface AuthoritativeNpcEntityRuntime {
   authoritative?: boolean;
@@ -102,11 +105,18 @@ export async function performPresenceLeave(
   deps.resetBackgroundFailures();
 }
 
+export function remotePresencePlayersFromJsonRuntime(rows: unknown): RemotePresencePlayer[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows.filter((row): row is RemotePresencePlayer => !!row && typeof row === "object");
+}
+
 export function projectRemotePresencePlayers(
-  playersRaw: RemotePresencePlayer[] | null | undefined,
+  playersRaw: readonly RemotePresencePlayer[] | null | undefined,
   self: { sessionId: string; userId: string; username: string }
 ): RemotePresencePlayer[] {
-  const players = Array.isArray(playersRaw) ? playersRaw : [];
+  const players = playersRaw || [];
   const filtered = players.filter((p) => {
     const sameSession = String(p.session_id || "") === String(self.sessionId || "");
     const sameUser = String(p.user_id || "") === String(self.userId || "");
@@ -142,7 +152,7 @@ export async function performPresencePoll(
   deps.setPollInFlight(true);
   try {
     const out = await deps.request("/api/world/presence", { method: "GET" }, true);
-    const players = Array.isArray(out?.players) ? out.players : [];
+    const players = remotePresencePlayersFromJsonRuntime(out?.players);
     deps.setRemotePlayers(projectRemotePresencePlayers(players, deps.selfIdentity()));
     deps.resetBackgroundFailures();
   } finally {
@@ -174,15 +184,22 @@ export function applyAuthoritativeWorldClockToSim(
   });
 }
 
+export function authoritativeNpcStateRowsFromJsonRuntime(rows: unknown): AuthoritativeNpcStateRow[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows.filter((row): row is AuthoritativeNpcStateRow => !!row && typeof row === "object");
+}
+
 export function applyAuthoritativeNpcStatesRuntime(
   entries: Iterable<AuthoritativeNpcEntityRuntime> | null | undefined,
-  rows: unknown,
+  rows: readonly AuthoritativeNpcStateRow[] | null | undefined,
   nowMs: number
 ): number {
   if (!entries) {
     return 0;
   }
-  const authoritativeRows = Array.isArray(rows) ? rows as AuthoritativeNpcStateRow[] : [];
+  const authoritativeRows = rows || [];
   const byId = new Map(authoritativeRows.map((row) => [Number(row?.npc_id) | 0, row]));
   let applied = 0;
   for (const entity of entries) {

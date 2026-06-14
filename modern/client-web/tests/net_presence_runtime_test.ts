@@ -2,19 +2,25 @@ import assert from "node:assert/strict";
 import {
   applyAuthoritativeNpcStatesRuntime,
   applyAuthoritativeWorldClockToSim,
+  authoritativeNpcStateRowsFromJsonRuntime,
   performPresenceHeartbeat,
   performPresencePoll,
   performWorldClockPoll,
   projectRemotePresencePlayers,
+  remotePresencePlayersFromJsonRuntime,
   type AuthoritativeNpcEntityRuntime
 } from "../net/presence_runtime.ts";
 
-const projected = projectRemotePresencePlayers([
+const decodedRemotePlayers = remotePresencePlayersFromJsonRuntime([
   { session_id: "self-session", user_id: "u1", username: "avatar", updated_at_ms: 10 },
   { session_id: "s2", user_id: "u2", username: "dupre", updated_at_ms: 10 },
   { session_id: "s3", user_id: "u2", username: "dupre", updated_at_ms: 20 },
-  { session_id: "s4", user_id: "u3", username: "shamino", updated_at_ms: 5 }
-], {
+  { session_id: "s4", user_id: "u3", username: "shamino", updated_at_ms: 5 },
+  null
+]);
+assert.equal(decodedRemotePlayers.length, 4);
+assert.deepEqual(remotePresencePlayersFromJsonRuntime(null), []);
+const projected = projectRemotePresencePlayers(decodedRemotePlayers, {
   sessionId: "self-session",
   userId: "u1",
   username: "avatar"
@@ -56,7 +62,8 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
     request: async () => ({
       players: [
         { session_id: "s1", user_id: "self", username: "avatar", updated_at_ms: 1 },
-        { session_id: "s2", user_id: "remote", username: "iolo", updated_at_ms: 2 }
+        { session_id: "s2", user_id: "remote", username: "iolo", updated_at_ms: 2 },
+        null
       ]
     }),
     resetBackgroundFailures: () => {},
@@ -94,7 +101,7 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
     y: 9,
     z: 0
   }];
-  const applied = applyAuthoritativeNpcStatesRuntime(entries, [{
+  const decodedNpcRows = authoritativeNpcStateRowsFromJsonRuntime([{
     npc_id: 10,
     x: 3,
     y: 4,
@@ -104,7 +111,10 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
     pose: " Stand ",
     path_status: " OK ",
     schedule_index: 7
-  }], 123.5);
+  }, null]);
+  assert.equal(decodedNpcRows.length, 1);
+  assert.deepEqual(authoritativeNpcStateRowsFromJsonRuntime(null), []);
+  const applied = applyAuthoritativeNpcStatesRuntime(entries, decodedNpcRows, 123.5);
   assert.equal(applied, 1);
   assert.deepEqual(entries[0], {
     id: 10,

@@ -140,11 +140,11 @@ import {
 import {
   applyAuthoritativeNpcStatesRuntime,
   applyAuthoritativeWorldClockToSim,
+  authoritativeNpcStateRowsFromJsonRuntime,
   performPresenceHeartbeat,
   performPresenceLeave,
   performPresencePoll,
   performWorldClockPoll,
-  type AuthoritativeNpcStateRow,
   type RemotePresencePlayer,
   type WorldClockPayload
 } from "./net/presence_runtime.ts";
@@ -4244,7 +4244,11 @@ function applyAuthoritativeNpcStates(rows: unknown): void {
   if (!presenceState.entityLayer || !Array.isArray(presenceState.entityLayer.entries)) {
     return;
   }
-  applyAuthoritativeNpcStatesRuntime(presenceState.entityLayer.entries, rows, performance.now());
+  applyAuthoritativeNpcStatesRuntime(
+    presenceState.entityLayer.entries,
+    authoritativeNpcStateRowsFromJsonRuntime(rows),
+    performance.now()
+  );
 }
 
 function applyAuthoritativeNpcOverrides(overrides: unknown): void {
@@ -4255,7 +4259,7 @@ function applyAuthoritativeWorldClock(clock: WorldClockPayload | null): void {
   const clockRecord = clock && typeof clock === "object" ? clock as {
     intro_state?: { phase?: unknown };
     npc_overrides?: unknown;
-    npc_states?: AuthoritativeNpcStateRow[];
+    npc_states?: unknown;
   } : {};
   applyAuthoritativeWorldClockToSim(clock, (next) => {
     state.sim.tick = next.tick;
