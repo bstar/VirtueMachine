@@ -77,7 +77,7 @@ function copyTalkFlagsBack(targetArray: unknown, sourceMap: unknown): void {
   }
 }
 
-function effectiveTalkFlagsForSession(state: ConversationRuntimeState, npcId: unknown): unknown[] {
+function effectiveTalkFlagsForSession(state: ConversationRuntimeState, npcId: unknown): ReadonlyArray<unknown> {
   const actual = Array.isArray(state?.npcRuntime?.talkFlags) ? state.npcRuntime.talkFlags : [];
   const introPhase = String(state?.introState?.phase || INTRO_PHASE_POST).trim().toLowerCase();
   if (introPhase !== INTRO_PHASE_PRE || !INTRO_COMPAT_NPC_IDS.has(Number(npcId) | 0)) {

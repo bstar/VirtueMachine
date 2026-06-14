@@ -22,7 +22,7 @@ type ConversationOkResult = {
   ok: true;
   payload: {
     kind?: string;
-    lines?: unknown[];
+    lines?: ReadonlyArray<unknown>;
     session_id?: string;
     target_name?: string;
   };
