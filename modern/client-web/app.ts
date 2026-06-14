@@ -150,6 +150,7 @@ import {
   createInitialAppSimState,
   toAppSimStateRuntime
 } from "./sim/app_state_runtime.ts";
+import { U6AnimDataRuntime } from "./sim/anim_data_runtime.ts";
 import {
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
@@ -896,85 +897,6 @@ function isLegacyFramePreviewOn() {
 const LEGACY_SCALE_MODES = Object.freeze(["fit", "1", "2", "3", "4"]);
 const CURSOR_ASPECT_X = 1.0;
 const CURSOR_ASPECT_Y = 1.2;
-
-type AnimDataEntry = {
-  baseTile: number;
-  startFrame: number;
-  mask: number;
-  shift: number;
-};
-
-class U6AnimDataJS {
-  entries: AnimDataEntry[];
-  state: Uint8Array;
-  byBase: Map<number, number>;
-
-  constructor(entries: AnimDataEntry[]) {
-    this.entries = entries;
-    this.state = new Uint8Array(entries.length);
-    this.state.fill(1);
-    this.byBase = new Map();
-    for (let i = 0; i < entries.length; i += 1) {
-      this.byBase.set(entries[i].baseTile, i);
-    }
-  }
-
-  setByBaseTile(tileId, mode) {
-    const i = this.byBase.get(tileId);
-    if (i === undefined) {
-      return;
-    }
-    this.state[i] = mode & 0x03;
-  }
-
-  hasBaseTile(tileId) {
-    return this.byBase.has(tileId);
-  }
-
-  animatedTile(tileId, counter) {
-    const i = this.byBase.get(tileId);
-    if (i === undefined) {
-      return tileId;
-    }
-    const e = this.entries[i];
-    let frame = e.startFrame;
-    if (this.state[i] === 1) {
-      frame += ((counter & e.mask) >>> e.shift);
-    } else if (this.state[i] === 2) {
-      frame += (((~counter) & e.mask) >>> e.shift);
-    }
-    return frame & 0xffff;
-  }
-
-  static fromBytes(bytes) {
-    if (!bytes || bytes.length < 2) {
-      return null;
-    }
-    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const maxAnim = 32;
-    let count = dv.getUint16(0, true);
-    if (count > maxAnim) {
-      count = maxAnim;
-    }
-    if (bytes.length < (2 + (maxAnim * 2) + (maxAnim * 2) + maxAnim + maxAnim)) {
-      return null;
-    }
-    const entries = [];
-    const offBase = 2;
-    const offStart = offBase + (maxAnim * 2);
-    const offMask = offStart + (maxAnim * 2);
-    const offShift = offMask + maxAnim;
-    for (let i = 0; i < count; i += 1) {
-      entries.push({
-        baseTile: dv.getUint16(offBase + (i * 2), true),
-        startFrame: dv.getUint16(offStart + (i * 2), true),
-        mask: bytes[offMask + i],
-        shift: bytes[offShift + i] & 0x07
-      });
-    }
-    return new U6AnimDataJS(entries);
-  }
-}
 
 function animationTick() {
   if (state.animationFrozen) {
@@ -10090,7 +10012,7 @@ async function loadRuntimeAssets() {
       state.pristineBaselineVersion = await fetchPristineBaselineVersion();
       state.pristineBaselineLastPollTick = state.sim.tick >>> 0;
       if (animRes.ok && animBuf.byteLength >= 2) {
-        state.animData = U6AnimDataJS.fromBytes(new Uint8Array(animBuf));
+        state.animData = U6AnimDataRuntime.fromBytes(new Uint8Array(animBuf));
       } else {
         state.animData = null;
       }
