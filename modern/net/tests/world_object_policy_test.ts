@@ -5,7 +5,10 @@ import {
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
-  pushSpawnedWorldObject
+  pushSpawnedWorldObject,
+  worldObjectInteractionPayload,
+  worldObjectInventoryPayload,
+  worldObjectTakeInventoryPayload
 } from "../world_object_policy.ts";
 
 assert.deepEqual(
@@ -38,7 +41,17 @@ assert.equal(
   "inv:a00i001:avatar:1:42"
 );
 
-const state: any = { worldObjects: { deltas: { spawned: [] } } };
+const state = {
+  worldObjects: {
+    active: [],
+    deltas: {
+      schema_version: 1,
+      moved: {},
+      spawned: [],
+      respawns: {}
+    }
+  }
+} as Parameters<typeof pushSpawnedWorldObject>[0];
 pushSpawnedWorldObject(state, {
   object_key: "inv:a00i001:avatar:1:42",
   source_area: 2,
@@ -59,5 +72,78 @@ pushSpawnedWorldObject(state, {
 assert.equal(state.worldObjects.deltas.spawned.length, 1);
 assert.equal(state.worldObjects.deltas.spawned[0].object_key, "inv:a00i001:avatar:1:42");
 assert.equal(state.worldObjects.deltas.spawned[0].type, 88);
+
+const payloadObject = {
+  object_key: "obj_1",
+  status: 0x10,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: "",
+  type: 88,
+  frame: 2,
+  tile_id: 0x220,
+  amount: 17,
+  x: 10,
+  y: 11,
+  z: 1,
+  source_kind: "spawned"
+};
+
+assert.deepEqual(worldObjectInteractionPayload(payloadObject, {
+  assocChain: ["obj_1", 7],
+  blockedBy: "wall",
+  rootAnchorKey: "root_1",
+  sourceObject: { object_key: "src_1" }
+}), {
+  object_key: "obj_1",
+  source_object_key: "src_1",
+  status: 0x10,
+  coord_use: 0x10,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: "",
+  type: 88,
+  frame: 2,
+  tile_id: 0x220,
+  x: 10,
+  y: 11,
+  z: 1,
+  assoc_chain: ["obj_1", "7"],
+  root_anchor_key: "root_1",
+  blocked_by: "wall"
+});
+
+assert.deepEqual(worldObjectTakeInventoryPayload(payloadObject, { object_key: "src_1" }), {
+  object_key: "obj_1",
+  source_object_key: "src_1",
+  status: 0x10,
+  coord_use: 0x10,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: "",
+  type: 88,
+  frame: 2,
+  tile_id: 0x220,
+  x: 10,
+  y: 11,
+  z: 1
+});
+
+assert.deepEqual(worldObjectInventoryPayload(payloadObject), {
+  object_key: "obj_1",
+  status: 0x10,
+  coord_use: 0x10,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: "",
+  type: 88,
+  frame: 2,
+  tile_id: 0x220,
+  amount: 17,
+  x: 10,
+  y: 11,
+  z: 1,
+  source_kind: "spawned"
+});
 
 console.log("world_object_policy_test: ok");

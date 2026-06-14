@@ -33,7 +33,10 @@ const {
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
-  pushSpawnedWorldObject
+  pushSpawnedWorldObject,
+  worldObjectInteractionPayload,
+  worldObjectInventoryPayload,
+  worldObjectTakeInventoryPayload
 } = require("./world_object_policy.ts");
 const {
   buildWorldObjectStateRuntime,
@@ -1576,39 +1579,13 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 200, {
       ok: true,
       verb,
-      target: {
-        object_key: String(responseTarget.object_key || ""),
-        source_object_key: sourceTarget ? String(sourceTarget.object_key || "") : "",
-        status: Number(responseTarget.status) & 0xff,
-        coord_use: coordUseOfStatus(responseTarget.status),
-        holder_kind: String(responseTarget.holder_kind || "none"),
-        holder_id: String(responseTarget.holder_id || ""),
-        holder_key: String(responseTarget.holder_key || ""),
-        type: Number(responseTarget.type) & 0x3ff,
-        frame: Number(responseTarget.frame) & 0x3f,
-        tile_id: Number(responseTarget.tile_id) & 0xffff,
-        x: responseTarget.x | 0,
-        y: responseTarget.y | 0,
-        z: responseTarget.z | 0,
-        assoc_chain: targetChain.assoc_chain,
-        root_anchor_key: targetChain.root_anchor_key,
-        blocked_by: targetChain.blocked_by
-      },
-      inventory_item: baselineTakeCreatesClone ? {
-        object_key: String(responseTarget.object_key || ""),
-        source_object_key: sourceTarget ? String(sourceTarget.object_key || "") : "",
-        status: Number(responseTarget.status) & 0xff,
-        coord_use: coordUseOfStatus(responseTarget.status),
-        holder_kind: String(responseTarget.holder_kind || "none"),
-        holder_id: String(responseTarget.holder_id || ""),
-        holder_key: String(responseTarget.holder_key || ""),
-        type: Number(responseTarget.type) & 0x3ff,
-        frame: Number(responseTarget.frame) & 0x3f,
-        tile_id: Number(responseTarget.tile_id) & 0xffff,
-        x: responseTarget.x | 0,
-        y: responseTarget.y | 0,
-        z: responseTarget.z | 0
-      } : null,
+      target: worldObjectInteractionPayload(responseTarget, {
+        assocChain: targetChain.assoc_chain,
+        blockedBy: targetChain.blocked_by,
+        rootAnchorKey: targetChain.root_anchor_key,
+        sourceObject: sourceTarget
+      }),
+      inventory_item: baselineTakeCreatesClone ? worldObjectTakeInventoryPayload(responseTarget, sourceTarget) : null,
       respawn,
       interaction_checkpoint: {
         seq: Number(state.worldInteractionLog?.seq || event.seq || 0) >>> 0,
@@ -1629,22 +1606,7 @@ const server = http.createServer(async (req, res) => {
         && String(obj.holder_id || "") === actorId
       ))
       .sort(compareLegacyWorldObjectOrder)
-      .map((obj) => ({
-        object_key: String(obj.object_key || ""),
-        status: Number(obj.status) & 0xff,
-        coord_use: coordUseOfStatus(obj.status),
-        holder_kind: String(obj.holder_kind || "none"),
-        holder_id: String(obj.holder_id || ""),
-        holder_key: String(obj.holder_key || ""),
-        type: Number(obj.type) & 0x3ff,
-        frame: Number(obj.frame) & 0x3f,
-        tile_id: Number(obj.tile_id) & 0xffff,
-        amount: Number(obj.amount) & 0xffff,
-        x: Number(obj.x) | 0,
-        y: Number(obj.y) | 0,
-        z: Number(obj.z) | 0,
-        source_kind: String(obj.source_kind || "")
-      }));
+      .map((obj) => worldObjectInventoryPayload(obj));
     sendJson(res, 200, {
       ok: true,
       actor_id: actorId,
