@@ -305,6 +305,7 @@ import {
   canonicalTalkSpeakerForTileRuntime,
   legacyArticleForTileRuntime,
   legacyLookupTileStringRuntime,
+  type LegacyLookStringEntryRuntime,
   sanitizeLegacyHudLabelTextRuntime
 } from "./ui/legacy_text_runtime.ts";
 import {
@@ -441,6 +442,13 @@ type AnimatedTileObject = {
   y?: number;
   z?: number;
   [key: string]: unknown;
+};
+type LegacyTalkActor = {
+  id?: number;
+  type?: number;
+  x?: number;
+  y?: number;
+  z?: number;
 };
 
 function byId<T = HTMLElement>(id: string): T {
@@ -1075,31 +1083,31 @@ function decompressU6Lzw(bytes: Uint8Array) {
   return decompressU6LzwRuntime(bytes) ?? bytes;
 }
 
-function legacyLookupTileString(tileId) {
-  return legacyLookupTileStringRuntime(tileId, state.lookStringEntries);
+function legacyLookupTileString(tileId: number): string {
+  return legacyLookupTileStringRuntime(tileId, state.lookStringEntries as LegacyLookStringEntryRuntime[] | null);
 }
 
-function legacyArticleForTile(tileId) {
+function legacyArticleForTile(tileId: number): string {
   return legacyArticleForTileRuntime(tileId, state.tileFlags2);
 }
 
-function canonicalLookSentenceForTile(tileId) {
-  return canonicalLookSentenceForTileRuntime(tileId, state.lookStringEntries, state.tileFlags2);
+function canonicalLookSentenceForTile(tileId: number): string {
+  return canonicalLookSentenceForTileRuntime(tileId, state.lookStringEntries as LegacyLookStringEntryRuntime[] | null, state.tileFlags2);
 }
 
-function canonicalTalkSpeakerForTile(tileId) {
-  return canonicalTalkSpeakerForTileRuntime(tileId, state.lookStringEntries, state.tileFlags2);
+function canonicalTalkSpeakerForTile(tileId: number): string {
+  return canonicalTalkSpeakerForTileRuntime(tileId, state.lookStringEntries as LegacyLookStringEntryRuntime[] | null, state.tileFlags2);
 }
 
-function sanitizeLegacyHudLabelText(text) {
+function sanitizeLegacyHudLabelText(text: unknown): string {
   return sanitizeLegacyHudLabelTextRuntime(text);
 }
 
-function areaIdForWorldXY(x, y) {
+function areaIdForWorldXY(x: unknown, y: unknown): number {
   return areaIdForWorldXYRuntime(x, y);
 }
 
-function legacyEquipmentSlotsForTalkActor(actor) {
+function legacyEquipmentSlotsForTalkActor(actor: LegacyTalkActor | null | undefined): ReturnType<typeof projectLegacyEquipmentSlotsRuntime> {
   if (!actor) {
     return [];
   }
@@ -1108,9 +1116,9 @@ function legacyEquipmentSlotsForTalkActor(actor) {
   const actorY = Number(actor.y) | 0;
   const actorZ = Number(actor.z) | 0;
   const actorType = Number(actor.type) & 0x03ff;
-  const rootAssocOwner = (row) => {
-    let cur = row;
-    const seen = new Set();
+  const rootAssocOwner = (row: U6ObjectEntryRuntime): U6ObjectEntryRuntime | null => {
+    let cur: U6ObjectEntryRuntime | null | undefined = row;
+    const seen = new Set<string>();
     for (let i = 0; i < 64; i += 1) {
       if (!cur || typeof cur !== "object") {
         return null;
@@ -1127,13 +1135,13 @@ function legacyEquipmentSlotsForTalkActor(actor) {
     }
     return null;
   };
-  const ownerMatchesActor = (owner) => !!owner
+  const ownerMatchesActor = (owner: U6ObjectEntryRuntime | null): boolean => !!owner
     && ((owner.coordUse | 0) === OBJ_COORD_USE_LOCXYZ)
     && ((owner.x | 0) === actorX)
     && ((owner.y | 0) === actorY)
     && ((owner.z | 0) === actorZ)
     && ((owner.type & 0x03ff) === actorType);
-  const selectEquipRows = (rows, useObjblkOwnerFallback) => (Array.isArray(rows) ? rows : [])
+  const selectEquipRows = (rows: unknown, useObjblkOwnerFallback: boolean): U6ObjectEntryRuntime[] => (Array.isArray(rows) ? rows : [])
     .filter((row) => {
       if (!row || (row.coordUse | 0) !== OBJ_COORD_USE_EQUIP) {
         return false;
