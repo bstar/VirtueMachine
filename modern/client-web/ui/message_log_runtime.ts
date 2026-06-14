@@ -45,12 +45,15 @@ export function normalizeMessageLogEntriesRuntime(input: {
 }): MessageLogEntryRuntime[] {
   const lineMaxChars = Math.max(8, Number(input?.lineMaxChars) | 0) || 64;
   const src = Array.isArray(input?.entries) ? input.entries : [];
-  const out: MessageLogEntryRuntime[] = src.map((row: any, i: number) => ({
-    tick: toU32(row?.tick != null ? row.tick : i),
-    level: String(row?.level || "info"),
-    text: String(row?.text || "").replace(/\s+/g, " ").trim().slice(0, lineMaxChars),
-    seq: toU32(row?.seq != null ? row.seq : i)
-  }));
+  const out: MessageLogEntryRuntime[] = src.map((row, i: number) => {
+    const entry = row && typeof row === "object" ? row as Record<string, unknown> : {};
+    return {
+      tick: toU32(entry.tick != null ? entry.tick : i),
+      level: String(entry.level || "info"),
+      text: String(entry.text || "").replace(/\s+/g, " ").trim().slice(0, lineMaxChars),
+      seq: toU32(entry.seq != null ? entry.seq : i)
+    };
+  });
   out.sort((a, b) => (a.tick - b.tick) || (a.seq - b.seq));
   return out;
 }

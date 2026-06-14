@@ -22,7 +22,7 @@ export function buildConversationVmContext(input: Record<string, unknown> | null
   const varStr = new Array(64).fill("");
   const varInt = new Array(64).fill(0);
   const talkFlags = Object.create(null);
-  const talkFlagsInput = (src as any).talkFlags;
+  const talkFlagsInput = src.talkFlags;
   const hour = Number(src.hour) | 0;
   const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "afternoon" : "evening");
   const player = String(src.player || "Avatar").trim() || "Avatar";

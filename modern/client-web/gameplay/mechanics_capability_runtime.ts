@@ -93,7 +93,7 @@ export function buildMechanicsCapabilityMatrixRuntime(runtimeExtensions: Record<
     ? runtimeExtensions
     : {};
   return BASE_CAPABILITIES.map((entry) => {
-    if (entry.key === "quest_state_progression" && !!(ext as any).quest_system) {
+    if (entry.key === "quest_state_progression" && !!ext.quest_system) {
       return {
         ...entry,
         status: "partial",

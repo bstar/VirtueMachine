@@ -68,7 +68,7 @@ export function projectPartyPanelMembersRuntime(input: {
     : {};
   return ids.map((id, index) => ({
     id: toU32(id),
-    name: String((nameById as any)?.[String(id)] || (id === 1 ? "Avatar" : `Actor_${id}`)),
+    name: String(nameById[String(id)] || (id === 1 ? "Avatar" : `Actor_${id}`)),
     in_party: true,
     active: index === activeIndex,
     party_index: index
