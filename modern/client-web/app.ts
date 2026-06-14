@@ -165,6 +165,11 @@ import {
   renderNetSessionStatRuntime
 } from "./net/status_runtime.ts";
 import {
+  legacyCastVerbRuntime,
+  legacyDropVerbRuntime,
+  legacyMoveVerbRuntime
+} from "./gameplay/legacy_verb_runtime.ts";
+import {
   advanceWorldMinuteRuntime,
   clampI32Runtime,
   expireRemovedWorldPropsRuntime,
@@ -221,8 +226,6 @@ import {
 } from "./sim/door_runtime.ts";
 import {
   addObjectToInventoryRuntime,
-  decrementInventoryKeyRuntime,
-  firstInventoryKeyRuntime,
   inventoryKeyForObjectRuntime,
   isObjectRemovedRuntime,
   markObjectRemovedRuntime,
@@ -5095,39 +5098,28 @@ function tryAttackAtCell(sim, tx, ty) {
 
 function tryCastAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
-  /* CANONICAL STUB: legacy spellbook/reagent/mana flow is not wired yet; keep keyboard contract live. */
-  playSfx(U6_SFX.CASTING_MAGIC_P1);
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Cast: target ${tx},${ty},${tz} accepted (spell system pending).`;
-  return true;
+  const result = legacyCastVerbRuntime(tx, ty, tz);
+  if (result.playSfx === "casting_magic_p1") {
+    playSfx(U6_SFX.CASTING_MAGIC_P1);
+  }
+  diagBox.className = `diag ${result.diagClass}`;
+  diagBox.textContent = result.text;
+  return result.ok;
 }
 
 function tryDropAtCell(sim, tx, ty) {
-  const tz = sim.world.map_z | 0;
-  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Drop: target must be adjacent (${tx},${ty}).`;
-    return false;
-  }
-  const key = firstInventoryKeyRuntime(sim);
-  if (!key) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Drop: inventory is empty.";
-    return false;
-  }
-  const remaining = decrementInventoryKeyRuntime(sim, key);
-  /* CANONICAL STUB: world drop object spawn/stack semantics still pending in sim core. */
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Drop: ${key} at ${tx},${ty},${tz} (remaining ${remaining}).`;
-  return true;
+  const result = legacyDropVerbRuntime(sim, tx, ty);
+  diagBox.className = `diag ${result.diagClass}`;
+  diagBox.textContent = result.text;
+  return result.ok;
 }
 
 function tryMoveVerbAtCell(sim, tx, ty) {
   const tz = sim.world.map_z | 0;
-  /* CANONICAL STUB: push/pull/move-object semantics not finalized; keep verb pipeline canonical. */
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Move: target ${tx},${ty},${tz} accepted (object move semantics pending).`;
-  return true;
+  const result = legacyMoveVerbRuntime(tx, ty, tz);
+  diagBox.className = `diag ${result.diagClass}`;
+  diagBox.textContent = result.text;
+  return result.ok;
 }
 
 function findObjectByAnchor(anchor) {
