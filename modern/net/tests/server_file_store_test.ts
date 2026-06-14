@@ -6,6 +6,7 @@ import {
   appendJsonLineRuntime,
   ensureServerDataDirRuntime,
   readJsonFileRuntime,
+  readJsonFileValidatedRuntime,
   readJsonLinesRuntime,
   writeJsonFileRuntime
 } from "../server_file_store.ts";
@@ -25,6 +26,27 @@ try {
 
   fs.writeFileSync(jsonPath, "{bad", "utf8");
   assert.deepEqual(readJsonFileRuntime(jsonPath, { fallback: "bad-json" }), { fallback: "bad-json" });
+
+  fs.writeFileSync(jsonPath, "{\"items\":[1,2]}\n", "utf8");
+  assert.deepEqual(
+    readJsonFileValidatedRuntime(jsonPath, { items: [] as number[] }, (value) => {
+      if (!value || typeof value !== "object" || !Array.isArray((value as { items?: unknown }).items)) {
+        return null;
+      }
+      return { items: (value as { items: number[] }).items };
+    }),
+    { items: [1, 2] }
+  );
+  fs.writeFileSync(jsonPath, "{\"items\":\"corrupt\"}\n", "utf8");
+  assert.deepEqual(
+    readJsonFileValidatedRuntime(jsonPath, { items: [9] }, (value) => {
+      if (!value || typeof value !== "object" || !Array.isArray((value as { items?: unknown }).items)) {
+        return null;
+      }
+      return { items: (value as { items: number[] }).items };
+    }),
+    { items: [9] }
+  );
 
   const logPath = path.join(dataDir, "events.log");
   appendJsonLineRuntime(logPath, { seq: 1 });

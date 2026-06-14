@@ -104,6 +104,7 @@ const {
   appendJsonLineRuntime,
   ensureServerDataDirRuntime,
   readJsonFileRuntime,
+  readJsonFileValidatedRuntime,
   readJsonLinesRuntime,
   writeJsonFileRuntime
 } = require("./server_file_store.ts");
@@ -167,6 +168,10 @@ function ensureDataDir() {
 
 function readJson(filePath, fallback) {
   return readJsonFileRuntime(filePath, fallback);
+}
+
+function readJsonValidated(filePath, fallback, validate) {
+  return readJsonFileValidatedRuntime(filePath, fallback, validate);
 }
 
 function writeJson(filePath, value) {
@@ -487,8 +492,8 @@ function loadState() {
       snapshot_base64: null,
       updated_at: nowIso()
     }),
-    presence: normalizePresenceRows(readJson(FILES.presence, [])),
-    worldClock: normalizeWorldClock(readJson(FILES.worldClock, defaultWorldClock())),
+    presence: readJsonValidated(FILES.presence, [], normalizePresenceRows),
+    worldClock: readJsonValidated(FILES.worldClock, defaultWorldClock(), normalizeWorldClock),
     npcBaseline,
     scheduleRuntime,
     npcRuntimePersist: normalizeNpcRuntimeState(readJson(FILES.npcRuntime, null), npcBaseline),
@@ -506,7 +511,7 @@ function loadState() {
     criticalPolicy: readJson(FILES.criticalPolicy, defaultCriticalPolicy()),
     worldObjects,
     mapRuntime: new U6MapRuntime(RUNTIME_DIR),
-    worldInteractionLog: normalizeWorldInteractionLog(readJson(FILES.worldInteractionLog, defaultWorldInteractionLog()))
+    worldInteractionLog: readJsonValidated(FILES.worldInteractionLog, defaultWorldInteractionLog(), normalizeWorldInteractionLog)
   };
   if (!Array.isArray(state.criticalPolicy) || !state.criticalPolicy.length) {
     state.criticalPolicy = defaultCriticalPolicy();

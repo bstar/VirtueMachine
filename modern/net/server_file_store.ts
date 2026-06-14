@@ -5,9 +5,21 @@ export function ensureServerDataDirRuntime(dataDir: string): void {
 }
 
 export function readJsonFileRuntime<T>(filePath: string, fallback: T): T {
+  return readJsonFileValidatedRuntime(filePath, fallback);
+}
+
+export function readJsonFileValidatedRuntime<T>(
+  filePath: string,
+  fallback: T,
+  validate?: (value: unknown) => T | null | undefined
+): T {
   try {
     const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw) as unknown;
+    if (validate) {
+      return validate(parsed) ?? fallback;
+    }
+    return parsed as T;
   } catch (_err) {
     return fallback;
   }
