@@ -30,6 +30,9 @@ interface SimHashAnchorRuntime {
   frame?: number;
 }
 
+type SimHashFlagMapRuntime = Record<string, number | boolean>;
+type SimHashCountMapRuntime = Record<string, number>;
+
 interface SimHashStateRuntime {
   tick: number;
   rngState: number;
@@ -38,11 +41,11 @@ interface SimHashStateRuntime {
   world: SimHashWorldRuntime;
   avatarPose?: string;
   avatarPoseAnchor?: SimHashAnchorRuntime | null;
-  doorOpenStates?: Record<string, unknown>;
-  removedObjectKeys?: Record<string, unknown>;
-  removedObjectAtTick?: Record<string, unknown>;
+  doorOpenStates?: SimHashFlagMapRuntime;
+  removedObjectKeys?: SimHashFlagMapRuntime;
+  removedObjectAtTick?: SimHashCountMapRuntime;
   removedObjectCount?: number;
-  inventory?: Record<string, unknown>;
+  inventory?: SimHashCountMapRuntime;
   spawnedWorldObjects?: SimHashAnchorRuntime[];
   spawnedWorldSeq?: number;
 }
