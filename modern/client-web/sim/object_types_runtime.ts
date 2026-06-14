@@ -14,6 +14,12 @@ const OBJECT_TYPES_BED = u6ObjectTypeSet(OBJECT_TYPE_BED_VALUES);
 const OBJECT_TYPES_TOP_DECOR = u6ObjectTypeSet(OBJECT_TYPE_TOP_DECOR_VALUES);
 const OBJECT_TYPES_SOLID_ENV = u6ObjectTypeSet(OBJECT_TYPE_SOLID_ENV_VALUES);
 const OBJECT_TYPES_CLOSEABLE_DOOR = u6ObjectTypeSet(OBJECT_TYPE_CLOSEABLE_DOOR_VALUES);
+const OBJECT_TYPES_STRUCTURAL_NON_PICKUP = u6ObjectTypeSet([
+  0x103, /* table leg */
+  0x104, /* shadow */
+  0x105, /* table leg */
+  0x106  /* shadow */
+]);
 
 function asType(type: number): number {
   return type & 0x03ff;
@@ -76,5 +82,6 @@ export function isLikelyPickupObjectTypeRuntime(type: number): boolean {
   if (OBJECT_TYPES_BED.has(t)) return false;
   if (OBJECT_TYPES_SOLID_ENV.has(t)) return false;
   if (OBJECT_TYPES_TOP_DECOR.has(t)) return false;
+  if (OBJECT_TYPES_STRUCTURAL_NON_PICKUP.has(t)) return false;
   return true;
 }

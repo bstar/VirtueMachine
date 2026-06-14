@@ -2457,12 +2457,7 @@ function renderLegacyHudStubOnBackdrop(): void {
           continue;
         }
         seen.add(key);
-        const cachedTile = Number(state.sim.inventoryTiles?.[key]);
-        out.push({
-          key,
-          count,
-          tile_hex: Number.isFinite(cachedTile) ? `0x${(cachedTile & 0xffff).toString(16)}` : undefined
-        });
+        out.push({ key, count });
         if (out.length >= 12) {
           return out;
         }

@@ -10,6 +10,7 @@ import {
   type TargetObjectLayerRuntime,
   type TargetWorldObjectRuntime
 } from "../sim/target_runtime.ts";
+import { isLikelyPickupObjectTypeRuntime } from "../sim/object_types_runtime.ts";
 
 function testTopWorldObjectSelection() {
   const objectLayer: TargetObjectLayerRuntime = {
@@ -110,12 +111,13 @@ function testPickupTargetResolution() {
   const objectLayer: TargetObjectLayerRuntime = {
     objectsAt: () => [
       { key: "door", renderable: true, legacyOrder: 50, type: 0x129, frame: 0 },
+      { key: "shadow", renderable: true, legacyOrder: 40, type: 0x104, frame: 0 },
       { key: "item", renderable: true, legacyOrder: 10, type: 0x90, frame: 0 }
     ]
   };
   const deps = {
     isObjectRemoved: (_sim: unknown, _obj: TargetWorldObjectRuntime) => false,
-    isLikelyPickupObjectType: (type: number) => (type & 0x3ff) !== 0x129
+    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
   };
   const result = resolvePickupTargetAtCellRuntime({
     world: { map_x: 10, map_y: 10, map_z: 0 },

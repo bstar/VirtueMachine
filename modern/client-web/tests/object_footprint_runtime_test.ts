@@ -3,7 +3,10 @@ import {
   isImplicitSolidObjectTileRuntime,
   objectFootprintTilesRuntime
 } from "../sim/object_footprint_runtime.ts";
-import { isSolidEnvTypeRuntime } from "../sim/object_types_runtime.ts";
+import {
+  isLikelyPickupObjectTypeRuntime,
+  isSolidEnvTypeRuntime
+} from "../sim/object_types_runtime.ts";
 
 const flags = (value: number) => () => value;
 
@@ -38,5 +41,8 @@ assert.equal(isImplicitSolidObjectTileRuntime(0x12a, 0x400, flags(0xe0)), false)
 assert.equal(isImplicitSolidObjectTileRuntime(0x05f, 0x400, flags(0x80)), false);
 assert.equal(isImplicitSolidObjectTileRuntime(0x100, 0x400, flags(0x90)), false);
 assert.equal(isSolidEnvTypeRuntime(0x097), true, "table type must be a solid environment object");
+assert.equal(isLikelyPickupObjectTypeRuntime(0x104), false, "shadow objects must not be picked up");
+assert.equal(isLikelyPickupObjectTypeRuntime(0x103), false, "table-leg objects must not be picked up");
+assert.equal(isLikelyPickupObjectTypeRuntime(0x090), true, "ordinary inventory objects should remain pickable");
 
 console.log("object_footprint_runtime_test: ok");
