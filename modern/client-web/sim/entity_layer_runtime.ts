@@ -10,8 +10,18 @@ export const NPC_FLAG_DIRECTION_MASK_RUNTIME = 0x07;
 export const NPC_FLAG_WALKING_RUNTIME = 0x80;
 
 export type U6EntityEntryRuntime = {
-  [key: string]: unknown;
   assocIndex?: number;
+  authoritativeAction?: number;
+  authoritativeDirection?: number;
+  authoritativeLastX?: number;
+  authoritativeLastY?: number;
+  authoritativeLastZ?: number;
+  authoritativeMode?: number;
+  authoritativeMovedAtMs?: number;
+  authoritativePathStatus?: string;
+  authoritativePose?: string;
+  authoritativeScheduleIndex?: number;
+  authoritativeUpdatedAtMs?: number;
   authoritative?: boolean;
   baseTile: number;
   coordUse?: number;
@@ -41,7 +51,6 @@ export type U6EntityEntryRuntime = {
 };
 
 export type U6EntityAssocEntryRuntime = {
-  [key: string]: unknown;
   assocIndex: number;
   baseTile: number;
   coordUse: number;

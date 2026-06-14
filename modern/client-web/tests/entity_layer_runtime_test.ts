@@ -102,9 +102,49 @@ assert.equal(parsed.entries[0].tileId, 0x401);
 assert.equal(parsed.entries[1].direction, 0x05 & NPC_FLAG_DIRECTION_MASK_RUNTIME);
 assert.equal(parsed.entries[1].walkingFlag, true);
 assert.equal(parsed.entries[1].origFrame, 1);
+assert.deepEqual(Object.keys(parsed.entries[0]).sort(), [
+  "baseTile",
+  "direction",
+  "frame",
+  "id",
+  "npcComMode",
+  "npcFlag",
+  "npcMode",
+  "npcStatus",
+  "order",
+  "origFrame",
+  "origType",
+  "qual",
+  "status",
+  "tileId",
+  "type",
+  "walkingFlag",
+  "x",
+  "y",
+  "z"
+]);
 assert.deepEqual(parsed.assocEntries.map((entry) => entry.id), [6]);
 assert.equal(parsed.assocEntries[0].assocIndex, 4);
 assert.equal(parsed.assocEntries[0].tileId, 0x403);
+assert.deepEqual(Object.keys(parsed.assocEntries[0]).sort(), [
+  "assocIndex",
+  "baseTile",
+  "coordUse",
+  "direction",
+  "frame",
+  "id",
+  "npcComMode",
+  "npcFlag",
+  "npcMode",
+  "npcStatus",
+  "order",
+  "origFrame",
+  "origType",
+  "status",
+  "tileId",
+  "type",
+  "walkingFlag"
+]);
 
 layer.load(bytes);
 assert.equal(layer.totalLoaded, 2);
