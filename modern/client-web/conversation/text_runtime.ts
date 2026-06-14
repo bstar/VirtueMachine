@@ -13,8 +13,16 @@ export function conversationMacroSymbolToIndex(sym: unknown): number {
 export type ConversationVmContext = {
   varStr: string[];
   varInt: number[];
-  talkFlags: Record<string, number>;
+  talkFlags: ConversationTalkFlagMap;
   objNum: number;
+};
+
+export type ConversationTalkFlagMap = {
+  [key: string]: number;
+};
+
+export type ConversationTalkFlagInputMap = {
+  [key: string]: unknown;
 };
 
 export type ConversationVmContextInput = {
@@ -23,7 +31,7 @@ export type ConversationVmContextInput = {
   objNum?: unknown;
   partySize?: unknown;
   player?: unknown;
-  talkFlags?: Record<string, unknown> | readonly unknown[];
+  talkFlags?: ConversationTalkFlagInputMap | ReadonlyArray<unknown>;
   target?: unknown;
 };
 
@@ -31,7 +39,7 @@ export function buildConversationVmContext(input: ConversationVmContextInput | n
   const src = (input && typeof input === "object") ? input : {};
   const varStr = new Array(64).fill("");
   const varInt = new Array(64).fill(0);
-  const talkFlags: Record<string, number> = Object.create(null);
+  const talkFlags: ConversationTalkFlagMap = Object.create(null);
   const talkFlagsInput = src.talkFlags;
   const hour = Number(src.hour) | 0;
   const timeWord = (hour < 12) ? "morning" : ((hour < 18) ? "afternoon" : "evening");

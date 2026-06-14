@@ -41,11 +41,20 @@ const CONV_OP_NPC = 0xeb;
 
 type ConversationVmStackValue = number | string;
 
+type ConversationVmMutableSlotsRuntime = {
+  length: number;
+  [index: number]: unknown;
+};
+
+type ConversationTalkFlagsRuntime = {
+  [key: string]: number;
+};
+
 export type ConversationVmContextRuntime = {
   objNum?: unknown;
-  talkFlags?: Record<string, number>;
-  varInt?: unknown[];
-  varStr?: unknown[];
+  talkFlags?: ConversationTalkFlagsRuntime;
+  varInt?: ConversationVmMutableSlotsRuntime;
+  varStr?: ConversationVmMutableSlotsRuntime;
 };
 
 export type ConversationDecodeOptionsRuntime = {
@@ -161,7 +170,7 @@ function conversationVmWriteTalkFlag(
   }
   const talkFlags = vmContext.talkFlags && typeof vmContext.talkFlags === "object"
     ? vmContext.talkFlags
-    : Object.create(null) as Record<string, number>;
+    : Object.create(null) as ConversationTalkFlagsRuntime;
   vmContext.talkFlags = talkFlags;
   const key = String(objNum);
   const cur = Number(talkFlags[key]) | 0;

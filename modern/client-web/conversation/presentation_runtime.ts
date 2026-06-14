@@ -1,3 +1,8 @@
+type ConversationVarStrSlotsRuntime = {
+  length: number;
+  [index: number]: unknown;
+};
+
 export function formatYouSeeLine(subject: unknown): string {
   const base = String(subject || "").trim();
   if (!base) {
@@ -12,7 +17,7 @@ export function formatYouSeeLine(subject: unknown): string {
 
 export function canonicalTalkFallbackGreeting(
   objNum: unknown,
-  vmContext: { varStr?: unknown[] } | null | undefined,
+  vmContext: { varStr?: ConversationVarStrSlotsRuntime } | null | undefined,
   macroSymbolToIndex: ((symbol: string) => number) | null | undefined
 ): string {
   const n = Number(objNum) | 0;

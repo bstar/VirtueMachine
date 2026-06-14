@@ -43,7 +43,7 @@ function readObjlistTalkFlags() {
   return Array.from(objlist.slice(TALK_FLAGS_OFF, TALK_FLAGS_OFF + 0x100));
 }
 
-function renderLines(lines: unknown[], vmContext: ConversationVmContext) {
+function renderLines(lines: ReadonlyArray<unknown>, vmContext: ConversationVmContext) {
   return (Array.isArray(lines) ? lines : [])
     .map((line) => renderConversationMacrosWithContext(String(line || ""), vmContext))
     .map((line) => String(line || "").trim())
