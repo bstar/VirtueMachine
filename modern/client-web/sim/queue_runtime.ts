@@ -1,3 +1,10 @@
+import {
+  LEGACY_COMMAND_TYPE_RUNTIME,
+  buildLegacyWireCommandRuntime,
+  legacyVerbCommandTypeRuntime,
+  normalizeLegacyTargetVerbRuntime
+} from "./legacy_command_runtime.ts";
+
 export interface SimCommandRuntime {
   type: number;
   tick: number;
@@ -81,6 +88,140 @@ export function enqueueCommandRuntime(args: {
 }): void {
   args.queue.push(args.cmd);
   appendCommandLogRuntime(args.commandLog, args.cmd, args.commandLogMax);
+}
+
+export type AvatarMoveQueueStateRuntime = {
+  avatarFacingDx: number;
+  avatarFacingDy: number;
+  avatarWalkAnimUntilMs: number;
+  commandLog: SimCommandRuntime[];
+  lastMoveInputDx: number;
+  lastMoveInputDy: number;
+  lastMoveQueueAtMs: number;
+  queue: SimCommandRuntime[];
+  sim: {
+    tick: number;
+  };
+};
+
+export function queueAvatarMoveCommandRuntime(args: {
+  state: AvatarMoveQueueStateRuntime;
+  dx: number;
+  dy: number;
+  nowMs: number;
+  minIntervalMs: number;
+  walkAnimWindowMs: number;
+  commandLogMax: number;
+}): boolean {
+  const state = args.state;
+  const dx = Number(args.dx) | 0;
+  const dy = Number(args.dy) | 0;
+  if (shouldSuppressRepeatedMoveRuntime({
+    dx,
+    dy,
+    lastDx: state.lastMoveInputDx,
+    lastDy: state.lastMoveInputDy,
+    lastQueuedAtMs: state.lastMoveQueueAtMs,
+    nowMs: args.nowMs,
+    minIntervalMs: args.minIntervalMs
+  })) {
+    return false;
+  }
+  state.lastMoveQueueAtMs = args.nowMs;
+  state.lastMoveInputDx = dx;
+  state.lastMoveInputDy = dy;
+  state.avatarFacingDx = dx;
+  state.avatarFacingDy = dy;
+  state.avatarWalkAnimUntilMs = args.nowMs + args.walkAnimWindowMs;
+  const targetTick = (Number(state.sim.tick) + 1) >>> 0;
+  const cmd = buildLegacyWireCommandRuntime(targetTick, LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR, dx, dy);
+  if (upsertMoveCommandForTickRuntime({
+    queue: state.queue,
+    commandLog: state.commandLog,
+    cmd,
+    targetTick,
+    moveType: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR,
+    commandLogMax: args.commandLogMax
+  })) {
+    return true;
+  }
+  enqueueCommandRuntime({
+    queue: state.queue,
+    commandLog: state.commandLog,
+    cmd,
+    commandLogMax: args.commandLogMax
+  });
+  return true;
+}
+
+export function queueFacingUseCommandRuntime(args: {
+  queue: SimCommandRuntime[];
+  commandLog: SimCommandRuntime[];
+  tick: number;
+  facingDx: number;
+  facingDy: number;
+  commandLogMax: number;
+}): void {
+  enqueueCommandRuntime({
+    queue: args.queue,
+    commandLog: args.commandLog,
+    cmd: buildLegacyWireCommandRuntime(
+      (Number(args.tick) + 1) >>> 0,
+      LEGACY_COMMAND_TYPE_RUNTIME.USE_FACING,
+      Number(args.facingDx) | 0,
+      Number(args.facingDy) | 0
+    ),
+    commandLogMax: args.commandLogMax
+  });
+}
+
+export function queueCellCommandRuntime(args: {
+  queue: SimCommandRuntime[];
+  commandLog: SimCommandRuntime[];
+  tick: number;
+  commandType: number;
+  wx: number;
+  wy: number;
+  commandLogMax: number;
+}): boolean {
+  const commandType = Number(args.commandType) | 0;
+  if (!commandType) {
+    return false;
+  }
+  enqueueCommandRuntime({
+    queue: args.queue,
+    commandLog: args.commandLog,
+    cmd: buildLegacyWireCommandRuntime(
+      (Number(args.tick) + 1) >>> 0,
+      commandType,
+      Number(args.wx) | 0,
+      Number(args.wy) | 0
+    ),
+    commandLogMax: args.commandLogMax
+  });
+  return true;
+}
+
+export function queueLegacyTargetVerbCommandRuntime(args: {
+  queue: SimCommandRuntime[];
+  commandLog: SimCommandRuntime[];
+  tick: number;
+  verb: unknown;
+  wx: number;
+  wy: number;
+  commandLogMax: number;
+}): boolean {
+  const verb = normalizeLegacyTargetVerbRuntime(args.verb);
+  const commandType = legacyVerbCommandTypeRuntime(verb) | 0;
+  return queueCellCommandRuntime({
+    queue: args.queue,
+    commandLog: args.commandLog,
+    tick: args.tick,
+    commandType,
+    wx: args.wx,
+    wy: args.wy,
+    commandLogMax: args.commandLogMax
+  });
 }
 
 export function filterFutureCommandsOfTypeRuntime(

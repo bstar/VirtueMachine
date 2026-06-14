@@ -220,12 +220,12 @@ import {
 } from "./sim/hash_runtime.ts";
 import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 import {
-  appendCommandLogRuntime,
-  enqueueCommandRuntime,
   filterFutureCommandsOfTypeRuntime,
   partitionCommandsForTickRuntime,
-  shouldSuppressRepeatedMoveRuntime,
-  upsertMoveCommandForTickRuntime,
+  queueAvatarMoveCommandRuntime,
+  queueCellCommandRuntime,
+  queueFacingUseCommandRuntime,
+  queueLegacyTargetVerbCommandRuntime,
   type SimCommandRuntime
 } from "./sim/queue_runtime.ts";
 import {
@@ -244,8 +244,6 @@ import {
   LEGACY_COMMAND_TYPE_RUNTIME,
   LEGACY_TARGET_VERB_LABEL_RUNTIME,
   LEGACY_TARGET_VERB_RUNTIME,
-  buildLegacyWireCommandRuntime,
-  legacyVerbCommandTypeRuntime,
   legacyVerbLabelRuntime,
   legacyVerbSelectRangeRuntime,
   normalizeLegacyTargetVerbRuntime
@@ -5919,10 +5917,6 @@ function stepSimTick(sim: AppSimState, queue: readonly SimCommandRuntime[]): Sim
   return pending;
 }
 
-function appendCommandLog(cmd: SimCommandRuntime): void {
-  appendCommandLogRuntime(state.commandLog, cmd, COMMAND_LOG_MAX);
-}
-
 function primeAudioFromUserGesture(): void {
   if (!state.audio || !state.sim?.world?.sound_enabled) {
     return;
@@ -6127,67 +6121,31 @@ function updateVisibleAmbientSfx(): void {
   }
 }
 
-function buildWireCommand(tick: number, type: number, arg0: number, arg1: number): SimCommandRuntime {
-  return buildLegacyWireCommandRuntime(tick, type, arg0, arg1);
-}
-
 function queueMove(dx: number, dy: number): void {
   if (state.legacyConversationActive) {
     return;
   }
-  dx |= 0;
-  dy |= 0;
-  const nowMs = performance.now();
-  if (shouldSuppressRepeatedMoveRuntime({
+  queueAvatarMoveCommandRuntime({
+    state,
     dx,
     dy,
-    lastDx: state.lastMoveInputDx,
-    lastDy: state.lastMoveInputDy,
-    lastQueuedAtMs: state.lastMoveQueueAtMs,
-    nowMs,
-    minIntervalMs: MOVE_INPUT_MIN_INTERVAL_MS
-  })) {
-    return;
-  }
-  state.lastMoveQueueAtMs = nowMs;
-  state.lastMoveInputDx = dx;
-  state.lastMoveInputDy = dy;
-  state.avatarFacingDx = dx;
-  state.avatarFacingDy = dy;
-  state.avatarWalkAnimUntilMs = nowMs + AVATAR_WALK_ANIM_WINDOW_MS;
-  const targetTick = (state.sim.tick + 1) >>> 0;
-  const cmd = buildWireCommand(targetTick, LEGACY_COMMAND_TYPE.MOVE_AVATAR, dx, dy);
-
-  // Keep exactly one pending move command so repeated key events cannot stack.
-  if (upsertMoveCommandForTickRuntime({
-    queue: state.queue,
-    commandLog: state.commandLog,
-    cmd,
-    targetTick,
-    moveType: LEGACY_COMMAND_TYPE.MOVE_AVATAR,
+    nowMs: performance.now(),
+    minIntervalMs: MOVE_INPUT_MIN_INTERVAL_MS,
+    walkAnimWindowMs: AVATAR_WALK_ANIM_WINDOW_MS,
     commandLogMax: COMMAND_LOG_MAX
-  })) {
-    return;
-  }
-
-  state.queue.push(cmd);
-  appendCommandLog(cmd);
+  });
 }
 
 function queueInteractDoor(): void {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const cmd = buildWireCommand(
-    state.sim.tick + 1,
-    LEGACY_COMMAND_TYPE.USE_FACING,
-    state.avatarFacingDx | 0,
-    state.avatarFacingDy | 0
-  );
-  enqueueCommandRuntime({
+  queueFacingUseCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
-    cmd,
+    tick: state.sim.tick,
+    facingDx: state.avatarFacingDx,
+    facingDy: state.avatarFacingDy,
     commandLogMax: COMMAND_LOG_MAX
   });
 }
@@ -6198,11 +6156,13 @@ function queueInteractAtCell(wx: number, wy: number): void {
   }
   const tx = wx | 0;
   const ty = wy | 0;
-  const cmd = buildWireCommand(state.sim.tick + 1, LEGACY_COMMAND_TYPE.USE_AT_CELL, tx, ty);
-  enqueueCommandRuntime({
+  queueCellCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
-    cmd,
+    tick: state.sim.tick,
+    commandType: LEGACY_COMMAND_TYPE.USE_AT_CELL,
+    wx: tx,
+    wy: ty,
     commandLogMax: COMMAND_LOG_MAX
   });
 }
@@ -6211,18 +6171,15 @@ function queueLegacyTargetVerb(verb: unknown, wx: number, wy: number): void {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const v = normalizeLegacyTargetVerbRuntime(verb);
-  const type = legacyVerbCommandTypeRuntime(v) | 0;
-  if (!type) {
-    return;
-  }
   const tx = wx | 0;
   const ty = wy | 0;
-  const cmd = buildWireCommand(state.sim.tick + 1, type, tx, ty);
-  enqueueCommandRuntime({
+  queueLegacyTargetVerbCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
-    cmd,
+    tick: state.sim.tick,
+    verb,
+    wx: tx,
+    wy: ty,
     commandLogMax: COMMAND_LOG_MAX
   });
 }

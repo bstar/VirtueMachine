@@ -13,6 +13,10 @@ import {
   enqueueCommandRuntime,
   filterFutureCommandsOfTypeRuntime,
   partitionCommandsForTickRuntime,
+  queueAvatarMoveCommandRuntime,
+  queueCellCommandRuntime,
+  queueFacingUseCommandRuntime,
+  queueLegacyTargetVerbCommandRuntime,
   shouldSuppressRepeatedMoveRuntime,
   upsertMoveCommandForTickRuntime
 } from "../sim/queue_runtime.ts";
@@ -102,5 +106,120 @@ enqueueCommandRuntime({
 });
 assert.deepEqual(enqueueQueue, [{ type: USE, tick: 6, arg0: 1 }]);
 assert.deepEqual(enqueueLog, [{ type: USE, tick: 6, arg0: 1 }]);
+
+{
+  const moveState = {
+    avatarFacingDx: 0,
+    avatarFacingDy: 0,
+    avatarWalkAnimUntilMs: -1,
+    commandLog: [],
+    lastMoveInputDx: 0,
+    lastMoveInputDy: 0,
+    lastMoveQueueAtMs: -1,
+    queue: [],
+    sim: { tick: 10 }
+  };
+  assert.equal(queueAvatarMoveCommandRuntime({
+    state: moveState,
+    dx: 1,
+    dy: 0,
+    nowMs: 1000,
+    minIntervalMs: 50,
+    walkAnimWindowMs: 120,
+    commandLogMax: 10
+  }), true);
+  assert.equal(moveState.avatarFacingDx, 1);
+  assert.equal(moveState.avatarWalkAnimUntilMs, 1120);
+  assert.deepEqual(moveState.queue, [{ tick: 11, type: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR, arg0: 1, arg1: 0 }]);
+  assert.deepEqual(moveState.commandLog, [{ tick: 11, type: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR, arg0: 1, arg1: 0 }]);
+
+  assert.equal(queueAvatarMoveCommandRuntime({
+    state: moveState,
+    dx: 1,
+    dy: 0,
+    nowMs: 1010,
+    minIntervalMs: 50,
+    walkAnimWindowMs: 120,
+    commandLogMax: 10
+  }), false);
+  assert.equal(moveState.queue.length, 1);
+
+  assert.equal(queueAvatarMoveCommandRuntime({
+    state: moveState,
+    dx: 0,
+    dy: 1,
+    nowMs: 1070,
+    minIntervalMs: 50,
+    walkAnimWindowMs: 120,
+    commandLogMax: 10
+  }), true);
+  assert.deepEqual(moveState.queue, [{ tick: 11, type: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR, arg0: 0, arg1: 1 }]);
+  assert.deepEqual(moveState.commandLog, [{ tick: 11, type: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR, arg0: 0, arg1: 1 }]);
+}
+
+{
+  const queue = [];
+  const commandLog = [];
+  queueFacingUseCommandRuntime({
+    queue,
+    commandLog,
+    tick: 20,
+    facingDx: -1,
+    facingDy: 0,
+    commandLogMax: 5
+  });
+  assert.deepEqual(queue, [{ tick: 21, type: LEGACY_COMMAND_TYPE_RUNTIME.USE_FACING, arg0: -1, arg1: 0 }]);
+  assert.deepEqual(commandLog, queue);
+}
+
+{
+  const queue = [];
+  const commandLog = [];
+  assert.equal(queueCellCommandRuntime({
+    queue,
+    commandLog,
+    tick: 30,
+    commandType: LEGACY_COMMAND_TYPE_RUNTIME.USE_AT_CELL,
+    wx: 123.9,
+    wy: 44.2,
+    commandLogMax: 5
+  }), true);
+  assert.deepEqual(queue, [{ tick: 31, type: LEGACY_COMMAND_TYPE_RUNTIME.USE_AT_CELL, arg0: 123, arg1: 44 }]);
+  assert.equal(queueCellCommandRuntime({
+    queue,
+    commandLog,
+    tick: 30,
+    commandType: 0,
+    wx: 1,
+    wy: 2,
+    commandLogMax: 5
+  }), false);
+  assert.equal(queue.length, 1);
+}
+
+{
+  const queue = [];
+  const commandLog = [];
+  assert.equal(queueLegacyTargetVerbCommandRuntime({
+    queue,
+    commandLog,
+    tick: 40,
+    verb: "talk",
+    wx: 7,
+    wy: 8,
+    commandLogMax: 5
+  }), true);
+  assert.deepEqual(queue, [{ tick: 41, type: LEGACY_COMMAND_TYPE_RUNTIME.TALK_AT_CELL, arg0: 7, arg1: 8 }]);
+  assert.equal(queueLegacyTargetVerbCommandRuntime({
+    queue,
+    commandLog,
+    tick: 40,
+    verb: "invalid",
+    wx: 1,
+    wy: 2,
+    commandLogMax: 5
+  }), false);
+  assert.equal(queue.length, 1);
+}
 
 console.log("queue_runtime_test: ok");
