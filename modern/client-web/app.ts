@@ -4294,7 +4294,7 @@ function startAuthoritativeConversationFromPayload(
   actor: LegacyTalkActor,
   tileId: number
 ): void {
-  const conversationState = state as unknown as AuthoritativeConversationStateView;
+  const conversationState = state as AuthoritativeConversationStateView;
   const session = payload && typeof payload === "object"
     ? payload as NonNullable<AuthoritativeConversationPayload["conversation_session"]>
     : {};
@@ -4816,7 +4816,7 @@ function initLegacyFramePreview(): void {
 }
 
 function tryLookAtCell(sim: AppSimState, tx: number, ty: number): boolean {
-  const talkState = state as unknown as LegacyTalkSessionStateView;
+  const talkState = state as LegacyTalkSessionStateView;
   const mapCtx = talkState.mapCtx;
   if (!mapCtx) {
     return false;
@@ -4847,7 +4847,7 @@ function tryLookAtCell(sim: AppSimState, tx: number, ty: number): boolean {
 }
 
 function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
-  const talkState = state as unknown as LegacyTalkSessionStateView;
+  const talkState = state as LegacyTalkSessionStateView;
   const target = resolveTalkTargetAtCellRuntime({
     world: sim.world,
     entityEntries: talkState.entityLayer?.entries,
@@ -5024,7 +5024,7 @@ async function netTakeWorldObject(
 }
 
 function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   const target = resolvePickupTargetAtCellRuntime({
     world: sim.world,
     objectLayer: interactionState.objectLayer,
@@ -5064,7 +5064,7 @@ function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
 }
 
 function tryAttackAtCell(sim: AppSimState, tx: number, ty: number): boolean {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   const target = resolveAttackTargetAtCellRuntime({
     world: sim.world,
     entityEntries: interactionState.entityLayer?.entries,
@@ -5108,7 +5108,7 @@ function tryMoveVerbAtCell(sim: AppSimState, tx: number, ty: number): boolean {
 }
 
 function findObjectByAnchor(anchor: InventoryObjectRuntime | null | undefined): U6ObjectEntryRuntime | null {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   if (!interactionState.objectLayer) {
     return null;
   }
@@ -5134,7 +5134,7 @@ function objectFootprintTiles(sim: AppSimState, o: ObjectFootprintSourceRuntime,
 }
 
 function isBlockedAt(sim: AppSimState, wx: number, wy: number, wz: number): boolean {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   const mapCtx = interactionState.mapCtx;
   if (!mapCtx) {
     return false;
@@ -5160,7 +5160,7 @@ function isBlockedAt(sim: AppSimState, wx: number, wy: number, wz: number): bool
 }
 
 function tryToggleDoorInFacingDirection(sim: AppSimState, dx: number, dy: number): boolean {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   if (!interactionState.objectLayer) {
     return false;
   }
@@ -5183,7 +5183,7 @@ function tryToggleDoorInFacingDirection(sim: AppSimState, dx: number, dy: number
 }
 
 function clearPendingAvatarMoveCommands(sim: AppSimState | null | undefined): void {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   if (!Array.isArray(interactionState.queue) || !sim) {
     return;
   }
@@ -5214,7 +5214,7 @@ function objectIsBedAtCell(obj: FurniturePoseObjectRuntime | null | undefined, t
 }
 
 function furnitureAtWorldCell(sim: AppSimState, tx: number, ty: number, tz: number) {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   return furnitureAtWorldCellRuntime({
     bedInteractionScore,
     fromX: sim.world.map_x,
@@ -5256,7 +5256,7 @@ function tryInteractFurnitureInFacingDirection(sim: AppSimState, dx: number, dy:
 }
 
 function tryToggleDoorAtCell(sim: AppSimState, tx: number, ty: number, tz: number): boolean {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   if (!interactionState.objectLayer) {
     return false;
   }
@@ -5276,7 +5276,7 @@ function tryToggleDoorAtCell(sim: AppSimState, tx: number, ty: number, tz: numbe
 }
 
 function tryInteractAtCell(sim: AppSimState, tx: number, ty: number): boolean {
-  const interactionState = state as unknown as GameplayInteractionStateView;
+  const interactionState = state as GameplayInteractionStateView;
   const tz = sim.world.map_z | 0;
   if (interactionState.objectLayer) {
     const overlays = interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);

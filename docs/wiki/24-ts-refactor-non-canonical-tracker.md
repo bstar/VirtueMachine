@@ -18,7 +18,7 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 - Status: `temporary`
 - Location: `modern/client-web/app.ts`
-- Note: logic has been partially extracted to `net/*`, `sim/*`, `ui/*` runtime modules, but `app.ts` still centrally orchestrates many canonical flows.
+- Note: logic has been partially extracted to `net/*`, `sim/*`, `ui/*` runtime modules, but `app.ts` still centrally orchestrates many canonical flows. Local app state view casts now use direct structural casts rather than `unknown` double-casts.
 - Risk: hidden coupling/order-of-operations drift during future slices.
 - Exit criteria: move remaining pure logic into typed runtimes and keep `app.ts` as composition/bootstrap only.
 
@@ -42,7 +42,7 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 - Status: `temporary`
 - Location: multiple `modern/client-web/net/*.ts`, `modern/client-web/sim/*.ts`
-- Note: many runtime signatures still use broad object typing to keep slices moving. World object take keys and inventory projection now use typed net-runtime boundary sources, with unknown server inventory JSON decoded before projection; net presence remote-player and authoritative-NPC rows now use explicit JSON decoders before projection/application.
+- Note: many runtime signatures still use broad object typing to keep slices moving. World object take keys and inventory projection now use typed net-runtime boundary sources, with unknown server inventory JSON decoded before projection; net presence remote-player and authoritative-NPC rows now use explicit JSON decoders before projection/application, and session state now uses the typed remote-player shape.
 - Risk: silent shape drift and late runtime failures.
 - Exit criteria: define shared interfaces for `state.net`, `sim`, object/entity records; increase strictness incrementally.
 

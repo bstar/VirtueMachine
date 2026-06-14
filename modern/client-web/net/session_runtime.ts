@@ -1,3 +1,5 @@
+import type { RemotePresencePlayer } from "./presence_runtime.ts";
+
 export type NetSessionState = {
   token?: string;
   userId?: string;
@@ -5,7 +7,7 @@ export type NetSessionState = {
   email?: string;
   emailVerified?: boolean;
   characterId?: string;
-  remotePlayers?: unknown[];
+  remotePlayers?: RemotePresencePlayer[];
   lastPresenceHeartbeatTick?: number;
   lastPresencePollTick?: number;
   lastClockPollTick?: number;
