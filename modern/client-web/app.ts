@@ -179,7 +179,8 @@ import {
 } from "./net/profile_runtime.ts";
 import {
   decodeSimSnapshotBase64Runtime,
-  encodeSimSnapshotBase64Runtime
+  encodeSimSnapshotBase64Runtime,
+  type SimSnapshotRuntime
 } from "./net/snapshot_codec_runtime.ts";
 import { loadNetPanelPrefs, persistNetLoginSettings, setModalOpenRuntime } from "./net/panel_runtime.ts";
 import {
@@ -3895,6 +3896,19 @@ function netSnapshotRoute(): string {
   return characterId ? `/api/characters/${characterId}/snapshot` : "/api/world/snapshot";
 }
 
+function applyLoadedSimSnapshot(loaded: SimSnapshotRuntime): void {
+  state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
+  state.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
+  state.sim.partyMembers = state.partyMembers.slice();
+  state.queue = [];
+  state.commandLog = [];
+  state.accMs = 0;
+  state.lastMoveQueueAtMs = -1;
+  state.avatarLastMoveTick = -1;
+  state.avatarWalkAnimUntilMs = -1;
+  state.interactionProbeTile = null;
+}
+
 async function netLogin(): Promise<void> {
   const out = await performNetLoginFlow({
     apiBaseInput: String(netApiBaseInput?.value || ""),
@@ -3916,16 +3930,7 @@ async function netLogin(): Promise<void> {
     snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
-      state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
-      state.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
-      state.sim.partyMembers = state.partyMembers.slice();
-      state.queue = [];
-      state.commandLog = [];
-      state.accMs = 0;
-      state.lastMoveQueueAtMs = -1;
-      state.avatarLastMoveTick = -1;
-      state.avatarWalkAnimUntilMs = -1;
-      state.interactionProbeTile = null;
+      applyLoadedSimSnapshot(loaded);
     },
     pollWorldClock: netPollWorldClock,
     pollPresence: netPollPresence,
@@ -4140,16 +4145,7 @@ async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
     snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
-      state.sim = toAppSimStateRuntime(loaded, state.partyMembers.length);
-      state.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
-      state.sim.partyMembers = state.partyMembers.slice();
-      state.queue = [];
-      state.commandLog = [];
-      state.accMs = 0;
-      state.lastMoveQueueAtMs = -1;
-      state.avatarLastMoveTick = -1;
-      state.avatarWalkAnimUntilMs = -1;
-      state.interactionProbeTile = null;
+      applyLoadedSimSnapshot(loaded);
     },
     resetBackgroundFailures,
     setStatus: setNetStatus
