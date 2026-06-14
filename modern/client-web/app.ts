@@ -157,6 +157,7 @@ import {
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
   setIntroPhaseRuntime,
+  worldInventorySourcesFromJsonRuntime,
   type CriticalMaintenanceEvent,
   type CriticalMaintenanceWorldItem,
   type WorldRuntimeJson
@@ -4980,7 +4981,7 @@ function applyInventoryProjectionFromServerObjects(sim: AppSimState | null | und
   if (!sim) {
     return;
   }
-  sim.inventory = inventoryProjectionFromServerObjectsRuntime(objects);
+  sim.inventory = inventoryProjectionFromServerObjectsRuntime(worldInventorySourcesFromJsonRuntime(objects));
 }
 
 async function netSyncInventoryProjection() {

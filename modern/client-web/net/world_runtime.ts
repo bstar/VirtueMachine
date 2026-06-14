@@ -22,6 +22,20 @@ export interface WorldRuntimeObject {
   z?: number;
 }
 
+export type WorldRuntimeObjectKeySource = object & {
+  index?: unknown;
+  objectKey?: unknown;
+  object_key?: unknown;
+  sourceArea?: unknown;
+};
+
+export type WorldRuntimeInventorySource = object & {
+  frame?: unknown;
+  objectKey?: unknown;
+  object_key?: unknown;
+  type?: unknown;
+};
+
 export interface WorldRuntimeObjectLayer {
   byCoord?: Map<string, WorldRuntimeObject[]>;
 }
@@ -41,8 +55,8 @@ export type WorldRuntimeInventoryItem = Record<string, unknown> & {
   type: number;
 };
 
-export function serverObjectKeyForWorldObjectRuntime(obj: unknown): string {
-  const row = obj && typeof obj === "object" ? obj as Record<string, unknown> : {};
+export function serverObjectKeyForWorldObjectRuntime(obj: WorldRuntimeObjectKeySource | null | undefined): string {
+  const row = obj || {};
   const direct = String(row.object_key || row.objectKey || "").trim();
   if (direct) {
     return direct;
@@ -55,12 +69,21 @@ export function serverObjectKeyForWorldObjectRuntime(obj: unknown): string {
   return "";
 }
 
-export function inventoryProjectionFromServerObjectsRuntime(objects: unknown): Record<string, number> {
+export function worldInventorySourcesFromJsonRuntime(objects: unknown): WorldRuntimeInventorySource[] {
+  if (!Array.isArray(objects)) {
+    return [];
+  }
+  return objects
+    .filter((obj): obj is WorldRuntimeInventorySource => !!obj && typeof obj === "object");
+}
+
+export function inventoryProjectionFromServerObjectsRuntime(
+  objects: readonly WorldRuntimeInventorySource[] | null | undefined
+): Record<string, number> {
   const next: Record<string, number> = {};
-  for (const obj of Array.isArray(objects) ? objects : []) {
-    const row = obj && typeof obj === "object" ? obj as { frame?: unknown; type?: unknown } : {};
-    const type = Number(row.type);
-    const frame = Number(row.frame);
+  for (const obj of objects || []) {
+    const type = Number(obj.type);
+    const frame = Number(obj.frame);
     if (!Number.isFinite(type) || !Number.isFinite(frame)) {
       continue;
     }
@@ -70,8 +93,8 @@ export function inventoryProjectionFromServerObjectsRuntime(objects: unknown): R
   return next;
 }
 
-function normalizeInventoryItemRuntime(value: unknown): WorldRuntimeInventoryItem {
-  const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null | undefined): WorldRuntimeInventoryItem {
+  const row = value || {};
   return {
     ...row,
     frame: Number(row.frame) | 0,
@@ -79,18 +102,26 @@ function normalizeInventoryItemRuntime(value: unknown): WorldRuntimeInventoryIte
   };
 }
 
-export function inventoryItemFromTakeResponseRuntime(out: unknown, fallback: unknown): WorldRuntimeInventoryItem {
-  const row = out && typeof out === "object" ? out as Record<string, unknown> : {};
-  return normalizeInventoryItemRuntime(row.inventory_item || row.target || fallback);
+export interface WorldRuntimeTakeResponse {
+  inventory_item?: WorldRuntimeInventorySource | null;
+  target?: WorldRuntimeInventorySource | null;
+  [key: string]: unknown;
+}
+
+export function inventoryItemFromTakeResponseRuntime(
+  out: WorldRuntimeTakeResponse | null | undefined,
+  fallback: WorldRuntimeInventorySource | null | undefined
+): WorldRuntimeInventoryItem {
+  return normalizeInventoryItemRuntime(out?.inventory_item || out?.target || fallback);
 }
 
 export async function requestTakeWorldObjectRuntime(
   args: {
-    actorId: unknown;
-    actorX: unknown;
-    actorY: unknown;
-    actorZ: unknown;
-    target: unknown;
+    actorId: string | number | null | undefined;
+    actorX: number;
+    actorY: number;
+    actorZ: number;
+    target: WorldRuntimeObjectKeySource | null | undefined;
   },
   request: WorldRuntimeRequest
 ): Promise<WorldRuntimeJson | null> {

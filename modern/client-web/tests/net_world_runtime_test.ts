@@ -8,7 +8,8 @@ import {
   requestTakeWorldObjectRuntime,
   serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime,
-  runCriticalMaintenanceRuntime
+  runCriticalMaintenanceRuntime,
+  worldInventorySourcesFromJsonRuntime
 } from "../net/world_runtime.ts";
 
 assert.equal(serverObjectKeyForWorldObjectRuntime({ object_key: " direct " }), "direct");
@@ -17,16 +18,19 @@ assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: 5, index: 9 }), 
 assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: "bad", index: 9 }), "");
 assert.equal(serverObjectKeyForWorldObjectRuntime(null), "");
 
-assert.deepEqual(inventoryProjectionFromServerObjectsRuntime([
+const decodedInventorySources = worldInventorySourcesFromJsonRuntime([
   { type: 0x123, frame: 0 },
   { type: 0x123, frame: 0 },
   { type: 0x123, frame: 1 },
   { type: "bad", frame: 1 },
   null
-]), {
+]);
+assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(decodedInventorySources), {
   "0x123:0x00": 2,
   "0x123:0x01": 1
 });
+assert.equal(decodedInventorySources.length, 4);
+assert.deepEqual(worldInventorySourcesFromJsonRuntime(null), []);
 assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(null), {});
 
 assert.deepEqual(inventoryItemFromTakeResponseRuntime({
@@ -46,9 +50,9 @@ assert.deepEqual(inventoryItemFromTakeResponseRuntime(null, { frame: 0, object_k
   const requested: string[] = [];
   const out = await requestTakeWorldObjectRuntime({
     actorId: "avatar-1",
-    actorX: "307",
-    actorY: "347",
-    actorZ: "0",
+    actorX: 307,
+    actorY: 347,
+    actorZ: 0,
     target: { object_key: "target-1" }
   }, async (route, init, auth) => {
     requested.push(`${route}:${init?.method}:${auth}:${String(init?.body || "")}`);
