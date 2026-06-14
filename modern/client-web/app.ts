@@ -3893,14 +3893,14 @@ async function netRequest(route: string, init: RequestInit = {}, auth = true): P
   });
 }
 
-async function netGetIntroPhase(): Promise<Record<string, unknown> | null> {
+async function netGetIntroPhase(): Promise<WorldRuntimeJson | null> {
   const { out, phase } = await requestIntroPhaseRuntime(state.net.introPhase, netRequest);
   state.net.introPhase = phase;
   updateIntroPhaseUi();
   return out;
 }
 
-async function netSetIntroPhase(phase: unknown): Promise<Record<string, unknown> | null> {
+async function netSetIntroPhase(phase: unknown): Promise<WorldRuntimeJson | null> {
   const { out, phase: next } = await setIntroPhaseRuntime(phase, netRequest);
   state.net.introPhase = next;
   updateIntroPhaseUi();

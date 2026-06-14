@@ -7,7 +7,12 @@ export type WorldRuntimeRequest = (
 ) => Promise<WorldRuntimeJson | null>;
 
 export interface WorldRuntimeJson {
-  [key: string]: unknown;
+  events?: CriticalMaintenanceEvent[];
+  inventory_item?: WorldRuntimeInventorySource | null;
+  intro_state?: { phase?: unknown };
+  objects?: WorldRuntimeServerObject[];
+  ok?: unknown;
+  target?: WorldRuntimeInventorySource | null;
 }
 
 export interface WorldRuntimeObject {
@@ -36,6 +41,30 @@ export type WorldRuntimeInventorySource = object & {
   type?: unknown;
 };
 
+export interface WorldRuntimeServerObject {
+  assoc_chain?: unknown[];
+  assoc_child_0010_count?: unknown;
+  assoc_child_count?: unknown;
+  blocked_by?: unknown;
+  footprint?: Array<{ x?: unknown; y?: unknown; z?: unknown }>;
+  frame?: unknown;
+  holder_id?: unknown;
+  holder_key?: unknown;
+  holder_kind?: unknown;
+  legacy_order?: unknown;
+  object_key?: unknown;
+  root_anchor_key?: unknown;
+  source_area?: unknown;
+  source_index?: unknown;
+  source_kind?: unknown;
+  status?: unknown;
+  tile_id?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+}
+
 export interface WorldRuntimeObjectLayer {
   byCoord?: Map<string, WorldRuntimeObject[]>;
 }
@@ -47,7 +76,7 @@ export interface CriticalMaintenanceWorldItem {
 }
 
 export interface CriticalMaintenanceEvent {
-  [key: string]: unknown;
+  item_id?: unknown;
 }
 
 export type WorldRuntimeInventoryItem = {
@@ -115,7 +144,6 @@ function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null
 export interface WorldRuntimeTakeResponse {
   inventory_item?: WorldRuntimeInventorySource | null;
   target?: WorldRuntimeInventorySource | null;
-  [key: string]: unknown;
 }
 
 export function inventoryItemFromTakeResponseRuntime(
@@ -163,9 +191,7 @@ export async function requestIntroPhaseRuntime(
   request: WorldRuntimeRequest
 ): Promise<{ out: WorldRuntimeJson | null; phase: "pre_intro" | "post_intro" }> {
   const out = await request("/api/world/intro-state", { method: "GET" }, true);
-  const rawPhase = out && typeof out === "object"
-    ? (out.intro_state as { phase?: unknown } | undefined)?.phase
-    : null;
+  const rawPhase = out?.intro_state?.phase;
   return {
     out,
     phase: normalizeIntroPhaseRuntime(rawPhase || fallbackPhase || "post_intro")
@@ -184,9 +210,7 @@ export async function setIntroPhaseRuntime(
       phase: requested
     })
   }, true);
-  const rawPhase = out && typeof out === "object"
-    ? (out.intro_state as { phase?: unknown } | undefined)?.phase
-    : null;
+  const rawPhase = out?.intro_state?.phase;
   return {
     out,
     phase: normalizeIntroPhaseRuntime(rawPhase || requested)
