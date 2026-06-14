@@ -7232,7 +7232,13 @@ async function fetchPristineBaselineVersion() {
   return String(await res.text()).trim();
 }
 
-function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime) {
+type ObjectBaselineLoadResult = {
+  entityLayer: U6EntityLayerRuntime;
+  objectLayer: U6ObjectLayerRuntime;
+  objectPath: string;
+};
+
+function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime): boolean {
   const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
   if (!removedCount) {
     return false;
@@ -7244,7 +7250,10 @@ function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime) {
   return !!removed[objectLayerAnchorKeyRuntime(obj)];
 }
 
-async function loadObjectBaselineFromPath(baseTiles, objectPath) {
+async function loadObjectBaselineFromPath(
+  baseTiles: ArrayLike<number> | null | undefined,
+  objectPath: string
+): Promise<ObjectBaselineLoadResult> {
   if (!baseTiles || baseTiles.length < 0x400) {
     throw new Error("invalid base tile table for object baseline");
   }
@@ -7262,9 +7271,9 @@ async function loadObjectBaselineFromPath(baseTiles, objectPath) {
   return { objectLayer, entityLayer, objectPath };
 }
 
-async function loadPristineObjectBaseline(baseTiles) {
+async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise<ObjectBaselineLoadResult> {
   const baselinePaths = [RUNTIME_OBJECT_PATH, PRISTINE_OBJECT_PATH];
-  let lastErr = null;
+  let lastErr: unknown = null;
   for (const objectPath of baselinePaths) {
     try {
       return await loadObjectBaselineFromPath(baseTiles, objectPath);
@@ -7275,7 +7284,7 @@ async function loadPristineObjectBaseline(baseTiles) {
   throw (lastErr || new Error("no valid object baseline path"));
 }
 
-async function fetchRuntimeAssetWithFallback(paths, minBytes = 1) {
+async function fetchRuntimeAssetWithFallback(paths: readonly unknown[], minBytes = 1): Promise<Uint8Array | null> {
   const list = Array.isArray(paths) ? paths : [];
   for (const p of list) {
     const path = String(p || "").trim();
@@ -7294,7 +7303,7 @@ async function fetchRuntimeAssetWithFallback(paths, minBytes = 1) {
   return null;
 }
 
-function looksLikeConversationArchive(bytes, minIndexCount = 8) {
+function looksLikeConversationArchive(bytes: unknown, minIndexCount = 8): boolean {
   if (!(bytes instanceof Uint8Array) || bytes.length < 512) {
     return false;
   }
@@ -7315,7 +7324,7 @@ function looksLikeConversationArchive(bytes, minIndexCount = 8) {
   return validCount >= Math.max(2, Math.floor(count / 4));
 }
 
-function archiveHasRecoverableCanonicalTriplet(archive) {
+function archiveHasRecoverableCanonicalTriplet(archive: unknown): boolean {
   if (!(archive instanceof Uint8Array)) {
     return false;
   }
@@ -7330,7 +7339,7 @@ function archiveHasRecoverableCanonicalTriplet(archive) {
   return true;
 }
 
-function loadLegacyConversationScriptFromArchive(archive, index) {
+function loadLegacyConversationScriptFromArchive(archive: unknown, index: unknown): Uint8Array | null {
   if (!(archive instanceof Uint8Array) || archive.length < 4) {
     return null;
   }
@@ -7361,7 +7370,7 @@ function loadLegacyConversationScriptFromArchive(archive, index) {
   return bytes;
 }
 
-function validateConversationArchiveA(archive) {
+function validateConversationArchiveA(archive: Uint8Array): boolean {
   const checks = [
     { index: 5, name: "lord british", descTokens: ["ruler", "britannia"] },
     { index: 6, name: "nystul", descTokens: ["concerned", "mage"] },
@@ -7387,7 +7396,7 @@ function validateConversationArchiveA(archive) {
   return true;
 }
 
-async function fetchConversationArchiveAWithValidation(paths, minBytes = 256) {
+async function fetchConversationArchiveAWithValidation(paths: readonly unknown[], minBytes = 256): Promise<Uint8Array | null> {
   const list = Array.isArray(paths) ? paths : [];
   for (const p of list) {
     const path = String(p || "").trim();
@@ -7410,7 +7419,7 @@ async function fetchConversationArchiveAWithValidation(paths, minBytes = 256) {
   return null;
 }
 
-async function fetchConversationArchiveAny(paths, minBytes = 256) {
+async function fetchConversationArchiveAny(paths: readonly unknown[], minBytes = 256): Promise<Uint8Array | null> {
   const list = Array.isArray(paths) ? paths : [];
   for (const p of list) {
     const path = String(p || "").trim();
@@ -7431,7 +7440,7 @@ async function fetchConversationArchiveAny(paths, minBytes = 256) {
   return null;
 }
 
-function conversationArchiveCandidatePaths(name) {
+function conversationArchiveCandidatePaths(name: unknown): string[] {
   const file = String(name || "").trim();
   if (!file) return [];
   const base = [
@@ -7449,7 +7458,7 @@ function conversationArchiveCandidatePaths(name) {
   return Array.from(new Set(base));
 }
 
-async function refreshPristineBaseline(force = false) {
+async function refreshPristineBaseline(force = false): Promise<boolean> {
   if (!state.tileSet || !state.objectLayer || !state.entityLayer) {
     return false;
   }
@@ -7659,8 +7668,8 @@ async function loadRuntimeAssets() {
       : null;
     const converseAPrimary = looksLikeConversationArchive(converseAPrimaryRaw, 8) ? converseAPrimaryRaw : null;
     const converseBPrimary = looksLikeConversationArchive(converseBPrimaryRaw, 4) ? converseBPrimaryRaw : null;
-    let converseA = converseAPrimary;
-    let converseB = converseBPrimary;
+    let converseA: Uint8Array | null = converseAPrimary;
+    let converseB: Uint8Array | null = converseBPrimary;
     let converseAValidated = true;
     if (converseA && !validateConversationArchiveA(converseA)) {
       converseA = null;
