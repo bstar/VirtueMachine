@@ -89,7 +89,7 @@ import {
 } from "./net/presence_runtime.ts";
 import {
   collectWorldItemsForMaintenanceFromLayer,
-  requestCriticalMaintenance,
+  runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
@@ -5370,38 +5370,20 @@ function collectWorldItemsForMaintenance() {
   return collectWorldItemsForMaintenanceFromLayer(state.objectLayer);
 }
 
-async function netRunCriticalMaintenance(opts: any = {}) {
-  const { silent = false } = opts;
-  if (state.net.maintenanceInFlight) {
-    return [];
-  }
-  state.net.maintenanceInFlight = true;
-  setNetStatus("sync", "Running critical maintenance...");
-  try {
-    if (!state.net.token) {
-      await netLogin();
+async function netRunCriticalMaintenance(opts: { silent?: boolean } = {}) {
+  return runCriticalMaintenanceRuntime(state.net, opts, {
+    currentTick: () => state.sim.tick >>> 0,
+    collectWorldItems: collectWorldItemsForMaintenance,
+    login: netLogin,
+    request: netRequest,
+    resetBackgroundFailures,
+    updateCriticalRecoveryStat,
+    setStatus: setNetStatus,
+    setDiag: (kind, text) => {
+      diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
+      diagBox.textContent = text;
     }
-    const events = await requestCriticalMaintenance({
-      tick: state.sim.tick >>> 0,
-      world_items: collectWorldItemsForMaintenance()
-    }, netRequest);
-    resetBackgroundFailures();
-    state.net.recoveryEventCount += events.length;
-    state.net.lastMaintenanceTick = state.sim.tick >>> 0;
-    updateCriticalRecoveryStat();
-    if (!silent) {
-      diagBox.className = "diag ok";
-      diagBox.textContent = events.length
-        ? `Critical maintenance emitted ${events.length} recovery event(s).`
-        : "Critical maintenance check complete (no recoveries needed).";
-    }
-    setNetStatus("online", events.length
-      ? `Maintenance recovered ${events.length} item(s)`
-      : "Maintenance check complete");
-    return events;
-  } finally {
-    state.net.maintenanceInFlight = false;
-  }
+  });
 }
 
 async function netFetchWorldObjectsAtCell(x, y, z) {
