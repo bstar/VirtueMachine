@@ -3734,7 +3734,7 @@ function pulseNetIndicator() {
     currentTimer: netActivityPulseTimer,
     timeoutMs: NET_ACTIVITY_PULSE_MS,
     setTimer: (nextTimer) => {
-      netActivityPulseTimer = nextTimer | 0;
+      netActivityPulseTimer = Number(nextTimer || 0) | 0;
     }
   });
 }

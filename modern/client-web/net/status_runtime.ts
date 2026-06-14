@@ -107,20 +107,24 @@ export function applyNetStatusRuntime(args: {
 
 export function pulseNetIndicatorRuntime(args: {
   indicator?: HTMLElement | null;
-  currentTimer: number;
+  currentTimer: ReturnType<typeof setTimeout> | number | null;
   timeoutMs: number;
-  setTimer: (nextTimer: number) => void;
+  setTimer: (nextTimer: ReturnType<typeof setTimeout> | number | null) => void;
+  clearTimeoutFn?: (timer: ReturnType<typeof setTimeout> | number) => void;
+  setTimeoutFn?: (fn: () => void, timeoutMs: number) => ReturnType<typeof setTimeout> | number;
 }): void {
   if (!args.indicator) {
     return;
   }
   args.indicator.classList.add("is-active");
   if (args.currentTimer) {
-    clearTimeout(args.currentTimer);
+    const clearTimeoutFn = args.clearTimeoutFn ?? ((timer) => window.clearTimeout(timer));
+    clearTimeoutFn(args.currentTimer);
   }
-  const nextTimer = window.setTimeout(() => {
+  const setTimeoutFn = args.setTimeoutFn ?? ((fn, timeoutMs) => window.setTimeout(fn, timeoutMs));
+  const nextTimer = setTimeoutFn(() => {
     args.indicator?.classList.remove("is-active");
-    args.setTimer(0);
+    args.setTimer(null);
   }, args.timeoutMs);
-  args.setTimer(nextTimer as unknown as number);
+  args.setTimer(nextTimer);
 }
