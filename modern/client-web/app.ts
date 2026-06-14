@@ -185,7 +185,6 @@ import {
   hashMixU32Runtime,
   simStateHashRuntime
 } from "./sim/hash_runtime.ts";
-import { packCommandRuntime, unpackCommandRuntime } from "./sim/command_wire_runtime.ts";
 import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 import {
   appendCommandLogRuntime,
@@ -203,6 +202,16 @@ import { applyAvatarMoveCommandRuntime } from "./sim/avatar_move_runtime.ts";
 import { U6AnimDataRuntime } from "./sim/anim_data_runtime.ts";
 import { U6EntityLayerRuntime } from "./sim/entity_layer_runtime.ts";
 import { U6MapRuntime } from "./sim/map_runtime.ts";
+import {
+  LEGACY_COMMAND_TYPE_RUNTIME,
+  LEGACY_TARGET_VERB_LABEL_RUNTIME,
+  LEGACY_TARGET_VERB_RUNTIME,
+  buildLegacyWireCommandRuntime,
+  legacyVerbCommandTypeRuntime,
+  legacyVerbLabelRuntime,
+  legacyVerbSelectRangeRuntime,
+  normalizeLegacyTargetVerbRuntime
+} from "./sim/legacy_command_runtime.ts";
 import {
   U6ObjectLayerRuntime,
   type U6ObjectEntryRuntime,
@@ -339,7 +348,6 @@ const LEGACY_PROMPT_FRAME_MS = 120;
 const TILE_SIZE = 64;
 const VIEW_W = 11;
 const VIEW_H = 11;
-const COMMAND_WIRE_SIZE = 16;
 const COMMAND_LOG_MAX = 50000;
 const MOVE_INPUT_MIN_INTERVAL_MS = 120;
 const AVATAR_WALK_ANIM_WINDOW_MS = 280;
@@ -573,65 +581,15 @@ const STARTUP_MENU = Object.freeze([
   { id: "ack", label: "Acknowledgements", enabled: false },
   { id: "journey", label: "Journey Onward", enabled: true }
 ]);
-const LEGACY_TARGET_VERB = Object.freeze({
-  ATTACK: "attack",
-  CAST: "cast",
-  TALK: "talk",
-  LOOK: "look",
-  GET: "get",
-  DROP: "drop",
-  MOVE: "move",
-  USE: "use"
-});
-const LEGACY_TARGET_VERB_LABEL = Object.freeze({
-  [LEGACY_TARGET_VERB.ATTACK]: "Attack",
-  [LEGACY_TARGET_VERB.CAST]: "Cast",
-  [LEGACY_TARGET_VERB.TALK]: "Talk",
-  [LEGACY_TARGET_VERB.LOOK]: "Look",
-  [LEGACY_TARGET_VERB.GET]: "Get",
-  [LEGACY_TARGET_VERB.DROP]: "Drop",
-  [LEGACY_TARGET_VERB.MOVE]: "Move",
-  [LEGACY_TARGET_VERB.USE]: "Use"
-});
-const LEGACY_VERB_SELECT_RANGE = Object.freeze({
-  [LEGACY_TARGET_VERB.ATTACK]: 7,
-  [LEGACY_TARGET_VERB.CAST]: 7,
-  [LEGACY_TARGET_VERB.TALK]: 7,
-  [LEGACY_TARGET_VERB.LOOK]: 7,
-  [LEGACY_TARGET_VERB.GET]: -1,
-  [LEGACY_TARGET_VERB.DROP]: 7,
-  [LEGACY_TARGET_VERB.MOVE]: -1,
-  [LEGACY_TARGET_VERB.USE]: -1
-});
+const LEGACY_TARGET_VERB = LEGACY_TARGET_VERB_RUNTIME;
+const LEGACY_TARGET_VERB_LABEL = LEGACY_TARGET_VERB_LABEL_RUNTIME;
 const LEGACY_STATUS_DISPLAY = Object.freeze({
   CMD_90: 0x90, /* character status */
   CMD_91: 0x91, /* party list / command */
   CMD_92: 0x92, /* equipment + inventory */
   CMD_9E: 0x9e  /* inspect / talk panel */
 });
-const LEGACY_COMMAND_TYPE = Object.freeze({
-  MOVE_AVATAR: 1,
-  USE_FACING: 2,
-  USE_AT_CELL: 3,
-  LOOK_AT_CELL: 4,
-  TALK_AT_CELL: 5,
-  GET_AT_CELL: 6,
-  ATTACK_AT_CELL: 7,
-  CAST_AT_CELL: 8,
-  DROP_AT_CELL: 9,
-  MOVE_AT_CELL: 10,
-  USE_VERB_AT_CELL: 11
-});
-const LEGACY_VERB_COMMAND_TYPE = Object.freeze({
-  [LEGACY_TARGET_VERB.ATTACK]: LEGACY_COMMAND_TYPE.ATTACK_AT_CELL,
-  [LEGACY_TARGET_VERB.CAST]: LEGACY_COMMAND_TYPE.CAST_AT_CELL,
-  [LEGACY_TARGET_VERB.TALK]: LEGACY_COMMAND_TYPE.TALK_AT_CELL,
-  [LEGACY_TARGET_VERB.LOOK]: LEGACY_COMMAND_TYPE.LOOK_AT_CELL,
-  [LEGACY_TARGET_VERB.GET]: LEGACY_COMMAND_TYPE.GET_AT_CELL,
-  [LEGACY_TARGET_VERB.DROP]: LEGACY_COMMAND_TYPE.DROP_AT_CELL,
-  [LEGACY_TARGET_VERB.MOVE]: LEGACY_COMMAND_TYPE.MOVE_AT_CELL,
-  [LEGACY_TARGET_VERB.USE]: LEGACY_COMMAND_TYPE.USE_VERB_AT_CELL
-});
+const LEGACY_COMMAND_TYPE = LEGACY_COMMAND_TYPE_RUNTIME;
 const LEGACY_LEDGER_MAX_CHARS = 17; /* clip 22..38 */
 const LEGACY_LEDGER_MAX_LINES = 10; /* clip 14..23 */
 const LEGACY_COMBAT_MODE_LABELS = Object.freeze([
@@ -5358,8 +5316,7 @@ function updateVisibleAmbientSfx() {
 }
 
 function buildWireCommand(tick, type, arg0, arg1) {
-  const bytes = packCommandRuntime(tick, type, arg0, arg1, COMMAND_WIRE_SIZE);
-  return unpackCommandRuntime(bytes);
+  return buildLegacyWireCommandRuntime(tick, type, arg0, arg1);
 }
 
 function queueMove(dx, dy) {
@@ -5442,8 +5399,8 @@ function queueLegacyTargetVerb(verb, wx, wy) {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const v = String(verb || "").toLowerCase();
-  const type = LEGACY_VERB_COMMAND_TYPE[v] | 0;
+  const v = normalizeLegacyTargetVerbRuntime(verb);
+  const type = legacyVerbCommandTypeRuntime(v) | 0;
   if (!type) {
     return;
   }
@@ -5920,7 +5877,7 @@ function drawLegacySelectCellMarker(g, px, py, size) {
   /* Canonical world-target selector in seg_0A33:
      SelectRange < 0 => TIL_16C (direction), else TIL_16D (select). */
   const verb = String(state.targetVerb || "");
-  const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
+  const range = legacyVerbSelectRangeRuntime(verb);
   const selectorTileId = (range < 0) ? 0x16c : 0x16d;
   if (state.tileSet && Number.isFinite(selectorTileId)) {
     const pal = paletteForTile(selectorTileId);
@@ -7223,7 +7180,7 @@ function clampUseCursorToView() {
   state.useCursorX = clampI32Runtime(state.useCursorX | 0, startX, maxX);
   state.useCursorY = clampI32Runtime(state.useCursorY | 0, startY, maxY);
   const verb = String(state.targetVerb || "");
-  const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
+  const range = legacyVerbSelectRangeRuntime(verb);
   if (Number.isFinite(range) && range >= 0) {
     const cx = state.sim.world.map_x | 0;
     const cy = state.sim.world.map_y | 0;
@@ -7244,8 +7201,8 @@ function beginTargetCursor(verb) {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const v = String(verb || "").toLowerCase();
-  if (!LEGACY_TARGET_VERB_LABEL[v]) {
+  const v = normalizeLegacyTargetVerbRuntime(verb);
+  if (!v) {
     return;
   }
   const px = state.sim.world.map_x | 0;
@@ -7257,10 +7214,10 @@ function beginTargetCursor(verb) {
   state.useCursorActive = true;
   clampUseCursorToView();
   diagBox.className = "diag ok";
-  if ((LEGACY_VERB_SELECT_RANGE[v] | 0) < 0) {
-    diagBox.textContent = `${LEGACY_TARGET_VERB_LABEL[v]}: choose direction with arrow keys, cancel with Esc.`;
+  if ((legacyVerbSelectRangeRuntime(v) | 0) < 0) {
+    diagBox.textContent = `${legacyVerbLabelRuntime(v)}: choose direction with arrow keys, cancel with Esc.`;
   } else {
-    diagBox.textContent = `${LEGACY_TARGET_VERB_LABEL[v]}: move target with arrows, confirm with Enter/U, cancel with Esc.`;
+    diagBox.textContent = `${legacyVerbLabelRuntime(v)}: move target with arrows, confirm with Enter/U, cancel with Esc.`;
   }
 }
 
@@ -7269,7 +7226,7 @@ function moveUseCursor(dx, dy) {
     return;
   }
   const verb = String(state.targetVerb || "");
-  const range = Number(LEGACY_VERB_SELECT_RANGE[verb]);
+  const range = legacyVerbSelectRangeRuntime(verb);
   if (range === -1) {
     /* Legacy directional-target commands execute on arrow toward adjacent cell. */
     const px = state.sim.world.map_x | 0;

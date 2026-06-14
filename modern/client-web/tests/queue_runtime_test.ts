@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
 import {
+  LEGACY_COMMAND_TYPE_RUNTIME,
+  LEGACY_TARGET_VERB_RUNTIME,
+  buildLegacyWireCommandRuntime,
+  legacyVerbCommandTypeRuntime,
+  legacyVerbLabelRuntime,
+  legacyVerbSelectRangeRuntime,
+  normalizeLegacyTargetVerbRuntime
+} from "../sim/legacy_command_runtime.ts";
+import {
   appendCommandLogRuntime,
   enqueueCommandRuntime,
   filterFutureCommandsOfTypeRuntime,
@@ -10,6 +19,18 @@ import {
 
 const MOVE = 1;
 const USE = 2;
+
+assert.equal(normalizeLegacyTargetVerbRuntime("Attack"), LEGACY_TARGET_VERB_RUNTIME.ATTACK);
+assert.equal(normalizeLegacyTargetVerbRuntime("invalid"), null);
+assert.equal(legacyVerbLabelRuntime("cast"), "Cast");
+assert.equal(legacyVerbSelectRangeRuntime("get"), -1);
+assert.equal(legacyVerbCommandTypeRuntime("talk"), LEGACY_COMMAND_TYPE_RUNTIME.TALK_AT_CELL);
+assert.deepEqual(buildLegacyWireCommandRuntime(7, LEGACY_COMMAND_TYPE_RUNTIME.USE_AT_CELL, 10, 11), {
+  tick: 7,
+  type: LEGACY_COMMAND_TYPE_RUNTIME.USE_AT_CELL,
+  arg0: 10,
+  arg1: 11
+});
 
 const commandLog = [{ type: 99, tick: 0 }];
 appendCommandLogRuntime(commandLog, { type: USE, tick: 1 }, 1);
