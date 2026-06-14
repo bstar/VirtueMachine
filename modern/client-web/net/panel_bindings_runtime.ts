@@ -100,11 +100,13 @@ export function bindNetPanelPrefPersistenceRuntime(args: {
     });
   }
   if (c.passwordToggleButton && c.passwordInput) {
-    c.passwordToggleButton.addEventListener("click", () => {
-      const show = c.passwordInput?.type === "password";
-      c.passwordInput.type = show ? "text" : "password";
-      c.passwordToggleButton.textContent = show ? "Hide" : "Show";
-      c.passwordToggleButton.title = show ? "Hide password" : "Show password";
+    const passwordInput = c.passwordInput;
+    const passwordToggleButton = c.passwordToggleButton;
+    passwordToggleButton.addEventListener("click", () => {
+      const show = passwordInput.type === "password";
+      passwordInput.type = show ? "text" : "password";
+      passwordToggleButton.textContent = show ? "Hide" : "Show";
+      passwordToggleButton.title = show ? "Hide password" : "Show password";
       saveNetPanelPref(k.passwordVisible, show ? "on" : "off");
     });
   }
