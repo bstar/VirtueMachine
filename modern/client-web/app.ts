@@ -1163,7 +1163,7 @@ function isLegacyScaleMode(mode: unknown): boolean {
   return mode === "fit" || mode === "1" || mode === "2" || mode === "3" || mode === "4";
 }
 
-function isLegacyFramePreviewOn() {
+function isLegacyFramePreviewOn(): boolean {
   return document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
 }
 
@@ -1292,7 +1292,7 @@ function getRenderPaletteKey(): string {
   return `palfx-${legacyPalettePhase()}`;
 }
 
-function decompressU6Lzw(bytes: Uint8Array) {
+function decompressU6Lzw(bytes: Uint8Array): Uint8Array {
   return decompressU6LzwRuntime(bytes) ?? bytes;
 }
 
@@ -1398,11 +1398,11 @@ function legacyEquipmentSlotsForTalkActor(actor: LegacyTalkActor | null | undefi
   })));
 }
 
-function endLegacyConversation() {
+function endLegacyConversation(): void {
   endLegacyConversationImported(state);
 }
 
-function pushLegacyConversationPrompt() {
+function pushLegacyConversationPrompt(): void {
   const rawName = String(state.net?.characterName || "Avatar").trim();
   const name = (rawName || "Avatar").slice(0, 12);
   pushLedgerMessage(`${name}:`);
@@ -1717,7 +1717,10 @@ function formatYouSeeLine(subject: unknown): string {
   return formatYouSeeLineImported(subject);
 }
 
-function legacyConversationReply(targetName: unknown, typed: unknown) {
+function legacyConversationReply(
+  targetName: unknown,
+  typed: unknown
+): ReturnType<typeof legacyConversationReplyImported> {
   const convState = state as LegacyConversationStateView;
   if (convState.legacyConversationScript instanceof Uint8Array) {
     const startPc = Number(convState.legacyConversationPc) | 0;
@@ -1759,7 +1762,7 @@ function conversationRunFromKeyCursor(
   startPc: number,
   typed: unknown,
   vmContext: ConversationVmContextRuntime | null
-) {
+): ReturnType<typeof conversationRunFromKeyCursorImported> {
   return conversationRunFromKeyCursorImported({
     scriptBytes,
     startPc,
@@ -1779,7 +1782,7 @@ function conversationRunFromKeyCursor(
   });
 }
 
-function submitLegacyConversationInput() {
+function submitLegacyConversationInput(): void {
   const out = submitLegacyConversationInputImported(state, {
     pushLedgerMessage,
     pushPrompt: pushLegacyConversationPrompt,
