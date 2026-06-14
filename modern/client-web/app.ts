@@ -6802,7 +6802,7 @@ function drawTileGrid() {
   statTile.textContent = `0x${centerTile.toString(16).padStart(2, "0")}`;
 }
 
-function updateStats() {
+function updateStats(): void {
   const w = state.sim.world;
   statTick.textContent = String(state.sim.tick);
   statPos.textContent = formatPositionRuntime(w);
@@ -7043,7 +7043,7 @@ function verifyReplayStability(): void {
   diagBox.textContent = "Animation mismatch detected. Animated tile phase is not deterministic.";
 }
 
-function resetRun() {
+function resetRun(): void {
   state.sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
   state.queue = [];
   state.commandLog = [];
@@ -7072,7 +7072,7 @@ function resetRun() {
   replayDownload.removeAttribute("href");
 }
 
-function tickLoop(ts) {
+function tickLoop(ts: number): void {
   try {
     const dtMs = Math.max(0, ts - state.lastTs);
     state.loopHealth.lastDtMs = dtMs;
@@ -7211,7 +7211,7 @@ function tickLoop(ts) {
   requestAnimationFrame(tickLoop);
 }
 
-function clearObjectTransientState() {
+function clearObjectTransientState(): void {
   if (!state.sim) {
     return;
   }
