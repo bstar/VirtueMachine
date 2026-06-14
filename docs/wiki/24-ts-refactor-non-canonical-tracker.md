@@ -18,7 +18,7 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 - Status: `temporary`
 - Location: `modern/client-web/app.ts`
-- Note: logic has been partially extracted to `net/*`, `sim/*`, `ui/*` runtime modules, but `app.ts` still centrally orchestrates many canonical flows. Local app state view casts now use direct structural casts rather than `unknown` double-casts.
+- Note: logic has been partially extracted to `net/*`, `sim/*`, `ui/*` runtime modules, but `app.ts` still centrally orchestrates many canonical flows. Local app state view casts now use direct structural casts rather than `unknown` double-casts, and animated-object helper inputs now use fixed tile/object fields.
 - Risk: hidden coupling/order-of-operations drift during future slices.
 - Exit criteria: move remaining pure logic into typed runtimes and keep `app.ts` as composition/bootstrap only.
 

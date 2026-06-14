@@ -498,7 +498,6 @@ type AnimatedTileObject = {
   x?: number;
   y?: number;
   z?: number;
-  [key: string]: unknown;
 };
 type LegacyTalkActor = {
   baseTile?: number;
