@@ -153,6 +153,33 @@ assert.equal(allowed.length, 1);
 assert.equal(allowed[0].x, 1, "allowed schedule step should advance one tile");
 assert.equal(allowed[0].path_status, "walking");
 
+const firstSchedulePass = buildScheduledNpcStatesRuntime(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 0 },
+  [],
+  0,
+  { canStep: () => true }
+);
+
+assert.equal(firstSchedulePass.length, 1);
+assert.equal(firstSchedulePass[0].x, 0, "first scheduled state must start from baseline x instead of teleporting to target");
+assert.equal(firstSchedulePass[0].y, 0, "first scheduled state must start from baseline y instead of teleporting to target");
+assert.equal(firstSchedulePass[0].target_x, 2);
+assert.equal(firstSchedulePass[0].path_status, "walking");
+
+const firstScheduleStep = buildScheduledNpcStatesRuntime(
+  baseline,
+  schedule,
+  { time_h: 0, date_d: 1, tick: 8 },
+  firstSchedulePass,
+  1,
+  { canStep: () => true }
+);
+
+assert.equal(firstScheduleStep[0].x, 1, "first movement after startup should advance through pathing");
+assert.equal(firstScheduleStep[0].y, 0);
+
 const furniturePermissive = buildScheduledNpcStatesRuntime(
   baseline,
   schedule,

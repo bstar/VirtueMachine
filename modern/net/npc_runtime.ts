@@ -529,9 +529,9 @@ function makeScheduledNpcState(
     || Number(prev.target_x) !== (selected.entry.x | 0)
     || Number(prev.target_y) !== (selected.entry.y | 0)
     || Number(prev.target_z) !== (selected.entry.z | 0);
-  const x = changed ? (prev ? (prev.x | 0) : (selected.entry.x | 0)) : (prev.x | 0);
-  const y = changed ? (prev ? (prev.y | 0) : (selected.entry.y | 0)) : (prev.y | 0);
-  const z = changed ? (prev ? (prev.z | 0) : (selected.entry.z | 0)) : (prev.z | 0);
+  const x = changed ? (prev ? (prev.x | 0) : (base.x | 0)) : (prev.x | 0);
+  const y = changed ? (prev ? (prev.y | 0) : (base.y | 0)) : (prev.y | 0);
+  const z = changed ? (prev ? (prev.z | 0) : (base.z | 0)) : (prev.z | 0);
   const atTarget = x === (selected.entry.x | 0) && y === (selected.entry.y | 0) && z === (selected.entry.z | 0);
   const unsupported = UNSUPPORTED_ACTIONS.has(action);
   return {
