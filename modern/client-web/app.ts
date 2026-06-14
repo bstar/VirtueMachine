@@ -118,9 +118,16 @@ import {
   OBJ_COORD_USE_EQUIP,
   OBJ_COORD_USE_LOCXYZ
 } from "../common/u6_object_constants.ts";
-import { performManagedNetRequest } from "./net/request_runtime.ts";
+import {
+  performManagedNetRequest,
+  type NetJsonBody
+} from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
-import { performNetLoadSnapshot, performNetSaveSnapshot } from "./net/snapshot_runtime.ts";
+import {
+  performNetLoadSnapshot,
+  performNetSaveSnapshot,
+  type SnapshotRuntimePayload
+} from "./net/snapshot_runtime.ts";
 import {
   performNetChangePassword,
   performNetRecoverPassword,
@@ -147,7 +154,10 @@ import {
   requestTakeWorldObjectRuntime,
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
-  setIntroPhaseRuntime
+  setIntroPhaseRuntime,
+  type CriticalMaintenanceEvent,
+  type CriticalMaintenanceWorldItem,
+  type WorldRuntimeJson
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
@@ -3666,7 +3676,7 @@ function updateCriticalRecoveryStat(): void {
   statCriticalRecoveries.textContent = `${state.net.recoveryEventCount}${suffix}`;
 }
 
-async function netRequest(route: string, init: RequestInit = {}, auth = true) {
+async function netRequest(route: string, init: RequestInit = {}, auth = true): Promise<NetJsonBody> {
   const enabledExtensions = runtimeExtensionsSummary(state.runtimeExtensions);
   return performManagedNetRequest({
     apiBase: String(state.net.apiBase || ""),
@@ -3714,7 +3724,7 @@ function netSnapshotRoute(): string {
   return characterId ? `/api/characters/${characterId}/snapshot` : "/api/world/snapshot";
 }
 
-async function netLogin() {
+async function netLogin(): Promise<void> {
   const out = await performNetLoginFlow({
     apiBaseInput: String(netApiBaseInput?.value || ""),
     usernameInput: String(netUsernameInput?.value || ""),
@@ -3782,7 +3792,7 @@ async function netLogin() {
   return out;
 }
 
-async function netSetEmail() {
+async function netSetEmail(): ReturnType<typeof performNetSetEmail> {
   return performNetSetEmail(String(netEmailInput?.value || ""), {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
@@ -3803,7 +3813,7 @@ async function netSetEmail() {
   });
 }
 
-async function netSendEmailVerification() {
+async function netSendEmailVerification(): ReturnType<typeof performNetSendEmailVerification> {
   return performNetSendEmailVerification({
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
@@ -3812,7 +3822,7 @@ async function netSendEmailVerification() {
   });
 }
 
-async function netVerifyEmail() {
+async function netVerifyEmail(): ReturnType<typeof performNetVerifyEmail> {
   return performNetVerifyEmail(String(netEmailCodeInput?.value || ""), {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
@@ -3831,7 +3841,7 @@ async function netVerifyEmail() {
   });
 }
 
-async function netRecoverPassword() {
+async function netRecoverPassword(): ReturnType<typeof performNetRecoverPassword> {
   return performNetRecoverPassword(
     String(netApiBaseInput?.value || ""),
     String(netUsernameInput?.value || ""),
@@ -3844,7 +3854,7 @@ async function netRecoverPassword() {
   );
 }
 
-async function netChangePassword() {
+async function netChangePassword(): ReturnType<typeof performNetChangePassword> {
   return performNetChangePassword(
     String(netPasswordInput?.value || ""),
     String(netNewPasswordInput?.value || ""),
@@ -3909,7 +3919,7 @@ async function netLogoutAndPersist(): Promise<void> {
   updateNetAuthButton();
 }
 
-async function netSaveSnapshot() {
+async function netSaveSnapshot(): Promise<SnapshotRuntimePayload> {
   return performNetSaveSnapshot({
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
@@ -3925,7 +3935,7 @@ async function netSaveSnapshot() {
   });
 }
 
-async function netLoadSnapshot() {
+async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
   return performNetLoadSnapshot({
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
@@ -3947,11 +3957,11 @@ async function netLoadSnapshot() {
   });
 }
 
-function collectWorldItemsForMaintenance() {
+function collectWorldItemsForMaintenance(): CriticalMaintenanceWorldItem[] {
   return collectWorldItemsForMaintenanceFromLayer(state.objectLayer);
 }
 
-async function netRunCriticalMaintenance(opts: { silent?: boolean } = {}) {
+async function netRunCriticalMaintenance(opts: { silent?: boolean } = {}): Promise<CriticalMaintenanceEvent[]> {
   return runCriticalMaintenanceRuntime(state.net, opts, {
     currentTick: () => state.sim.tick >>> 0,
     collectWorldItems: collectWorldItemsForMaintenance,
@@ -3967,7 +3977,7 @@ async function netRunCriticalMaintenance(opts: { silent?: boolean } = {}) {
   });
 }
 
-async function netFetchWorldObjectsAtCell(x: number, y: number, z: number) {
+async function netFetchWorldObjectsAtCell(x: number, y: number, z: number): Promise<WorldRuntimeJson | null> {
   if (!isNetAuthenticated()) {
     return null;
   }
