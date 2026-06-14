@@ -4,9 +4,7 @@ export interface SnapshotRuntimePayload {
   snapshot_base64?: unknown;
   snapshot_meta?: {
     saved_tick?: unknown;
-    [key: string]: unknown;
   };
-  [key: string]: unknown;
 }
 
 export type SnapshotRuntimeRequest = (
