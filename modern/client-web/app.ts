@@ -837,12 +837,24 @@ type AppState = {
   useCursorY: number;
 };
 
-function byId<T = HTMLElement>(id: string): T {
-  return document.getElementById(id) as unknown as T;
+function byId<T extends HTMLElement = HTMLElement>(id: string): T {
+  const element = document.getElementById(id);
+  if (!element) {
+    throw new Error(`Missing required element #${id}`);
+  }
+  return element as T;
+}
+
+function canvas2dContext(canvasElement: HTMLCanvasElement, label: string): CanvasRenderingContext2D {
+  const context = canvasElement.getContext("2d");
+  if (!context) {
+    throw new Error(`${label} 2D context is unavailable`);
+  }
+  return context;
 }
 
 const canvas = byId<HTMLCanvasElement>("viewport");
-const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+const ctx = canvas2dContext(canvas, "viewport");
 const legacyBackdropCanvas = byId<HTMLCanvasElement>("legacyBackdrop");
 const legacyViewportCanvas = byId<HTMLCanvasElement>("legacyViewport");
 const legacyWorldSurface = byId<HTMLCanvasElement>("legacyWorldSurface");
