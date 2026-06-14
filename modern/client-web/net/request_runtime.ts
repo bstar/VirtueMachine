@@ -9,9 +9,8 @@ export type NetRuntimeRequestOptions = {
   onPulse?: () => void;
 };
 
-export interface NetJsonBody {
-  [key: string]: NetJsonBody;
-}
+export type NetJsonValue = null | boolean | number | string | NetJsonValue[] | { [key: string]: NetJsonValue };
+export type NetJsonBody = { [key: string]: NetJsonValue };
 
 /**
  * Build runtime contract headers for client->net requests.
