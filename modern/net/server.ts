@@ -66,6 +66,11 @@ const {
   smtpTextMessageRuntime
 } = require("./email_runtime.ts");
 const {
+  issueEmailVerificationCodeRuntime,
+  listUserCharactersRuntime,
+  sixDigitEmailVerificationCodeRuntime
+} = require("./server_account_runtime.ts");
+const {
   advanceWorldClockMinuteRuntime,
   clampIntRuntime,
   computeSnapshotHashRuntime,
@@ -671,13 +676,11 @@ function issueToken(state, userId) {
 }
 
 function issueEmailVerificationCode(user) {
-  const code = String(Math.floor(100000 + (Math.random() * 900000)));
-  user.email_verification = {
-    code,
-    issued_at: nowIso(),
-    expires_at_ms: Date.now() + (1000 * 60 * 15)
-  };
-  return code;
+  return issueEmailVerificationCodeRuntime(user, {
+    code: sixDigitEmailVerificationCodeRuntime(Math.random()),
+    issuedAt: nowIso(),
+    expiresAtMs: Date.now() + (1000 * 60 * 15)
+  });
 }
 
 function sanitizeHeaderValue(raw) {
@@ -931,14 +934,7 @@ async function deliverEmail(toEmail, subject, bodyText, meta = {}) {
 }
 
 function listUserCharacters(state, userId) {
-  return state.characters.filter((c) => c.user_id === userId).map((c) => ({
-    character_id: c.character_id,
-    user_id: c.user_id,
-    name: c.name,
-    created_at: c.created_at,
-    updated_at: c.updated_at,
-    snapshot_meta: c.snapshot_meta
-  }));
+  return listUserCharactersRuntime(state.characters, userId);
 }
 
 function computeSnapshotHash(snapshotBase64) {
