@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   bedInteractionScoreRuntime,
   chairFrameForCellRuntime,
+  furnitureAtWorldCellRuntime,
   furnitureOccupancyCellsRuntime,
   objectIsBedAtCellRuntime,
   objectIsChairAtCellRuntime,
@@ -122,5 +123,60 @@ assert.equal(
   ]),
   false
 );
+
+{
+  const chairAtTarget = { ...chair, order: 9, x: 20, y: 20 };
+  const bedAtTarget = { ...bed, order: 1, x: 20, y: 20 };
+  const selected = furnitureAtWorldCellRuntime({
+    bedInteractionScore: () => ({ valid: true, dist: 0 }),
+    fromX: 19,
+    fromY: 20,
+    isBedAtCell: (obj, tx, ty) => obj.type === 0x0a3 && tx === 20 && ty === 20,
+    isChairAtCell: (obj, tx, ty) => obj.type === 0x0fc && tx === 20 && ty === 20,
+    objectsAt: (x, y) => (x === 20 && y === 20 ? [bedAtTarget, chairAtTarget, chairAtTarget] : []),
+    tx: 20,
+    ty: 20,
+    tz: 0
+  });
+  assert.equal(selected, chairAtTarget);
+}
+
+{
+  const invalidNear = { ...bed, frame: 4, order: 1, x: 20, y: 20 };
+  const validFar = { ...bed, frame: 0, order: 2, x: 21, y: 20 };
+  const validNearHighOrder = { ...bed, frame: 0, order: 9, x: 20, y: 21 };
+  const selected = furnitureAtWorldCellRuntime({
+    bedInteractionScore: (obj) => {
+      if (obj === invalidNear) return { valid: false, dist: 0 };
+      if (obj === validFar) return { valid: true, dist: 5 };
+      return { valid: true, dist: 1 };
+    },
+    fromX: 20,
+    fromY: 20,
+    isBedAtCell: (obj) => obj.type === 0x0a3,
+    isChairAtCell: () => false,
+    objectsAt: (x, y) => (
+      x === 20 && y === 20
+        ? [invalidNear, validFar, validNearHighOrder]
+        : []
+    ),
+    tx: 20,
+    ty: 20,
+    tz: 0
+  });
+  assert.equal(selected, validNearHighOrder);
+}
+
+assert.equal(furnitureAtWorldCellRuntime({
+  bedInteractionScore: () => ({ valid: false, dist: 0 }),
+  fromX: 0,
+  fromY: 0,
+  isBedAtCell: () => false,
+  isChairAtCell: () => false,
+  objectsAt: null,
+  tx: 0,
+  ty: 0,
+  tz: 0
+}), null);
 
 console.log("furniture_pose_runtime_test: ok");

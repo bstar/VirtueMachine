@@ -25,6 +25,12 @@ export type ChairFootprintProviderRuntime = (
   obj: FurniturePoseObjectRuntime
 ) => readonly ChairFootprintTileRuntime[];
 
+export type FurnitureObjectProviderRuntime = (
+  x: number,
+  y: number,
+  z: number
+) => Iterable<FurniturePoseObjectRuntime>;
+
 export function furnitureOccupancyCellsRuntime(
   obj: FurniturePoseObjectRuntime | null | undefined,
   tileFlagsForTile: TileFlagsForTileRuntime
@@ -210,4 +216,75 @@ export function bedInteractionScoreRuntime(
     }
   }
   return { valid, dist: valid ? validDist : anyDist };
+}
+
+export function furnitureAtWorldCellRuntime(args: {
+  bedInteractionScore(obj: FurniturePoseObjectRuntime, fromX: number, fromY: number): { valid: boolean; dist: number };
+  fromX: number;
+  fromY: number;
+  isBedAtCell(obj: FurniturePoseObjectRuntime, tx: number, ty: number): boolean;
+  isChairAtCell(obj: FurniturePoseObjectRuntime, tx: number, ty: number): boolean;
+  objectsAt: FurnitureObjectProviderRuntime | null | undefined;
+  tx: number;
+  ty: number;
+  tz: number;
+}): FurniturePoseObjectRuntime | null {
+  if (!args.objectsAt) {
+    return null;
+  }
+  const tx = args.tx | 0;
+  const ty = args.ty | 0;
+  const tz = args.tz | 0;
+  const overlays: FurniturePoseObjectRuntime[] = [];
+  const seen = new Set<string>();
+  const addCandidatesAt = (sx: number, sy: number) => {
+    for (const o of args.objectsAt ? args.objectsAt(sx | 0, sy | 0, tz) : []) {
+      if (!args.isChairAtCell(o, tx, ty) && !args.isBedAtCell(o, tx, ty)) {
+        continue;
+      }
+      const key = `${Number(o.order) | 0}:${Number(o.type) | 0}:${Number(o.x) | 0}:${Number(o.y) | 0}:${Number(o.z) | 0}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      overlays.push(o);
+    }
+  };
+  addCandidatesAt(tx, ty);
+  addCandidatesAt((tx + 1) | 0, ty);
+  addCandidatesAt(tx, (ty + 1) | 0);
+  addCandidatesAt((tx + 1) | 0, (ty + 1) | 0);
+
+  const chairs: FurniturePoseObjectRuntime[] = [];
+  const beds: FurniturePoseObjectRuntime[] = [];
+  for (const o of overlays) {
+    if (args.isChairAtCell(o, tx, ty)) {
+      chairs.push(o);
+    } else if (args.isBedAtCell(o, tx, ty)) {
+      beds.push(o);
+    }
+  }
+  if (chairs.length > 0) {
+    return chairs[0];
+  }
+  if (beds.length === 1) {
+    return beds[0];
+  }
+  if (beds.length > 1) {
+    const fromX = args.fromX | 0;
+    const fromY = args.fromY | 0;
+    beds.sort((a, b) => {
+      const as = args.bedInteractionScore(a, fromX, fromY);
+      const bs = args.bedInteractionScore(b, fromX, fromY);
+      if (as.valid !== bs.valid) {
+        return as.valid ? -1 : 1;
+      }
+      if (as.dist !== bs.dist) {
+        return as.dist - bs.dist;
+      }
+      return (Number(a.order) | 0) - (Number(b.order) | 0);
+    });
+    return beds[0];
+  }
+  return null;
 }

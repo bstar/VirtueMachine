@@ -207,6 +207,7 @@ import {
 import {
   bedInteractionScoreRuntime,
   chairFrameForCellRuntime,
+  furnitureAtWorldCellRuntime,
   furnitureOccupancyCellsRuntime,
   objectIsBedAtCellRuntime,
   objectIsChairAtCellRuntime,
@@ -5241,61 +5242,17 @@ function objectIsBedAtCell(obj, tx, ty) {
 }
 
 function furnitureAtWorldCell(sim, tx, ty, tz) {
-  if (!state.objectLayer) {
-    return null;
-  }
-  const overlays = [];
-  const seen = new Set();
-  const addCandidatesAt = (sx, sy) => {
-    for (const o of state.objectLayer.objectsAt(sx, sy, tz)) {
-      if (!objectIsChairAtCell(o, tx, ty) && !objectIsBedAtCell(o, tx, ty)) {
-        continue;
-      }
-      const key = `${o.order | 0}:${o.type | 0}:${o.x | 0}:${o.y | 0}:${o.z | 0}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      overlays.push(o);
-    }
-  };
-  addCandidatesAt(tx, ty);
-  addCandidatesAt((tx + 1) | 0, ty | 0);
-  addCandidatesAt(tx | 0, (ty + 1) | 0);
-  addCandidatesAt((tx + 1) | 0, (ty + 1) | 0);
-
-  const chairs = [];
-  const beds = [];
-  for (const o of overlays) {
-    if (objectIsChairAtCell(o, tx, ty)) {
-      chairs.push(o);
-    } else if (objectIsBedAtCell(o, tx, ty)) {
-      beds.push(o);
-    }
-  }
-  if (chairs.length > 0) {
-    return chairs[0];
-  }
-  if (beds.length === 1) {
-    return beds[0];
-  }
-  if (beds.length > 1) {
-    const fromX = sim.world.map_x | 0;
-    const fromY = sim.world.map_y | 0;
-    beds.sort((a, b) => {
-      const as = bedInteractionScore(a, fromX, fromY);
-      const bs = bedInteractionScore(b, fromX, fromY);
-      if (as.valid !== bs.valid) {
-        return as.valid ? -1 : 1;
-      }
-      if (as.dist !== bs.dist) {
-        return as.dist - bs.dist;
-      }
-      return (a.order | 0) - (b.order | 0);
-    });
-    return beds[0];
-  }
-  return null;
+  return furnitureAtWorldCellRuntime({
+    bedInteractionScore,
+    fromX: sim.world.map_x,
+    fromY: sim.world.map_y,
+    isBedAtCell: objectIsBedAtCell,
+    isChairAtCell: objectIsChairAtCell,
+    objectsAt: state.objectLayer ? (x, y, z) => state.objectLayer.objectsAt(x, y, z) : null,
+    tx,
+    ty,
+    tz
+  });
 }
 
 function furnitureAtCell(sim, tx, ty) {
