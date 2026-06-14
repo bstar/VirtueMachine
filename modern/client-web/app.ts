@@ -110,7 +110,8 @@ import {
 } from "./net/profile_runtime.ts";
 import {
   decodeSimSnapshotBase64Runtime,
-  encodeSimSnapshotBase64Runtime
+  encodeSimSnapshotBase64Runtime,
+  type SimSnapshotRuntime
 } from "./net/snapshot_codec_runtime.ts";
 import { loadNetPanelPrefs, persistNetLoginSettings, setModalOpenRuntime } from "./net/panel_runtime.ts";
 import {
@@ -647,7 +648,12 @@ const INITIAL_WORLD = Object.freeze({
 
 const INITIAL_SEED = 0x12345678;
 
-const state: any = {
+type AppSimState = Omit<SimSnapshotRuntime, "doorOpenStates"> & {
+  doorOpenStates: Record<string, number>;
+  partySize: number;
+};
+
+const state = {
   sim: createInitialSimState(),
   audio: createU6AudioRuntime(),
   musicPhase: "",
@@ -681,7 +687,7 @@ const state: any = {
   legacyLedgerPrompt: false,
   legacyPromptAnimMs: 0,
   legacyPromptAnimPhase: 0,
-  legacyStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_92,
+  legacyStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_92 as number,
   showOverlayDebug: false,
   enablePaletteFx: true,
   movementMode: "ghost",
@@ -704,7 +710,7 @@ const state: any = {
   legacyConversationVmContext: null,
   legacyConversationNpcKey: "",
   legacyConversationPendingPrompt: "",
-  legacyConversationPrevStatus: LEGACY_STATUS_DISPLAY.CMD_92,
+  legacyConversationPrevStatus: LEGACY_STATUS_DISPLAY.CMD_92 as number,
   useCursorX: 0,
   useCursorY: 0,
   avatarFacingDx: 0,
@@ -747,6 +753,7 @@ const state: any = {
   legacyConversationRules: [],
   legacyConversationPc: -1,
   legacyConversationInputOpcode: 0,
+  legacyCombatModeLabel: "ASSAULT",
   legacyScaleMode: "4",
   legacyComposeCanvas: null,
   legacyBackdropBaseCanvas: null,
@@ -2172,7 +2179,7 @@ function conversationMacroSymbolToIndex(sym) {
 function conversationVmContextForSession(overrides = null) {
   const ov = (overrides && typeof overrides === "object") ? overrides : {};
   return buildConversationVmContextImported({
-    hour: Number(state.world?.clock_hour) | 0,
+    hour: Number(state.sim.world?.time_h) | 0,
     player: String(state.net?.characterName || "Avatar").trim() || "Avatar",
     target: String(ov.targetName || state.legacyConversationTargetName || "").trim(),
     greeting: String(ov.greeting || "milady").trim() || "milady",
@@ -4794,7 +4801,7 @@ function composeLegacyViewportFromModernGrid() {
   lv.drawImage(compose, 8, 8, 160, 160, 0, 0, 160, 160);
 }
 
-function createInitialSimState() {
+function createInitialSimState(): AppSimState {
   return {
     tick: 0,
     rngState: INITIAL_SEED >>> 0,
@@ -4812,6 +4819,16 @@ function createInitialSimState() {
     avatarPoseAnchor: null,
     partySize: 1,
     world: { ...INITIAL_WORLD }
+  };
+}
+
+function toAppSimState(snapshot: SimSnapshotRuntime): AppSimState {
+  return {
+    ...snapshot,
+    doorOpenStates: Object.fromEntries(
+      Object.entries(snapshot.doorOpenStates ?? {}).map(([key, value]) => [key, Number(value) | 0])
+    ),
+    partySize: Math.max(1, Number((snapshot as { partySize?: number }).partySize) || state.partyMembers.length || 1)
   };
 }
 
@@ -5275,7 +5292,7 @@ async function netLogin() {
     snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
-      state.sim = loaded;
+      state.sim = toAppSimState(loaded);
       state.queue = [];
       state.commandLog = [];
       state.accMs = 0;
@@ -5473,7 +5490,7 @@ async function netLoadSnapshot() {
     snapshotRoute: netSnapshotRoute,
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
     applyLoadedSim: (loaded) => {
-      state.sim = loaded;
+      state.sim = toAppSimState(loaded);
       state.queue = [];
       state.commandLog = [];
       state.accMs = 0;
@@ -7966,7 +7983,7 @@ function buildLegacyViewContext(startX, startY, wz) {
     return v;
   };
   const ambientLightLevel = () => {
-    const world = state?.sim?.world || {};
+    const world = state.sim.world;
     const hour = Number(world.time_h) >>> 0;
     const minute = Number(world.time_m) >>> 0;
     const dateD = Number(world.date_d) >>> 0;
