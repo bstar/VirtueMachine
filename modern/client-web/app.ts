@@ -86,14 +86,7 @@ import {
 import {
   OBJ_COORD_USE_EQUIP,
   OBJ_COORD_USE_LOCXYZ,
-  OBJ_COORD_USE_MASK,
-  OBJECT_TYPE_BED_VALUES,
-  OBJECT_TYPE_CHAIR_VALUES,
-  OBJECT_TYPE_CLOSEABLE_DOOR_VALUES,
-  OBJECT_TYPE_DOOR_VALUES,
-  OBJECT_TYPE_SOLID_ENV_VALUES,
-  OBJECT_TYPE_TOP_DECOR_VALUES,
-  u6ObjectTypeSet
+  OBJ_COORD_USE_MASK
 } from "../common/u6_object_constants.ts";
 import { performManagedNetRequest } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
@@ -192,6 +185,10 @@ import {
   sleepBedCellFrameOffsetRuntime,
   sleepFrameOffsetForBedAtCellRuntime
 } from "./sim/furniture_pose_runtime.ts";
+import {
+  isImplicitSolidObjectTileRuntime,
+  objectFootprintTilesRuntime
+} from "./sim/object_footprint_runtime.ts";
 import {
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
@@ -294,12 +291,6 @@ const LEGACY_SLEEP_SHAPE_TYPE = 0x092;
 const NPC_FLAG_DIRECTION_MASK = 0x07;
 const NPC_FLAG_WALKING = 0x80;
 const OBJECT_TYPES_FLOOR_DECOR = new Set([0x12e, 0x12f, 0x130]);
-const OBJECT_TYPES_DOOR = u6ObjectTypeSet(OBJECT_TYPE_DOOR_VALUES);
-const OBJECT_TYPES_CLOSEABLE_DOOR = u6ObjectTypeSet(OBJECT_TYPE_CLOSEABLE_DOOR_VALUES);
-const OBJECT_TYPES_CHAIR = u6ObjectTypeSet(OBJECT_TYPE_CHAIR_VALUES);
-const OBJECT_TYPES_BED = u6ObjectTypeSet(OBJECT_TYPE_BED_VALUES);
-const OBJECT_TYPES_TOP_DECOR = u6ObjectTypeSet(OBJECT_TYPE_TOP_DECOR_VALUES);
-const OBJECT_TYPES_SOLID_ENV = u6ObjectTypeSet(OBJECT_TYPE_SOLID_ENV_VALUES);
 function isRenderableWorldObjectType(type) {
   const t = type & 0x03ff;
   if (t >= ENTITY_TYPE_ACTOR_MIN && t <= ENTITY_TYPE_ACTOR_MAX) {
@@ -310,31 +301,6 @@ function isRenderableWorldObjectType(type) {
     return false;
   }
   return true;
-}
-
-function isImplicitSolidObjectTile(objType, tileId) {
-  if (OBJECT_TYPES_DOOR.has(objType & 0x03ff)) {
-    return false;
-  }
-  if (!state.tileFlags) {
-    return false;
-  }
-  const tf = state.tileFlags[tileId & 0x07ff] ?? 0;
-  if ((tf & 0x20) !== 0) {
-    return true;
-  }
-  /* Legacy data has many large furniture props without explicit nos-step flags.
-     Use multi-tile footprint as a collision fallback, but never for foreground/top decor. */
-  if ((tf & 0xc0) !== 0) {
-    if ((tf & 0x10) !== 0) {
-      return false;
-    }
-    if (OBJECT_TYPES_TOP_DECOR.has(objType & 0x03ff)) {
-      return false;
-    }
-    return true;
-  }
-  return false;
 }
 
 const HASH_OFFSET = 1469598103934665603n;
@@ -5929,23 +5895,8 @@ function findObjectByAnchor(anchor) {
 }
 
 function objectFootprintTiles(sim, o, ox, oy) {
-  const wrap10 = (v) => v & 0x3ff;
-  const sx = wrap10(ox);
-  const sy = wrap10(oy);
   const tileId = resolveDoorTileIdRuntime(sim, o) & 0xffff;
-  const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
-  const out = [{ x: sx, y: sy, tileId }];
-  if (tf & 0x80) {
-    out.push({ x: wrap10(sx - 1), y: sy, tileId: (tileId - 1) & 0xffff });
-  }
-  if (tf & 0x40) {
-    const upTile = (tf & 0x80) ? (tileId - 2) : (tileId - 1);
-    out.push({ x: sx, y: wrap10(sy - 1), tileId: upTile & 0xffff });
-  }
-  if ((tf & 0xc0) === 0xc0) {
-    out.push({ x: wrap10(sx - 1), y: wrap10(sy - 1), tileId: (tileId - 3) & 0xffff });
-  }
-  return out;
+  return objectFootprintTilesRuntime(ox, oy, tileId, tileFlagsForTile);
 }
 
 function isBlockedAt(sim, wx, wy, wz) {
@@ -5984,7 +5935,7 @@ function isBlockedAt(sim, wx, wy, wz) {
         if (isSolidEnvObjectRuntime(o)) {
           return true;
         }
-        if (isImplicitSolidObjectTile(o.type, c.tileId)) {
+        if (isImplicitSolidObjectTileRuntime(o.type, c.tileId, tileFlagsForTile)) {
           return true;
         }
       }
