@@ -1,8 +1,30 @@
 "use strict";
 
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { NetConnectOpts } from "node:net";
 import type { ConnectionOptions } from "node:tls";
+import type {
+  NpcBaselineRuntime,
+  NpcRenderableEntry,
+  NpcRuntimePersistRuntime,
+  ScheduledNpcStepRuntime,
+  ScheduledNpcStateRuntime,
+  U6ScheduleTableRuntime
+} from "./npc_runtime.ts";
+import type {
+  CriticalItemPolicyRuntime,
+  PresenceRowRuntime,
+  WorldClockRuntime,
+  WorldInteractionLogRuntime,
+  WorldSnapshotRuntime
+} from "./server_runtime.ts";
+import type {
+  ServerCharacterRuntime,
+  ServerTokenRuntime,
+  ServerUserRuntime
+} from "./server_account_runtime.ts";
+import type { U6MapRuntime as U6MapRuntimeType } from "./world_map_runtime.ts";
+import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
 
 const http = require("node:http");
 const fs = require("node:fs");
@@ -168,6 +190,33 @@ const FILES = {
 const INTRO_PHASE_PRE = INTRO_PHASE_PRE_RUNTIME;
 const INTRO_PHASE_POST = INTRO_PHASE_POST_RUNTIME;
 
+type ServerState = {
+  characters: ServerCharacterRuntime[];
+  conversationArchives: unknown;
+  conversationSessions: Record<string, unknown>;
+  criticalPolicy: CriticalItemPolicyRuntime[];
+  introState: { phase: string };
+  mapRuntime: U6MapRuntimeType;
+  npcBaseline: NpcBaselineRuntime;
+  npcPilot: ScheduledNpcStateRuntime[];
+  npcPilotById: Map<number, ScheduledNpcStateRuntime>;
+  npcRuntime: NpcBaselineRuntime | null;
+  npcRuntimeById: Map<number, NpcRenderableEntry>;
+  npcRuntimePersist: NpcRuntimePersistRuntime;
+  npcScheduleById: Map<number, ScheduledNpcStateRuntime>;
+  npcStates: ScheduledNpcStateRuntime[];
+  presence: PresenceRowRuntime[];
+  scheduleRuntime: U6ScheduleTableRuntime;
+  tokens: ServerTokenRuntime[];
+  users: ServerUserRuntime[];
+  worldClock: WorldClockRuntime;
+  worldInteractionLog: WorldInteractionLogRuntime;
+  worldObjects: WorldObjectState;
+  worldSnapshot: WorldSnapshotRuntime;
+};
+
+type CreatedServerUser = ServerUserRuntime & { created_at: string };
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -208,15 +257,15 @@ function isValidEmail(raw: unknown): boolean {
   return isValidEmailRuntime(raw);
 }
 
-function newUserId(state) {
-  return newUserIdRuntime(state.users, (bytes) => nodeCrypto.randomBytes(bytes).toString("hex"));
+function newUserId(state: Pick<ServerState, "users">): string {
+  return newUserIdRuntime(state.users, (bytes: number) => nodeCrypto.randomBytes(bytes).toString("hex"));
 }
 
-function findUserByUsername(state, username) {
+function findUserByUsername(state: Pick<ServerState, "users">, username: unknown): ServerUserRuntime | null {
   return findUserByUsernameRuntime(state.users, username);
 }
 
-function ensureUserSchema(user) {
+function ensureUserSchema(user: ServerUserRuntime): void {
   ensureUserSchemaRuntime(user);
 }
 
@@ -253,27 +302,27 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
   return body && typeof body === "object" ? body as Record<string, unknown> : {};
 }
 
-function defaultCriticalPolicy() {
+function defaultCriticalPolicy(): CriticalItemPolicyRuntime[] {
   return defaultCriticalPolicyRuntime();
 }
 
-function defaultWorldClock() {
+function defaultWorldClock(): WorldClockRuntime {
   return defaultWorldClockRuntime();
 }
 
-function defaultWorldSnapshot() {
+function defaultWorldSnapshot(): WorldSnapshotRuntime {
   return defaultWorldSnapshotRuntime(nowIso());
 }
 
-function defaultNpcRuntimeState(baseline) {
+function defaultNpcRuntimeState(baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined): NpcRuntimePersistRuntime {
   return defaultNpcRuntimeStateRuntime(baseline);
 }
 
-function normalizeNpcRuntimeState(raw, baseline) {
+function normalizeNpcRuntimeState(raw: unknown, baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined): NpcRuntimePersistRuntime {
   return normalizeNpcRuntimeStateRuntime(raw, baseline);
 }
 
-function rebuildNpcRuntimeState(state) {
+function rebuildNpcRuntimeState(state: ServerState): void {
   const introPhase = String(state?.npcRuntimePersist?.intro_phase || INTRO_PHASE_POST).trim().toLowerCase() === INTRO_PHASE_PRE
     ? INTRO_PHASE_PRE
     : INTRO_PHASE_POST;
@@ -298,7 +347,7 @@ function rebuildNpcRuntimeState(state) {
       state.worldClock,
       [],
       0,
-      { canStep: (step) => canNpcStepInto(state, step) }
+      { canStep: (step: ScheduledNpcStepRuntime) => canNpcStepInto(state, step) }
     );
   }
   rebuildNpcScheduleIndex(state);
@@ -308,7 +357,7 @@ function rebuildNpcRuntimeState(state) {
   };
 }
 
-function rebuildNpcScheduleIndex(state) {
+function rebuildNpcScheduleIndex(state: ServerState): void {
   state.npcPilot = Array.isArray(state.npcStates) ? state.npcStates : [];
   state.npcPilotById = new Map();
   state.npcScheduleById = new Map();
@@ -319,7 +368,7 @@ function rebuildNpcScheduleIndex(state) {
   }
 }
 
-function updateNpcScheduleStates(state, elapsedTicks) {
+function updateNpcScheduleStates(state: ServerState, elapsedTicks: number): void {
   if (!state?.npcRuntime || !state?.scheduleRuntime || !state?.worldClock) {
     return;
   }
@@ -329,12 +378,12 @@ function updateNpcScheduleStates(state, elapsedTicks) {
     state.worldClock,
     Array.isArray(state.npcStates) ? state.npcStates : [],
     elapsedTicks,
-    { canStep: (step) => canNpcStepInto(state, step) }
+    { canStep: (step: ScheduledNpcStepRuntime) => canNpcStepInto(state, step) }
   );
   rebuildNpcScheduleIndex(state);
 }
 
-function normalizeWorldClock(raw: unknown) {
+function normalizeWorldClock(raw: unknown): WorldClockRuntime {
   return normalizeWorldClockRuntime(raw);
 }
 
@@ -357,26 +406,32 @@ function loadBaseTileMap(runtimeDir: string): Uint16Array {
 }
 
 function assertObjBaselineDir(dir: string): string {
-  const names = fs.readdirSync(dir);
-  const objblkCount = names.filter((name) => /^objblk[a-h][a-h]$/i.test(name)).length;
+  const names: string[] = fs.readdirSync(dir);
+  const objblkCount = names.filter((name: string) => /^objblk[a-h][a-h]$/i.test(name)).length;
   if (objblkCount < 64) {
     throw new Error(`incomplete object baseline in ${dir}: expected >=64 objblk files, found ${objblkCount}`);
   }
-  if (!names.some((name) => /^objlist$/i.test(name))) {
+  if (!names.some((name: string) => /^objlist$/i.test(name))) {
     throw new Error(`missing objlist in object baseline dir: ${dir}`);
   }
   return dir;
 }
 
-function parseObjBlkRecords(bytes: Uint8Array | Buffer | null | undefined, areaId: number, baseTileMap: Uint16Array) {
+function parseObjBlkRecords(bytes: Uint8Array | Buffer | null | undefined, areaId: number, baseTileMap: Uint16Array): WorldObject[] {
   return parseObjBlkRecordsRuntime(bytes, areaId, baseTileMap);
 }
 
-function loadWorldObjectBaseline(runtimeDir: string) {
+function loadWorldObjectBaseline(runtimeDir: string): {
+  baseline_count: number;
+  files_loaded: number;
+  loaded_at: string;
+  objects: WorldObject[];
+  source_dir: string;
+} {
   const sourceDir = assertObjBaselineDir(OBJECT_BASELINE_DIR);
   const loadedAt = nowIso();
   const baseTileMap = loadBaseTileMap(runtimeDir);
-  const objects = [];
+  const objects: WorldObject[] = [];
   let filesLoaded = 0;
   for (let ay = 0; ay < 8; ay += 1) {
     for (let ax = 0; ax < 8; ax += 1) {
@@ -408,7 +463,7 @@ function loadWorldObjectBaseline(runtimeDir: string) {
   };
 }
 
-function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown) {
+function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown): WorldObjectState {
   const baseline = loadWorldObjectBaseline(runtimeDir);
   const tileFlags = loadTileFlagMap(runtimeDir);
   const terrainType = loadTerrainTypeMap(runtimeDir);
@@ -422,27 +477,27 @@ function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown) {
   });
 }
 
-function worldObjectMeta(state) {
+function worldObjectMeta(state: Pick<ServerState, "worldObjects">) {
   return buildWorldObjectMeta(state, OBJECT_BASELINE_DIR);
 }
 
-function defaultWorldInteractionLog() {
+function defaultWorldInteractionLog(): WorldInteractionLogRuntime {
   return defaultWorldInteractionLogRuntime();
 }
 
-function normalizeWorldInteractionLog(raw: unknown) {
+function normalizeWorldInteractionLog(raw: unknown): WorldInteractionLogRuntime {
   return normalizeWorldInteractionLogRuntime(raw);
 }
 
-function hashInteractionEvent(prevHash: unknown, event: Record<string, unknown>) {
+function hashInteractionEvent(prevHash: unknown, event: Record<string, unknown>): string {
   return hashInteractionEventRuntime(prevHash, event);
 }
 
-function recordWorldInteractionEvent(state, event) {
+function recordWorldInteractionEvent(state: Pick<ServerState, "worldInteractionLog">, event: unknown) {
   return recordWorldInteractionEventRuntime(state, event);
 }
 
-function reloadWorldObjectBaseline(state) {
+function reloadWorldObjectBaseline(state: ServerState): void {
   state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
   state.mapRuntime = new U6MapRuntime(RUNTIME_DIR);
   writeJson(FILES.worldObjectDeltas, []);
@@ -459,7 +514,7 @@ function advanceWorldClockMinute(clock: Parameters<typeof advanceWorldClockMinut
   });
 }
 
-function updateAuthoritativeClock(state) {
+function updateAuthoritativeClock(state: ServerState): WorldClockRuntime {
   const nowMs = Date.now();
   if (!state.worldClock) {
     state.worldClock = defaultWorldClock();
@@ -488,17 +543,17 @@ function updateAuthoritativeClock(state) {
   return clock;
 }
 
-function normalizePresenceRows(raw: unknown) {
+function normalizePresenceRows(raw: unknown): PresenceRowRuntime[] {
   return normalizePresenceRowsRuntime(raw);
 }
 
-function loadState() {
+function loadState(): ServerState {
   ensureDataDir();
   const rawWorldObjectDeltas = readJsonValidated(FILES.worldObjectDeltas, null, normalizeWorldObjectDeltas);
   const worldObjects = buildWorldObjectState(RUNTIME_DIR, rawWorldObjectDeltas);
   const npcBaseline = loadNpcBaselineRuntime(RUNTIME_DIR);
   const scheduleRuntime = loadScheduleRuntime(RUNTIME_DIR);
-  const state = {
+  const state: ServerState = {
     users: readJsonValidated(FILES.users, [], normalizeServerUsersRuntime),
     tokens: readJsonValidated(FILES.tokens, [], normalizeServerTokensRuntime),
     characters: readJsonValidated(FILES.characters, [], normalizeServerCharactersRuntime),
@@ -512,11 +567,11 @@ function loadState() {
       phase: INTRO_PHASE_POST
     },
     npcRuntime: null,
-    npcRuntimeById: new Map(),
+    npcRuntimeById: new Map<number, NpcRenderableEntry>(),
     npcStates: [],
-    npcScheduleById: new Map(),
+    npcScheduleById: new Map<number, ScheduledNpcStateRuntime>(),
     npcPilot: [],
-    npcPilotById: new Map(),
+    npcPilotById: new Map<number, ScheduledNpcStateRuntime>(),
     conversationArchives: null,
     conversationSessions: Object.create(null),
     criticalPolicy: readJsonValidated(FILES.criticalPolicy, defaultCriticalPolicy(), normalizeCriticalPolicyRuntime),
@@ -535,7 +590,7 @@ function loadState() {
   return state;
 }
 
-function persistState(state) {
+function persistState(state: ServerState): void {
   writeJson(FILES.users, state.users);
   writeJson(FILES.tokens, state.tokens);
   writeJson(FILES.characters, state.characters);
@@ -548,21 +603,21 @@ function persistState(state) {
   writeJson(FILES.worldInteractionLog, state.worldInteractionLog || defaultWorldInteractionLog());
 }
 
-function prunePresence(state, nowMs = Date.now()) {
+function prunePresence(state: ServerState, nowMs = Date.now()): void {
   state.presence = prunePresenceRowsRuntime(state.presence, {
     nowMs,
     ttlMs: PRESENCE_TTL_MS
   });
 }
 
-function upsertPresenceRow(state, row, nowMs = Date.now()) {
+function upsertPresenceRow(state: ServerState, row: PresenceRowRuntime, nowMs = Date.now()): void {
   state.presence = upsertPresenceRowRuntime(state.presence, row, {
     nowMs,
     ttlMs: PRESENCE_TTL_MS
   });
 }
 
-function requireUser(state, req, res) {
+function requireUser(state: ServerState, req: IncomingMessage, res: ServerResponse): ServerUserRuntime | null {
   const token = parseAuth(req);
   if (!token) {
     sendError(res, 401, "auth_required", "Missing bearer token");
@@ -585,16 +640,16 @@ function requireUser(state, req, res) {
   return auth.user;
 }
 
-function issueToken(state, userId) {
+function issueToken(state: Pick<ServerState, "tokens">, userId: unknown): string {
   return issueTokenRuntime(state.tokens, {
     nowIso: nowIso(),
     nowMs: Date.now(),
-    randomHex: (bytes) => nodeCrypto.randomBytes(bytes).toString("hex"),
+    randomHex: (bytes: number) => nodeCrypto.randomBytes(bytes).toString("hex"),
     userId
   });
 }
 
-function issueEmailVerificationCode(user) {
+function issueEmailVerificationCode(user: ServerUserRuntime): string {
   return issueEmailVerificationCodeRuntime(user, {
     code: sixDigitEmailVerificationCodeRuntime(Math.random()),
     issuedAt: nowIso(),
@@ -687,7 +742,7 @@ async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknow
   return delivery;
 }
 
-function listUserCharacters(state, userId) {
+function listUserCharacters(state: Pick<ServerState, "characters">, userId: unknown): ServerCharacterRuntime[] {
   return listUserCharactersRuntime(state.characters, userId);
 }
 
@@ -695,7 +750,7 @@ function computeSnapshotHash(snapshotBase64: unknown): string {
   return computeSnapshotHashRuntime(snapshotBase64);
 }
 
-function runCriticalItemMaintenance(state, payload) {
+function runCriticalItemMaintenance(state: Pick<ServerState, "criticalPolicy">, payload: unknown) {
   const recoveryEvents = readJsonLines(FILES.recoveriesLog);
   const emitted = runCriticalItemMaintenanceRuntime({
     criticalPolicy: state.criticalPolicy,
@@ -713,7 +768,7 @@ const state = loadState();
 prunePresence(state);
 persistState(state);
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
@@ -725,7 +780,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   if (req.method === "GET" && url.pathname === "/health") {
     updateAuthoritativeClock(state);
@@ -769,7 +824,7 @@ const server = http.createServer(async (req, res) => {
 
     let user = findUserByUsername(state, username);
     if (!user) {
-      user = {
+      const createdUser: CreatedServerUser = {
         user_id: newUserId(state),
         username,
         password_plaintext: password,
@@ -778,6 +833,7 @@ const server = http.createServer(async (req, res) => {
         email_verification: null,
         created_at: nowIso()
       };
+      user = createdUser;
       state.users.push(user);
     } else if (!user.password_plaintext) {
       user.password_plaintext = password;
@@ -849,6 +905,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const code = issueEmailVerificationCode(user);
+    const pendingVerification = user.email_verification;
+    if (!pendingVerification) {
+      sendError(res, 500, "verification_not_issued", "email verification could not be issued");
+      return;
+    }
     let delivery;
     try {
       delivery = await deliverEmail(
@@ -866,7 +927,7 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       delivery_id: `${delivery.at}:${delivery.to}`,
       email: email,
-      expires_at_ms: user.email_verification.expires_at_ms
+      expires_at_ms: pendingVerification.expires_at_ms
     });
     return;
   }
@@ -1081,7 +1142,7 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 400, "bad_policy", "critical_item_policy array is required");
       return;
     }
-    state.criticalPolicy = body.critical_item_policy;
+    state.criticalPolicy = normalizeCriticalPolicyRuntime(body.critical_item_policy);
     persistState(state);
     sendJson(res, 200, { critical_item_policy: state.criticalPolicy });
     return;
@@ -1253,18 +1314,20 @@ const server = http.createServer(async (req, res) => {
       sendError(res, 500, "world_query_bridge_failed", String(selection.message || "world query bridge failed"));
       return;
     }
-    const byKey = new Map();
+    const byKey = new Map<string, WorldObject>();
     for (const obj of state.worldObjects.active) {
       const key = String(obj.object_key || "");
       if (key) byKey.set(key, obj);
     }
-    const selected = selection.keys.map((k) => byKey.get(String(k))).filter(Boolean);
+    const selected = selection.keys
+      .map((k: unknown) => byKey.get(String(k)))
+      .filter((obj: WorldObject | undefined): obj is WorldObject => !!obj);
     const diagResult = analyzeContainmentChainsBatchViaSimCore(state.worldObjects.active, selected);
     if (!diagResult.ok) {
       sendError(res, 500, "assoc_batch_bridge_failed", String(diagResult.message || "assoc-chain batch bridge failed"));
       return;
     }
-    const out = selected.map((obj) => {
+    const out = selected.map((obj: WorldObject) => {
       const diag = diagResult.byKey.get(String(obj.object_key || "")) || {
         assoc_chain: [],
         root_anchor_key: "",
