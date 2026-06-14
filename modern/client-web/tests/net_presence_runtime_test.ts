@@ -56,7 +56,7 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
 
 {
   let inFlight = false;
-  let players: unknown[] = [];
+  let players: Array<{ username?: unknown }> = [];
   await performPresencePoll({
     isAuthenticated: () => true,
     request: async () => ({
@@ -73,7 +73,7 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
     selfIdentity: () => ({ sessionId: "s1", userId: "self", username: "avatar" })
   });
   assert.equal(inFlight, false);
-  assert.deepEqual(players.map((p) => String((p as { username?: unknown }).username)), ["iolo"]);
+  assert.deepEqual(players.map((p) => String(p.username)), ["iolo"]);
 }
 
 {

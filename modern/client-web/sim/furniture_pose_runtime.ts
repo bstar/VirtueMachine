@@ -323,11 +323,11 @@ export function bedInteractionScoreRuntime(
   }
   let valid = false;
   let validDist = Number.POSITIVE_INFINITY;
-  let anyDist = Number.POSITIVE_INFINITY;
+  let nearestDist = Number.POSITIVE_INFINITY;
   for (const cell of cells) {
     const dist = Math.abs((fromX | 0) - (cell.x | 0)) + Math.abs((fromY | 0) - (cell.y | 0));
-    if (dist < anyDist) {
-      anyDist = dist;
+    if (dist < nearestDist) {
+      nearestDist = dist;
     }
     const normalized = (((bedObj.frame | 0) - sleepBedCellFrameOffsetRuntime(bedObj, cell.x | 0, cell.y | 0, tileFlagsForTile)) & 0x07);
     if (normalized === 0 || normalized === 6) {
@@ -337,7 +337,7 @@ export function bedInteractionScoreRuntime(
       }
     }
   }
-  return { valid, dist: valid ? validDist : anyDist };
+  return { valid, dist: valid ? validDist : nearestDist };
 }
 
 export function furnitureAtWorldCellRuntime(args: {

@@ -236,11 +236,11 @@ function testTextDrawingHelpers() {
   ]);
 
   const fallback = makeFakeTextCanvas();
-  let fallbackArgs: unknown[] | null = null;
+  let fallbackArgs: [string, number, number, number, string] | null = null;
   assert.equal(drawBootIntroWouTextRuntime(fallback, {
     color: "#def",
     drawFallbackText: (_g, text, sx, sy, scale, color) => {
-      fallbackArgs = [text, sx, sy, scale, color];
+      fallbackArgs = [String(text), Number(sx), Number(sy), Number(scale), String(color)];
     },
     fallbackMeasure: (text) => String(text).length * 3,
     font: null,

@@ -23,6 +23,7 @@ import type {
   ServerTokenRuntime,
   ServerUserRuntime
 } from "./server_account_runtime.ts";
+import type { JsonValueRuntime } from "./server_file_store.ts";
 import type { U6MapRuntime as U6MapRuntimeType } from "./world_map_runtime.ts";
 import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
 import type { ConversationSessionMapRuntime } from "./conversation_runtime_types.ts";
@@ -268,7 +269,7 @@ function appendJsonLine(filePath: string, value: unknown): void {
   appendJsonLineRuntime(filePath, value);
 }
 
-function readJsonLines(filePath: string): unknown[] {
+function readJsonLines(filePath: string): JsonValueRuntime[] {
   return readJsonLinesRuntime(filePath);
 }
 

@@ -19,6 +19,17 @@ const SIM_CORE_ASSOC_BATCH_BIN = path.join(ROOT, "build", "modern", "sim-core", 
 const SIM_CORE_WORLD_QUERY_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_objects_query_bridge");
 const ROOM_HOTSPOT_FIXTURES = path.join(ROOT, "modern", "net", "tests", "fixtures", "room_hotspots.level0.json");
 
+type ClockNpcStateTestRow = {
+  action?: unknown;
+  npc_id?: unknown;
+  path_status?: unknown;
+  pose?: unknown;
+  target_x?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -357,12 +368,15 @@ async function main() {
         "npc_overrides should remain a compatibility alias for npc_states"
       );
       assert.equal(String(clockForNpcTalk.body?.intro_state?.phase || ""), "post_intro");
-      const lbNpc = (clockForNpcTalk.body?.npc_states || []).find((row: Record<string, unknown>) => Number(row?.npc_id) === 5);
+      const npcRows = Array.isArray(clockForNpcTalk.body?.npc_states)
+        ? clockForNpcTalk.body.npc_states as ClockNpcStateTestRow[]
+        : [];
+      const lbNpc = npcRows.find((row) => Number(row?.npc_id) === 5);
       assert.ok(lbNpc, "expected Lord British npc state in clock response");
       assert.equal(Number.isInteger(lbNpc.target_x), true, "scheduled NPC should expose target_x");
       assert.equal(Number.isInteger(lbNpc.action), true, "scheduled NPC should expose action");
       assert.equal(typeof lbNpc.pose, "string", "scheduled NPC should expose render pose");
-      const geoffreyNpc = (clockForNpcTalk.body?.npc_states || []).find((row: Record<string, unknown>) => Number(row?.npc_id) === 7);
+      const geoffreyNpc = npcRows.find((row) => Number(row?.npc_id) === 7);
       assert.ok(geoffreyNpc, "expected Geoffrey npc state in clock response");
       assert.notEqual(String(geoffreyNpc.path_status || ""), "walking", "Geoffrey should not start in patrol/walking state after initial schedule sync");
 

@@ -1,5 +1,13 @@
 import fs from "node:fs";
 
+export type JsonValueRuntime =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValueRuntime[]
+  | { [key: string]: JsonValueRuntime };
+
 export function ensureServerDataDirRuntime(dataDir: string): void {
   fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -33,14 +41,14 @@ export function appendJsonLineRuntime(filePath: string, value: unknown): void {
   fs.appendFileSync(filePath, `${JSON.stringify(value)}\n`, "utf8");
 }
 
-export function readJsonLinesRuntime(filePath: string): unknown[] {
+export function readJsonLinesRuntime(filePath: string): JsonValueRuntime[] {
   try {
     const raw = fs.readFileSync(filePath, "utf8");
     const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const parsed: unknown[] = [];
+    const parsed: JsonValueRuntime[] = [];
     for (const line of lines) {
       try {
-        parsed.push(JSON.parse(line));
+        parsed.push(JSON.parse(line) as JsonValueRuntime);
       } catch (_err) {
         // Keep append-only logs resilient to partial or manually edited lines.
       }
