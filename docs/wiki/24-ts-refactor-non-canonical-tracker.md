@@ -56,11 +56,11 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 ### 6) Saved-account profile UX remains modern-only
 
-- Status: `temporary`
+- Status: `verified`
 - Location: `modern/client-web/net/profile_runtime.ts`
-- Note: account profile select/apply/upsert helpers were moved into typed runtime helpers for TS extraction speed.
-- Risk: this area is not a legacy U6 canonical system, so behavior could drift from intended modern UX if we later fold profile state into broader auth/session orchestration.
-- Exit criteria: decide final ownership boundary for auth/profile UX (panel runtime vs app orchestrator) and lock with integration tests.
+- Note: account profile select/apply/upsert helpers remain owned by the net profile runtime, and tests now cover sanitize/upsert, storage filtering, selected-key persistence, select population, profile application, and control-driven upsert.
+- Risk: this remains a modern UX surface, so future auth/session orchestration changes should keep profile ownership in the net runtime or introduce an explicit replacement controller.
+- Exit criteria: satisfied for the current profile-runtime ownership boundary.
 
 ### 7) Net status render orchestration split
 
