@@ -63,7 +63,7 @@ export interface RespawnWorldObjectDelta {
 
 export interface WorldObjectDeltas {
   schema_version: 1;
-  removed?: Record<string, boolean>;
+  removed: Record<string, boolean>;
   moved: Record<string, MovedWorldObjectDelta>;
   spawned: SpawnedWorldObjectDelta[];
   respawns: Record<string, RespawnWorldObjectDelta>;

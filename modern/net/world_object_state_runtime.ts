@@ -383,9 +383,16 @@ export function persistPatchedObject(state: WorldObjectStateContainer, obj: Worl
   if (String(obj.source_kind || "").startsWith("spawned")) {
     const index = state.worldObjects.deltas.spawned.findIndex((s) => String(s.object_key || "") === String(obj.object_key));
     if (index >= 0) {
+      const moved = movedWorldObjectDeltaFromObject(obj);
       state.worldObjects.deltas.spawned[index] = {
         ...state.worldObjects.deltas.spawned[index],
-        ...movedWorldObjectDeltaFromObject(obj)
+        x: moved.x,
+        y: moved.y,
+        z: moved.z,
+        status: moved.status ?? (Number(state.worldObjects.deltas.spawned[index].status) & 0xff),
+        holder_kind: moved.holder_kind,
+        holder_id: moved.holder_id,
+        holder_key: moved.holder_key
       };
     }
     return;

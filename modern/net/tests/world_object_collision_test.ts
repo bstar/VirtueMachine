@@ -43,6 +43,7 @@ const state: WorldObjectRuntimeState = {
     activeByAnchor: buildObjectAnchorIndex([bed]),
     deltas: {
       schema_version: 1,
+      removed: {},
       moved: {},
       spawned: [],
       respawns: {}
