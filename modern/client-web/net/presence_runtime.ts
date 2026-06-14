@@ -1,7 +1,3 @@
-export interface PresenceRuntimeJson {
-  [key: string]: unknown;
-}
-
 export type RemotePresencePlayer = object & {
   facing_dx?: unknown;
   facing_dy?: unknown;
@@ -21,7 +17,11 @@ export interface WorldClockPayload {
   date_d?: unknown;
   date_m?: unknown;
   date_y?: unknown;
-  [key: string]: unknown;
+}
+
+export interface PresenceRuntimeJson extends WorldClockPayload {
+  ok?: unknown;
+  players?: unknown;
 }
 
 export type AuthoritativeNpcStateRow = object & {
