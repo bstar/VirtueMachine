@@ -43,7 +43,7 @@ type ConversationVmStackValue = number | string;
 
 export type ConversationVmContextRuntime = {
   objNum?: unknown;
-  talkFlags?: Record<string, unknown>;
+  talkFlags?: Record<string, number>;
   varInt?: unknown[];
   varStr?: unknown[];
 };
@@ -161,7 +161,7 @@ function conversationVmWriteTalkFlag(
   }
   const talkFlags = vmContext.talkFlags && typeof vmContext.talkFlags === "object"
     ? vmContext.talkFlags
-    : Object.create(null) as Record<string, unknown>;
+    : Object.create(null) as Record<string, number>;
   vmContext.talkFlags = talkFlags;
   const key = String(objNum);
   const cur = Number(talkFlags[key]) | 0;
