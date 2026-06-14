@@ -63,10 +63,10 @@ assert.equal(snapshotBase64Runtime({}), "");
 assert.equal(normalizeLoadedSimStateRuntime({}), null);
 const malformedSnapshot = normalizeLoadedSimStateRuntime({
   tick: 77,
-  doorOpenStates: "bad",
-  inventory: "bad",
+  doorOpenStates: ["bad"],
+  inventory: ["bad"],
   removedObjectKeys: { stale: true },
-  removedObjectAtTick: "bad",
+  removedObjectAtTick: ["bad"],
   spawnedWorldObjects: ["bad"],
   partyMembers: [],
   world: {

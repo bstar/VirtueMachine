@@ -53,7 +53,9 @@ export interface SimSnapshotRuntime {
   world: Required<SnapshotWorldRuntime>;
 }
 
-type SnapshotMapSourceRuntime = Record<string, unknown>;
+type SnapshotMapSourceRuntime = {
+  [key: string]: unknown;
+};
 
 type SnapshotWorldObjectSourceRuntime = {
   frame?: unknown;
@@ -93,24 +95,28 @@ type SimSnapshotSourceRuntime = {
   worldFlags?: unknown;
 };
 
+function isSnapshotObjectSourceRuntime(value: unknown): value is object {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function asSimSnapshotSourceRuntime(value: unknown): SimSnapshotSourceRuntime | null {
-  return value && typeof value === "object" ? value as SimSnapshotSourceRuntime : null;
+  return isSnapshotObjectSourceRuntime(value) ? value as SimSnapshotSourceRuntime : null;
 }
 
 function asSnapshotWorldRuntime(value: unknown): SnapshotWorldRuntime | null {
-  return value && typeof value === "object" ? value as SnapshotWorldRuntime : null;
+  return isSnapshotObjectSourceRuntime(value) ? value as SnapshotWorldRuntime : null;
 }
 
 function asSnapshotMapSourceRuntime(value: unknown): SnapshotMapSourceRuntime | null {
-  return value && typeof value === "object" ? value as SnapshotMapSourceRuntime : null;
+  return isSnapshotObjectSourceRuntime(value) ? value as SnapshotMapSourceRuntime : null;
 }
 
 function asSnapshotWorldObjectSourceRuntime(value: unknown): SnapshotWorldObjectSourceRuntime | null {
-  return value && typeof value === "object" ? value as SnapshotWorldObjectSourceRuntime : null;
+  return isSnapshotObjectSourceRuntime(value) ? value as SnapshotWorldObjectSourceRuntime : null;
 }
 
 function asSnapshotAnchorSourceRuntime(value: unknown): SnapshotAnchorSourceRuntime | null {
-  return value && typeof value === "object" ? value as SnapshotAnchorSourceRuntime : null;
+  return isSnapshotObjectSourceRuntime(value) ? value as SnapshotAnchorSourceRuntime : null;
 }
 
 export function cloneSimStateRuntime(sim: SimSnapshotRuntime): SimSnapshotRuntime {
