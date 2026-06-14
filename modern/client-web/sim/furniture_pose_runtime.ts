@@ -127,8 +127,8 @@ export function applyFurnitureInteractionRuntime(
   sim.avatarPoseAnchor = {
     x: obj.x | 0,
     y: obj.y | 0,
-    z: obj.z | 0,
-    order: obj.order | 0,
+    z: Number(obj.z) | 0,
+    order: Number(obj.order) | 0,
     type: obj.type | 0
   };
 
@@ -140,7 +140,7 @@ export function applyFurnitureInteractionRuntime(
   } else {
     sim.world.map_x = obj.x | 0;
     sim.world.map_y = obj.y | 0;
-    sim.world.map_z = obj.z | 0;
+    sim.world.map_z = Number(obj.z) | 0;
   }
 
   return {
@@ -280,7 +280,7 @@ export function preferredSleepCellForBedRuntime(
 ): FurniturePoseCellRuntime & { z: number } {
   const cells = furnitureOccupancyCellsRuntime(bedObj, tileFlagsForTile);
   if (!cells.length) {
-    return { x: bedObj.x | 0, y: bedObj.y | 0, z: bedObj.z | 0 };
+    return { x: bedObj.x | 0, y: bedObj.y | 0, z: Number(bedObj.z) | 0 };
   }
   let best = cells[0];
   let bestScore = Number.POSITIVE_INFINITY;
@@ -294,7 +294,7 @@ export function preferredSleepCellForBedRuntime(
       bestScore = score;
     }
   }
-  return { x: best.x | 0, y: best.y | 0, z: bedObj.z | 0 };
+  return { x: best.x | 0, y: best.y | 0, z: Number(bedObj.z) | 0 };
 }
 
 export function sleepFrameOffsetForBedAtCellRuntime(

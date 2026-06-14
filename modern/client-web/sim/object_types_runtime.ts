@@ -29,7 +29,7 @@ export function isCloseableDoorTypeRuntime(type: number): boolean {
 }
 
 export function isCloseableDoorObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
-  return !!obj && isCloseableDoorTypeRuntime(obj.type);
+  return !!obj && isCloseableDoorTypeRuntime(Number(obj.type));
 }
 
 export function isChairTypeRuntime(type: number): boolean {
@@ -40,12 +40,12 @@ export function isChairObjectRuntime(obj: ObjectTypeRuntimeObject | null | undef
   if (!obj) {
     return false;
   }
-  const type = asType(obj.type);
+  const type = asType(Number(obj.type));
   if (OBJECT_TYPES_CHAIR.has(type)) {
     return true;
   }
   if (type === 0x147) {
-    const frame = obj.frame | 0;
+    const frame = Number(obj.frame) | 0;
     if (frame === 2) {
       return true;
     }
@@ -58,7 +58,7 @@ export function isBedTypeRuntime(type: number): boolean {
 }
 
 export function isBedObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
-  return !!obj && isBedTypeRuntime(obj.type);
+  return !!obj && isBedTypeRuntime(Number(obj.type));
 }
 
 export function isSolidEnvTypeRuntime(type: number): boolean {
@@ -66,7 +66,7 @@ export function isSolidEnvTypeRuntime(type: number): boolean {
 }
 
 export function isSolidEnvObjectRuntime(obj: ObjectTypeRuntimeObject | null | undefined): boolean {
-  return !!obj && isSolidEnvTypeRuntime(obj.type);
+  return !!obj && isSolidEnvTypeRuntime(Number(obj.type));
 }
 
 export function isLikelyPickupObjectTypeRuntime(type: number): boolean {
