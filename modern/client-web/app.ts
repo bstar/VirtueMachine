@@ -244,9 +244,7 @@ import {
   LEGACY_COMMAND_TYPE_RUNTIME,
   LEGACY_TARGET_VERB_LABEL_RUNTIME,
   LEGACY_TARGET_VERB_RUNTIME,
-  legacyVerbLabelRuntime,
-  legacyVerbSelectRangeRuntime,
-  normalizeLegacyTargetVerbRuntime
+  legacyVerbSelectRangeRuntime
 } from "./sim/legacy_command_runtime.ts";
 import {
   U6ObjectLayerRuntime,
@@ -303,6 +301,12 @@ import {
   topWorldObjectAtCellRuntime,
   type TargetObjectLayerRuntime
 } from "./sim/target_runtime.ts";
+import {
+  beginTargetCursorRuntime,
+  cancelTargetCursorRuntime,
+  clampTargetCursorToViewRuntime,
+  moveTargetCursorRuntime
+} from "./sim/target_cursor_runtime.ts";
 import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 import {
   BOOT_INTRO_SCENES,
@@ -8037,82 +8041,48 @@ type HoveredWorldCellRuntime = {
   z: number;
 };
 
-function viewStartX(): number {
-  return (state.sim.world.map_x | 0) - (VIEW_W >> 1);
-}
-
-function viewStartY(): number {
-  return (state.sim.world.map_y | 0) - (VIEW_H >> 1);
-}
-
 function clampUseCursorToView(): void {
-  const startX = viewStartX();
-  const startY = viewStartY();
-  const maxX = startX + VIEW_W - 1;
-  const maxY = startY + VIEW_H - 1;
-  state.useCursorX = clampI32Runtime(state.useCursorX | 0, startX, maxX);
-  state.useCursorY = clampI32Runtime(state.useCursorY | 0, startY, maxY);
-  const verb = String(state.targetVerb || "");
-  const range = legacyVerbSelectRangeRuntime(verb);
-  if (Number.isFinite(range) && range >= 0) {
-    const cx = state.sim.world.map_x | 0;
-    const cy = state.sim.world.map_y | 0;
-    const dx = (state.useCursorX | 0) - cx;
-    const dy = (state.useCursorY | 0) - cy;
-    const cheb = Math.max(Math.abs(dx), Math.abs(dy));
-    if (cheb > range) {
-      const s = range / Math.max(1, cheb);
-      const nx = cx + Math.round(dx * s);
-      const ny = cy + Math.round(dy * s);
-      state.useCursorX = clampI32Runtime(nx | 0, startX, maxX);
-      state.useCursorY = clampI32Runtime(ny | 0, startY, maxY);
-    }
-  }
+  clampTargetCursorToViewRuntime({
+    state,
+    world: state.sim.world,
+    viewW: VIEW_W,
+    viewH: VIEW_H
+  });
 }
 
 function beginTargetCursor(verb: unknown): void {
   if (state.movementMode !== "avatar") {
     return;
   }
-  const v = normalizeLegacyTargetVerbRuntime(verb);
-  if (!v) {
+  const result = beginTargetCursorRuntime({
+    state,
+    world: state.sim.world,
+    verb,
+    viewW: VIEW_W,
+    viewH: VIEW_H
+  });
+  if (!result.ok) {
     return;
   }
-  const px = state.sim.world.map_x | 0;
-  const py = state.sim.world.map_y | 0;
-  /* Legacy starts selector centered on avatar tile (AimX/AimY = 5,5). */
-  state.useCursorX = px;
-  state.useCursorY = py;
-  state.targetVerb = v;
-  state.useCursorActive = true;
-  clampUseCursorToView();
   diagBox.className = "diag ok";
-  if ((legacyVerbSelectRangeRuntime(v) | 0) < 0) {
-    diagBox.textContent = `${legacyVerbLabelRuntime(v)}: choose direction with arrow keys, cancel with Esc.`;
-  } else {
-    diagBox.textContent = `${legacyVerbLabelRuntime(v)}: move target with arrows, confirm with Enter/U, cancel with Esc.`;
-  }
+  diagBox.textContent = result.diagText;
 }
 
 function moveUseCursor(dx: number, dy: number): void {
   if (!state.useCursorActive) {
     return;
   }
-  const verb = String(state.targetVerb || "");
-  const range = legacyVerbSelectRangeRuntime(verb);
-  if (range === -1) {
-    /* Legacy directional-target commands execute on arrow toward adjacent cell. */
-    const px = state.sim.world.map_x | 0;
-    const py = state.sim.world.map_y | 0;
-    state.useCursorX = (px + (dx | 0)) | 0;
-    state.useCursorY = (py + (dy | 0)) | 0;
-    clampUseCursorToView();
+  const result = moveTargetCursorRuntime({
+    state,
+    world: state.sim.world,
+    dx,
+    dy,
+    viewW: VIEW_W,
+    viewH: VIEW_H
+  });
+  if (result.shouldCommit) {
     commitUseCursorInteract();
-    return;
   }
-  state.useCursorX = (state.useCursorX + (dx | 0)) | 0;
-  state.useCursorY = (state.useCursorY + (dy | 0)) | 0;
-  clampUseCursorToView();
 }
 
 function commitUseCursorInteract(): void {
@@ -8132,11 +8102,9 @@ function commitUseCursorInteract(): void {
 }
 
 function cancelTargetCursor(): void {
-  if (!state.useCursorActive) {
+  if (!cancelTargetCursorRuntime(state)) {
     return;
   }
-  state.useCursorActive = false;
-  state.targetVerb = "";
   diagBox.className = "diag ok";
   diagBox.textContent = "Targeting cancelled.";
 }

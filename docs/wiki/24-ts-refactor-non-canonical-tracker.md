@@ -33,8 +33,8 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 ### 3) Runtime adapter wrappers in `app.ts`
 
 - Status: `temporary`
-- Location examples: `range*`, `target*` wrappers
-- Note: queue command mutation now lives in `sim/queue_runtime.ts`, door toggle lookup/mutation now lives in `sim/door_runtime.ts`, and inventory anchor resolution now lives in `sim/inventory_runtime.ts`; `app.ts` still keeps some thin wrapper functions delegating to other typed runtime modules.
+- Location examples: `range*`, object-target wrappers
+- Note: queue command mutation now lives in `sim/queue_runtime.ts`, door toggle lookup/mutation now lives in `sim/door_runtime.ts`, inventory anchor resolution now lives in `sim/inventory_runtime.ts`, and target cursor state transitions now live in `sim/target_cursor_runtime.ts`; `app.ts` still keeps some thin wrapper functions delegating to other typed runtime modules.
 - Risk: duplicate naming can obscure true source-of-truth if wrappers diverge.
 - Exit criteria: either remove wrappers (direct imports at call sites) or enforce wrappers as strict pass-through with tests.
 

@@ -19,7 +19,10 @@
   },
   "include": [
     "modern/client-web/sim/collision_runtime.ts",
+    "modern/client-web/sim/legacy_command_runtime.ts",
     "modern/client-web/sim/object_footprint_runtime.ts",
+    "modern/client-web/sim/sim_utils_runtime.ts",
+    "modern/client-web/sim/target_cursor_runtime.ts",
     "modern/client-web/sim/target_runtime.ts",
     "modern/client-web/ui/input_runtime.ts",
     "modern/client-web/ui/legacy_text_runtime.ts",
