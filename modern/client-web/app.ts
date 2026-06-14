@@ -304,6 +304,11 @@ import {
   normalizePartyMemberIdsRuntime,
   resolvePartySwitchDigitRuntime
 } from "./ui/party_message_runtime.ts";
+import {
+  onOffPreferenceRuntime,
+  readStoredChoicePreferenceRuntime,
+  writeStoredStringPreferenceRuntime
+} from "./ui/preference_runtime.ts";
 
 const TICK_MS = 100;
 const LEGACY_PROMPT_FRAME_MS = 120;
@@ -3483,23 +3488,11 @@ function setTheme(themeName) {
   if (wikiLink) {
     wikiLink.href = `/docs/wiki/?theme=${encodeURIComponent(theme)}`;
   }
-  try {
-    localStorage.setItem(THEME_KEY, theme);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, THEME_KEY, theme);
 }
 
 function initTheme() {
-  let saved = "obsidian";
-  try {
-    const fromStorage = localStorage.getItem(THEME_KEY);
-    if (fromStorage) {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, THEME_KEY, "obsidian", THEMES);
   setTheme(saved);
   if (themeSelect) {
     themeSelect.addEventListener("change", () => {
@@ -3514,23 +3507,11 @@ function setFont(fontName) {
   if (fontSelect) {
     fontSelect.value = font;
   }
-  try {
-    localStorage.setItem(FONT_KEY, font);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, FONT_KEY, font);
 }
 
 function initFont() {
-  let saved = "silkscreen";
-  try {
-    const fromStorage = localStorage.getItem(FONT_KEY);
-    if (fromStorage) {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, FONT_KEY, "silkscreen", FONTS);
   setFont(saved);
   if (fontSelect) {
     fontSelect.addEventListener("change", () => {
@@ -4612,23 +4593,11 @@ function setGrid(enabled) {
   if (gridToggle) {
     gridToggle.value = state.showGrid ? "on" : "off";
   }
-  try {
-    localStorage.setItem(GRID_KEY, state.showGrid ? "on" : "off");
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, GRID_KEY, onOffPreferenceRuntime(state.showGrid));
 }
 
 function initGrid() {
-  let saved = "off";
-  try {
-    const fromStorage = localStorage.getItem(GRID_KEY);
-    if (fromStorage === "on" || fromStorage === "off") {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, GRID_KEY, "off", ["on", "off"]);
   setGrid(saved === "on");
   if (gridToggle) {
     gridToggle.addEventListener("change", () => {
@@ -4642,23 +4611,11 @@ function setOverlayDebug(enabled) {
   if (debugOverlayToggle) {
     debugOverlayToggle.value = state.showOverlayDebug ? "on" : "off";
   }
-  try {
-    localStorage.setItem(DEBUG_OVERLAY_KEY, state.showOverlayDebug ? "on" : "off");
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, DEBUG_OVERLAY_KEY, onOffPreferenceRuntime(state.showOverlayDebug));
 }
 
 function initOverlayDebug() {
-  let saved = "off";
-  try {
-    const fromStorage = localStorage.getItem(DEBUG_OVERLAY_KEY);
-    if (fromStorage === "on" || fromStorage === "off") {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, DEBUG_OVERLAY_KEY, "off", ["on", "off"]);
   setOverlayDebug(saved === "on");
   if (debugOverlayToggle) {
     debugOverlayToggle.addEventListener("change", () => {
@@ -4678,23 +4635,11 @@ function setAnimationMode(mode) {
   if (animationToggle) {
     animationToggle.value = nextMode;
   }
-  try {
-    localStorage.setItem(ANIMATION_KEY, nextMode);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, ANIMATION_KEY, nextMode);
 }
 
 function initAnimationMode() {
-  let saved = "live";
-  try {
-    const fromStorage = localStorage.getItem(ANIMATION_KEY);
-    if (fromStorage === "live" || fromStorage === "freeze") {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, ANIMATION_KEY, "live", ["live", "freeze"]);
   setAnimationMode(saved);
   if (animationToggle) {
     animationToggle.addEventListener("change", () => {
@@ -4710,23 +4655,11 @@ function setPaletteFxMode(enabled) {
   if (paletteFxToggle) {
     paletteFxToggle.value = state.enablePaletteFx ? "on" : "off";
   }
-  try {
-    localStorage.setItem(PALETTE_FX_KEY, state.enablePaletteFx ? "on" : "off");
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, PALETTE_FX_KEY, onOffPreferenceRuntime(state.enablePaletteFx));
 }
 
 function initPaletteFxMode() {
-  let saved = "on";
-  try {
-    const fromStorage = localStorage.getItem(PALETTE_FX_KEY);
-    if (fromStorage === "on" || fromStorage === "off") {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, PALETTE_FX_KEY, "on", ["on", "off"]);
   setPaletteFxMode(saved === "on");
   if (paletteFxToggle) {
     paletteFxToggle.addEventListener("change", () => {
@@ -4748,23 +4681,11 @@ function setMovementMode(mode) {
   if (statAvatarState) {
     statAvatarState.textContent = next === "avatar" ? "avatar" : "ghost";
   }
-  try {
-    localStorage.setItem(MOVEMENT_MODE_KEY, next);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, MOVEMENT_MODE_KEY, next);
 }
 
 function initMovementMode() {
-  let saved = "avatar";
-  try {
-    const fromStorage = localStorage.getItem(MOVEMENT_MODE_KEY);
-    if (fromStorage === "avatar" || fromStorage === "ghost") {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, MOVEMENT_MODE_KEY, "avatar", ["avatar", "ghost"]);
   setMovementMode(saved);
   if (movementModeToggle) {
     movementModeToggle.addEventListener("change", () => {
@@ -4780,11 +4701,7 @@ function setLegacyFramePreview(enabled) {
     capturePreviewToggle.value = on ? "on" : "off";
   }
   applyLegacyFrameLayout();
-  try {
-    localStorage.setItem(LEGACY_FRAME_PREVIEW_KEY, on ? "on" : "off");
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, LEGACY_FRAME_PREVIEW_KEY, onOffPreferenceRuntime(on));
 }
 
 function setLegacyScaleMode(mode) {
@@ -4793,11 +4710,7 @@ function setLegacyScaleMode(mode) {
   if (legacyScaleModeToggle) {
     legacyScaleModeToggle.value = next;
   }
-  try {
-    localStorage.setItem(LEGACY_SCALE_MODE_KEY, next);
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  writeStoredStringPreferenceRuntime(localStorage, LEGACY_SCALE_MODE_KEY, next);
   applyLegacyFrameLayout();
 }
 
@@ -4810,17 +4723,9 @@ function cycleLegacyScaleMode(step) {
 }
 
 function initLegacyScaleMode() {
-  let saved = "4";
-  try {
-    const fromStorage = localStorage.getItem(LEGACY_SCALE_MODE_KEY);
-    if (isLegacyScaleMode(fromStorage)) {
-      saved = fromStorage;
-    } else if (fromStorage === "native") {
-      saved = "4";
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, LEGACY_SCALE_MODE_KEY, "4", LEGACY_SCALE_MODES, {
+    native: "4"
+  });
   setLegacyScaleMode(saved);
   if (legacyScaleModeToggle) {
     legacyScaleModeToggle.addEventListener("change", () => {
@@ -4830,15 +4735,7 @@ function initLegacyScaleMode() {
 }
 
 function initLegacyFramePreview() {
-  let saved = "on";
-  try {
-    const fromStorage = localStorage.getItem(LEGACY_FRAME_PREVIEW_KEY);
-    if (fromStorage === "on" || fromStorage === "off") {
-      saved = fromStorage;
-    }
-  } catch (_err) {
-    // ignore storage failures in restrictive browser contexts
-  }
+  const saved = readStoredChoicePreferenceRuntime(localStorage, LEGACY_FRAME_PREVIEW_KEY, "on", ["on", "off"]);
   setLegacyFramePreview(saved === "on");
   if (capturePreviewToggle) {
     capturePreviewToggle.addEventListener("change", () => {
