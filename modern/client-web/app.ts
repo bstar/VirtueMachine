@@ -196,6 +196,7 @@ import {
   createInitialAppSimState,
   toAppSimStateRuntime
 } from "./sim/app_state_runtime.ts";
+import { applyAvatarMoveCommandRuntime } from "./sim/avatar_move_runtime.ts";
 import { U6AnimDataRuntime } from "./sim/anim_data_runtime.ts";
 import { U6MapRuntime } from "./sim/map_runtime.ts";
 import {
@@ -208,7 +209,6 @@ import {
   applyFurnitureInteractionRuntime,
   bedInteractionScoreRuntime,
   chairFrameForCellRuntime,
-  clearFurnitureAvatarPoseRuntime,
   furnitureAtWorldCellRuntime,
   furnitureOccupancyCellsRuntime,
   objectIsBedAtCellRuntime,
@@ -5206,10 +5206,6 @@ function tryToggleDoorInFacingDirection(sim, dx, dy) {
   return false;
 }
 
-function clearAvatarPose(sim) {
-  clearFurnitureAvatarPoseRuntime(sim);
-}
-
 function clearPendingAvatarMoveCommands(sim) {
   if (!Array.isArray(state.queue) || !sim) {
     return;
@@ -5814,38 +5810,29 @@ async function captureParitySnapshotJson() {
 
 function applyCommand(sim, cmd) {
   if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
-    if ((sim.avatarPoseSetTick | 0) === (sim.tick | 0)) {
-      /* If pose was set this tick (from USE), do not let queued move cancel it immediately. */
+    const moveResult = applyAvatarMoveCommandRuntime(sim, cmd.arg0, cmd.arg1, {
+      isBlockedAt: (x, y, z) => isBlockedAt(sim, x, y, z),
+      movementMode: state.movementMode
+    });
+    if (moveResult.kind === "pose-set-this-tick") {
       return;
     }
-    if (sim.avatarPose !== "stand") {
-      clearAvatarPose(sim);
-    }
-    const nx = clampI32Runtime(sim.world.map_x + cmd.arg0, -4096, 4095);
-    const ny = clampI32Runtime(sim.world.map_y + cmd.arg1, -4096, 4095);
-    if (state.movementMode === "avatar") {
-      if (!isBlockedAt(sim, nx, ny, sim.world.map_z)) {
-        sim.world.map_x = nx;
-        sim.world.map_y = ny;
-        state.avatarLastMoveTick = sim.tick >>> 0;
-        state.avatarWalkAnimUntilMs = performance.now() + AVATAR_WALK_ANIM_WINDOW_MS;
-        /*
-          Canonical-facing behavior: actor pose follows occupied furniture cell.
-          NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
-        */
-        const landedFurniture = furnitureAtCell(sim, nx, ny);
-        if (landedFurniture && isChairObjectRuntime(landedFurniture)) {
-          tryInteractFurnitureObject(sim, landedFurniture);
-        }
-      } else {
-        // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
-        if (!tryInteractFurnitureObject(sim, furnitureAtCell(sim, nx, ny))) {
-          playSfx(U6_SFX.BLOCKED);
-        }
+    if (moveResult.kind === "avatar-move") {
+      state.avatarLastMoveTick = sim.tick >>> 0;
+      state.avatarWalkAnimUntilMs = performance.now() + AVATAR_WALK_ANIM_WINDOW_MS;
+      /*
+        Canonical-facing behavior: actor pose follows occupied furniture cell.
+        NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
+      */
+      const landedFurniture = furnitureAtCell(sim, moveResult.targetX, moveResult.targetY);
+      if (landedFurniture && isChairObjectRuntime(landedFurniture)) {
+        tryInteractFurnitureObject(sim, landedFurniture);
       }
-    } else {
-      sim.world.map_x = nx;
-      sim.world.map_y = ny;
+    } else if (moveResult.kind === "blocked") {
+      // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
+      if (!tryInteractFurnitureObject(sim, furnitureAtCell(sim, moveResult.targetX, moveResult.targetY))) {
+        playSfx(U6_SFX.BLOCKED);
+      }
     }
   } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_FACING) {
     if (state.movementMode === "avatar") {
