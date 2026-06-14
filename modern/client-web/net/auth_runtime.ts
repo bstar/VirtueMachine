@@ -9,7 +9,6 @@ export interface NetLoginPayload {
     email_verified?: unknown;
   };
   snapshot_base64?: unknown;
-  [key: string]: unknown;
 }
 
 export type NetLoginRequest = (
