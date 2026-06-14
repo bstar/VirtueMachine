@@ -110,7 +110,6 @@ const {
 const {
   appendJsonLineRuntime,
   ensureServerDataDirRuntime,
-  readJsonFileRuntime,
   readJsonFileValidatedRuntime,
   readJsonLinesRuntime,
   writeJsonFileRuntime
@@ -171,10 +170,6 @@ function nowIso() {
 
 function ensureDataDir() {
   ensureServerDataDirRuntime(DATA_DIR);
-}
-
-function readJson(filePath, fallback) {
-  return readJsonFileRuntime(filePath, fallback);
 }
 
 function readJsonValidated(filePath, fallback, validate) {
