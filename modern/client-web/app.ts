@@ -154,7 +154,8 @@ import {
   loadNetProfilesFromStorage,
   populateNetAccountSelectRuntime,
   profileKey as profileKeyRuntime,
-  upsertNetProfileFromControlsRuntime
+  upsertNetProfileFromControlsRuntime,
+  type NetProfile
 } from "./net/profile_runtime.ts";
 import {
   decodeSimSnapshotBase64Runtime,
@@ -3214,13 +3215,13 @@ function composeLegacyViewportFromModernGrid(): void {
   lv.drawImage(compose, 8, 8, 160, 160, 0, 0, 160, 160);
 }
 
-function applyRuntimeProfileState(profile, extensions) {
+function applyRuntimeProfileState(profile: unknown, extensions: unknown): void {
   state.runtimeProfile = normalizeRuntimeProfile(profile);
   state.runtimeExtensions = sanitizeRuntimeExtensions(extensions);
   document.documentElement.setAttribute("data-runtime-profile", state.runtimeProfile);
 }
 
-function initRuntimeProfileConfig() {
+function initRuntimeProfileConfig(): void {
   const { profile, extensions } = resolveRuntimeProfileConfigRuntime({
     keys: {
       profileKey: RUNTIME_PROFILE_KEY,
@@ -3239,7 +3240,7 @@ function initRuntimeProfileConfig() {
   });
 }
 
-function setTheme(themeName) {
+function setTheme(themeName: string): void {
   const theme = THEMES.includes(themeName) ? themeName : "obsidian";
   document.documentElement.setAttribute("data-theme", theme);
   if (themeSelect) {
@@ -3251,7 +3252,7 @@ function setTheme(themeName) {
   writeStoredStringPreferenceRuntime(localStorage, THEME_KEY, theme);
 }
 
-function initTheme() {
+function initTheme(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, THEME_KEY, "obsidian", THEMES);
   setTheme(saved);
   if (themeSelect) {
@@ -3261,7 +3262,7 @@ function initTheme() {
   }
 }
 
-function setFont(fontName) {
+function setFont(fontName: string): void {
   const font = FONTS.includes(fontName) ? fontName : "silkscreen";
   document.documentElement.setAttribute("data-font", font);
   if (fontSelect) {
@@ -3270,7 +3271,7 @@ function setFont(fontName) {
   writeStoredStringPreferenceRuntime(localStorage, FONT_KEY, font);
 }
 
-function initFont() {
+function initFont(): void {
   const saved = readStoredChoicePreferenceRuntime(localStorage, FONT_KEY, "silkscreen", FONTS);
   setFont(saved);
   if (fontSelect) {
@@ -3280,7 +3281,7 @@ function initFont() {
   }
 }
 
-async function copyTextToClipboard(text) {
+async function copyTextToClipboard(text: unknown): Promise<boolean> {
   const v = String(text ?? "");
   let lastErr = "";
   try {
@@ -3289,7 +3290,7 @@ async function copyTextToClipboard(text) {
       return true;
     }
   } catch (err) {
-    lastErr = String(err && err.message ? err.message : err);
+    lastErr = errorMessageRuntime(err);
   }
   try {
     const ta = document.createElement("textarea");
@@ -3315,7 +3316,7 @@ async function copyTextToClipboard(text) {
     return false;
   } catch (err) {
     if (!lastErr) {
-      lastErr = String(err && err.message ? err.message : err);
+      lastErr = errorMessageRuntime(err);
     }
     if (diagBox) {
       diagBox.dataset.copyError = lastErr || "copy blocked";
@@ -3324,13 +3325,13 @@ async function copyTextToClipboard(text) {
   }
 }
 
-function setCopyStatus(ok, detail = "") {
+function setCopyStatus(ok: boolean, detail = ""): void {
   if (topCopyStatus) {
     topCopyStatus.textContent = ok ? "ok" : (detail ? `failed (${detail})` : "failed");
   }
 }
 
-function copyTextToClipboardSync(text) {
+function copyTextToClipboardSync(text: unknown): { ok: boolean; reason: string } {
   const v = String(text ?? "");
   let lastErr = "";
   try {
@@ -3350,7 +3351,7 @@ function copyTextToClipboardSync(text) {
     }
     lastErr = "execCommand(copy) returned false";
   } catch (err) {
-    lastErr = String(err && err.message ? err.message : err);
+    lastErr = errorMessageRuntime(err);
   }
   if (diagBox) {
     diagBox.dataset.copyError = lastErr || "copy blocked";
@@ -3358,7 +3359,7 @@ function copyTextToClipboardSync(text) {
   return { ok: false, reason: lastErr || "copy blocked" };
 }
 
-function makeCopyButton(getText) {
+function makeCopyButton(getText: () => string): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "copy-icon-btn";
@@ -3376,7 +3377,7 @@ function makeCopyButton(getText) {
   return btn;
 }
 
-function initPanelCopyButtons() {
+function initPanelCopyButtons(): void {
   const usefulValueIds = new Set([
     "statPos",
     "statClock",
@@ -3391,11 +3392,11 @@ function initPanelCopyButtons() {
     "statNetSession"
   ]);
   const rows = document.querySelectorAll(".stat-row");
-  for (const row of rows) {
+  rows.forEach((row) => {
     const label = row.querySelector("span");
     const value = row.querySelector("strong");
     if (!label || !value) {
-      continue;
+      return;
     }
     const valueId = value.id || "";
     const existingBtn = row.querySelector(".copy-icon-btn");
@@ -3403,14 +3404,14 @@ function initPanelCopyButtons() {
       if (existingBtn) {
         existingBtn.remove();
       }
-      continue;
+      return;
     }
     if (existingBtn) {
-      continue;
+      return;
     }
     const btn = makeCopyButton(() => `${label.textContent || ""}: ${value.textContent || ""}`);
     row.appendChild(btn);
-  }
+  });
 
   if (diagBox && diagBox.parentElement && !diagBox.parentElement.querySelector(".diag-copy")) {
     const wrap = document.createElement("div");
@@ -3421,7 +3422,7 @@ function initPanelCopyButtons() {
   }
 }
 
-function updateNetSessionStat() {
+function updateNetSessionStat(): void {
   renderNetSessionStatRuntime(statNetSession, {
     token: state.net.token,
     userId: state.net.userId,
@@ -3431,7 +3432,7 @@ function updateNetSessionStat() {
   updateIntroPhaseUi();
 }
 
-function updatePauseLoopUi() {
+function updatePauseLoopUi(): void {
   const paused = !!state.simPaused;
   if (pauseLoopButton) {
     pauseLoopButton.textContent = paused ? "Resume Loop" : "Pause Loop";
@@ -3441,7 +3442,7 @@ function updatePauseLoopUi() {
   }
 }
 
-function setSimPaused(paused, reason = "") {
+function setSimPaused(paused: boolean, reason = ""): void {
   state.simPaused = !!paused;
   state.net.backgroundSyncPaused = !!paused;
   state.accMs = 0;
@@ -3453,7 +3454,7 @@ function setSimPaused(paused, reason = "") {
   }
 }
 
-function updateIntroPhaseUi() {
+function updateIntroPhaseUi(): void {
   const phase = String(state.net.introPhase || "post_intro").trim().toLowerCase();
   const normalized = phase === "pre_intro" ? "pre_intro" : "post_intro";
   state.net.introPhase = normalized;
@@ -3465,11 +3466,11 @@ function updateIntroPhaseUi() {
   }
 }
 
-function updateNetAuthButton() {
+function updateNetAuthButton(): void {
   renderNetAuthButtonRuntime(netLoginButton, isNetAuthenticated());
 }
 
-function setNetStatus(level, text) {
+function setNetStatus(level: string, text: string): void {
   applyNetStatusRuntime({
     stateNet: state.net,
     level,
@@ -3483,7 +3484,7 @@ function setNetStatus(level, text) {
 }
 
 let netActivityPulseTimer = 0;
-function pulseNetIndicator() {
+function pulseNetIndicator(): void {
   pulseNetIndicatorRuntime({
     indicator: topNetIndicator,
     currentTimer: netActivityPulseTimer,
@@ -3494,7 +3495,7 @@ function pulseNetIndicator() {
   });
 }
 
-function upsertNetProfileFromInputs() {
+function upsertNetProfileFromInputs(): void {
   upsertNetProfileFromControlsRuntime({
     controls: currentNetProfileControls(),
     ...NET_PROFILE_STORAGE,
@@ -3503,7 +3504,7 @@ function upsertNetProfileFromInputs() {
   });
 }
 
-function recordBackgroundNetFailure(err, context) {
+function recordBackgroundNetFailure(err: unknown, context: string): void {
   recordBackgroundFailureRuntime(state.net, {
     err,
     context,
@@ -3514,7 +3515,13 @@ function recordBackgroundNetFailure(err, context) {
   });
 }
 
-function currentNetProfileControls() {
+function currentNetProfileControls(): {
+  apiBaseInput: HTMLInputElement | null;
+  usernameInput: HTMLInputElement | null;
+  passwordInput: HTMLInputElement | null;
+  characterNameInput: HTMLInputElement | null;
+  emailInput: HTMLInputElement | null;
+} {
   return {
     apiBaseInput: netApiBaseInput,
     usernameInput: netUsernameInput,
@@ -3524,7 +3531,7 @@ function currentNetProfileControls() {
   };
 }
 
-function applyProfileToNetControls(profile) {
+function applyProfileToNetControls(profile: NetProfile): boolean {
   return applyNetProfileToControlsRuntime({
     profile,
     controls: currentNetProfileControls(),
@@ -3532,11 +3539,16 @@ function applyProfileToNetControls(profile) {
   });
 }
 
-function refreshNetAccountSelect() {
+function refreshNetAccountSelect(): NetProfile[] {
   return populateNetAccountSelectRuntime({ accountSelect: netAccountSelect, ...NET_PROFILE_STORAGE });
 }
 
-function netAccountSelectionBinding() {
+function netAccountSelectionBinding(): {
+  accountSelect: HTMLSelectElement | null;
+  loadProfiles: () => NetProfile[];
+  profileKey: (profile: { apiBase?: string; username?: string }) => string;
+  applyProfile: (profile: NetProfile) => void;
+} {
   return {
     accountSelect: netAccountSelect,
     loadProfiles: () => loadNetProfilesFromStorage(NET_PROFILE_STORAGE.storageKey),
@@ -3547,11 +3559,11 @@ function netAccountSelectionBinding() {
   };
 }
 
-function resetBackgroundFailures() {
+function resetBackgroundFailures(): void {
   resetBackgroundFailureState(state.net);
 }
 
-function updateCriticalRecoveryStat() {
+function updateCriticalRecoveryStat(): void {
   if (!statCriticalRecoveries) {
     return;
   }
@@ -3559,7 +3571,7 @@ function updateCriticalRecoveryStat() {
   statCriticalRecoveries.textContent = `${state.net.recoveryEventCount}${suffix}`;
 }
 
-async function netRequest(route, init = {}, auth = true) {
+async function netRequest(route: string, init: RequestInit = {}, auth = true) {
   const enabledExtensions = runtimeExtensionsSummary(state.runtimeExtensions);
   return performManagedNetRequest({
     apiBase: String(state.net.apiBase || ""),
@@ -3579,14 +3591,14 @@ async function netRequest(route, init = {}, auth = true) {
   });
 }
 
-async function netGetIntroPhase() {
+async function netGetIntroPhase(): Promise<Record<string, unknown> | null> {
   const { out, phase } = await requestIntroPhaseRuntime(state.net.introPhase, netRequest);
   state.net.introPhase = phase;
   updateIntroPhaseUi();
   return out;
 }
 
-async function netSetIntroPhase(phase) {
+async function netSetIntroPhase(phase: unknown): Promise<Record<string, unknown> | null> {
   const { out, phase: next } = await setIntroPhaseRuntime(phase, netRequest);
   state.net.introPhase = next;
   updateIntroPhaseUi();
