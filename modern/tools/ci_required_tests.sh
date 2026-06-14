@@ -27,6 +27,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_typescript_no_explicit_any.sh"
   "$ROOT_DIR/modern/tools/test_legacy_ui_anchors.sh"
   "$ROOT_DIR/modern/tools/test_client_web_anim_data.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_entity_layer.sh"
   "$ROOT_DIR/modern/tools/test_client_web_map_runtime.sh"
   "$ROOT_DIR/modern/tools/test_client_web_queue.sh"
   "$ROOT_DIR/modern/tools/test_client_web_legacy_pixmap.sh"
