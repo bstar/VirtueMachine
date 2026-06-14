@@ -14,7 +14,8 @@ import {
 
 assert.equal(serverObjectKeyForWorldObjectRuntime({ object_key: " direct " }), "direct");
 assert.equal(serverObjectKeyForWorldObjectRuntime({ objectKey: "camel" }), "camel");
-assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: 5, index: 9 }), "objblk:5:9");
+assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: 5, index: 9 }), "a05i009");
+assert.equal(serverObjectKeyForWorldObjectRuntime({ source_area: 0x2a, source_index: 0x1b }), "a2ai01b");
 assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: "bad", index: 9 }), "");
 assert.equal(serverObjectKeyForWorldObjectRuntime(null), "");
 
@@ -53,13 +54,13 @@ assert.deepEqual(inventoryItemFromTakeResponseRuntime(null, { frame: 0, object_k
     actorX: 307,
     actorY: 347,
     actorZ: 0,
-    target: { object_key: "target-1" }
+    target: { sourceArea: 5, index: 9 }
   }, async (route, init, auth) => {
     requested.push(`${route}:${init?.method}:${auth}:${String(init?.body || "")}`);
     return { ok: true };
   });
   assert.deepEqual(requested, [
-    "/api/world/objects/interact:POST:true:{\"verb\":\"take\",\"target_key\":\"target-1\",\"actor_id\":\"avatar-1\",\"actor_x\":307,\"actor_y\":347,\"actor_z\":0}"
+    "/api/world/objects/interact:POST:true:{\"verb\":\"take\",\"target_key\":\"a05i009\",\"actor_id\":\"avatar-1\",\"actor_x\":307,\"actor_y\":347,\"actor_z\":0}"
   ]);
   assert.deepEqual(out, { ok: true });
 }

@@ -209,6 +209,8 @@ const state: WorldObjectStateContainer = {
       {
         object_key: "a00i003",
         source_kind: "baseline",
+        source_area: 0,
+        source_index: 3,
         x: 1,
         y: 2,
         z: 0,
@@ -231,6 +233,7 @@ const state: WorldObjectStateContainer = {
 };
 
 assert.equal(findActiveObjectByKey(state, "a00i003")?.x, 1);
+assert.equal(findActiveObjectByKey(state, "objblk:0:3")?.object_key, "a00i003");
 persistPatchedObject(state, {
   object_key: "a00i003",
   source_kind: "baseline",

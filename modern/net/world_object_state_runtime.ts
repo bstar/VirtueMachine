@@ -10,12 +10,75 @@ import type {
   WorldObjectStateContainer
 } from "./world_object_types.ts";
 
+type WorldObjectDeltasSourceRuntime = {
+  moved?: unknown;
+  removed?: unknown;
+  respawns?: unknown;
+  spawned?: unknown;
+};
+
+type MovedWorldObjectDeltaSourceRuntime = {
+  holder_id?: unknown;
+  holder_key?: unknown;
+  holder_kind?: unknown;
+  status?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type SpawnedWorldObjectDeltaSourceRuntime = MovedWorldObjectDeltaSourceRuntime & {
+  amount?: unknown;
+  frame?: unknown;
+  object_key?: unknown;
+  shape_type?: unknown;
+  source_area?: unknown;
+  source_index?: unknown;
+  tile_id?: unknown;
+  type?: unknown;
+};
+
+type RespawnWorldObjectDeltaSourceRuntime = {
+  due_at_ms?: unknown;
+  policy?: unknown;
+  respawn_ms?: unknown;
+  taken_at_ms?: unknown;
+};
+
+export type WorldObjectMetaRuntime = {
+  active_count: number;
+  baseline_count: number;
+  baseline_dir: string;
+  delta_moved_count: number;
+  delta_removed_count: number;
+  delta_spawned_count: number;
+  files_loaded: number;
+  loaded_at?: string;
+  source_dir?: string;
+};
+
 function parseU16LE(bytes: Uint8Array, off: number): number {
   return (bytes[off] | (bytes[off + 1] << 8)) >>> 0;
 }
 
-function objectRecord(value: unknown): Record<string, unknown> | null {
+function asWorldObjectDeltasSourceRuntime(value: unknown): WorldObjectDeltasSourceRuntime | null {
+  return value && typeof value === "object" ? value as WorldObjectDeltasSourceRuntime : null;
+}
+
+function asUnknownEntryMapRuntime(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function asMovedWorldObjectDeltaSourceRuntime(value: unknown): MovedWorldObjectDeltaSourceRuntime | null {
+  return value && typeof value === "object" ? value as MovedWorldObjectDeltaSourceRuntime : null;
+}
+
+function asSpawnedWorldObjectDeltaSourceRuntime(value: unknown): SpawnedWorldObjectDeltaSourceRuntime | null {
+  return value && typeof value === "object" ? value as SpawnedWorldObjectDeltaSourceRuntime : null;
+}
+
+function asRespawnWorldObjectDeltaSourceRuntime(value: unknown): RespawnWorldObjectDeltaSourceRuntime | null {
+  return value && typeof value === "object" ? value as RespawnWorldObjectDeltaSourceRuntime : null;
 }
 
 function decodePackedCoord(raw0: number, raw1: number, raw2: number): { x: number; y: number; z: number } {
@@ -144,7 +207,7 @@ export function parseObjBlkRecordsRuntime(
   return out;
 }
 
-function spawnedDeltaFromRecord(value: Record<string, unknown>, index: number): SpawnedWorldObjectDelta {
+function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, index: number): SpawnedWorldObjectDelta {
   return {
     object_key: String(value.object_key || `spawn_${index}`),
     source_area: Number(value.source_area) >>> 0,
@@ -172,11 +235,11 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
     spawned: [],
     respawns: {}
   };
-  const src = objectRecord(raw);
+  const src = asWorldObjectDeltasSourceRuntime(raw);
   if (!src) {
     return out;
   }
-  const removed = objectRecord(src.removed);
+  const removed = asUnknownEntryMapRuntime(src.removed);
   if (removed) {
     for (const [key, value] of Object.entries(removed)) {
       if (value) {
@@ -184,10 +247,10 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
       }
     }
   }
-  const moved = objectRecord(src.moved);
+  const moved = asUnknownEntryMapRuntime(src.moved);
   if (moved) {
     for (const [key, value] of Object.entries(moved)) {
-      const entry = objectRecord(value);
+      const entry = asMovedWorldObjectDeltaSourceRuntime(value);
       if (!entry) {
         continue;
       }
@@ -205,15 +268,15 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
   if (Array.isArray(src.spawned)) {
     out.spawned = src.spawned
       .map((value, index) => {
-        const entry = objectRecord(value);
+        const entry = asSpawnedWorldObjectDeltaSourceRuntime(value);
         return entry ? spawnedDeltaFromRecord(entry, index) : null;
       })
       .filter((value): value is SpawnedWorldObjectDelta => !!value);
   }
-  const respawns = objectRecord(src.respawns);
+  const respawns = asUnknownEntryMapRuntime(src.respawns);
   if (respawns) {
     for (const [key, value] of Object.entries(respawns)) {
-      const entry = objectRecord(value);
+      const entry = asRespawnWorldObjectDeltaSourceRuntime(value);
       if (!entry) {
         continue;
       }
@@ -329,7 +392,7 @@ export function compareLegacyWorldObjectOrder(a: WorldObject, b: WorldObject): n
   return String(a.object_key || "").localeCompare(String(b.object_key || ""));
 }
 
-export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: string): Record<string, unknown> {
+export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: string): WorldObjectMetaRuntime {
   const wo = state.worldObjects;
   return {
     baseline_dir: baselineDir,
@@ -349,7 +412,20 @@ export function findActiveObjectByKey(state: WorldObjectStateContainer, objectKe
   if (!key) {
     return null;
   }
-  return state.worldObjects.active.find((obj) => String(obj.object_key || "") === key) || null;
+  const direct = state.worldObjects.active.find((obj) => String(obj.object_key || "") === key);
+  if (direct) {
+    return direct;
+  }
+  const legacyObjblk = key.match(/^objblk:(\d+):(\d+)$/);
+  if (!legacyObjblk) {
+    return null;
+  }
+  const sourceArea = Number(legacyObjblk[1]) | 0;
+  const sourceIndex = Number(legacyObjblk[2]) | 0;
+  return state.worldObjects.active.find((obj) => (
+    (Number(obj.source_area) | 0) === sourceArea
+    && (Number(obj.source_index) | 0) === sourceIndex
+  )) || null;
 }
 
 export function movedWorldObjectDeltaFromObject(obj: WorldObject): MovedWorldObjectDelta {
@@ -364,7 +440,7 @@ export function movedWorldObjectDeltaFromObject(obj: WorldObject): MovedWorldObj
   };
 }
 
-export function respawnWorldObjectDeltaFromRecord(value: Record<string, unknown>): RespawnWorldObjectDelta {
+export function respawnWorldObjectDeltaFromRecord(value: RespawnWorldObjectDeltaSourceRuntime): RespawnWorldObjectDelta {
   const dueAtMs = Number(value.due_at_ms);
   const takenAtMs = Number(value.taken_at_ms);
   const respawnMs = Number(value.respawn_ms);

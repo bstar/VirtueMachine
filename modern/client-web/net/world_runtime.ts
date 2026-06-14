@@ -32,6 +32,9 @@ export type WorldRuntimeObjectKeySource = object & {
   objectKey?: unknown;
   object_key?: unknown;
   sourceArea?: unknown;
+  sourceIndex?: unknown;
+  source_area?: unknown;
+  source_index?: unknown;
 };
 
 export type WorldRuntimeInventorySource = object & {
@@ -92,10 +95,12 @@ export function serverObjectKeyForWorldObjectRuntime(obj: WorldRuntimeObjectKeyS
   if (direct) {
     return direct;
   }
-  const sourceArea = Number(row.sourceArea);
-  const index = Number(row.index);
-  if (Number.isFinite(sourceArea) && Number.isFinite(index)) {
-    return `objblk:${sourceArea | 0}:${index | 0}`;
+  const sourceArea = Number(row.sourceArea ?? row.source_area);
+  const sourceIndex = Number(row.sourceIndex ?? row.source_index ?? row.index);
+  if (Number.isFinite(sourceArea) && Number.isFinite(sourceIndex)) {
+    const areaHex = (sourceArea >>> 0).toString(16).padStart(2, "0");
+    const indexHex = (sourceIndex >>> 0).toString(16).padStart(3, "0");
+    return `a${areaHex}i${indexHex}`;
   }
   return "";
 }
