@@ -23,6 +23,10 @@ import type {
   ServerTokenRuntime,
   ServerUserRuntime
 } from "./server_account_runtime.ts";
+import type {
+  EmailDeliveryLogRuntime,
+  EmailDeliveryMetaRuntime
+} from "./email_runtime.ts";
 import type { JsonValueRuntime } from "./server_file_store.ts";
 import type { U6MapRuntime as U6MapRuntimeType } from "./world_map_runtime.ts";
 import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
@@ -90,8 +94,7 @@ const {
   replyAuthoritativeConversation
 } = require("./conversation_runtime.ts");
 const {
-  resendDeliverRuntime,
-  smtpDeliverRuntime
+  deliverEmailRuntime
 } = require("./email_runtime.ts");
 const {
   ensureUserSchemaRuntime,
@@ -615,96 +618,31 @@ function issueEmailVerificationCode(user: ServerUserRuntime): string {
   });
 }
 
-interface EmailDeliveryLog {
-  kind: "email_delivery";
-  at: string;
-  to: string;
-  subject: string;
-  body_text: string;
-  mode: string;
-  status: "queued" | "sent" | "failed" | "logged";
-  error?: string;
-  provider_id?: string;
-  template?: string;
-  user_id?: string;
-}
-
-type EmailDeliveryMeta = {
-  template?: unknown;
-  user_id?: unknown;
-};
-
-async function smtpDeliver(toEmail: string, subject: string, bodyText: string) {
-  return smtpDeliverRuntime({
+async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknown, meta: EmailDeliveryMetaRuntime = {}) {
+  return deliverEmailRuntime({
+    appendLog: (delivery: EmailDeliveryLogRuntime) => appendJsonLine(FILES.emailOutbox, delivery),
     bodyText,
     connect: (options: NetConnectOpts) => net.connect(options),
-    fromEmail: EMAIL_FROM,
-    helo: EMAIL_SMTP_HELO,
-    host: EMAIL_SMTP_HOST,
-    pass: EMAIL_SMTP_PASS,
-    port: EMAIL_SMTP_PORT,
-    rejectUnauthorized: process.env.VM_EMAIL_SMTP_REJECT_UNAUTHORIZED,
-    secure: EMAIL_SMTP_SECURE,
-    subject,
-    timeoutMs: EMAIL_SMTP_TIMEOUT_MS,
-    tlsConnect: (options: ConnectionOptions) => tls.connect(options),
-    toEmail,
-    user: EMAIL_SMTP_USER
-  });
-}
-
-async function resendDeliver(toEmail: string, subject: string, bodyText: string) {
-  return resendDeliverRuntime({
-    apiKey: EMAIL_RESEND_API_KEY,
-    baseUrl: EMAIL_RESEND_BASE_URL,
-    bodyText,
+    errorMessage,
     fetchImpl: fetch,
     fromEmail: EMAIL_FROM,
+    meta,
+    mode: EMAIL_MODE,
+    nowIso,
+    resendApiKey: EMAIL_RESEND_API_KEY,
+    resendBaseUrl: EMAIL_RESEND_BASE_URL,
+    smtpHelo: EMAIL_SMTP_HELO,
+    smtpHost: EMAIL_SMTP_HOST,
+    smtpPass: EMAIL_SMTP_PASS,
+    smtpPort: EMAIL_SMTP_PORT,
+    smtpRejectUnauthorized: process.env.VM_EMAIL_SMTP_REJECT_UNAUTHORIZED,
+    smtpSecure: EMAIL_SMTP_SECURE,
+    smtpTimeoutMs: EMAIL_SMTP_TIMEOUT_MS,
+    smtpUser: EMAIL_SMTP_USER,
     subject,
+    tlsConnect: (options: ConnectionOptions) => tls.connect(options),
     toEmail
   });
-}
-
-async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknown, meta: EmailDeliveryMeta = {}) {
-  const delivery: EmailDeliveryLog = {
-    kind: "email_delivery",
-    at: nowIso(),
-    to: normalizeEmail(toEmail),
-    subject: String(subject || ""),
-    body_text: String(bodyText || ""),
-    mode: EMAIL_MODE,
-    status: "queued",
-    template: meta.template == null ? undefined : String(meta.template || ""),
-    user_id: meta.user_id == null ? undefined : String(meta.user_id || "")
-  };
-  if (EMAIL_MODE === "smtp") {
-    try {
-      await smtpDeliver(delivery.to, delivery.subject, delivery.body_text);
-      delivery.status = "sent";
-    } catch (err) {
-      delivery.status = "failed";
-      delivery.error = errorMessage(err);
-      appendJsonLine(FILES.emailOutbox, delivery);
-      throw new Error(`email delivery failed: ${delivery.error}`);
-    }
-  } else if (EMAIL_MODE === "resend") {
-    try {
-      const out = await resendDeliver(delivery.to, delivery.subject, delivery.body_text);
-      delivery.status = "sent";
-      if (out && typeof out === "object" && out.id) {
-        delivery.provider_id = String(out.id);
-      }
-    } catch (err) {
-      delivery.status = "failed";
-      delivery.error = errorMessage(err);
-      appendJsonLine(FILES.emailOutbox, delivery);
-      throw new Error(`email delivery failed: ${delivery.error}`);
-    }
-  } else {
-    delivery.status = "logged";
-  }
-  appendJsonLine(FILES.emailOutbox, delivery);
-  return delivery;
 }
 
 function listUserCharacters(state: Pick<ServerState, "characters">, userId: unknown): ServerCharacterRuntime[] {

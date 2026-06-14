@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   boolEnvOnRuntime,
+  deliverEmailRuntime,
+  type EmailDeliveryLogRuntime,
   isValidEmailRuntime,
   normalizeEmailRuntime,
   parseSmtpLineBufferRuntime,
@@ -156,5 +158,113 @@ await assert.rejects(
   }),
   /resend api key not configured/
 );
+
+const unusedConnect = () => {
+  throw new Error("unused transport");
+};
+
+{
+  const logs: EmailDeliveryLogRuntime[] = [];
+  const out = await deliverEmailRuntime({
+    appendLog: (delivery) => logs.push({ ...delivery }),
+    bodyText: "body",
+    connect: unusedConnect,
+    errorMessage: (err) => err instanceof Error ? err.message : String(err),
+    fromEmail: "from@example.com",
+    meta: { template: "verify", user_id: "u1" },
+    mode: "log",
+    nowIso: () => "2026-06-14T00:00:00.000Z",
+    resendApiKey: "",
+    resendBaseUrl: "https://resend.example.test/emails",
+    smtpHelo: "unit.test",
+    smtpHost: "",
+    smtpPass: "",
+    smtpPort: 25,
+    smtpRejectUnauthorized: true,
+    smtpSecure: false,
+    smtpTimeoutMs: 1000,
+    smtpUser: "",
+    subject: "Subject",
+    tlsConnect: unusedConnect,
+    toEmail: "TO@EXAMPLE.COM"
+  });
+  assert.equal(out.status, "logged");
+  assert.equal(out.to, "to@example.com");
+  assert.equal(out.template, "verify");
+  assert.deepEqual(logs, [out]);
+}
+
+{
+  const logs: EmailDeliveryLogRuntime[] = [];
+  const out = await deliverEmailRuntime({
+    appendLog: (delivery) => logs.push({ ...delivery }),
+    bodyText: "body",
+    connect: unusedConnect,
+    errorMessage: (err) => err instanceof Error ? err.message : String(err),
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: async () => "{\"id\":\"email_456\"}"
+    }),
+    fromEmail: "from@example.com",
+    mode: "resend",
+    nowIso: () => "2026-06-14T00:00:00.000Z",
+    resendApiKey: "key_456",
+    resendBaseUrl: "https://resend.example.test/emails",
+    smtpHelo: "unit.test",
+    smtpHost: "",
+    smtpPass: "",
+    smtpPort: 25,
+    smtpRejectUnauthorized: true,
+    smtpSecure: false,
+    smtpTimeoutMs: 1000,
+    smtpUser: "",
+    subject: "Subject",
+    tlsConnect: unusedConnect,
+    toEmail: "to@example.com"
+  });
+  assert.equal(out.status, "sent");
+  assert.equal(out.provider_id, "email_456");
+  assert.deepEqual(logs, [out]);
+}
+
+{
+  const logs: EmailDeliveryLogRuntime[] = [];
+  await assert.rejects(
+    () => deliverEmailRuntime({
+      appendLog: (delivery) => logs.push({ ...delivery }),
+      bodyText: "body",
+      connect: unusedConnect,
+      errorMessage: (err) => err instanceof Error ? err.message : String(err),
+      fetchImpl: async () => ({
+        ok: false,
+        status: 500,
+        statusText: "Server Error",
+        text: async () => "{\"message\":\"boom\"}"
+      }),
+      fromEmail: "from@example.com",
+      mode: "resend",
+      nowIso: () => "2026-06-14T00:00:00.000Z",
+      resendApiKey: "key_789",
+      resendBaseUrl: "https://resend.example.test/emails",
+      smtpHelo: "unit.test",
+      smtpHost: "",
+      smtpPass: "",
+      smtpPort: 25,
+      smtpRejectUnauthorized: true,
+      smtpSecure: false,
+      smtpTimeoutMs: 1000,
+      smtpUser: "",
+      subject: "Subject",
+      tlsConnect: unusedConnect,
+      toEmail: "to@example.com"
+    }),
+    /email delivery failed: resend 500: boom/
+  );
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].status, "failed");
+  assert.equal(logs[0].error, "resend 500: boom");
+}
 
 console.log("email_runtime_test: ok");

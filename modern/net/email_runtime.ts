@@ -70,6 +70,25 @@ type SmtpResponseRuntime = {
   error?: Error;
 };
 
+export type EmailDeliveryLogRuntime = {
+  at: string;
+  body_text: string;
+  error?: string;
+  kind: "email_delivery";
+  mode: string;
+  provider_id?: string;
+  status: "queued" | "sent" | "failed" | "logged";
+  subject: string;
+  template?: string;
+  to: string;
+  user_id?: string;
+};
+
+export type EmailDeliveryMetaRuntime = {
+  template?: unknown;
+  user_id?: unknown;
+};
+
 type SmtpTransportRuntime = {
   readonly destroyed?: boolean;
   destroy(err?: Error): void;
@@ -295,4 +314,93 @@ export async function resendDeliverRuntime(args: ResendDeliverRuntimeArgs): Prom
     throw new Error(`resend ${response.status}: ${apiMessage}`);
   }
   return parsed;
+}
+
+export async function deliverEmailRuntime(args: {
+  appendLog: (delivery: EmailDeliveryLogRuntime) => void;
+  bodyText: unknown;
+  connect: SmtpDeliverRuntimeArgs["connect"];
+  errorMessage: (err: unknown) => string;
+  fetchImpl?: ResendDeliverRuntimeArgs["fetchImpl"];
+  fromEmail: unknown;
+  meta?: EmailDeliveryMetaRuntime;
+  mode: string;
+  nowIso: () => string;
+  resendApiKey: unknown;
+  resendBaseUrl: unknown;
+  smtpHelo: unknown;
+  smtpHost: unknown;
+  smtpPass: string;
+  smtpPort: number;
+  smtpRejectUnauthorized: unknown;
+  smtpSecure: unknown;
+  smtpTimeoutMs: number;
+  smtpUser: string;
+  subject: unknown;
+  tlsConnect: SmtpDeliverRuntimeArgs["tlsConnect"];
+  toEmail: unknown;
+}): Promise<EmailDeliveryLogRuntime> {
+  const meta = args.meta || {};
+  const delivery: EmailDeliveryLogRuntime = {
+    kind: "email_delivery",
+    at: args.nowIso(),
+    to: normalizeEmailRuntime(args.toEmail),
+    subject: String(args.subject || ""),
+    body_text: String(args.bodyText || ""),
+    mode: String(args.mode || "log").trim().toLowerCase(),
+    status: "queued",
+    template: meta.template == null ? undefined : String(meta.template || ""),
+    user_id: meta.user_id == null ? undefined : String(meta.user_id || "")
+  };
+  if (delivery.mode === "smtp") {
+    try {
+      await smtpDeliverRuntime({
+        bodyText: delivery.body_text,
+        connect: args.connect,
+        fromEmail: args.fromEmail,
+        helo: args.smtpHelo,
+        host: String(args.smtpHost || ""),
+        pass: args.smtpPass,
+        port: args.smtpPort,
+        rejectUnauthorized: args.smtpRejectUnauthorized,
+        secure: args.smtpSecure,
+        subject: delivery.subject,
+        timeoutMs: args.smtpTimeoutMs,
+        tlsConnect: args.tlsConnect,
+        toEmail: delivery.to,
+        user: args.smtpUser
+      });
+      delivery.status = "sent";
+    } catch (err) {
+      delivery.status = "failed";
+      delivery.error = args.errorMessage(err);
+      args.appendLog(delivery);
+      throw new Error(`email delivery failed: ${delivery.error}`);
+    }
+  } else if (delivery.mode === "resend") {
+    try {
+      const out = await resendDeliverRuntime({
+        apiKey: String(args.resendApiKey || ""),
+        baseUrl: String(args.resendBaseUrl || "https://api.resend.com/emails"),
+        bodyText: delivery.body_text,
+        fetchImpl: args.fetchImpl,
+        fromEmail: args.fromEmail,
+        subject: delivery.subject,
+        toEmail: delivery.to
+      });
+      delivery.status = "sent";
+      if (out && typeof out === "object" && "id" in out) {
+        delivery.provider_id = String(out.id);
+      }
+    } catch (err) {
+      delivery.status = "failed";
+      delivery.error = args.errorMessage(err);
+      args.appendLog(delivery);
+      throw new Error(`email delivery failed: ${delivery.error}`);
+    }
+  } else {
+    delivery.status = "logged";
+  }
+  args.appendLog(delivery);
+  return delivery;
 }
