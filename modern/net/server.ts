@@ -52,6 +52,17 @@ const {
   startAuthoritativeConversation,
   replyAuthoritativeConversation
 } = require("./conversation_runtime.ts");
+const {
+  advanceWorldClockMinuteRuntime,
+  clampIntRuntime,
+  computeSnapshotHashRuntime,
+  decodePackedCoordRuntime,
+  defaultWorldClockRuntime,
+  deterministicRecoveryTickLastRuntime,
+  normalizeWorldClockRuntime,
+  parseU16LERuntime,
+  queryIntOrRuntime
+} = require("./server_runtime.ts");
 
 const HOST = process.env.VM_NET_HOST || "127.0.0.1";
 const PORT = Number.parseInt(process.env.VM_NET_PORT || "8081", 10);
@@ -277,15 +288,7 @@ function defaultCriticalPolicy() {
 }
 
 function defaultWorldClock() {
-  return {
-    tick: 0,
-    time_m: 0,
-    time_h: 0,
-    date_d: 1,
-    date_m: 1,
-    date_y: 1,
-    last_advanced_at_ms: Date.now()
-  };
+  return defaultWorldClockRuntime();
 }
 
 function defaultNpcRuntimeState(baseline) {
@@ -373,49 +376,23 @@ function updateNpcScheduleStates(state, elapsedTicks) {
 }
 
 function normalizeWorldClock(raw) {
-  const base = defaultWorldClock();
-  if (!raw || typeof raw !== "object") {
-    return base;
-  }
-  return {
-    tick: Number(raw.tick) >>> 0,
-    time_m: Number(raw.time_m) >>> 0,
-    time_h: Number(raw.time_h) >>> 0,
-    date_d: Number(raw.date_d) >>> 0 || 1,
-    date_m: Number(raw.date_m) >>> 0 || 1,
-    date_y: Number(raw.date_y) >>> 0 || 1,
-    last_advanced_at_ms: Number(raw.last_advanced_at_ms) || Date.now()
-  };
+  return normalizeWorldClockRuntime(raw);
 }
 
 function parseU16LE(bytes, off) {
-  return (bytes[off] | (bytes[off + 1] << 8)) >>> 0;
+  return parseU16LERuntime(bytes, off);
 }
 
 function decodePackedCoord(raw0, raw1, raw2) {
-  return {
-    x: (raw0 | ((raw1 & 0x03) << 8)) >>> 0,
-    y: ((raw1 >> 2) | ((raw2 & 0x0f) << 6)) >>> 0,
-    z: ((raw2 >> 4) & 0x0f) >>> 0
-  };
+  return decodePackedCoordRuntime(raw0, raw1, raw2);
 }
 
 function clampInt(n, lo, hi) {
-  const v = Number(n) | 0;
-  if (v < lo) return lo;
-  if (v > hi) return hi;
-  return v;
+  return clampIntRuntime(n, lo, hi);
 }
 
 function queryIntOr(url, key, fallback) {
-  if (!url.searchParams.has(key)) {
-    return fallback;
-  }
-  const v = Number(url.searchParams.get(key));
-  if (!Number.isFinite(v)) {
-    return fallback;
-  }
-  return v | 0;
+  return queryIntOrRuntime(url, key, fallback);
 }
 
 function loadBaseTileMap(runtimeDir) {
@@ -736,19 +713,12 @@ function reloadWorldObjectBaseline(state) {
 }
 
 function advanceWorldClockMinute(clock) {
-  clock.time_m += 1;
-  if (clock.time_m < SERVER_MINUTES_PER_HOUR) return;
-  clock.time_m = 0;
-  clock.time_h += 1;
-  if (clock.time_h < SERVER_HOURS_PER_DAY) return;
-  clock.time_h = 0;
-  clock.date_d += 1;
-  if (clock.date_d <= SERVER_DAYS_PER_MONTH) return;
-  clock.date_d = 1;
-  clock.date_m += 1;
-  if (clock.date_m <= SERVER_MONTHS_PER_YEAR) return;
-  clock.date_m = 1;
-  clock.date_y += 1;
+  advanceWorldClockMinuteRuntime(clock, {
+    daysPerMonth: SERVER_DAYS_PER_MONTH,
+    hoursPerDay: SERVER_HOURS_PER_DAY,
+    minutesPerHour: SERVER_MINUTES_PER_HOUR,
+    monthsPerYear: SERVER_MONTHS_PER_YEAR
+  });
 }
 
 function updateAuthoritativeClock(state) {
@@ -1259,12 +1229,11 @@ function listUserCharacters(state, userId) {
 }
 
 function computeSnapshotHash(snapshotBase64) {
-  return nodeCrypto.createHash("sha256").update(snapshotBase64 || "").digest("hex");
+  return computeSnapshotHashRuntime(snapshotBase64);
 }
 
 function deterministicRecoveryTickLast(events, itemId) {
-  const filtered = events.filter((e) => e.item_id === itemId).sort((a, b) => b.tick - a.tick);
-  return filtered.length ? filtered[0].tick : null;
+  return deterministicRecoveryTickLastRuntime(events, itemId);
 }
 
 function runCriticalItemMaintenance(state, payload) {
