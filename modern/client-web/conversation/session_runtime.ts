@@ -103,6 +103,85 @@ export interface ConversationKeydownDeps {
   maxChars?: number;
 }
 
+export interface BeginLegacyConversationSessionArgs {
+  actorEntityId?: unknown;
+  authoritative?: boolean;
+  desc?: unknown;
+  equipmentSlots?: LegacyConversationEquipmentSlot[];
+  formatYouSeeLine?: (text: string) => string;
+  inputOpcode?: unknown;
+  openingLines?: unknown;
+  portraitTile?: unknown;
+  sessionId?: unknown;
+  statusDisplay?: unknown;
+  script?: unknown;
+  rules?: ConversationRule[];
+  targetName?: unknown;
+  targetObjNum?: unknown;
+  targetObjType?: unknown;
+  vmContext?: unknown;
+  pc?: unknown;
+}
+
+export interface BeginLegacyConversationSessionResult {
+  openingBlock: string[];
+  targetName: string;
+  desc: string;
+}
+
+function normalizedConversationLines(lines: unknown): string[] {
+  return (Array.isArray(lines) ? lines : [])
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+}
+
+export function beginLegacyConversationSession(
+  state: LegacyConversationState,
+  args: BeginLegacyConversationSessionArgs = {}
+): BeginLegacyConversationSessionResult {
+  const targetName = String(args.targetName || "Unknown").trim() || "Unknown";
+  const desc = String(args.desc || "").trim() || targetName;
+  const formatYouSeeLine = typeof args.formatYouSeeLine === "function"
+    ? args.formatYouSeeLine
+    : (text: string) => text;
+  const openingLines = normalizedConversationLines(args.openingLines);
+  const equipmentSlots = Array.isArray(args.equipmentSlots) ? args.equipmentSlots : [];
+
+  state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
+  if (args.statusDisplay != null) {
+    state.legacyStatusDisplay = Number(args.statusDisplay) | 0;
+  }
+  state.legacyConversationActive = true;
+  state.legacyConversationAuthoritative = !!args.authoritative;
+  state.legacyConversationSessionId = String(args.sessionId || "");
+  state.legacyConversationInput = "";
+  state.legacyConversationTargetName = targetName;
+  state.legacyConversationActorEntityId = Number(args.actorEntityId) | 0;
+  state.legacyConversationPortraitTile = args.portraitTile == null ? null : (Number(args.portraitTile) | 0);
+  state.legacyConversationTargetObjNum = Number(args.targetObjNum) | 0;
+  state.legacyConversationTargetObjType = Number(args.targetObjType) | 0;
+  state.legacyConversationNpcKey = "";
+  state.legacyConversationPendingPrompt = "";
+  state.legacyConversationScript = args.script || null;
+  state.legacyConversationDescText = desc;
+  state.legacyConversationRules = Array.isArray(args.rules) ? args.rules : [];
+  state.legacyConversationPc = Number(args.pc) | 0;
+  state.legacyConversationInputOpcode = Number(args.inputOpcode) | 0;
+  state.legacyConversationVmContext = args.vmContext || null;
+  state.legacyConversationShowInventory = equipmentSlots.length > 0;
+  state.legacyConversationEquipmentSlots = equipmentSlots;
+
+  const openingBlock = [formatYouSeeLine(desc || targetName)];
+  if (openingLines.length > 0) {
+    openingBlock.push("");
+    for (const line of openingLines) {
+      openingBlock.push(line);
+    }
+    openingBlock.push("");
+  }
+  return { openingBlock, targetName, desc };
+}
+
 export function wrapLegacyLedgerLines(text: unknown, maxChars: unknown): string[] {
   const out: string[] = [];
   const limit = Math.max(1, Number(maxChars) | 0);

@@ -81,6 +81,7 @@ import {
 } from "./conversation/dialog_runtime.ts";
 import {
   advanceLegacyConversationPagination as advanceLegacyConversationPaginationImported,
+  beginLegacyConversationSession,
   buildDebugChatLedgerText as buildDebugChatLedgerTextImported,
   endLegacyConversation as endLegacyConversationImported,
   handleLegacyConversationKeydown as handleLegacyConversationKeydownImported,
@@ -644,10 +645,6 @@ type LegacyBackdropRenderStateView = {
   legacyStatusDisplay: number;
   objectLayer: U6ObjectLayerRuntime | null;
   tileSet: U6TileSetRuntime | null;
-};
-type AuthoritativeConversationStateView = {
-  legacyConversationEquipmentSlots: LegacyPanelSlotEntry[];
-  legacyConversationPortraitTile: number;
 };
 type StartupMenuRenderStateView = {
   basePalette: RgbPaletteRuntime | null;
@@ -4309,7 +4306,6 @@ function startAuthoritativeConversationFromPayload(
   actor: LegacyTalkActor,
   tileId: number
 ): void {
-  const conversationState = state as AuthoritativeConversationStateView;
   const session = payload && typeof payload === "object"
     ? payload as NonNullable<AuthoritativeConversationPayload["conversation_session"]>
     : {};
@@ -4319,36 +4315,23 @@ function startAuthoritativeConversationFromPayload(
   const openingLines = Array.isArray(session.opening_lines)
     ? session.opening_lines.map((line) => String(line || "").trim()).filter(Boolean)
     : [];
-  state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
-  state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
-  state.legacyConversationActive = true;
-  state.legacyConversationAuthoritative = true;
-  state.legacyConversationSessionId = sessionId;
-  state.legacyConversationInput = "";
-  state.legacyConversationTargetName = targetName;
-  state.legacyConversationActorEntityId = Number(actor?.id) | 0;
-  conversationState.legacyConversationPortraitTile = tileId;
-  state.legacyConversationTargetObjNum = Number(session.npc_id) | 0;
-  state.legacyConversationTargetObjType = Number(actor?.type) | 0;
-  state.legacyConversationNpcKey = "";
-  state.legacyConversationPendingPrompt = "";
-  state.legacyConversationScript = null;
-  state.legacyConversationDescText = desc;
-  state.legacyConversationRules = [];
-  state.legacyConversationPc = Number(session.next_pc) | 0;
-  state.legacyConversationInputOpcode = Number(session.stop_opcode) | 0;
-  state.legacyConversationVmContext = null;
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
-  state.legacyConversationShowInventory = equipSlots.length > 0;
-  conversationState.legacyConversationEquipmentSlots = equipSlots;
-  const openingBlock = [formatYouSeeLine(desc || targetName)];
-  if (openingLines.length > 0) {
-    openingBlock.push("");
-    for (const line of openingLines) {
-      openingBlock.push(String(line || ""));
-    }
-    openingBlock.push("");
-  }
+  const { openingBlock } = beginLegacyConversationSession(state, {
+    actorEntityId: Number(actor?.id) | 0,
+    authoritative: true,
+    desc,
+    equipmentSlots: equipSlots,
+    formatYouSeeLine,
+    inputOpcode: Number(session.stop_opcode) | 0,
+    openingLines,
+    portraitTile: tileId,
+    sessionId,
+    statusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
+    targetName,
+    targetObjNum: Number(session.npc_id) | 0,
+    targetObjType: Number(actor?.type) | 0,
+    pc: Number(session.next_pc) | 0
+  });
   const pagedOpening = startLegacyConversationPagination(openingBlock);
   if (!pagedOpening) {
     for (const line of openingBlock) {
@@ -4933,54 +4916,51 @@ function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk fallback: ${summary}`;
   }
-  /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
-  talkState.legacyConversationPrevStatus = Number(talkState.legacyStatusDisplay) | 0;
-  talkState.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
-  talkState.legacyConversationActive = true;
-  talkState.legacyConversationInput = "";
-  talkState.legacyConversationTargetName = speaker;
-  talkState.legacyConversationActorEntityId = actorId;
-  talkState.legacyConversationPortraitTile = tileId;
-  talkState.legacyConversationTargetObjNum = talkObjNum;
-  talkState.legacyConversationTargetObjType = Number(actor.type) | 0;
-  talkState.legacyConversationNpcKey = "";
-  talkState.legacyConversationPendingPrompt = "";
-  talkState.legacyConversationScript = scriptAvailable ? script : null;
-  talkState.legacyConversationDescText = desc;
-  talkState.legacyConversationRules = rules;
-  talkState.legacyConversationPc = scriptAvailable ? (Number(openingResult.stopPc) | 0) : -1;
-  talkState.legacyConversationInputOpcode = scriptAvailable ? (Number(openingResult.stopOpcode) | 0) : 0;
-  talkState.legacyConversationVmContext = vmContext;
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor as LegacyTalkActor);
-  /*
-    Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
-    when `showInven` is true (derived from real EQUIP objects on the actor).
-  */
-  talkState.legacyConversationShowInventory = equipSlots.length > 0;
-  talkState.legacyConversationEquipmentSlots = equipSlots;
-  const openingBlock = [formatYouSeeLine(desc || speaker)];
-  let pushedOpening = false;
+  const renderedOpeningLines: string[] = [];
   const normalizedOpening = (Array.isArray(openingLines) ? openingLines : [])
     .map((line) => String(line || "").trim())
     .filter(Boolean);
-  if (normalizedOpening.length > 0) {
-    openingBlock.push("");
-  }
   for (const rawLine of normalizedOpening) {
     const line = renderConversationMacros(String(rawLine || "").trim(), vmContext);
     if (line) {
-      openingBlock.push(line);
-      pushedOpening = true;
+      renderedOpeningLines.push(line);
     }
   }
-  if (!pushedOpening) {
+  let fallbackOpeningLine = "";
+  if (!renderedOpeningLines.length) {
     const fallback = canonicalTalkFallbackGreeting(resolvedConversation.objNum, speaker, vmContext);
     if (fallback) {
-      openingBlock.push(`"${fallback}"`);
+      fallbackOpeningLine = `"${fallback}"`;
     }
   }
-  if (pushedOpening) {
-    openingBlock.push("");
+  /*
+    Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E).
+    Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
+    when `showInven` is true (derived from real EQUIP objects on the actor).
+  */
+  const { openingBlock } = beginLegacyConversationSession(state as LegacyConversationState, {
+    actorEntityId: actorId,
+    desc,
+    equipmentSlots: equipSlots,
+    formatYouSeeLine,
+    inputOpcode: scriptAvailable ? (Number(openingResult.stopOpcode) | 0) : 0,
+    openingLines: renderedOpeningLines,
+    portraitTile: tileId,
+    script: scriptAvailable ? script : null,
+    rules,
+    statusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
+    targetName: speaker,
+    targetObjNum: talkObjNum,
+    targetObjType: Number(actor.type) | 0,
+    vmContext,
+    pc: scriptAvailable ? (Number(openingResult.stopPc) | 0) : -1
+  });
+  if (fallbackOpeningLine) {
+    if (normalizedOpening.length > 0) {
+      openingBlock.push("");
+    }
+    openingBlock.push(fallbackOpeningLine);
   }
   const pagedOpening = startLegacyConversationPagination(openingBlock);
   if (!pagedOpening) {
