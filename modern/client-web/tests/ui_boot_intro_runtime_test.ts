@@ -18,6 +18,7 @@ import {
   bootIntroPrintTextRuntime,
   bootIntroClockFramesRuntime,
   bootIntroClockSpritesRuntime,
+  buildBootIntroTextCardRenderPlanRuntime,
   bootIntroWouCharWidthRuntime,
   bootIntroTvStaticCellsRuntime,
   createBootIntroTvMachineRuntime,
@@ -319,6 +320,72 @@ function testTvStaticAndClockPlanning() {
   ]);
 }
 
+function testTextCardRenderPlanning() {
+  assert.equal(buildBootIntroTextCardRenderPlanRuntime({
+    card: null,
+    measureText: () => 0,
+    scale: 1,
+    textColor: [1, 2, 3],
+    wrapText: () => []
+  }), null);
+
+  assert.deepEqual(buildBootIntroTextCardRenderPlanRuntime({
+    card: {
+      frame: 2,
+      text: "ignored",
+      lines: [" First ", "", "Second"],
+      align: "center",
+      x: 10,
+      y: 20,
+      width: 100,
+      textX: 5,
+      textY: 7
+    },
+    measureText: (text) => text.length * 2,
+    scale: 2,
+    textColor: [10, 20, 30],
+    wrapText: () => assert.fail("explicit lines should bypass wrapping")
+  }), {
+    color: "rgb(10, 20, 30)",
+    lines: [
+      { drawX: 110, text: "First", y: 54 },
+      { drawX: 108, text: "Second", y: 70 }
+    ],
+    panel: { frame: 2, x: 20, y: 40 },
+    printOps: [],
+    textMaxWidth: 89
+  });
+
+  assert.deepEqual(buildBootIntroTextCardRenderPlanRuntime({
+    card: {
+      frame: 3,
+      text: "one two",
+      printOps: [
+        { text: "one", startX: 8, width: 50, x: 1, y: 2 },
+        { text: "two", startX: 8, width: 0, x: -1, y: -1 }
+      ],
+      x: 4,
+      y: 5,
+      width: 80,
+      textX: 6,
+      textY: 7
+    },
+    measureText: (text) => text.length,
+    scale: 1,
+    textColor: [1, 2, 3],
+    wrapText: () => ["wrapped"]
+  }), {
+    color: "rgb(1, 2, 3)",
+    lines: [],
+    panel: { frame: 3, x: 4, y: 5 },
+    printOps: [
+      { text: "one", startX: 8, width: 50, x: 1, y: 2 },
+      { text: "two", startX: 8, width: 68, x: -1, y: -1 }
+    ],
+    textMaxWidth: 68
+  });
+}
+
 function testWindowHelpers() {
   const randCtx = { seed: 0x51f15eED };
   const rand = bootIntroWindowRandRuntime(randCtx, -5, 5);
@@ -369,6 +436,7 @@ testTvMachine();
 testWouFontHelpers();
 testTextDrawingHelpers();
 testTvStaticAndClockPlanning();
+testTextCardRenderPlanning();
 testWindowHelpers();
 testTextWrapHelpers();
 

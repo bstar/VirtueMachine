@@ -57,6 +57,34 @@ export type BootIntroClockSpriteRuntime = {
   y: number;
 };
 
+export type BootIntroTextCardPanelRuntime = {
+  frame: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroTextCardPrintOpRuntime = {
+  startX: number;
+  text: unknown;
+  width: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroTextCardLineRuntime = {
+  drawX: number;
+  text: string;
+  y: number;
+};
+
+export type BootIntroTextCardRenderPlanRuntime = {
+  color: string;
+  lines: BootIntroTextCardLineRuntime[];
+  panel: BootIntroTextCardPanelRuntime | null;
+  printOps: BootIntroTextCardPrintOpRuntime[];
+  textMaxWidth: number;
+};
+
 export type BootIntroTvMachineRuntime = {
   fingerVisible: boolean;
   loopCnt: number;
@@ -1032,6 +1060,74 @@ export function bootIntroClockSpritesRuntime(now: Date, scrollPx: unknown): Boot
     { frame: frames[2], x: 0xe7 - xOff, y: 0x14 },
     { frame: frames[3], x: 0xeb - xOff, y: 0x14 }
   ];
+}
+
+export function buildBootIntroTextCardRenderPlanRuntime(args: {
+  card: BootIntroTextCard | null | undefined;
+  measureText: (text: string) => number;
+  scale: number;
+  textColor: readonly number[];
+  wrapText: (text: string, maxWidthPx: number) => string[];
+}): BootIntroTextCardRenderPlanRuntime | null {
+  const card = args.card;
+  if (!card || !card.text) {
+    return null;
+  }
+  const scale = Math.max(1, Number(args.scale) || 1);
+  const colorRgb = Array.isArray(args.textColor) ? args.textColor : [];
+  const color = `rgb(${Number(colorRgb[0]) | 0}, ${Number(colorRgb[1]) | 0}, ${Number(colorRgb[2]) | 0})`;
+  const textMaxWidth = Math.max(8, (Number(card.width) || 0) - (Number(card.textX) || 0) - 6);
+  const explicitLines = Array.isArray(card.lines)
+    ? card.lines.map((line) => String(line || "").trim()).filter(Boolean)
+    : null;
+  const sourceLines = explicitLines && explicitLines.length
+    ? explicitLines
+    : args.wrapText(card.text, textMaxWidth);
+  const panel = {
+    frame: Number(card.frame) | 0,
+    x: Math.round((Number(card.x) || 0) * scale),
+    y: Math.round((Number(card.y) || 0) * scale)
+  };
+  if (Array.isArray(card.printOps) && card.printOps.length) {
+    const printOps: BootIntroTextCardPrintOpRuntime[] = [];
+    for (const op of card.printOps) {
+      printOps.push({
+        startX: Number(op.startX) || 0,
+        text: op.text,
+        width: Number(op.width) || textMaxWidth,
+        x: Number(op.x) | 0,
+        y: Number(op.y) | 0
+      });
+    }
+    return {
+      color,
+      lines: [],
+      panel,
+      printOps,
+      textMaxWidth
+    };
+  }
+  const lines: BootIntroTextCardLineRuntime[] = [];
+  for (let i = 0; i < sourceLines.length; i += 1) {
+    const line = sourceLines[i];
+    const baseX = ((Number(card.x) || 0) + (Number(card.textX) || 0));
+    const lineWidth = args.measureText(line);
+    const drawX = card.align === "center"
+      ? Math.round((((Number(card.x) || 0) + (((Number(card.width) || 0) - lineWidth) / 2))) * scale)
+      : Math.round(baseX * scale);
+    lines.push({
+      drawX,
+      text: line,
+      y: Math.round((((Number(card.y) || 0) + (Number(card.textY) || 0)) + (i * 8)) * scale)
+    });
+  }
+  return {
+    color,
+    lines,
+    panel,
+    printOps: [],
+    textMaxWidth
+  };
 }
 
 export function bootIntroWindowRandRuntime(

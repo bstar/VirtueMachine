@@ -247,6 +247,7 @@ import {
   bootIntroClockSpritesRuntime,
   bootIntroTvStateAtRuntime,
   bootIntroTvStaticCellsRuntime,
+  buildBootIntroTextCardRenderPlanRuntime,
   bootIntroWouCharWidthRuntime,
   decodeBootIntroWouFontRuntime,
   drawBootIntroWouTextRuntime,
@@ -3030,30 +3031,29 @@ function wrapBootIntroTextPixels(text, maxWidthPx) {
 }
 
 function renderBootIntroTextCard(g, scale, scene, card) {
-  if (!card || !card.text) {
+  const plan = buildBootIntroTextCardRenderPlanRuntime({
+    card,
+    measureText: measureBootIntroTextWidth,
+    scale,
+    textColor: activeTitleIntroPalette(scene)?.[0x3e] || [0xe6, 0xd1, 0xa0],
+    wrapText: wrapBootIntroTextPixels
+  });
+  if (!plan) {
     return;
   }
-  const panel = bootIntroBlockSpriteCanvas(Number(card.frame) | 0, scene);
-  const explicitLines = Array.isArray(card.lines)
-    ? card.lines.map((line) => String(line || "").trim()).filter(Boolean)
-    : null;
-  const textMaxWidth = Math.max(8, (Number(card.width) || 0) - (Number(card.textX) || 0) - 6);
-  const lines = explicitLines && explicitLines.length
-    ? explicitLines
-    : wrapBootIntroTextPixels(card.text, textMaxWidth);
-  const textColor = activeTitleIntroPalette(scene)?.[0x3e] || [0xe6, 0xd1, 0xa0];
-  if (panel) {
+  const panel = plan.panel ? bootIntroBlockSpriteCanvas(plan.panel.frame, scene) : null;
+  if (panel && plan.panel) {
     g.drawImage(
       panel,
-      Math.round(card.x * scale),
-      Math.round(card.y * scale),
+      plan.panel.x,
+      plan.panel.y,
       Math.round(panel.width * scale),
       Math.round(panel.height * scale)
     );
   }
-  if (Array.isArray(card.printOps) && card.printOps.length) {
+  if (plan.printOps.length) {
     let last = { x: 0, y: 0 };
-    for (const op of card.printOps) {
+    for (const op of plan.printOps) {
       const opX = (Number(op.x) | 0) >= 0 ? (Number(op.x) | 0) : last.x;
       const opY = (Number(op.y) | 0) >= 0 ? (Number(op.y) | 0) : last.y;
       last = bootIntroPrintTextOnCard(
@@ -3061,30 +3061,24 @@ function renderBootIntroTextCard(g, scale, scene, card) {
         Number(card.x) || 0,
         Number(card.y) || 0,
         op.text,
-        Number(op.startX) || 0,
-        Number(op.width) || textMaxWidth,
+        op.startX,
+        op.width,
         opX,
         opY,
         Math.max(1, scale),
-        `rgb(${textColor[0] | 0}, ${textColor[1] | 0}, ${textColor[2] | 0})`
+        plan.color
       );
     }
     return;
   }
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    const baseX = ((Number(card.x) || 0) + (Number(card.textX) || 0));
-    const lineWidth = measureBootIntroTextWidth(line);
-    const drawX = card.align === "center"
-      ? Math.round((((Number(card.x) || 0) + (((Number(card.width) || 0) - lineWidth) / 2))) * scale)
-      : Math.round(baseX * scale);
+  for (const line of plan.lines) {
     drawBootIntroWouText(
       g,
-      line,
-      drawX,
-      Math.round((((Number(card.y) || 0) + (Number(card.textY) || 0)) + (i * 8)) * scale),
+      line.text,
+      line.drawX,
+      line.y,
       Math.max(1, scale),
-      `rgb(${textColor[0] | 0}, ${textColor[1] | 0}, ${textColor[2] | 0})`
+      plan.color
     );
   }
 }
