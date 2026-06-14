@@ -297,6 +297,12 @@ import {
   currentBootIntroSceneRuntime,
   measureBootIntroTextWidthRuntime,
   startBootIntroRuntime,
+  type BootIntroRuntimeState,
+  type BootIntroSceneSpec,
+  type BootIntroTextCard,
+  type BootIntroTextCanvasRuntime,
+  type BootIntroWindowStateRuntime,
+  type BootIntroWouFontRuntime,
   wrapBootIntroTextPixelsRuntime
 } from "./ui/boot_intro_runtime.ts";
 import {
@@ -528,6 +534,24 @@ type LegacyBackdropRenderStateView = {
   legacyStatusDisplay: number;
   objectLayer: U6ObjectLayerRuntime | null;
   tileSet: U6TileSetRuntime | null;
+};
+type StartupMenuRenderStateView = {
+  basePalette: RgbPaletteRuntime | null;
+  startupCanvasCache: Map<string, HTMLCanvasElement | null>;
+  startupMenuIndex: number;
+  startupMenuPixmap: IndexedPixmapRuntime | null;
+  startupTitlePixmaps: [IndexedPixmapRuntime | null, IndexedPixmapRuntime | null] | null;
+  tileSet: U6TileSetRuntime | null;
+};
+type BootIntroBankName = "intro1" | "intro2" | "intro3";
+type BootIntroRenderStateView = {
+  basePalette: RgbPaletteRuntime | null;
+  bootIntro: BootIntroRuntimeState | null;
+  bootIntroBanks: Partial<Record<BootIntroBankName, Array<IndexedPixmapRuntime | null>>> | null;
+  bootIntroBlocks: Array<IndexedPixmapRuntime | null> | null;
+  bootIntroCanvasCache: Map<string, HTMLCanvasElement | null>;
+  bootIntroFont: BootIntroWouFontRuntime | null;
+  bootIntroPalettes: RgbPaletteRuntime[] | null;
 };
 
 function byId<T = HTMLElement>(id: string): T {
@@ -2393,50 +2417,62 @@ function renderLegacyHudStubOnBackdrop() {
   drawTile(LEGACY_UI_TILE.BUTTON_RIGHT, 152, 176);
 }
 
-function drawLegacyTileScaled(g, tileId, sx, sy, scale) {
-  if (!state.tileSet) {
+function drawLegacyTileScaled(
+  g: CanvasRenderingContext2D,
+  tileId: number,
+  sx: number,
+  sy: number,
+  scale: number
+): void {
+  const renderState = state as StartupMenuRenderStateView;
+  if (!renderState.tileSet) {
     return;
   }
   const pal = paletteForTile(tileId);
+  if (!pal) {
+    return;
+  }
   const key = paletteKeyForTile(tileId);
-  const tc = state.tileSet.tileCanvas(tileId, pal, key);
+  const tc = renderState.tileSet.tileCanvas(tileId, pal, key);
   if (!tc) {
     return;
   }
   g.drawImage(tc, sx, sy, 16 * scale, 16 * scale);
 }
 
-function renderStartupMenuLayer(g, scale) {
-  const x = (v) => v * scale;
-  const y = (v) => v * scale;
+function renderStartupMenuLayer(g: CanvasRenderingContext2D, scale: number): void {
+  const startupState = state as StartupMenuRenderStateView;
+  const x = (v: number): number => v * scale;
+  const y = (v: number): number => v * scale;
 
   const startupPal = buildStartupPaletteForMenu();
+  const titlePixmaps = startupState.startupTitlePixmaps;
   const hasStartupArt = startupPal
-    && state.startupTitlePixmaps
-    && state.startupTitlePixmaps[0]
-    && state.startupTitlePixmaps[1]
-    && state.startupMenuPixmap;
+    && titlePixmaps
+    && titlePixmaps[0]
+    && titlePixmaps[1]
+    && startupState.startupMenuPixmap;
   g.fillStyle = "#000000";
   g.fillRect(0, 0, x(320), y(200));
   if (hasStartupArt) {
-    const drawSprite = (key, pixmap, sx, sy) => {
+    const drawSprite = (key: string, pixmap: IndexedPixmapRuntime | null | undefined, sx: number, sy: number): void => {
       if (!pixmap) {
         return;
       }
-      const cacheKey = `${key}:${state.startupMenuIndex}`;
-      let sprite = state.startupCanvasCache.get(cacheKey);
+      const cacheKey = `${key}:${startupState.startupMenuIndex}`;
+      let sprite = startupState.startupCanvasCache.get(cacheKey);
       if (!sprite) {
         sprite = canvasFromIndexedPixels(pixmap, startupPal, 0xff);
-        state.startupCanvasCache.set(cacheKey, sprite);
+        startupState.startupCanvasCache.set(cacheKey, sprite);
       }
       if (!sprite) {
         return;
       }
       g.drawImage(sprite, x(sx), y(sy), x(sprite.width), y(sprite.height));
     };
-    drawSprite("title", state.startupTitlePixmaps[0], 0x13, 0x00);
-    drawSprite("subtitle", state.startupTitlePixmaps[1], 0x3b, 0x2f);
-    drawSprite("menu", state.startupMenuPixmap, 0x31, 0x53);
+    drawSprite("title", titlePixmaps?.[0], 0x13, 0x00);
+    drawSprite("subtitle", titlePixmaps?.[1], 0x3b, 0x2f);
+    drawSprite("menu", startupState.startupMenuPixmap, 0x31, 0x53);
     return;
   }
 
@@ -2456,7 +2492,7 @@ function renderStartupMenuLayer(g, scale) {
     const item = STARTUP_MENU[i];
     const enabled = startupMenuItemEnabledRuntime(item, isNetAuthenticated());
     const rowY = 74 + (i * 20);
-    const selected = i === state.startupMenuIndex;
+    const selected = i === startupState.startupMenuIndex;
     g.fillStyle = selected ? "#5f2e1d" : "#1f1a14";
     g.fillRect(x(62), y(rowY), x(196), y(16));
     g.strokeStyle = selected ? "#d7b981" : "#6a5131";
@@ -2471,26 +2507,34 @@ function renderStartupMenuLayer(g, scale) {
   drawU6MainText(g, "Use ARROWS + ENTER", x(98), y(162), Math.max(1, scale), "#8e7a55");
 }
 
-function buildStartupPaletteForMenu() {
-  return buildStartupPaletteForMenuRuntime(state.basePalette, state.startupMenuIndex);
+function buildStartupPaletteForMenu(): RgbPaletteRuntime | null {
+  const startupState = state as StartupMenuRenderStateView;
+  return buildStartupPaletteForMenuRuntime(startupState.basePalette, startupState.startupMenuIndex);
 }
 
-function activeTitleIntroPalette(scene = null) {
+function activeTitleIntroPalette(scene: BootIntroSceneSpec | { kind: "lounge" } | null = null): RgbPaletteRuntime | null {
+  const introState = state as BootIntroRenderStateView;
   return activeBootIntroPaletteRuntime({
-    basePalette: state.basePalette,
+    basePalette: introState.basePalette,
     fallbackPalette: buildStartupPaletteForMenu(),
-    introPalettes: state.bootIntroPalettes,
+    introPalettes: introState.bootIntroPalettes,
     scene,
-    sceneElapsedMs: Number(state.bootIntro?.sceneElapsedMs) | 0
+    sceneElapsedMs: Number(introState.bootIntro?.sceneElapsedMs) | 0
   });
 }
 
-function bootIntroPaletteCacheKey(scene = null) {
-  return bootIntroPaletteCacheKeyRuntime(scene, Number(state.bootIntro?.sceneElapsedMs) | 0);
+function bootIntroPaletteCacheKey(scene: BootIntroSceneSpec | { kind: "lounge" } | null = null): string {
+  const introState = state as BootIntroRenderStateView;
+  return bootIntroPaletteCacheKeyRuntime(scene, Number(introState.bootIntro?.sceneElapsedMs) | 0);
 }
 
-function bootIntroSceneSpriteCanvas(bankName, frameIdx, scene = null) {
-  const banks = state.bootIntroBanks;
+function bootIntroSceneSpriteCanvas(
+  bankName: BootIntroBankName,
+  frameIdx: number,
+  scene: BootIntroSceneSpec | null = null
+): HTMLCanvasElement | null {
+  const introState = state as BootIntroRenderStateView;
+  const banks = introState.bootIntroBanks;
   const bank = banks && typeof banks === "object" ? banks[bankName] : null;
   const pixmap = Array.isArray(bank) ? bank[frameIdx] : null;
   const pal = activeTitleIntroPalette(scene);
@@ -2498,35 +2542,47 @@ function bootIntroSceneSpriteCanvas(bankName, frameIdx, scene = null) {
     return null;
   }
   const cacheKey = `${bankName}:${frameIdx}:${bootIntroPaletteCacheKey(scene)}`;
-  let sprite = state.bootIntroCanvasCache.get(cacheKey);
+  let sprite = introState.bootIntroCanvasCache.get(cacheKey);
   if (!sprite) {
     sprite = canvasFromIndexedPixels(pixmap, pal, 0xff);
     if (sprite) {
-      state.bootIntroCanvasCache.set(cacheKey, sprite);
+      introState.bootIntroCanvasCache.set(cacheKey, sprite);
     }
   }
   return sprite || null;
 }
 
-function bootIntroBlockSpriteCanvas(frameIdx, scene = null) {
-  const bank = state.bootIntroBlocks;
+function bootIntroBlockSpriteCanvas(frameIdx: number, scene: BootIntroSceneSpec | null = null): HTMLCanvasElement | null {
+  const introState = state as BootIntroRenderStateView;
+  const bank = introState.bootIntroBlocks;
   const pixmap = Array.isArray(bank) ? bank[frameIdx] : null;
   const pal = activeTitleIntroPalette(scene);
   if (!pixmap || !pal) {
     return null;
   }
   const cacheKey = `blocks:${frameIdx}:${bootIntroPaletteCacheKey(scene)}`;
-  let sprite = state.bootIntroCanvasCache.get(cacheKey);
+  let sprite = introState.bootIntroCanvasCache.get(cacheKey);
   if (!sprite) {
     sprite = canvasFromIndexedPixels(pixmap, pal, 0xff);
     if (sprite) {
-      state.bootIntroCanvasCache.set(cacheKey, sprite);
+      introState.bootIntroCanvasCache.set(cacheKey, sprite);
     }
   }
   return sprite || null;
 }
 
-function drawBootIntroSprite(g, bankName, frameIdx, lx, ly, scale, scene = null, sw = null, sh = null, alpha = 1) {
+function drawBootIntroSprite(
+  g: CanvasRenderingContext2D,
+  bankName: BootIntroBankName,
+  frameIdx: number,
+  lx: number,
+  ly: number,
+  scale: number,
+  scene: BootIntroSceneSpec | null = null,
+  sw: number | null = null,
+  sh: number | null = null,
+  alpha = 1
+): void {
   const sprite = bootIntroSceneSpriteCanvas(bankName, frameIdx, scene);
   if (!sprite) {
     return;
@@ -2547,11 +2603,23 @@ function drawBootIntroSprite(g, bankName, frameIdx, lx, ly, scale, scene = null,
   g.globalAlpha = prevAlpha;
 }
 
-function bootIntroTvStateAt(updateCount) {
+function bootIntroTvStateAt(updateCount: number) {
   return bootIntroTvStateAtRuntime(updateCount);
 }
 
-function drawBootIntroClippedSprite(g, bankName, frameIdx, lx, ly, scale, scene, clipX, clipY, clipW, clipH) {
+function drawBootIntroClippedSprite(
+  g: CanvasRenderingContext2D,
+  bankName: BootIntroBankName,
+  frameIdx: number,
+  lx: number,
+  ly: number,
+  scale: number,
+  scene: BootIntroSceneSpec,
+  clipX: number,
+  clipY: number,
+  clipW: number,
+  clipH: number
+): void {
   g.save();
   g.beginPath();
   g.rect(Math.round(clipX * scale), Math.round(clipY * scale), Math.round(clipW * scale), Math.round(clipH * scale));
@@ -2560,7 +2628,7 @@ function drawBootIntroClippedSprite(g, bankName, frameIdx, lx, ly, scale, scene,
   g.restore();
 }
 
-function drawBootIntroTvStatic(g, x, y, scale, seed) {
+function drawBootIntroTvStatic(g: CanvasRenderingContext2D, x: number, y: number, scale: number, seed: number): void {
   const pal = activeTitleIntroPalette({ kind: "lounge" }) || [];
   const cell = Math.max(1, scale | 0);
   for (const staticCell of bootIntroTvStaticCellsRuntime(seed)) {
@@ -2571,24 +2639,37 @@ function drawBootIntroTvStatic(g, x, y, scale, seed) {
   }
 }
 
-function decodeBootIntroWouFont(bytes) {
-  return decodeBootIntroWouFontRuntime(bytes, decompressU6Lzw);
+function bootIntroDecompress(bytes: Uint8Array | null | undefined): Uint8Array | null {
+  return bytes ? decompressU6Lzw(bytes) : null;
 }
 
-function bootIntroWouCharWidth(font, code) {
+function decodeBootIntroWouFont(bytes: Uint8Array | null | undefined): BootIntroWouFontRuntime | null {
+  return decodeBootIntroWouFontRuntime(bytes, bootIntroDecompress);
+}
+
+function bootIntroWouCharWidth(font: BootIntroWouFontRuntime | null | undefined, code: number): number {
   return bootIntroWouCharWidthRuntime(font, code);
 }
 
-function measureBootIntroTextWidth(text) {
-  return measureBootIntroTextWidthRuntime(state.bootIntroFont, text, (fallbackText) => measureU6TextWidth(fallbackText, true));
+function measureBootIntroTextWidth(text: unknown): number {
+  const introState = state as BootIntroRenderStateView;
+  return measureBootIntroTextWidthRuntime(introState.bootIntroFont, text, (fallbackText) => measureU6TextWidth(fallbackText, true));
 }
 
-function drawBootIntroWouText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
+function drawBootIntroWouText(
+  g: BootIntroTextCanvasRuntime,
+  text: unknown,
+  sx: number,
+  sy: number,
+  scale = 1,
+  color = "#e7dcc0"
+): number {
+  const introState = state as BootIntroRenderStateView;
   return drawBootIntroWouTextRuntime(g, {
     color,
     drawFallbackText: (ctx, fallbackText, x, y, s, c) => drawU6CompactText(ctx, fallbackText, x, y, s, c),
     fallbackMeasure: (fallbackText) => measureU6TextWidth(fallbackText, true),
-    font: state.bootIntroFont,
+    font: introState.bootIntroFont,
     scale,
     sx,
     sy,
@@ -2596,13 +2677,29 @@ function drawBootIntroWouText(g, text, sx, sy, scale = 1, color = "#e7dcc0") {
   });
 }
 
-function drawBootIntroTextRun(g, text, x, y, scale, color) {
+function drawBootIntroTextRun(
+  g: BootIntroTextCanvasRuntime,
+  text: string,
+  x: number,
+  y: number,
+  scale: number,
+  color: string
+): number {
   const endX = drawBootIntroWouText(g, text, Math.round(x * scale), Math.round(y * scale), Math.max(1, scale), color);
   return Math.round(endX / Math.max(1, scale));
 }
 
-function bootIntroPrintText(g, text, startX, width, x, y, scale, color) {
-  const font = state.bootIntroFont;
+function bootIntroPrintText(
+  g: BootIntroTextCanvasRuntime,
+  text: unknown,
+  startX: number,
+  width: number,
+  x: number,
+  y: number,
+  scale: number,
+  color: string
+): { x: number; y: number } {
+  const font = (state as BootIntroRenderStateView).bootIntroFont;
   return bootIntroPrintTextRuntime(g, {
     color,
     drawTextRun: drawBootIntroTextRun,
@@ -2617,8 +2714,19 @@ function bootIntroPrintText(g, text, startX, width, x, y, scale, color) {
   });
 }
 
-function bootIntroPrintTextOnCard(g, cardX, cardY, text, startX, width, x, y, scale, color) {
-  const font = state.bootIntroFont;
+function bootIntroPrintTextOnCard(
+  g: BootIntroTextCanvasRuntime,
+  cardX: number,
+  cardY: number,
+  text: unknown,
+  startX: number,
+  width: number,
+  x: number,
+  y: number,
+  scale: number,
+  color: string
+): { x: number; y: number } {
+  const font = (state as BootIntroRenderStateView).bootIntroFont;
   return bootIntroPrintTextOnCardRuntime(g, {
     cardX,
     cardY,
@@ -2639,25 +2747,30 @@ function bootIntroClockFrames(now = new Date()) {
   return bootIntroClockFramesRuntime(now);
 }
 
-function drawBootIntroClock(g, scene, scale, scrollPx) {
+function drawBootIntroClock(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number, scrollPx: number): void {
   for (const sprite of bootIntroClockSpritesRuntime(new Date(), scrollPx)) {
     drawBootIntroSprite(g, "intro1", sprite.frame, sprite.x, sprite.y, scale, scene);
   }
 }
 
-function bootIntroWindowSceneBase(sceneId) {
+function bootIntroWindowSceneBase(sceneId: string) {
   return bootIntroWindowSceneBaseRuntime(sceneId);
 }
 
-function bootIntroWindowStateAt(scene, updateCount, forceStrike) {
+function bootIntroWindowStateAt(scene: BootIntroSceneSpec, updateCount: number, forceStrike: boolean): BootIntroWindowStateRuntime {
   return bootIntroWindowStateAtRuntime(scene, updateCount, forceStrike);
 }
 
-function wrapBootIntroTextPixels(text, maxWidthPx) {
+function wrapBootIntroTextPixels(text: unknown, maxWidthPx: number): string[] {
   return wrapBootIntroTextPixelsRuntime(text, maxWidthPx, measureBootIntroTextWidth);
 }
 
-function renderBootIntroTextCard(g, scale, scene, card) {
+function renderBootIntroTextCard(
+  g: CanvasRenderingContext2D,
+  scale: number,
+  scene: BootIntroSceneSpec,
+  card: BootIntroTextCard | null | undefined
+): void {
   const plan = buildBootIntroTextCardRenderPlanRuntime({
     card,
     measureText: measureBootIntroTextWidth,
@@ -2679,6 +2792,9 @@ function renderBootIntroTextCard(g, scale, scene, card) {
     );
   }
   if (plan.printOps.length) {
+    if (!card) {
+      return;
+    }
     let last = { x: 0, y: 0 };
     for (const op of plan.printOps) {
       const opX = (Number(op.x) | 0) >= 0 ? (Number(op.x) | 0) : last.x;
@@ -2710,7 +2826,7 @@ function renderBootIntroTextCard(g, scale, scene, card) {
   }
 }
 
-function renderBootIntroSplash(g, scene, scale) {
+function renderBootIntroSplash(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
   const frame = Number(scene?.splashFrame) | 0;
   const sprite = bootIntroSceneSpriteCanvas("intro1", frame, scene);
   g.fillStyle = "#000000";
@@ -2723,8 +2839,9 @@ function renderBootIntroSplash(g, scene, scale) {
   g.drawImage(sprite, sx, sy, sprite.width * scale, sprite.height * scale);
 }
 
-function renderBootIntroLounge(g, scene, scale) {
-  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+function renderBootIntroLounge(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
+  const introState = state as BootIntroRenderStateView;
+  const elapsed = Number(introState.bootIntro?.sceneElapsedMs) | 0;
   const scrollPx = (scene?.id === "lounge_pan")
     ? Math.min(319, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 319))
     : 0;
@@ -2770,8 +2887,9 @@ function renderBootIntroLounge(g, scene, scale) {
   drawBootIntroClock(g, scene, scale, scrollPx);
 }
 
-function renderBootIntroWindow(g, scene, scale) {
-  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+function renderBootIntroWindow(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
+  const introState = state as BootIntroRenderStateView;
+  const elapsed = Number(introState.bootIntro?.sceneElapsedMs) | 0;
   const panPx = (scene?.id === "window_pan")
     ? Math.min(320, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 320))
     : ((scene?.id === "window_door_open" || scene?.id === "window_run") ? 320 : 0);
@@ -2807,8 +2925,9 @@ function renderBootIntroWindow(g, scene, scale) {
   drawBootIntroSprite(g, "intro2", 25, 573 - panPx + doorOpenPx, 0, scale, scene);
 }
 
-function renderBootIntroStones(g, scene, scale) {
-  const elapsed = Number(state.bootIntro?.sceneElapsedMs) | 0;
+function renderBootIntroStones(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
+  const introState = state as BootIntroRenderStateView;
+  const elapsed = Number(introState.bootIntro?.sceneElapsedMs) | 0;
   const gateRisePx = (scene?.id === "stones_gate")
     ? Math.max(5, 0x64 - Math.floor(elapsed / 25))
     : ((scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") ? 5 : 0x64);
@@ -2850,8 +2969,9 @@ function renderBootIntroStones(g, scene, scale) {
   }
 }
 
-function renderBootIntroLayer(g, scale) {
-  const scene = currentBootIntroSceneRuntime(state.bootIntro);
+function renderBootIntroLayer(g: CanvasRenderingContext2D, scale: number): void {
+  const introState = state as BootIntroRenderStateView;
+  const scene = currentBootIntroSceneRuntime(introState.bootIntro);
   if (!scene) {
     renderStartupMenuLayer(g, scale);
     return;
@@ -2866,7 +2986,7 @@ function renderBootIntroLayer(g, scale) {
     renderBootIntroStones(g, scene, scale);
   }
   renderBootIntroTextCard(g, scale, scene, scene.textCard || null);
-  const overlayAlpha = bootIntroOverlayAlphaRuntime(state.bootIntro);
+  const overlayAlpha = bootIntroOverlayAlphaRuntime(introState.bootIntro);
   if (overlayAlpha > 0) {
     g.fillStyle = `rgba(0,0,0,${Math.max(0, Math.min(1, overlayAlpha / 255))})`;
     g.fillRect(0, 0, 320 * scale, 200 * scale);
@@ -2875,7 +2995,11 @@ function renderBootIntroLayer(g, scale) {
 
 function renderStartupScreen() {
   const mainScale = Math.max(1, Math.floor(canvas.width / 320));
-  if (state.bootIntro && state.bootIntro.active) {
+  const introState = state as BootIntroRenderStateView;
+  if (!ctx) {
+    return;
+  }
+  if (introState.bootIntro && introState.bootIntro.active) {
     renderBootIntroLayer(ctx, mainScale);
   } else {
     renderStartupMenuLayer(ctx, mainScale);
@@ -2886,6 +3010,9 @@ function renderStartupScreen() {
     return;
   }
   const g = legacyBackdropCanvas.getContext("2d");
+  if (!g) {
+    return;
+  }
   const w = legacyBackdropCanvas.width | 0;
   const h = legacyBackdropCanvas.height | 0;
   if (w <= 0 || h <= 0) {
