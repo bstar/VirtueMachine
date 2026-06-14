@@ -1,28 +1,37 @@
-export interface CharacterRuntimeJson {
-  [key: string]: unknown;
-}
-
 export type CharacterPayload = object & {
   character_id?: unknown;
   name?: unknown;
 };
 
-export interface CharacterListPayload extends CharacterRuntimeJson {
+export interface CharacterListPayload {
   characters?: unknown;
-  [key: string]: unknown;
 }
+
+export type CharacterRuntimeResponse = CharacterListPayload | CharacterPayload;
 
 export type CharacterRuntimeRequest = (
   route: string,
   init?: RequestInit,
   auth?: boolean
-) => Promise<CharacterRuntimeJson | null>;
+) => Promise<CharacterRuntimeResponse | null>;
 
 export function characterPayloadsFromJsonRuntime(rows: unknown): CharacterPayload[] {
   if (!Array.isArray(rows)) {
     return [];
   }
-  return rows.filter((row): row is CharacterPayload => !!row && typeof row === "object");
+  return rows.filter((row): row is CharacterPayload => {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    const candidate = row as CharacterPayload;
+    return candidate.character_id != null || candidate.name != null;
+  });
+}
+
+function characterRowsFromResponseRuntime(response: CharacterRuntimeResponse | null | undefined): unknown {
+  return response && typeof response === "object"
+    ? (response as CharacterListPayload).characters
+    : null;
 }
 
 export async function performNetEnsureCharacter(
@@ -31,7 +40,7 @@ export async function performNetEnsureCharacter(
 ): Promise<{ characterId: string; characterName: string }> {
   const desiredName = String(characterName || "").trim() || "Avatar";
   const list = await request("/api/characters", { method: "GET" }, true);
-  const chars = characterPayloadsFromJsonRuntime(list?.characters);
+  const chars = characterPayloadsFromJsonRuntime(characterRowsFromResponseRuntime(list));
   let pick = chars.find(
     (c) => String(c?.name || "").toLowerCase() === desiredName.toLowerCase()
   );

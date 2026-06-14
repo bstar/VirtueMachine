@@ -8,7 +8,8 @@ assert.deepEqual(characterPayloadsFromJsonRuntime(null), []);
 assert.equal(characterPayloadsFromJsonRuntime([
   { character_id: "c1", name: "Avatar" },
   null,
-  "bad"
+  "bad",
+  { other: "ignored" }
 ]).length, 1);
 
 {
