@@ -99,8 +99,8 @@ import {
   conversationHeaderMatchesExpectedCanonicalDescRuntime,
   conversationHeaderMatchesExpectedCanonicalNameRuntime,
   decompressU6LzwRuntime,
-  decodeU6LzwWithKnownLengthRuntime,
   isLikelyValidConversationScriptRuntime,
+  loadLegacyConversationScriptFromArchiveRuntime,
   loadLegacyConversationScriptForNpcRuntime,
   normalizedConversationNameRuntime,
   parseConversationHeaderAndDescRuntime
@@ -1661,10 +1661,6 @@ function conversationVmContextForSession(overrides: LegacyConversationVmOverride
     partySize: Number(state.sim?.partySize) | 0,
     objNum: Number(ov.objNum) | 0
   });
-}
-
-function decodeU6LzwWithKnownLength(srcBytes: Uint8Array | null | undefined, outLen: number): Uint8Array | null {
-  return decodeU6LzwWithKnownLengthRuntime(srcBytes, outLen);
 }
 
 function loadLegacyConversationScript(objNum: number, objType: number): Uint8Array | null {
@@ -7541,44 +7537,13 @@ function archiveHasRecoverableCanonicalTriplet(archive: unknown): boolean {
   }
   const triplet = [2, 5, 6]; /* Dupre, Lord British, Nystul */
   for (const idx of triplet) {
-    const script = loadLegacyConversationScriptFromArchive(archive, idx);
+    const script = loadLegacyConversationScriptFromArchiveRuntime(archive, idx);
     const header = parseConversationHeaderAndDesc(script);
     if (!isLikelyValidConversationScript(script, header)) {
       return false;
     }
   }
   return true;
-}
-
-function loadLegacyConversationScriptFromArchive(archive: unknown, index: unknown): Uint8Array | null {
-  if (!(archive instanceof Uint8Array) || archive.length < 4) {
-    return null;
-  }
-  const idx = Number(index) | 0;
-  if (idx < 0) {
-    return null;
-  }
-  const offPtr = idx << 2;
-  if (offPtr < 0 || (offPtr + 4) > archive.length) {
-    return null;
-  }
-  const dv = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-  const offset = dv.getUint32(offPtr, true) >>> 0;
-  if (!offset || (offset + 4) > archive.length) {
-    return null;
-  }
-  const inflatedSize = dv.getUint32(offset, true) >>> 0;
-  let bytes = null;
-  if (inflatedSize && inflatedSize < 0x2800) {
-    bytes = decodeU6LzwWithKnownLength(archive.subarray(offset + 4), inflatedSize);
-  } else {
-    const end = Math.min(archive.length, offset + 4 + 0x2800);
-    bytes = archive.subarray(offset + 4, end);
-  }
-  if (!(bytes instanceof Uint8Array) || bytes.length < 8) {
-    return null;
-  }
-  return bytes;
 }
 
 function validateConversationArchiveA(archive: Uint8Array): boolean {
@@ -7588,7 +7553,7 @@ function validateConversationArchiveA(archive: Uint8Array): boolean {
     { index: 2, name: "dupre", descTokens: ["handsome", "man"] }
   ];
   for (const check of checks) {
-    const script = loadLegacyConversationScriptFromArchive(archive, check.index);
+    const script = loadLegacyConversationScriptFromArchiveRuntime(archive, check.index);
     const header = parseConversationHeaderAndDesc(script);
     if (!isLikelyValidConversationScript(script, header)) {
       return false;
