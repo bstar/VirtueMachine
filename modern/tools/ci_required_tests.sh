@@ -45,6 +45,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_ui_inventory_paperdoll.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_paperdoll_equipment.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_party_message.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_legacy_text.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_message_log.sh"
   "$ROOT_DIR/modern/tools/test_client_web_ui_panel_scope.sh"
   "$ROOT_DIR/modern/tools/test_client_web_net_account.sh"

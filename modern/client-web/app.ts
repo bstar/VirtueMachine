@@ -242,6 +242,14 @@ import {
   startupMenuItemEnabledRuntime,
   startupMenuIndexAtSurfacePointRuntime
 } from "./ui/startup_runtime.ts";
+import {
+  areaIdForWorldXYRuntime,
+  canonicalLookSentenceForTileRuntime,
+  canonicalTalkSpeakerForTileRuntime,
+  legacyArticleForTileRuntime,
+  legacyLookupTileStringRuntime,
+  sanitizeLegacyHudLabelTextRuntime
+} from "./ui/legacy_text_runtime.ts";
 import { isTypingContextRuntime } from "./ui/input_runtime.ts";
 import {
   buildLegacyInventoryPaperdollLayoutRuntime,
@@ -1593,81 +1601,27 @@ function decompressU6Lzw(bytes) {
 }
 
 function legacyLookupTileString(tileId) {
-  const entries = state.lookStringEntries;
-  const n = Array.isArray(entries) ? entries.length : 0;
-  if (n <= 0) {
-    return "nothing";
-  }
-  let i = 0;
-  let si = entries[0].tileId | 0;
-  let out = String(entries[0].text || "nothing");
-  const target = tileId & 0xffff;
-  while (si < target && (i + 1) < n) {
-    i += 1;
-    si = entries[i].tileId | 0;
-    out = String(entries[i].text || out);
-  }
-  return out || "nothing";
+  return legacyLookupTileStringRuntime(tileId, state.lookStringEntries);
 }
 
 function legacyArticleForTile(tileId) {
-  if (!state.tileFlags2) {
-    return "";
-  }
-  const f = state.tileFlags2[tileId & 0x07ff] & 0xc0;
-  if (f === 0x40) return "a ";
-  if (f === 0x80) return "an ";
-  if (f === 0xc0) return "the ";
-  return "";
+  return legacyArticleForTileRuntime(tileId, state.tileFlags2);
 }
 
 function canonicalLookSentenceForTile(tileId) {
-  const name = legacyLookupTileString(tileId);
-  const article = legacyArticleForTile(tileId);
-  return `Thou dost see ${article}${name}.`;
+  return canonicalLookSentenceForTileRuntime(tileId, state.lookStringEntries, state.tileFlags2);
 }
 
 function canonicalTalkSpeakerForTile(tileId) {
-  const raw = String(legacyLookupTileString(tileId) || "Unknown");
-  const normalizeSpeakerText = (s) => String(s || "")
-    .replace(/\bor britannia\b/ig, "of Britannia")
-    .replace(/\s+/g, " ")
-    .trim();
-  const article = String(legacyArticleForTile(tileId) || "").trim().toLowerCase();
-  const normalizeCaps = (s) => {
-    const text = normalizeSpeakerText(s);
-    if (!text) return text;
-    /* Only normalize if source string is all caps. */
-    const letters = text.replace(/[^A-Za-z]+/g, "");
-    if (!letters || letters !== letters.toUpperCase()) {
-      return text;
-    }
-    return text
-      .toLowerCase()
-      .replace(/\b([a-z])/g, (m, ch) => ch.toUpperCase());
-  };
-  if (!article) {
-    return normalizeCaps(raw);
-  }
-  const prefix = `${article} `;
-  if (raw.toLowerCase().startsWith(prefix)) {
-    return normalizeCaps(raw.slice(prefix.length).trim() || raw);
-  }
-  return normalizeCaps(raw);
+  return canonicalTalkSpeakerForTileRuntime(tileId, state.lookStringEntries, state.tileFlags2);
 }
 
 function sanitizeLegacyHudLabelText(text) {
-  return String(text || "")
-    .replace(/[^\x20-\x7e]+/g, " ")
-    .replace(/[^A-Za-z0-9 .,'-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return sanitizeLegacyHudLabelTextRuntime(text);
 }
 
 function areaIdForWorldXY(x, y) {
-  const ax = ((Number(x) | 0) >> 7) & 0x7;
-  const ay = ((Number(y) | 0) >> 7) & 0x7;
-  return ((ay << 3) | ax) & 0x3f;
+  return areaIdForWorldXYRuntime(x, y);
 }
 
 function legacyEquipmentSlotsForTalkActor(actor) {
