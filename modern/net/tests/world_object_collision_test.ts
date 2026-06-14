@@ -6,6 +6,7 @@ import {
   objectBlocksCell,
   objectFootprintCells
 } from "../world_object_collision.ts";
+import type { WorldObject, WorldObjectRuntimeState } from "../world_object_types.ts";
 
 const flags = new Uint8Array(0x800);
 flags[0x220] = 0x80;
@@ -18,7 +19,7 @@ assert.deepEqual(
   ]
 );
 
-const bed = {
+const bed: WorldObject = {
   object_key: "a00i001",
   coord_use: OBJ_COORD_USE_LOCXYZ,
   type: 0x0a3,
@@ -31,7 +32,7 @@ const bed = {
 assert.equal(objectBlocksCell(bed, 30, 40, 0, flags), true);
 assert.equal(objectBlocksCell(bed, 31, 40, 0, flags), false);
 
-const state: any = {
+const state: WorldObjectRuntimeState = {
   mapRuntime: {
     tileAt: () => 0x001
   },
@@ -39,7 +40,13 @@ const state: any = {
     terrainType: new Uint8Array(0x800),
     tileFlags: flags,
     active: [bed],
-    activeByAnchor: buildObjectAnchorIndex([bed])
+    activeByAnchor: buildObjectAnchorIndex([bed]),
+    deltas: {
+      schema_version: 1,
+      moved: {},
+      spawned: [],
+      respawns: {}
+    }
   }
 };
 assert.equal(canNpcStepInto(state, { to_x: 30, to_y: 40, to_z: 0 }), false);

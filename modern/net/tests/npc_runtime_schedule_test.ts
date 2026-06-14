@@ -4,13 +4,16 @@ import {
   INTRO_PHASE_PRE_RUNTIME,
   buildScheduledNpcStatesRuntime,
   defaultNpcRuntimeStateRuntime,
-  normalizeNpcRuntimeStateRuntime
+  normalizeNpcRuntimeStateRuntime,
+  type NpcBaselineRuntime,
+  type ScheduledNpcStateRuntime,
+  type U6ScheduleTableRuntime
 } from "../npc_runtime.ts";
 
 const AI_SIT = 0x92;
 const AI_FINDPATH = 0x81;
 
-const baseline: any = {
+const baseline: NpcBaselineRuntime = {
   entries: [
     {
       id: 2,
@@ -28,9 +31,18 @@ const baseline: any = {
       source: "objlist"
     }
   ],
+  assocEntries: [],
   talkFlags: [1, 2, 3],
+  schedIndex: [],
+  npcMode: [],
+  npcComMode: [],
+  movePts: [],
+  leader: [],
+  npcFlag: [],
+  level: [],
   party: [],
-  partySize: 0
+  partySize: 0,
+  origShapeType: []
 };
 
 const defaultPersist = defaultNpcRuntimeStateRuntime(baseline);
@@ -60,7 +72,7 @@ const npcOffsets = new Array(0x101).fill(0);
 npcOffsets[2] = 0;
 npcOffsets[3] = 1;
 
-const schedule: any = {
+const schedule: U6ScheduleTableRuntime = {
   npcOffsets,
   entryCount: 1,
   entries: [
@@ -75,7 +87,7 @@ const schedule: any = {
   ]
 };
 
-const previous: any = [
+const previous: ScheduledNpcStateRuntime[] = [
   {
     npc_id: 2,
     x: 0,
