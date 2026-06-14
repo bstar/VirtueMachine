@@ -211,7 +211,8 @@ import {
 } from "./sim/queue_runtime.ts";
 import {
   createInitialAppSimState,
-  toAppSimStateRuntime
+  toAppSimStateRuntime,
+  type AppSimState
 } from "./sim/app_state_runtime.ts";
 import { applyAvatarMoveCommandRuntime } from "./sim/avatar_move_runtime.ts";
 import { U6AnimDataRuntime } from "./sim/anim_data_runtime.ts";
@@ -275,7 +276,12 @@ import {
   isLikelyPickupObjectTypeRuntime,
   isSolidEnvObjectRuntime
 } from "./sim/object_types_runtime.ts";
-import { nearestTalkTargetAtCellRuntime, topWorldObjectAtCellRuntime } from "./sim/target_runtime.ts";
+import {
+  nearestTalkTargetAtCellRuntime,
+  topWorldObjectAtCellRuntime,
+  type TargetEntityRuntime,
+  type TargetObjectLayerRuntime
+} from "./sim/target_runtime.ts";
 import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 import {
   BOOT_INTRO_SCENES,
@@ -505,6 +511,28 @@ type LegacyConversationStateView = {
   legacyConversationScript: Uint8Array | null;
   legacyConversationTargetName: string | null;
   legacyConversationVmContext: ConversationVmContextRuntime | null;
+};
+type LegacyTalkSessionStateView = LegacyConversationStateView & {
+  converseArchiveA: Uint8Array | null;
+  converseArchiveB: Uint8Array | null;
+  entityLayer: U6EntityLayerRuntime | null;
+  legacyConversationActive: boolean;
+  legacyConversationActorEntityId: number;
+  legacyConversationAuthoritative: boolean;
+  legacyConversationEquipmentSlots: ReturnType<typeof projectLegacyEquipmentSlotsRuntime>;
+  legacyConversationInput: string;
+  legacyConversationKnownNames: Record<string, string>;
+  legacyConversationNpcKey: string;
+  legacyConversationPendingPrompt: string;
+  legacyConversationPortraitTile: number;
+  legacyConversationPrevStatus: number;
+  legacyConversationSessionId: string;
+  legacyConversationShowInventory: boolean;
+  legacyConversationTargetObjNum: number;
+  legacyConversationTargetObjType: number;
+  legacyStatusDisplay: number;
+  mapCtx: U6MapRuntime | null;
+  objectLayer: TargetObjectLayerRuntime | null;
 };
 type AppObjectLayerStateView = {
   entityLayer: U6EntityLayerRuntime | null;
@@ -4526,8 +4554,10 @@ function initLegacyFramePreview() {
   }
 }
 
-function tryLookAtCell(sim, tx, ty) {
-  if (!state.mapCtx) {
+function tryLookAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  const talkState = state as unknown as LegacyTalkSessionStateView;
+  const mapCtx = talkState.mapCtx;
+  if (!mapCtx) {
     return false;
   }
   const tz = sim.world.map_z | 0;
@@ -4538,25 +4568,25 @@ function tryLookAtCell(sim, tx, ty) {
     showLegacyLedgerPrompt();
     return false;
   }
-  const obj = topWorldObjectAtCellRuntime(state.objectLayer, sim, tx, ty, tz, {}, WORLD_OBJECT_LOOKUP_DEPS);
+  const obj = topWorldObjectAtCellRuntime(talkState.objectLayer, sim, tx, ty, tz, {}, WORLD_OBJECT_LOOKUP_DEPS);
   if (obj) {
-    const tileId = ((obj.baseTile | 0) + (obj.frame | 0)) & 0xffff;
+    const tileId = ((Number(obj.baseTile) | 0) + (obj.frame | 0)) & 0xffff;
     pushLedgerMessage(canonicalLookSentenceForTile(tileId));
     showLegacyLedgerPrompt();
     diagBox.className = "diag ok";
     diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
     return true;
   }
-  const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
+  const actor = nearestTalkTargetAtCellRuntime(talkState.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   if (actor) {
-    const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
+    const tileId = ((Number(actor.baseTile) | 0) + (Number(actor.frame) | 0)) & 0xffff;
     pushLedgerMessage(canonicalLookSentenceForTile(tileId));
     showLegacyLedgerPrompt();
     diagBox.className = "diag ok";
     diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
     return true;
   }
-  const tile = state.mapCtx.tileAt(tx | 0, ty | 0, tz | 0) & 0xffff;
+  const tile = mapCtx.tileAt(tx | 0, ty | 0, tz | 0) & 0xffff;
   pushLedgerMessage(canonicalLookSentenceForTile(tile));
   showLegacyLedgerPrompt();
   diagBox.className = "diag ok";
@@ -4564,7 +4594,8 @@ function tryLookAtCell(sim, tx, ty) {
   return true;
 }
 
-function tryTalkAtCell(sim, tx, ty) {
+function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  const talkState = state as unknown as LegacyTalkSessionStateView;
   const tz = sim.world.map_z | 0;
   if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
     diagBox.className = "diag warn";
@@ -4573,7 +4604,7 @@ function tryTalkAtCell(sim, tx, ty) {
     showLegacyLedgerPrompt();
     return false;
   }
-  const actor = nearestTalkTargetAtCellRuntime(state.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
+  const actor = nearestTalkTargetAtCellRuntime(talkState.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
   if (!actor) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: nobody there at ${tx},${ty},${tz}.`;
@@ -4584,7 +4615,7 @@ function tryTalkAtCell(sim, tx, ty) {
   if (isNetAuthenticated()) {
     diagBox.className = "diag ok";
     diagBox.textContent = `Talk: contacting authoritative conversation service for actor ${Number(actor.id) | 0}...`;
-    netStartConversation(actor, tx, ty, tz).catch((err) => {
+    netStartConversation(actor, tx, ty, tz).catch((err: unknown) => {
       diagBox.className = "diag warn";
       diagBox.textContent = `Talk failed: ${errorMessageRuntime(err)}`;
       pushLedgerMessage("No one responds.");
@@ -4592,16 +4623,18 @@ function tryTalkAtCell(sim, tx, ty) {
     });
     return true;
   }
-  const haveConverse = (state.converseArchiveA instanceof Uint8Array) || (state.converseArchiveB instanceof Uint8Array);
-  const tileId = ((actor.baseTile | 0) + (actor.frame | 0)) & 0xffff;
+  const haveConverse = (talkState.converseArchiveA instanceof Uint8Array) || (talkState.converseArchiveB instanceof Uint8Array);
+  const tileId = ((Number(actor.baseTile) | 0) + (Number(actor.frame) | 0)) & 0xffff;
   const actorId = Number(actor.id) | 0;
-  const resolvedConversation = resolveConversationScriptForActor(actor, tileId);
-  const scriptAvailable = !!(resolvedConversation.valid && (resolvedConversation.script instanceof Uint8Array));
-  const script = scriptAvailable ? resolvedConversation.script : null;
+  const resolvedConversation = resolveConversationScriptForActor(actor as LegacyConversationActor, tileId);
+  const script = resolvedConversation.valid && resolvedConversation.script instanceof Uint8Array
+    ? resolvedConversation.script
+    : null;
+  const scriptAvailable = script instanceof Uint8Array;
   const header = scriptAvailable
     ? resolvedConversation.header
     : { name: "", desc: "", mainPc: 0 };
-  const knownName = state.legacyConversationKnownNames[String(actorId)] || "";
+  const knownName = talkState.legacyConversationKnownNames[String(actorId)] || "";
   const scriptName = String(header.name || "").trim();
   const speakerRaw = knownName || scriptName || canonicalTalkSpeakerForTile(tileId);
   const speaker = sanitizeLegacyHudLabelText(speakerRaw) || "Unknown";
@@ -4627,30 +4660,30 @@ function tryTalkAtCell(sim, tx, ty) {
     diagBox.textContent = `Talk fallback: ${summary}`;
   }
   /* Canonical UI behavior: entering talk routes status panel to inspect/talk (0x9E). */
-  state.legacyConversationPrevStatus = Number(state.legacyStatusDisplay) | 0;
-  state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
-  state.legacyConversationActive = true;
-  state.legacyConversationInput = "";
-  state.legacyConversationTargetName = speaker;
-  state.legacyConversationActorEntityId = actorId;
-  state.legacyConversationPortraitTile = tileId;
-  state.legacyConversationTargetObjNum = talkObjNum;
-  state.legacyConversationTargetObjType = Number(actor.type) | 0;
-  state.legacyConversationNpcKey = "";
-  state.legacyConversationPendingPrompt = "";
-  state.legacyConversationScript = scriptAvailable ? script : null;
-  state.legacyConversationDescText = desc;
-  state.legacyConversationRules = rules;
-  state.legacyConversationPc = scriptAvailable ? (Number(openingResult.stopPc) | 0) : -1;
-  state.legacyConversationInputOpcode = scriptAvailable ? (Number(openingResult.stopOpcode) | 0) : 0;
-  state.legacyConversationVmContext = vmContext;
-  const equipSlots = legacyEquipmentSlotsForTalkActor(actor);
+  talkState.legacyConversationPrevStatus = Number(talkState.legacyStatusDisplay) | 0;
+  talkState.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_9E;
+  talkState.legacyConversationActive = true;
+  talkState.legacyConversationInput = "";
+  talkState.legacyConversationTargetName = speaker;
+  talkState.legacyConversationActorEntityId = actorId;
+  talkState.legacyConversationPortraitTile = tileId;
+  talkState.legacyConversationTargetObjNum = talkObjNum;
+  talkState.legacyConversationTargetObjType = Number(actor.type) | 0;
+  talkState.legacyConversationNpcKey = "";
+  talkState.legacyConversationPendingPrompt = "";
+  talkState.legacyConversationScript = scriptAvailable ? script : null;
+  talkState.legacyConversationDescText = desc;
+  talkState.legacyConversationRules = rules;
+  talkState.legacyConversationPc = scriptAvailable ? (Number(openingResult.stopPc) | 0) : -1;
+  talkState.legacyConversationInputOpcode = scriptAvailable ? (Number(openingResult.stopOpcode) | 0) : 0;
+  talkState.legacyConversationVmContext = vmContext;
+  const equipSlots = legacyEquipmentSlotsForTalkActor(actor as LegacyTalkActor);
   /*
     Canonical C_27A1_02D9 path: paperdoll/inventory is shown in talk view only
     when `showInven` is true (derived from real EQUIP objects on the actor).
   */
-  state.legacyConversationShowInventory = equipSlots.length > 0;
-  state.legacyConversationEquipmentSlots = equipSlots;
+  talkState.legacyConversationShowInventory = equipSlots.length > 0;
+  talkState.legacyConversationEquipmentSlots = equipSlots;
   const openingBlock = [formatYouSeeLine(desc || speaker)];
   let pushedOpening = false;
   const normalizedOpening = (Array.isArray(openingLines) ? openingLines : [])
