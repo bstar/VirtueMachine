@@ -39,7 +39,31 @@ const CONV_OP_OR = 0x94;
 const CONV_OP_AND = 0x95;
 const CONV_OP_NPC = 0xeb;
 
-function appendConversationChar(ch, linesRef) {
+type ConversationVmStackValue = number | string;
+
+export type ConversationVmContextRuntime = {
+  objNum?: unknown;
+  talkFlags?: Record<string, unknown>;
+  varInt?: unknown[];
+  varStr?: unknown[];
+};
+
+export type ConversationDecodeOptionsRuntime = {
+  followGoto?: boolean;
+  stopOnGoto?: boolean;
+  stopOnInput?: boolean;
+  vmContext?: ConversationVmContextRuntime | null;
+};
+
+export type ConversationDecodeResultRuntime = {
+  lines: string[];
+  nextPc?: number;
+  sawJoin?: boolean;
+  stopOpcode?: number;
+  stopPc?: number;
+};
+
+function appendConversationChar(ch: string, linesRef: string[]): void {
   const arr = linesRef;
   if (!Array.isArray(arr) || arr.length <= 0) {
     arr.push("");
@@ -48,7 +72,7 @@ function appendConversationChar(ch, linesRef) {
   arr[idx] = String(arr[idx] || "") + ch;
 }
 
-function pushConversationLineBreak(linesRef) {
+function pushConversationLineBreak(linesRef: string[]): void {
   const arr = linesRef;
   if (!Array.isArray(arr) || arr.length <= 0) {
     arr.push("");
@@ -59,8 +83,8 @@ function pushConversationLineBreak(linesRef) {
   }
 }
 
-function readConversationCString(scriptBytes, startPc) {
-  const out = [];
+function readConversationCString(scriptBytes: Uint8Array, startPc: unknown): string {
+  const out: string[] = [];
   let i = Math.max(0, Number(startPc) | 0);
   while (i < scriptBytes.length) {
     const b = scriptBytes[i] & 0xff;
@@ -77,7 +101,7 @@ function readConversationCString(scriptBytes, startPc) {
   return out.join("").replace(/\s+/g, " ").trim();
 }
 
-function readConversationU32(scriptBytes, pc) {
+function readConversationU32(scriptBytes: Uint8Array, pc: number): { value: number; nextPc: number } {
   if ((pc + 4) > scriptBytes.length) {
     return { value: 0, nextPc: scriptBytes.length };
   }
@@ -90,35 +114,44 @@ function readConversationU32(scriptBytes, pc) {
   return { value, nextPc: pc + 4 };
 }
 
-function conversationVmReadVarInt(vmContext, idx) {
+function normalizeVmContext(vmContext: ConversationVmContextRuntime | null | undefined): ConversationVmContextRuntime {
+  return vmContext && typeof vmContext === "object" ? vmContext : {};
+}
+
+function conversationVmReadVarInt(vmContext: ConversationVmContextRuntime | null | undefined, idx: unknown): number {
   const i = Number(idx) | 0;
   const src = Array.isArray(vmContext?.varInt) ? vmContext.varInt : null;
   if (!src || i < 0 || i >= src.length) return 0;
   return Number(src[i]) | 0;
 }
 
-function conversationVmReadVarStr(vmContext, idx) {
+function conversationVmReadVarStr(vmContext: ConversationVmContextRuntime | null | undefined, idx: unknown): string {
   const i = Number(idx) | 0;
   const src = Array.isArray(vmContext?.varStr) ? vmContext.varStr : null;
   if (!src || i < 0 || i >= src.length) return "";
   return String(src[i] || "");
 }
 
-function conversationVmWriteVarInt(vmContext, idx, value) {
+function conversationVmWriteVarInt(vmContext: ConversationVmContextRuntime | null | undefined, idx: unknown, value: unknown): void {
   const i = Number(idx) | 0;
   const dst = Array.isArray(vmContext?.varInt) ? vmContext.varInt : null;
   if (!dst || i < 0 || i >= dst.length) return;
   dst[i] = Number(value) | 0;
 }
 
-function conversationVmWriteVarStr(vmContext, idx, value) {
+function conversationVmWriteVarStr(vmContext: ConversationVmContextRuntime | null | undefined, idx: unknown, value: unknown): void {
   const i = Number(idx) | 0;
   const dst = Array.isArray(vmContext?.varStr) ? vmContext.varStr : null;
   if (!dst || i < 0 || i >= dst.length) return;
   dst[i] = String(value || "");
 }
 
-function conversationVmWriteTalkFlag(vmContext, objNumRaw, bitRaw, enabled) {
+function conversationVmWriteTalkFlag(
+  vmContext: ConversationVmContextRuntime | null | undefined,
+  objNumRaw: unknown,
+  bitRaw: unknown,
+  enabled: boolean
+): void {
   const objNum = ((Number(objNumRaw) | 0) === CONV_OP_NPC)
     ? (Number(vmContext?.objNum) | 0)
     : (Number(objNumRaw) | 0);
@@ -126,26 +159,33 @@ function conversationVmWriteTalkFlag(vmContext, objNumRaw, bitRaw, enabled) {
   if (!vmContext || typeof vmContext !== "object") {
     return;
   }
-  if (!vmContext.talkFlags || typeof vmContext.talkFlags !== "object") {
-    vmContext.talkFlags = Object.create(null);
-  }
-  const cur = Number(vmContext.talkFlags[objNum]) | 0;
-  vmContext.talkFlags[objNum] = enabled ? (cur | (1 << bit)) : (cur & ~(1 << bit));
+  const talkFlags = vmContext.talkFlags && typeof vmContext.talkFlags === "object"
+    ? vmContext.talkFlags
+    : Object.create(null) as Record<string, unknown>;
+  vmContext.talkFlags = talkFlags;
+  const key = String(objNum);
+  const cur = Number(talkFlags[key]) | 0;
+  talkFlags[key] = enabled ? (cur | (1 << bit)) : (cur & ~(1 << bit));
 }
 
-function conversationVmEvalFactor(scriptBytes, startPc, vmContext, endPc) {
+function conversationVmEvalFactor(
+  scriptBytes: Uint8Array,
+  startPc: unknown,
+  vmContext: ConversationVmContextRuntime,
+  endPc: unknown
+): { value: number; nextPc: number } {
   let pc = Math.max(0, Number(startPc) | 0);
   const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
-  const stack = [];
-  const pop = () => ((stack.length > 0) ? stack.pop() : 0);
-  const asNum = (v) => {
+  const stack: ConversationVmStackValue[] = [];
+  const pop = (): ConversationVmStackValue => ((stack.length > 0) ? stack.pop() ?? 0 : 0);
+  const asNum = (v: ConversationVmStackValue): number => {
     if (typeof v === "string") {
       const n = Number(v);
       return Number.isFinite(n) ? (n | 0) : 0;
     }
     return Number(v) | 0;
   };
-  const asStr = (v) => String(v == null ? "" : v);
+  const asStr = (v: ConversationVmStackValue): string => String(v == null ? "" : v);
   while (pc < end) {
     const opcode = scriptBytes[pc] & 0xff;
     pc += 1;
@@ -187,7 +227,7 @@ function conversationVmEvalFactor(scriptBytes, startPc, vmContext, endPc) {
         const bit = asNum(pop()) & 0x1f;
         const objNumRaw = asNum(pop());
         const objNum = (objNumRaw === CONV_OP_NPC) ? (Number(vmContext?.objNum) | 0) : objNumRaw;
-        const flags = Number(vmContext?.talkFlags?.[objNum]) | 0;
+        const flags = Number(vmContext?.talkFlags?.[String(objNum)]) | 0;
         stack.push((flags >> bit) & 1);
       } break;
       case CONV_OP_EQU: {
@@ -266,7 +306,7 @@ function conversationVmEvalFactor(scriptBytes, startPc, vmContext, endPc) {
   return { value: Number(value) | 0, nextPc: pc };
 }
 
-function conversationVmSkipToElseOrEndIf(scriptBytes, startPc, endPc) {
+function conversationVmSkipToElseOrEndIf(scriptBytes: Uint8Array, startPc: unknown, endPc: unknown): number {
   let pc = Math.max(0, Number(startPc) | 0);
   const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
   while (pc < end) {
@@ -291,7 +331,7 @@ function conversationVmSkipToElseOrEndIf(scriptBytes, startPc, endPc) {
   return pc;
 }
 
-function conversationVmSkipToEndIf(scriptBytes, startPc, endPc) {
+function conversationVmSkipToEndIf(scriptBytes: Uint8Array, startPc: unknown, endPc: unknown): number {
   let pc = Math.max(0, Number(startPc) | 0);
   const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
   while (pc < end) {
@@ -316,15 +356,18 @@ function conversationVmSkipToEndIf(scriptBytes, startPc, endPc) {
   return pc;
 }
 
-export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
-  const options = (opts && typeof opts === "object") ? opts : {};
+export function decodeConversationResponseOpcodeAware(
+  scriptBytes: Uint8Array,
+  startPc: unknown,
+  endPc: unknown,
+  opts: ConversationDecodeOptionsRuntime | null = null
+): ConversationDecodeResultRuntime {
+  const options = opts && typeof opts === "object" ? opts : {};
   const stopOnGoto = options.stopOnGoto !== false;
   const followGoto = !!options.followGoto;
-  const vmContext = (options.vmContext && typeof options.vmContext === "object")
-    ? options.vmContext
-    : {};
+  const vmContext = normalizeVmContext(options.vmContext);
   const stopOnInput = options.stopOnInput !== false;
-  const lines = [""];
+  const lines: string[] = [""];
   let sawJoin = false;
   let stopOpcode = 0;
   let stopPc = -1;
@@ -332,7 +375,7 @@ export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endP
   const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
   const maxSteps = Math.max(1024, Math.min(65536, scriptBytes.length * 4));
   let steps = 0;
-  const seenTargets = new Set();
+  const seenTargets = new Set<string>();
   while (pc < end) {
     steps += 1;
     if (steps > maxSteps) {
@@ -508,23 +551,29 @@ export function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endP
       continue;
     }
   }
-  const out = lines.map((s) => String(s || "").replace(/\*/g, " ").replace(/\s+/g, " ").trim()).filter((v, idx, arr) => {
+  const out = lines.map((s: string) => String(s || "").replace(/\*/g, " ").replace(/\s+/g, " ").trim()).filter((v: string, idx: number, arr: string[]) => {
     if (v) return true;
     return idx > 0 && idx < (arr.length - 1);
   });
   return { lines: out, sawJoin, stopOpcode, stopPc, nextPc: pc };
 }
 
-export function decodeConversationResponseBytes(responseBytes, scriptBytes = null, startPc = -1, endPc = -1, vmContext = null) {
+export function decodeConversationResponseBytes(
+  responseBytes: Uint8Array,
+  scriptBytes: Uint8Array | null = null,
+  startPc = -1,
+  endPc = -1,
+  vmContext: ConversationVmContextRuntime | null = null
+): ConversationDecodeResultRuntime {
   if (scriptBytes instanceof Uint8Array && startPc >= 0 && endPc > startPc) {
     return decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, { vmContext });
   }
-  const lines = [];
+  const lines: string[] = [];
   let cur = "";
   let quoted = false;
   let sawQuotedText = false;
   let sawJoin = false;
-  const flush = () => {
+  const flush = (): void => {
     const text = cur.replace(/\s+/g, " ").trim();
     if (text) lines.push(text);
     cur = "";
@@ -569,7 +618,11 @@ export function decodeConversationResponseBytes(responseBytes, scriptBytes = nul
   return { lines, sawJoin };
 }
 
-export function decodeConversationOpeningLines(scriptBytes, mainPc, vmContext = null) {
+export function decodeConversationOpeningLines(
+  scriptBytes: unknown,
+  mainPc: unknown,
+  vmContext: ConversationVmContextRuntime | null = null
+): string[] {
   if (!(scriptBytes instanceof Uint8Array)) {
     return [];
   }
@@ -583,7 +636,11 @@ export function decodeConversationOpeningLines(scriptBytes, mainPc, vmContext = 
   return Array.isArray(decoded?.lines) ? decoded.lines : [];
 }
 
-export function decodeConversationOpeningResult(scriptBytes, mainPc, vmContext = null) {
+export function decodeConversationOpeningResult(
+  scriptBytes: unknown,
+  mainPc: unknown,
+  vmContext: ConversationVmContextRuntime | null = null
+): Required<Pick<ConversationDecodeResultRuntime, "lines" | "nextPc" | "stopOpcode" | "stopPc">> {
   if (!(scriptBytes instanceof Uint8Array)) {
     return { lines: [], stopOpcode: 0, stopPc: -1, nextPc: -1 };
   }

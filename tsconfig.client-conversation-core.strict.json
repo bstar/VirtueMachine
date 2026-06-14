@@ -24,6 +24,7 @@
     "modern/client-web/conversation/rules_runtime.ts",
     "modern/client-web/conversation/session_runtime.ts",
     "modern/client-web/conversation/text_runtime.ts",
+    "modern/client-web/conversation/vm_runtime.ts",
     "modern/common/**/*.ts"
   ]
 }
