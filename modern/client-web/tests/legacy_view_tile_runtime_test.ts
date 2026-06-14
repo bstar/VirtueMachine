@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   applyLegacyCornerVariantRuntime,
+  buildBaseTileBuffersRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
@@ -84,5 +85,63 @@ assert.equal(shouldBlackoutTileRuntime(0x010, 10, 20, deps({
   terrainOf: () => 0x01,
   viewCtx: viewCtx()
 })), true);
+
+assert.deepEqual(Array.from(buildBaseTileBuffersRuntime({
+  isBackgroundObjectTile: () => false,
+  mapTileAt: null,
+  processBackgroundObjects: false,
+  resolveAnimatedObjectTile: () => -1,
+  resolveDoorTileId: () => 0,
+  startX: 2,
+  startY: 3,
+  terrainOf: () => 0,
+  tileFlagsForTile: () => 0,
+  viewH: 2,
+  viewW: 2,
+  wz: 0
+}).rawTiles), [
+  ((2 * 7 + 3 * 13) & 0xff),
+  ((3 * 7 + 3 * 13) & 0xff),
+  ((2 * 7 + 4 * 13) & 0xff),
+  ((3 * 7 + 4 * 13) & 0xff)
+]);
+
+assert.deepEqual(Array.from(buildBaseTileBuffersRuntime({
+  isBackgroundObjectTile: () => false,
+  mapTileAt: () => 0x012,
+  processBackgroundObjects: false,
+  resolveAnimatedObjectTile: () => -1,
+  resolveDoorTileId: () => 0,
+  startX: 10,
+  startY: 20,
+  terrainOf: () => 0x01,
+  tileFlagsForTile: () => 0,
+  viewCtx: viewCtx(),
+  viewH: 1,
+  viewW: 1,
+  wz: 0
+}).displayTiles), [0x0ff]);
+
+assert.deepEqual(Array.from(buildBaseTileBuffersRuntime({
+  isBackgroundObjectTile: (tileId) => tileId >= 0x200,
+  mapTileAt: () => 0x001,
+  objectsInWindowLegacyOrder: () => [
+    { baseTile: 0x210, frame: 0, order: 0, renderable: true, type: 0x100, x: 11, y: 21, z: 0 }
+  ],
+  processBackgroundObjects: true,
+  resolveAnimatedObjectTile: () => 0x210,
+  resolveDoorTileId: () => 0x220,
+  startX: 10,
+  startY: 20,
+  terrainOf: () => 0,
+  tileFlagsForTile: () => 0xc0,
+  viewH: 3,
+  viewW: 3,
+  wz: 0
+}).displayTiles), [
+  0x21d, 0x21e, 0x001,
+  0x21f, 0x210, 0x001,
+  0x001, 0x001, 0x001
+]);
 
 console.log("legacy_view_tile_runtime_test: ok");

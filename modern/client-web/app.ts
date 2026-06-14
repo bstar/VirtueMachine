@@ -270,6 +270,7 @@ import {
 } from "./ui/cursor_runtime.ts";
 import {
   applyLegacyCornerVariantRuntime,
+  buildBaseTileBuffersRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime
 } from "./ui/legacy_view_tile_runtime.ts";
@@ -6764,102 +6765,25 @@ function stableCornerVariant(rawTile, wx, wy, wz, viewCtx) {
 }
 
 function buildBaseTileBuffersCurrent(startX, startY, wz, viewCtx) {
-  const rawTiles = new Uint16Array(VIEW_W * VIEW_H);
-  const displayTiles = new Uint16Array(VIEW_W * VIEW_H);
-  const cellIndex = (gx, gy) => (gy * VIEW_W) + gx;
-  for (let gy = 0; gy < VIEW_H; gy += 1) {
-    for (let gx = 0; gx < VIEW_W; gx += 1) {
-      const wx = startX + gx;
-      const wy = startY + gy;
-      let rawTile = 0;
-      let displayTile = 0;
-      if (state.mapCtx) {
-        rawTile = state.mapCtx.tileAt(wx, wy, wz) & 0xffff;
-        displayTile = rawTile;
-        if (shouldBlackoutTile(rawTile, wx, wy, viewCtx)) {
-          rawTile = 0x0ff;
-          displayTile = 0x0ff;
-        } else {
-          displayTile = stableCornerVariant(displayTile, wx, wy, wz, viewCtx);
-        }
-      } else {
-        rawTile = (wx * 7 + wy * 13) & 0xff;
-        displayTile = rawTile;
-      }
-      const idx = cellIndex(gx, gy);
-      rawTiles[idx] = rawTile & 0xffff;
-      displayTiles[idx] = displayTile & 0xffff;
-    }
-  }
-
-  if (state.objectLayer && state.tileFlags2) {
-    const visibleAtWorld = viewCtx && typeof viewCtx.visibleAtWorld === "function"
-      ? viewCtx.visibleAtWorld.bind(viewCtx)
-      : null;
-    const applyBg = (wx, wy, tileId, sourceX, sourceY) => {
-      const gx = (wx | 0) - startX;
-      const gy = (wy | 0) - startY;
-      if (gx < 0 || gy < 0 || gx >= VIEW_W || gy >= VIEW_H) {
-        return;
-      }
-      if (visibleAtWorld && !visibleAtWorld(sourceX | 0, sourceY | 0)) {
-        return;
-      }
-      if (!isTileBackground(tileId)) {
-        return;
-      }
-      const idx = cellIndex(gx, gy);
-      rawTiles[idx] = tileId & 0xffff;
-      displayTiles[idx] = tileId & 0xffff;
-    };
-
-    const processObject = (o) => {
-      if (!o || !o.renderable) {
-        return;
-      }
-      const wx = o.x | 0;
-      const wy = o.y | 0;
-      if (visibleAtWorld && !visibleAtWorld(wx, wy)) {
-        return;
-      }
-      const animObjTile = resolveAnimatedObjectTile(o);
-      if (animObjTile < 0) {
-        return;
-      }
-      const footprintTile = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
-      applyBg(wx, wy, animObjTile, wx, wy);
-      const tf = state.tileFlags ? (state.tileFlags[footprintTile & 0x07ff] ?? 0) : 0;
-      if (tf & 0x80) {
-        applyBg(wx - 1, wy, footprintTile - 1, wx, wy);
-        if (tf & 0x40) {
-          applyBg(wx, wy - 1, footprintTile - 2, wx, wy);
-          applyBg(wx - 1, wy - 1, footprintTile - 3, wx, wy);
-        }
-      } else if (tf & 0x40) {
-        applyBg(wx, wy - 1, footprintTile - 1, wx, wy);
-      }
-    };
-
-    if (typeof state.objectLayer.objectsInWindowLegacyOrder === "function") {
-      const stream = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W + 1, VIEW_H + 1, wz);
-      for (const o of stream) {
-        processObject(o);
-      }
-    } else {
-      for (let gy = 0; gy < VIEW_H; gy += 1) {
-        for (let gx = 0; gx < VIEW_W; gx += 1) {
-          const wx = startX + gx;
-          const wy = startY + gy;
-          const overlays = state.objectLayer.objectsAt(wx, wy, wz);
-          for (const o of overlays) {
-            processObject(o);
-          }
-        }
-      }
-    }
-  }
-
-  return { rawTiles, displayTiles };
+  return buildBaseTileBuffersRuntime({
+    isBackgroundObjectTile: isTileBackground,
+    mapTileAt: state.mapCtx ? (wx, wy, z) => state.mapCtx.tileAt(wx, wy, z) : null,
+    objectsAt: state.objectLayer ? (wx, wy, z) => state.objectLayer.objectsAt(wx, wy, z) : null,
+    objectsInWindowLegacyOrder: state.objectLayer && typeof state.objectLayer.objectsInWindowLegacyOrder === "function"
+      ? (wx, wy, w, h, z) => state.objectLayer.objectsInWindowLegacyOrder(wx, wy, w, h, z)
+      : null,
+    processBackgroundObjects: Boolean(state.objectLayer && state.tileFlags2),
+    resolveAnimatedObjectTile,
+    resolveDoorTileId: (o) => resolveDoorTileIdRuntime(state.sim, o),
+    startX,
+    startY,
+    terrainOf,
+    tileFlagsForTile: (tileId) => state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0,
+    viewCtx,
+    viewH: VIEW_H,
+    viewW: VIEW_W,
+    wz
+  });
 }
 
 type BaseTileBuffers = ReturnType<typeof buildBaseTileBuffersCurrent> & {
