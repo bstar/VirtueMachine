@@ -54,11 +54,15 @@ import {
   decodeConversationOpeningLines as decodeConversationOpeningLinesImported,
   decodeConversationOpeningResult as decodeConversationOpeningResultImported,
   decodeConversationResponseBytes as decodeConversationResponseBytesImported,
-  decodeConversationResponseOpcodeAware as decodeConversationResponseOpcodeAwareImported
+  decodeConversationResponseOpcodeAware as decodeConversationResponseOpcodeAwareImported,
+  type ConversationDecodeOptionsRuntime,
+  type ConversationDecodeResultRuntime,
+  type ConversationVmContextRuntime
 } from "./conversation/vm_runtime.ts";
 import {
   findConversationFirstKeyPc as findConversationFirstKeyPcImported,
-  parseConversationRules as parseConversationRulesImported
+  parseConversationRules as parseConversationRulesImported,
+  type ConversationRule
 } from "./conversation/rules_runtime.ts";
 import {
   canonicalizeOpeningLines as canonicalizeOpeningLinesImported,
@@ -449,6 +453,37 @@ type LegacyTalkActor = {
   x?: number;
   y?: number;
   z?: number;
+};
+type LegacyConversationActor = LegacyTalkActor & {
+  qual?: number;
+};
+type LegacyConversationHeader = ReturnType<typeof parseConversationHeaderAndDescRuntime>;
+type LegacyConversationResolution = {
+  objNum: number;
+  script: Uint8Array | null;
+  header: LegacyConversationHeader;
+  valid: boolean;
+};
+type LegacyConversationVmOverrides = {
+  targetName?: unknown;
+  greeting?: unknown;
+  objNum?: unknown;
+};
+type LegacyConversationStateView = {
+  converseArchiveA: Uint8Array | null;
+  converseArchiveB: Uint8Array | null;
+  converseArchiveDiag: string | null;
+  legacyConversationDescText: string | null;
+  legacyConversationInputOpcode: number;
+  legacyConversationPc: number;
+  legacyConversationRules: ConversationRule[];
+  legacyConversationScript: Uint8Array | null;
+  legacyConversationTargetName: string | null;
+  legacyConversationVmContext: ConversationVmContextRuntime | null;
+};
+type AppObjectLayerStateView = {
+  entityLayer: U6EntityLayerRuntime | null;
+  objectLayer: U6ObjectLayerRuntime | null;
 };
 
 function byId<T = HTMLElement>(id: string): T {
@@ -1171,9 +1206,10 @@ function legacyEquipmentSlotsForTalkActor(actor: LegacyTalkActor | null | undefi
     Canonical source first: objlist actor table stores actor-owned/equipped objects.
     Objblk assoc rows are a fallback for baseline/static snapshots.
   */
-  let equipRows = selectEquipRows(state.entityLayer?.assocEntries, false);
+  const layerState = state as AppObjectLayerStateView;
+  let equipRows = selectEquipRows(layerState.entityLayer?.assocEntries, false);
   if (!equipRows.length) {
-    equipRows = selectEquipRows(state.objectLayer?.assocEntries, true);
+    equipRows = selectEquipRows(layerState.objectLayer?.assocEntries, true);
   }
   if (!equipRows.length) {
     return [];
@@ -1235,70 +1271,79 @@ const CONV_OP_OR = 0x94;
 const CONV_OP_AND = 0x95;
 const CONV_OP_NPC = 0xeb;
 
-function conversationMacroSymbolToIndex(sym) {
+function conversationMacroSymbolToIndex(sym: unknown): number {
   return conversationMacroSymbolToIndexImported(sym);
 }
 
-function conversationVmContextForSession(overrides = null) {
+function conversationVmContextForSession(overrides: LegacyConversationVmOverrides | null = null): ConversationVmContextRuntime {
+  const convState = state as LegacyConversationStateView;
   const ov = (overrides && typeof overrides === "object") ? overrides : {};
   return buildConversationVmContextImported({
     hour: Number(state.sim.world?.time_h) | 0,
     player: String(state.net?.characterName || "Avatar").trim() || "Avatar",
-    target: String(ov.targetName || state.legacyConversationTargetName || "").trim(),
+    target: String(ov.targetName || convState.legacyConversationTargetName || "").trim(),
     greeting: String(ov.greeting || "milady").trim() || "milady",
     partySize: Number(state.sim?.partySize) | 0,
     objNum: Number(ov.objNum) | 0
   });
 }
 
-function decodeU6LzwWithKnownLength(srcBytes, outLen) {
+function decodeU6LzwWithKnownLength(srcBytes: Uint8Array | null | undefined, outLen: number): Uint8Array | null {
   return decodeU6LzwWithKnownLengthRuntime(srcBytes, outLen);
 }
 
-function loadLegacyConversationScript(objNum, objType) {
+function loadLegacyConversationScript(objNum: number, objType: number): Uint8Array | null {
+  const convState = state as LegacyConversationStateView;
   return loadLegacyConversationScriptForNpcRuntime(
-    { a: state.converseArchiveA, b: state.converseArchiveB },
+    { a: convState.converseArchiveA, b: convState.converseArchiveB },
     objNum,
     objType
   );
 }
 
-function parseConversationHeaderAndDesc(scriptBytes) {
+function parseConversationHeaderAndDesc(scriptBytes: Uint8Array | null | undefined): LegacyConversationHeader {
   return parseConversationHeaderAndDescRuntime(scriptBytes);
 }
 
-function isLikelyValidConversationScript(scriptBytes, header) {
+function isLikelyValidConversationScript(
+  scriptBytes: Uint8Array | null | undefined,
+  header: LegacyConversationHeader | null | undefined
+): boolean {
   return isLikelyValidConversationScriptRuntime(scriptBytes, header);
 }
 
-function canonicalConversationHintIdFromSpeaker(speaker) {
+function canonicalConversationHintIdFromSpeaker(speaker: unknown): number {
   return canonicalConversationHintIdFromSpeakerRuntime(speaker);
 }
 
-function normalizedNameForCompare(name) {
+function normalizedNameForCompare(name: unknown): string {
   return normalizedConversationNameRuntime(name);
 }
 
-function headerMatchesExpectedCanonicalName(header, objNum) {
+function headerMatchesExpectedCanonicalName(header: LegacyConversationHeader | null | undefined, objNum: number): boolean {
   return conversationHeaderMatchesExpectedCanonicalNameRuntime(header, objNum);
 }
 
-function headerMatchesExpectedCanonicalDesc(header, objNum) {
+function headerMatchesExpectedCanonicalDesc(header: LegacyConversationHeader | null | undefined, objNum: number): boolean {
   return conversationHeaderMatchesExpectedCanonicalDescRuntime(header, objNum);
 }
 
-function headerIsPlausibleCanonicalFallback(script, header, objNum) {
+function headerIsPlausibleCanonicalFallback(
+  script: Uint8Array | null | undefined,
+  header: LegacyConversationHeader | null | undefined,
+  objNum: number
+): boolean {
   return conversationHeaderIsPlausibleCanonicalFallbackRuntime(script, header, objNum);
 }
 
-function resolveConversationScriptForActor(actor, tileId) {
+function resolveConversationScriptForActor(actor: LegacyConversationActor | null | undefined, tileId: number): LegacyConversationResolution {
   const actorId = Number(actor?.id) | 0;
   const actorType = Number(actor?.type) & 0x03ff;
   const actorQual = Number(actor?.qual) & 0xff;
   const speakerHint = canonicalTalkSpeakerForTile(tileId);
   const hintId = canonicalConversationHintIdFromSpeaker(speakerHint);
-  const candidates = [];
-  const pushCandidate = (n) => {
+  const candidates: number[] = [];
+  const pushCandidate = (n: unknown): void => {
     const v = Number(n) | 0;
     if (v < 0) return;
     if (!candidates.includes(v)) candidates.push(v);
@@ -1355,14 +1400,15 @@ function resolveConversationScriptForActor(actor, tileId) {
   };
 }
 
-function debugConversationResolutionSummary(actor, tileId) {
+function debugConversationResolutionSummary(actor: LegacyConversationActor | null | undefined, tileId: number): string {
+  const convState = state as LegacyConversationStateView;
   const actorId = Number(actor?.id) | 0;
   const actorType = Number(actor?.type) & 0x03ff;
   const actorQual = Number(actor?.qual) & 0xff;
   const speakerHint = canonicalTalkSpeakerForTile(tileId);
   const hintId = canonicalConversationHintIdFromSpeaker(speakerHint);
-  const candidates = [];
-  const pushCandidate = (n) => {
+  const candidates: number[] = [];
+  const pushCandidate = (n: unknown): void => {
     const v = Number(n) | 0;
     if (v < 0) return;
     if (!candidates.includes(v)) candidates.push(v);
@@ -1372,9 +1418,9 @@ function debugConversationResolutionSummary(actor, tileId) {
     pushCandidate(actorQual);
   }
   pushCandidate(actorId);
-  const parts = [];
-  const convA = (state.converseArchiveA instanceof Uint8Array) ? 1 : 0;
-  const convB = (state.converseArchiveB instanceof Uint8Array) ? 1 : 0;
+  const parts: string[] = [];
+  const convA = (convState.converseArchiveA instanceof Uint8Array) ? 1 : 0;
+  const convB = (convState.converseArchiveB instanceof Uint8Array) ? 1 : 0;
   parts.push(`convA=${convA} convB=${convB} hint=${hintId} actor=${actorId} type=0x${actorType.toString(16)}`);
   for (const objNum of candidates) {
     const script = loadLegacyConversationScript(objNum, actorType);
@@ -1383,30 +1429,30 @@ function debugConversationResolutionSummary(actor, tileId) {
     const nameOk = headerMatchesExpectedCanonicalName(header, objNum) ? 1 : 0;
     const descOk = headerMatchesExpectedCanonicalDesc(header, objNum) ? 1 : 0;
     const fallbackOk = headerIsPlausibleCanonicalFallback(script, header, objNum) ? 1 : 0;
-    const rules = parseConversationRules(script, Number(header?.mainPc) | 0).length;
+    const rules = script ? parseConversationRules(script, Number(header?.mainPc) | 0).length : 0;
     const headerName = sanitizeLegacyHudLabelText(String(header?.name || "").slice(0, 24));
     parts.push(`c${objNum}[v=${validScript} n=${nameOk} d=${descOk} f=${fallbackOk} r=${rules} h=${headerName || "-"}]`);
   }
-  const loadDiag = String(state.converseArchiveDiag || "").trim();
+  const loadDiag = String(convState.converseArchiveDiag || "").trim();
   if (loadDiag) {
     parts.push(`load{${loadDiag}}`);
   }
   return parts.join(" | ");
 }
 
-function splitConversationInputWords(input) {
+function splitConversationInputWords(input: unknown): string[] {
   return splitConversationInputWordsImported(input);
 }
 
-function conversationWordMatchesPattern(pattern, word) {
+function conversationWordMatchesPattern(pattern: unknown, word: unknown): boolean {
   return conversationWordMatchesPatternImported(pattern, word);
 }
 
-function conversationKeyMatchesInput(pattern, input) {
+function conversationKeyMatchesInput(pattern: unknown, input: unknown): boolean {
   return conversationKeyMatchesInputImported(pattern, input);
 }
 
-function parseConversationRules(scriptBytes, mainPc) {
+function parseConversationRules(scriptBytes: Uint8Array, mainPc: number): ConversationRule[] {
   return parseConversationRulesImported(scriptBytes, mainPc, {
     KEY: CONV_OP_KEY,
     RES: CONV_OP_RES,
@@ -1414,7 +1460,7 @@ function parseConversationRules(scriptBytes, mainPc) {
   });
 }
 
-function findConversationFirstKeyPc(scriptBytes, mainPc) {
+function findConversationFirstKeyPc(scriptBytes: Uint8Array, mainPc: number): number {
   return findConversationFirstKeyPcImported(scriptBytes, mainPc, {
     KEY: CONV_OP_KEY,
     RES: CONV_OP_RES,
@@ -1422,33 +1468,58 @@ function findConversationFirstKeyPc(scriptBytes, mainPc) {
   });
 }
 
-function decodeConversationResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
+function decodeConversationResponseOpcodeAware(
+  scriptBytes: Uint8Array,
+  startPc: number,
+  endPc: number,
+  opts: ConversationDecodeOptionsRuntime | null = null
+): ConversationDecodeResultRuntime {
   return decodeConversationResponseOpcodeAwareImported(scriptBytes, startPc, endPc, opts);
 }
 
-function decodeConversationResponseBytes(responseBytes, scriptBytes = null, startPc = -1, endPc = -1, vmContext = null) {
+function decodeConversationResponseBytes(
+  responseBytes: Uint8Array,
+  scriptBytes: Uint8Array | null = null,
+  startPc = -1,
+  endPc = -1,
+  vmContext: ConversationVmContextRuntime | null = null
+): ConversationDecodeResultRuntime {
   return decodeConversationResponseBytesImported(responseBytes, scriptBytes, startPc, endPc, vmContext);
 }
 
-function decodeConversationOpeningLines(scriptBytes, mainPc, vmContext = null) {
+function decodeConversationOpeningLines(
+  scriptBytes: Uint8Array,
+  mainPc: number,
+  vmContext: ConversationVmContextRuntime | null = null
+): string[] {
   return decodeConversationOpeningLinesImported(scriptBytes, mainPc, vmContext);
 }
 
-function decodeConversationOpeningResult(scriptBytes, mainPc, vmContext = null) {
+function decodeConversationOpeningResult(
+  scriptBytes: Uint8Array,
+  mainPc: number,
+  vmContext: ConversationVmContextRuntime | null = null
+): ConversationDecodeResultRuntime {
   return decodeConversationOpeningResultImported(scriptBytes, mainPc, vmContext);
 }
 
-function renderConversationMacros(text, vmContext = null) {
+function renderConversationMacros(text: unknown, vmContext: ConversationVmContextRuntime | null = null): string {
+  const convState = state as LegacyConversationStateView;
   const ctx = (vmContext && typeof vmContext === "object")
     ? vmContext
-    : (state.legacyConversationVmContext || conversationVmContextForSession());
+    : (convState.legacyConversationVmContext || conversationVmContextForSession());
   return renderConversationMacrosWithContextImported(text, ctx);
 }
 
-function canonicalTalkFallbackGreeting(objNum, speaker, vmContext = null) {
+function canonicalTalkFallbackGreeting(
+  objNum: number,
+  speaker: unknown,
+  vmContext: ConversationVmContextRuntime | null = null
+): string {
+  const convState = state as LegacyConversationStateView;
   const ctx = (vmContext && typeof vmContext === "object")
     ? vmContext
-    : (state.legacyConversationVmContext || conversationVmContextForSession());
+    : (convState.legacyConversationVmContext || conversationVmContextForSession());
   return canonicalTalkFallbackGreetingImported(
     objNum,
     ctx,
@@ -1456,7 +1527,7 @@ function canonicalTalkFallbackGreeting(objNum, speaker, vmContext = null) {
   );
 }
 
-function canonicalizeOpeningLines(objNum, lines) {
+function canonicalizeOpeningLines(objNum: number, lines: unknown): string[] {
   return canonicalizeOpeningLinesImported(
     objNum,
     lines,
@@ -1464,23 +1535,24 @@ function canonicalizeOpeningLines(objNum, lines) {
   );
 }
 
-function formatYouSeeLine(subject) {
+function formatYouSeeLine(subject: unknown): string {
   return formatYouSeeLineImported(subject);
 }
 
-function legacyConversationReply(targetName, typed) {
-  if (state.legacyConversationScript instanceof Uint8Array) {
-    const startPc = Number(state.legacyConversationPc) | 0;
+function legacyConversationReply(targetName: unknown, typed: unknown) {
+  const convState = state as LegacyConversationStateView;
+  if (convState.legacyConversationScript instanceof Uint8Array) {
+    const startPc = Number(convState.legacyConversationPc) | 0;
     if (startPc >= 0) {
       const cursorReply = conversationRunFromKeyCursor(
-        state.legacyConversationScript,
+        convState.legacyConversationScript,
         startPc,
         typed,
-        state.legacyConversationVmContext
+        convState.legacyConversationVmContext
       );
       if (cursorReply && cursorReply.kind === "ok") {
-        state.legacyConversationPc = Number(cursorReply.nextPc) | 0;
-        state.legacyConversationInputOpcode = Number(cursorReply.stopOpcode) | 0;
+        convState.legacyConversationPc = Number(cursorReply.nextPc) | 0;
+        convState.legacyConversationInputOpcode = Number(cursorReply.stopOpcode) | 0;
         return {
           kind: "ok",
           lines: Array.isArray(cursorReply.lines) ? cursorReply.lines : []
@@ -1493,10 +1565,10 @@ function legacyConversationReply(targetName, typed) {
   }
   return legacyConversationReplyImported({
     typed,
-    rules: state.legacyConversationRules,
-    script: state.legacyConversationScript,
-    vmContext: state.legacyConversationVmContext,
-    descText: state.legacyConversationDescText,
+    rules: convState.legacyConversationRules,
+    script: convState.legacyConversationScript,
+    vmContext: convState.legacyConversationVmContext,
+    descText: convState.legacyConversationDescText,
     keyMatchesInput: conversationKeyMatchesInput,
     decodeResponseBytes: decodeConversationResponseBytes,
     renderMacros: renderConversationMacros,
@@ -1504,7 +1576,12 @@ function legacyConversationReply(targetName, typed) {
   });
 }
 
-function conversationRunFromKeyCursor(scriptBytes, startPc, typed, vmContext) {
+function conversationRunFromKeyCursor(
+  scriptBytes: Uint8Array,
+  startPc: number,
+  typed: unknown,
+  vmContext: ConversationVmContextRuntime | null
+) {
   return conversationRunFromKeyCursorImported({
     scriptBytes,
     startPc,
