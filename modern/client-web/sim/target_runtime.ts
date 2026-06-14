@@ -1,3 +1,5 @@
+import { isWithinChebyshevRangeRuntime } from "./range_runtime.ts";
+
 export interface TargetWorldObjectRuntime {
   key?: string;
   type: number;
@@ -25,6 +27,17 @@ export interface TargetEntityRuntime {
   order?: number;
 }
 
+export interface TargetWorldRuntime {
+  map_x: number;
+  map_y: number;
+  map_z: number;
+}
+
+export type TargetLookupDepsRuntime = {
+  isObjectRemoved: (sim: unknown, obj: TargetWorldObjectRuntime) => boolean;
+  isLikelyPickupObjectType: (type: number) => boolean;
+};
+
 export function topWorldObjectAtCellRuntime(
   objectLayer: TargetObjectLayerRuntime | null | undefined,
   sim: unknown,
@@ -32,10 +45,7 @@ export function topWorldObjectAtCellRuntime(
   ty: number,
   tz: number,
   opts: { pickupOnly?: boolean } | undefined,
-  deps: {
-    isObjectRemoved: (sim: unknown, obj: TargetWorldObjectRuntime) => boolean;
-    isLikelyPickupObjectType: (type: number) => boolean;
-  }
+  deps: TargetLookupDepsRuntime
 ): TargetWorldObjectRuntime | null {
   if (!objectLayer) {
     return null;
@@ -65,6 +75,166 @@ export function topWorldObjectAtCellRuntime(
     return b.index - a.index;
   });
   return candidates[0].obj || null;
+}
+
+function targetZRuntime(world: TargetWorldRuntime): number {
+  return Number(world.map_z) | 0;
+}
+
+function targetInRangeRuntime(world: TargetWorldRuntime, tx: number, ty: number, range: number): boolean {
+  return isWithinChebyshevRangeRuntime(
+    Number(world.map_x) | 0,
+    Number(world.map_y) | 0,
+    tx | 0,
+    ty | 0,
+    range | 0
+  );
+}
+
+export type LookTargetResolutionRuntime = {
+  ok: false;
+  reason: "out_of_range";
+  x: number;
+  y: number;
+  z: number;
+} | {
+  ok: true;
+  source: "object" | "actor" | "map";
+  tileId: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export function resolveLookTargetAtCellRuntime(args: {
+  world: TargetWorldRuntime;
+  objectLayer: TargetObjectLayerRuntime | null | undefined;
+  entityEntries: TargetEntityRuntime[] | null | undefined;
+  mapTileAt: (x: number, y: number, z: number) => number;
+  sim: unknown;
+  tx: number;
+  ty: number;
+  avatarEntityId: number;
+  deps: TargetLookupDepsRuntime;
+  maxRange?: number;
+}): LookTargetResolutionRuntime {
+  const tx = Number(args.tx) | 0;
+  const ty = Number(args.ty) | 0;
+  const tz = targetZRuntime(args.world);
+  if (!targetInRangeRuntime(args.world, tx, ty, Number(args.maxRange ?? 7) | 0)) {
+    return { ok: false, reason: "out_of_range", x: tx, y: ty, z: tz };
+  }
+  const obj = topWorldObjectAtCellRuntime(args.objectLayer, args.sim, tx, ty, tz, {}, args.deps);
+  if (obj) {
+    return {
+      ok: true,
+      source: "object",
+      tileId: ((Number(obj.baseTile) | 0) + (Number(obj.frame) | 0)) & 0xffff,
+      x: tx,
+      y: ty,
+      z: tz
+    };
+  }
+  const actor = nearestTalkTargetAtCellRuntime(args.entityEntries, tx, ty, tz, args.avatarEntityId);
+  if (actor) {
+    return {
+      ok: true,
+      source: "actor",
+      tileId: ((Number(actor.baseTile) | 0) + (Number(actor.frame) | 0)) & 0xffff,
+      x: tx,
+      y: ty,
+      z: tz
+    };
+  }
+  return {
+    ok: true,
+    source: "map",
+    tileId: args.mapTileAt(tx, ty, tz) & 0xffff,
+    x: tx,
+    y: ty,
+    z: tz
+  };
+}
+
+export type TalkTargetResolutionRuntime = {
+  actor: null;
+  ok: false;
+  reason: "out_of_range" | "no_actor";
+  x: number;
+  y: number;
+  z: number;
+} | {
+  actor: TargetEntityRuntime;
+  ok: true;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export function resolveTalkTargetAtCellRuntime(args: {
+  world: TargetWorldRuntime;
+  entityEntries: TargetEntityRuntime[] | null | undefined;
+  tx: number;
+  ty: number;
+  avatarEntityId: number;
+  maxRange?: number;
+}): TalkTargetResolutionRuntime {
+  const tx = Number(args.tx) | 0;
+  const ty = Number(args.ty) | 0;
+  const tz = targetZRuntime(args.world);
+  if (!targetInRangeRuntime(args.world, tx, ty, Number(args.maxRange ?? 1) | 0)) {
+    return { actor: null, ok: false, reason: "out_of_range", x: tx, y: ty, z: tz };
+  }
+  const actor = nearestTalkTargetAtCellRuntime(args.entityEntries, tx, ty, tz, args.avatarEntityId);
+  if (!actor) {
+    return { actor: null, ok: false, reason: "no_actor", x: tx, y: ty, z: tz };
+  }
+  return { actor, ok: true, x: tx, y: ty, z: tz };
+}
+
+export type PickupTargetResolutionRuntime = {
+  object: null;
+  ok: false;
+  reason: "out_of_range" | "no_object";
+  x: number;
+  y: number;
+  z: number;
+} | {
+  object: TargetWorldObjectRuntime;
+  ok: true;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export function resolvePickupTargetAtCellRuntime(args: {
+  world: TargetWorldRuntime;
+  objectLayer: TargetObjectLayerRuntime | null | undefined;
+  sim: unknown;
+  tx: number;
+  ty: number;
+  deps: TargetLookupDepsRuntime;
+  maxRange?: number;
+}): PickupTargetResolutionRuntime {
+  const tx = Number(args.tx) | 0;
+  const ty = Number(args.ty) | 0;
+  const tz = targetZRuntime(args.world);
+  if (!targetInRangeRuntime(args.world, tx, ty, Number(args.maxRange ?? 1) | 0)) {
+    return { object: null, ok: false, reason: "out_of_range", x: tx, y: ty, z: tz };
+  }
+  const object = topWorldObjectAtCellRuntime(
+    args.objectLayer,
+    args.sim,
+    tx,
+    ty,
+    tz,
+    { pickupOnly: true },
+    args.deps
+  );
+  if (!object) {
+    return { object: null, ok: false, reason: "no_object", x: tx, y: ty, z: tz };
+  }
+  return { object, ok: true, x: tx, y: ty, z: tz };
 }
 
 export function nearestTalkTargetAtCellRuntime(

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import {
   buildTargetResolverRegressionProbesRuntime,
   nearestTalkTargetAtCellRuntime,
+  resolveLookTargetAtCellRuntime,
+  resolvePickupTargetAtCellRuntime,
+  resolveTalkTargetAtCellRuntime,
   topWorldObjectAtCellRuntime,
   type TargetObjectLayerRuntime,
   type TargetWorldObjectRuntime
@@ -53,8 +56,90 @@ function testRegressionProbes() {
   );
 }
 
+function testLookTargetResolution() {
+  const objectLayer: TargetObjectLayerRuntime = {
+    objectsAt: () => [{ key: "item", renderable: true, baseTile: 0x300, frame: 2, type: 0x90 }]
+  };
+  const deps = {
+    isObjectRemoved: (_sim: unknown, _obj: TargetWorldObjectRuntime) => false,
+    isLikelyPickupObjectType: (_type: number) => true
+  };
+  assert.deepEqual(resolveLookTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 0 },
+    objectLayer,
+    entityEntries: [],
+    mapTileAt: () => 0x111,
+    sim: {},
+    tx: 12,
+    ty: 10,
+    avatarEntityId: 1,
+    deps
+  }), { ok: true, source: "object", tileId: 0x302, x: 12, y: 10, z: 0 });
+  assert.deepEqual(resolveLookTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 0 },
+    objectLayer: null,
+    entityEntries: [],
+    mapTileAt: () => 0x111,
+    sim: {},
+    tx: 30,
+    ty: 10,
+    avatarEntityId: 1,
+    deps
+  }), { ok: false, reason: "out_of_range", x: 30, y: 10, z: 0 });
+}
+
+function testTalkTargetResolution() {
+  assert.deepEqual(resolveTalkTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 0 },
+    entityEntries: [{ id: 2, x: 11, y: 10, z: 0, legacyOrder: 1 }],
+    tx: 11,
+    ty: 10,
+    avatarEntityId: 1
+  }), { actor: { id: 2, x: 11, y: 10, z: 0, legacyOrder: 1 }, ok: true, x: 11, y: 10, z: 0 });
+  assert.deepEqual(resolveTalkTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 0 },
+    entityEntries: [],
+    tx: 12,
+    ty: 10,
+    avatarEntityId: 1
+  }), { actor: null, ok: false, reason: "out_of_range", x: 12, y: 10, z: 0 });
+}
+
+function testPickupTargetResolution() {
+  const objectLayer: TargetObjectLayerRuntime = {
+    objectsAt: () => [
+      { key: "door", renderable: true, legacyOrder: 50, type: 0x129, frame: 0 },
+      { key: "item", renderable: true, legacyOrder: 10, type: 0x90, frame: 0 }
+    ]
+  };
+  const deps = {
+    isObjectRemoved: (_sim: unknown, _obj: TargetWorldObjectRuntime) => false,
+    isLikelyPickupObjectType: (type: number) => (type & 0x3ff) !== 0x129
+  };
+  const result = resolvePickupTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 0 },
+    objectLayer,
+    sim: {},
+    tx: 11,
+    ty: 10,
+    deps
+  });
+  assert.equal(result.ok && result.object.key, "item");
+  assert.deepEqual(resolvePickupTargetAtCellRuntime({
+    world: { map_x: 10, map_y: 10, map_z: 0 },
+    objectLayer: null,
+    sim: {},
+    tx: 11,
+    ty: 10,
+    deps
+  }), { object: null, ok: false, reason: "no_object", x: 11, y: 10, z: 0 });
+}
+
 testTopWorldObjectSelection();
 testTalkTargetSelection();
 testRegressionProbes();
+testLookTargetResolution();
+testTalkTargetResolution();
+testPickupTargetResolution();
 
 console.log("ui_target_runtime_test: ok");

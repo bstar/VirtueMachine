@@ -298,7 +298,9 @@ import {
 } from "./sim/object_types_runtime.ts";
 import {
   nearestTalkTargetAtCellRuntime,
-  topWorldObjectAtCellRuntime,
+  resolveLookTargetAtCellRuntime,
+  resolvePickupTargetAtCellRuntime,
+  resolveTalkTargetAtCellRuntime,
   type TargetObjectLayerRuntime
 } from "./sim/target_runtime.ts";
 import {
@@ -307,7 +309,6 @@ import {
   clampTargetCursorToViewRuntime,
   moveTargetCursorRuntime
 } from "./sim/target_cursor_runtime.ts";
-import { isWithinChebyshevRangeRuntime } from "./sim/range_runtime.ts";
 import {
   BOOT_INTRO_SCENES,
   abortBootIntroRuntime,
@@ -4815,58 +4816,56 @@ function tryLookAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   if (!mapCtx) {
     return false;
   }
-  const tz = sim.world.map_z | 0;
-  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 7)) {
+  const result = resolveLookTargetAtCellRuntime({
+    world: sim.world,
+    objectLayer: talkState.objectLayer,
+    entityEntries: talkState.entityLayer?.entries,
+    mapTileAt: (x, y, z) => mapCtx.tileAt(x, y, z),
+    sim,
+    tx,
+    ty,
+    avatarEntityId: AVATAR_ENTITY_ID,
+    deps: WORLD_OBJECT_LOOKUP_DEPS
+  });
+  if (!result.ok) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Look: ${tx},${ty} is out of range.`;
     pushLedgerMessage("Thou dost see nothing.");
     showLegacyLedgerPrompt();
     return false;
   }
-  const obj = topWorldObjectAtCellRuntime(talkState.objectLayer, sim, tx, ty, tz, {}, WORLD_OBJECT_LOOKUP_DEPS);
-  if (obj) {
-    const tileId = ((Number(obj.baseTile) | 0) + (obj.frame | 0)) & 0xffff;
-    pushLedgerMessage(canonicalLookSentenceForTile(tileId));
-    showLegacyLedgerPrompt();
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
-    return true;
-  }
-  const actor = nearestTalkTargetAtCellRuntime(talkState.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
-  if (actor) {
-    const tileId = ((Number(actor.baseTile) | 0) + (Number(actor.frame) | 0)) & 0xffff;
-    pushLedgerMessage(canonicalLookSentenceForTile(tileId));
-    showLegacyLedgerPrompt();
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tileId)} @ ${tx},${ty},${tz}`;
-    return true;
-  }
-  const tile = mapCtx.tileAt(tx | 0, ty | 0, tz | 0) & 0xffff;
-  pushLedgerMessage(canonicalLookSentenceForTile(tile));
+  pushLedgerMessage(canonicalLookSentenceForTile(result.tileId));
   showLegacyLedgerPrompt();
   diagBox.className = "diag ok";
-  diagBox.textContent = `Look: ${canonicalLookSentenceForTile(tile)} @ ${tx},${ty},${tz}`;
+  diagBox.textContent = `Look: ${canonicalLookSentenceForTile(result.tileId)} @ ${result.x},${result.y},${result.z}`;
   return true;
 }
 
 function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const talkState = state as unknown as LegacyTalkSessionStateView;
-  const tz = sim.world.map_z | 0;
-  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
+  const target = resolveTalkTargetAtCellRuntime({
+    world: sim.world,
+    entityEntries: talkState.entityLayer?.entries,
+    tx,
+    ty,
+    avatarEntityId: AVATAR_ENTITY_ID
+  });
+  const tz = target.z;
+  if (target.ok === false && target.reason === "out_of_range") {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: target must be adjacent (${tx},${ty}).`;
     pushLedgerMessage("No one responds.");
     showLegacyLedgerPrompt();
     return false;
   }
-  const actor = nearestTalkTargetAtCellRuntime(talkState.entityLayer?.entries, tx, ty, tz, AVATAR_ENTITY_ID);
-  if (!actor) {
+  if (target.ok === false) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Talk: nobody there at ${tx},${ty},${tz}.`;
     pushLedgerMessage("No one responds.");
     showLegacyLedgerPrompt();
     return false;
   }
+  const actor = target.actor;
   if (isNetAuthenticated()) {
     diagBox.className = "diag ok";
     diagBox.textContent = `Talk: contacting authoritative conversation service for actor ${Number(actor.id) | 0}...`;
@@ -5021,26 +5020,26 @@ async function netTakeWorldObject(
 
 function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const interactionState = state as unknown as GameplayInteractionStateView;
-  const tz = sim.world.map_z | 0;
-  if (!isWithinChebyshevRangeRuntime(sim.world.map_x | 0, sim.world.map_y | 0, tx | 0, ty | 0, 1)) {
+  const target = resolvePickupTargetAtCellRuntime({
+    world: sim.world,
+    objectLayer: interactionState.objectLayer,
+    sim,
+    tx,
+    ty,
+    deps: WORLD_OBJECT_LOOKUP_DEPS
+  });
+  const tz = target.z;
+  if (target.ok === false && target.reason === "out_of_range") {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
     return false;
   }
-  const obj = topWorldObjectAtCellRuntime(
-    interactionState.objectLayer,
-    sim,
-    tx,
-    ty,
-    tz,
-    { pickupOnly: true },
-    WORLD_OBJECT_LOOKUP_DEPS
-  );
-  if (!obj) {
+  if (target.ok === false) {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
     return false;
   }
+  const obj = target.object;
   if (isNetAuthenticated()) {
     diagBox.className = "diag ok";
     diagBox.textContent = `Get: taking 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
