@@ -12,6 +12,18 @@ export type NetRuntimeRequestOptions = {
 export type NetJsonValue = null | boolean | number | string | NetJsonValue[] | { [key: string]: NetJsonValue };
 export type NetJsonBody = { [key: string]: NetJsonValue };
 
+function netJsonObjectRuntime(value: NetJsonValue | undefined): NetJsonBody | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as NetJsonBody
+    : null;
+}
+
+export function netErrorMessageRuntime(body: NetJsonBody | null | undefined): string {
+  const error = netJsonObjectRuntime(body?.error);
+  const message = error?.message;
+  return typeof message === "string" && message.trim() ? message : "";
+}
+
 /**
  * Build runtime contract headers for client->net requests.
  */
@@ -99,8 +111,7 @@ export async function performManagedNetRequest(options: {
     if (out.status === 401 && typeof options.onUnauthorized === "function") {
       options.onUnauthorized();
     }
-    const body = out.body && typeof out.body === "object" ? out.body as { error?: { message?: unknown } } : {};
-    const msg = body.error?.message || `${out.status} ${out.statusText}`;
+    const msg = netErrorMessageRuntime(out.body) || `${out.status} ${out.statusText}`;
     throw new Error(String(msg));
   }
   return out.body || {};

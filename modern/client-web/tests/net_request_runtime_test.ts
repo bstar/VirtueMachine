@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildRuntimeContractHeaders,
   netJsonRequest,
+  netErrorMessageRuntime,
   performManagedNetRequest,
   type NetJsonBody
 } from "../net/request_runtime.ts";
@@ -18,6 +19,8 @@ assert.deepEqual(buildRuntimeContractHeaders({
   "x-vm-runtime-extensions": "quest_system",
   "x-vm-runtime-profile": "canonical_plus"
 });
+assert.equal(netErrorMessageRuntime({ error: { message: "bad request" } }), "bad request");
+assert.equal(netErrorMessageRuntime({ error: { message: 3 } }), "");
 
 const originalFetch = globalThis.fetch;
 const requests: string[] = [];
@@ -66,6 +69,23 @@ try {
       runtimeProfile: "canonical_strict"
     }),
     /bad request/
+  );
+
+  globalThis.fetch = (async (): Promise<Response> => new Response(JSON.stringify({
+    error: { message: 3 }
+  } satisfies NetJsonBody), {
+    status: 500,
+    statusText: "Server Error"
+  })) as typeof fetch;
+
+  await assert.rejects(
+    () => performManagedNetRequest({
+      apiBase: "http://net",
+      route: "/api/fallback",
+      runtimeExtensions: [],
+      runtimeProfile: "canonical_strict"
+    }),
+    /500 Server Error/
   );
 } finally {
   globalThis.fetch = originalFetch;
