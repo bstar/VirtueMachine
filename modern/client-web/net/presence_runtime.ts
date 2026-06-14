@@ -52,7 +52,7 @@ export interface AuthoritativeNpcEntityRuntime {
   authoritativeUpdatedAtMs?: number;
   homeX?: number;
   homeY?: number;
-  id?: unknown;
+  id?: number;
   movable?: boolean;
   x?: number;
   y?: number;

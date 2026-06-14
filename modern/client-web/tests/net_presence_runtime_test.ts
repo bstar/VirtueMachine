@@ -178,6 +178,7 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
 
 assert.equal(applyAuthoritativeNpcStatesRuntime(null, [{ npc_id: 1 }], 1), 0);
 assert.equal(applyAuthoritativeNpcStatesRuntime([{ id: 1 }], null, 1), 0);
+assert.equal(applyAuthoritativeNpcStatesRuntime([{ id: 1 }], [{ npc_id: "bad", x: 1, y: 2, z: 0 }], 1), 0);
 
 {
   let appliedTick = 0;
