@@ -29,6 +29,7 @@ if command -v bun >/dev/null 2>&1; then
   "$ROOT_DIR/modern/tools/test_client_web_anim_data.sh"
   "$ROOT_DIR/modern/tools/test_client_web_map_runtime.sh"
   "$ROOT_DIR/modern/tools/test_client_web_legacy_pixmap.sh"
+  "$ROOT_DIR/modern/tools/test_client_web_shape_archive.sh"
   "$ROOT_DIR/modern/tools/test_client_web_palette_runtime.sh"
   "$ROOT_DIR/modern/tools/test_client_web_indexed_pixels.sh"
   "$ROOT_DIR/modern/tools/test_client_web_tile_set.sh"
