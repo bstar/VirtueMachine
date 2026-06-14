@@ -36,9 +36,9 @@ const {
   pushSpawnedWorldObject
 } = require("./world_object_policy.ts");
 const {
+  buildWorldObjectStateRuntime,
   compareLegacyWorldObjectOrder,
   findActiveObjectByKey,
-  normalizeWorldObjectDeltas,
   parseBaseTileMapRuntime,
   parseObjBlkRecordsRuntime,
   persistPatchedObject,
@@ -446,45 +446,14 @@ function buildWorldObjectState(runtimeDir, rawDeltas) {
   const baseline = loadWorldObjectBaseline(runtimeDir);
   const tileFlags = loadTileFlagMap(runtimeDir);
   const terrainType = loadTerrainTypeMap(runtimeDir);
-  const deltas = normalizeWorldObjectDeltas(rawDeltas);
-  const active = [];
-  const nowMs = Date.now();
-  for (const b of baseline.objects) {
-    const respawn = deltas.respawns[b.object_key];
-    const hiddenByPickup = deltas.removed[b.object_key]
-      && !(respawn && Number(respawn.due_at_ms) <= nowMs);
-    if (hiddenByPickup) {
-      continue;
-    }
-    const moved = deltas.moved[b.object_key];
-    if (moved) {
-      active.push({
-        ...b,
-        x: moved.x | 0,
-        y: moved.y | 0,
-        z: moved.z | 0,
-        status: Number.isFinite(Number(moved.status)) ? (Number(moved.status) & 0xff) : (Number(b.status) & 0xff),
-        holder_kind: String(moved.holder_kind || b.holder_kind || "none"),
-        holder_id: String(moved.holder_id || b.holder_id || ""),
-        holder_key: String(moved.holder_key || b.holder_key || ""),
-        source_kind: "baseline_moved"
-      });
-    } else {
-      active.push({ ...b, source_kind: "baseline" });
-    }
-  }
-  for (const s of deltas.spawned) {
-    active.push({ ...s, source_kind: "spawned" });
-  }
-  active.sort(compareLegacyWorldObjectOrder);
-  return {
+  return buildWorldObjectStateRuntime({
     baseline,
+    buildObjectAnchorIndex,
+    nowMs: Date.now(),
+    rawDeltas,
     tileFlags,
-    terrainType,
-    deltas,
-    active,
-    activeByAnchor: buildObjectAnchorIndex(active)
-  };
+    terrainType
+  });
 }
 
 function worldObjectMeta(state) {

@@ -6,6 +6,7 @@ import type {
   SpawnedWorldObjectDelta,
   WorldObject,
   WorldObjectDeltas,
+  WorldObjectState,
   WorldObjectStateContainer
 } from "./world_object_types.ts";
 
@@ -231,6 +232,64 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
     }
   }
   return out;
+}
+
+export function buildWorldObjectStateRuntime(args: {
+  baseline: {
+    baseline_count?: number;
+    files_loaded?: number;
+    loaded_at?: string;
+    objects?: WorldObject[];
+    source_dir?: string;
+    [key: string]: unknown;
+  };
+  buildObjectAnchorIndex: (objects: WorldObject[]) => Map<string, WorldObject[]>;
+  nowMs: number;
+  rawDeltas: unknown;
+  terrainType: Uint8Array;
+  tileFlags: Uint8Array;
+}): WorldObjectState {
+  const baselineObjects = Array.isArray(args.baseline.objects) ? args.baseline.objects : [];
+  const deltas = normalizeWorldObjectDeltas(args.rawDeltas);
+  const active: WorldObject[] = [];
+  const nowMs = Number(args.nowMs);
+  for (const b of baselineObjects) {
+    const objectKey = String(b.object_key || "");
+    const respawn = deltas.respawns[objectKey];
+    const hiddenByPickup = deltas.removed[objectKey]
+      && !(respawn && Number(respawn.due_at_ms) <= nowMs);
+    if (hiddenByPickup) {
+      continue;
+    }
+    const moved = deltas.moved[objectKey];
+    if (moved) {
+      active.push({
+        ...b,
+        x: moved.x | 0,
+        y: moved.y | 0,
+        z: moved.z | 0,
+        status: Number.isFinite(Number(moved.status)) ? (Number(moved.status) & 0xff) : (Number(b.status) & 0xff),
+        holder_kind: String(moved.holder_kind || b.holder_kind || "none"),
+        holder_id: String(moved.holder_id || b.holder_id || ""),
+        holder_key: String(moved.holder_key || b.holder_key || ""),
+        source_kind: "baseline_moved"
+      });
+    } else {
+      active.push({ ...b, source_kind: "baseline" });
+    }
+  }
+  for (const s of deltas.spawned) {
+    active.push({ ...s, source_kind: "spawned" });
+  }
+  active.sort(compareLegacyWorldObjectOrder);
+  return {
+    baseline: args.baseline,
+    tileFlags: args.tileFlags,
+    terrainType: args.terrainType,
+    deltas,
+    active,
+    activeByAnchor: args.buildObjectAnchorIndex(active)
+  };
 }
 
 function isStatus0010(status: unknown): boolean {

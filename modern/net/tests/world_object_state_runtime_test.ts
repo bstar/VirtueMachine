@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   compareLegacyWorldObjectOrder,
+  buildWorldObjectStateRuntime,
   findActiveObjectByKey,
   normalizeWorldObjectDeltas,
   parseBaseTileMapRuntime,
@@ -126,6 +127,67 @@ assert.equal(deltas.spawned[0].object_key, "inv:a00i001:avatar:1");
 assert.equal(deltas.spawned[0].type, 88);
 assert.equal(deltas.respawns.a00i001.due_at_ms, 2000);
 assert.equal(deltas.respawns.invalid, undefined);
+
+const builtWorldState = buildWorldObjectStateRuntime({
+  baseline: {
+    source_dir: "/baseline",
+    objects: [
+      { object_key: "hidden", status: 0, x: 1, y: 1, z: 0, legacy_order: 2 },
+      { object_key: "respawned", status: 0, x: 2, y: 2, z: 0, legacy_order: 3 },
+      { object_key: "moved", status: 0, x: 3, y: 3, z: 0, legacy_order: 1 }
+    ]
+  },
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 1000,
+  rawDeltas: {
+    removed: {
+      hidden: true,
+      respawned: true
+    },
+    moved: {
+      moved: {
+        x: 30,
+        y: 31,
+        z: 1,
+        status: null,
+        holder_kind: "npc",
+        holder_id: "avatar",
+        holder_key: "k"
+      }
+    },
+    respawns: {
+      respawned: {
+        due_at_ms: 999,
+        taken_at_ms: 1,
+        respawn_ms: 10,
+        policy: "default"
+      }
+    },
+    spawned: [
+      {
+        object_key: "spawned",
+        x: 9,
+        y: 9,
+        z: 0,
+        status: 0,
+        type: 88,
+        frame: 0,
+        tile_id: 0x200
+      }
+    ]
+  },
+  terrainType: new Uint8Array([1]),
+  tileFlags: new Uint8Array([2])
+});
+assert.deepEqual(builtWorldState.active.map((obj) => obj.object_key), ["spawned", "moved", "respawned"]);
+assert.equal(builtWorldState.active[1].source_kind, "baseline_moved");
+assert.equal(builtWorldState.active[1].x, 30);
+assert.equal(builtWorldState.active[1].status, 0);
+assert.equal(builtWorldState.active[2].source_kind, "baseline");
+assert.equal(builtWorldState.active[0].source_kind, "spawned");
+assert.equal(builtWorldState.activeByAnchor?.get("all")?.length, 3);
+assert.equal(builtWorldState.tileFlags?.[0], 2);
+assert.equal(builtWorldState.terrainType?.[0], 1);
 
 assert.equal(
   compareLegacyWorldObjectOrder(
