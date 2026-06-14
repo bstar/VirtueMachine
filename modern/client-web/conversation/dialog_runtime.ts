@@ -1,17 +1,107 @@
-export function legacyConversationReply(opts: Record<string, unknown> = {}) {
+type ConversationVmContextRuntime = Record<string, unknown> | null;
+
+type ConversationRuleRuntime = {
+  keys?: unknown;
+  responseBytes?: unknown;
+  responseEndPc?: unknown;
+  responseStartPc?: unknown;
+};
+
+type ConversationDecodeResultRuntime = {
+  lines?: unknown;
+  nextPc?: unknown;
+  stopOpcode?: unknown;
+  stopPc?: unknown;
+};
+
+type DecodeResponseBytesRuntime = (
+  responseBytes: Uint8Array,
+  script: Uint8Array | null,
+  startPc: number,
+  endPc: number,
+  vmContext: ConversationVmContextRuntime
+) => ConversationDecodeResultRuntime;
+
+type DecodeResponseOpcodeAwareRuntime = (
+  scriptBytes: Uint8Array,
+  startPc: number,
+  endPc: number,
+  opts: {
+    followGoto?: boolean;
+    stopOnGoto?: boolean;
+    stopOnInput?: boolean;
+    vmContext?: ConversationVmContextRuntime;
+  }
+) => ConversationDecodeResultRuntime;
+
+type RenderMacrosRuntime = (line: unknown, vmContext?: ConversationVmContextRuntime) => string;
+type KeyMatchesInputRuntime = (pattern: unknown, input: string) => boolean;
+type FormatYouSeeLineRuntime = (subject: unknown) => string;
+
+type LegacyConversationReplyOptions = {
+  decodeResponseBytes?: unknown;
+  descText?: unknown;
+  formatYouSeeLine?: unknown;
+  keyMatchesInput?: unknown;
+  renderMacros?: unknown;
+  rules?: unknown;
+  script?: unknown;
+  typed?: unknown;
+  vmContext?: unknown;
+};
+
+type LegacyConversationReplyResult =
+  | { kind: "ok"; lines: string[] }
+  | { kind: "unimplemented"; lines: string[] }
+  | { kind: "no-match"; lines: string[] };
+
+type ConversationRunFromKeyCursorOptions = {
+  decodeResponseOpcodeAware?: unknown;
+  keyMatchesInput?: unknown;
+  opcodes?: unknown;
+  renderMacros?: unknown;
+  scriptBytes?: unknown;
+  startPc?: unknown;
+  typed?: unknown;
+  vmContext?: unknown;
+};
+
+type ConversationRunFromKeyCursorResult = {
+  kind: "ok" | "no-match";
+  lines: string[];
+  nextPc: number;
+  stopOpcode: number;
+};
+
+function asVmContext(raw: unknown): ConversationVmContextRuntime {
+  return raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
+}
+
+function asDecodeResponseBytes(raw: unknown): DecodeResponseBytesRuntime | null {
+  return typeof raw === "function" ? raw as DecodeResponseBytesRuntime : null;
+}
+
+function asDecodeResponseOpcodeAware(raw: unknown): DecodeResponseOpcodeAwareRuntime | null {
+  return typeof raw === "function" ? raw as DecodeResponseOpcodeAwareRuntime : null;
+}
+
+function asRenderMacros(raw: unknown): RenderMacrosRuntime {
+  return typeof raw === "function" ? raw as RenderMacrosRuntime : ((line: unknown) => String(line || ""));
+}
+
+function asKeyMatchesInput(raw: unknown): KeyMatchesInputRuntime {
+  return typeof raw === "function" ? raw as KeyMatchesInputRuntime : (() => false);
+}
+
+export function legacyConversationReply(opts: LegacyConversationReplyOptions = {}): LegacyConversationReplyResult {
   const query = String(opts.typed || "").trim();
   const queryUse = query || "bye";
-  const rules = Array.isArray(opts.rules) ? opts.rules : [];
+  const rules: ConversationRuleRuntime[] = Array.isArray(opts.rules) ? opts.rules as ConversationRuleRuntime[] : [];
   const script = (opts.script instanceof Uint8Array) ? opts.script : null;
-  const decodeResponseBytes = (typeof opts.decodeResponseBytes === "function")
-    ? opts.decodeResponseBytes
-    : null;
-  const renderMacros = (typeof opts.renderMacros === "function")
-    ? opts.renderMacros
-    : ((line) => String(line || ""));
-  const keyMatchesInput = (typeof opts.keyMatchesInput === "function")
-    ? opts.keyMatchesInput
-    : (() => false);
+  const decodeResponseBytes = asDecodeResponseBytes(opts.decodeResponseBytes);
+  const renderMacros = asRenderMacros(opts.renderMacros);
+  const keyMatchesInput = asKeyMatchesInput(opts.keyMatchesInput);
+  const vmContext = asVmContext(opts.vmContext);
 
   for (const rule of rules) {
     const keys = Array.isArray(rule.keys) ? rule.keys : [];
@@ -27,16 +117,16 @@ export function legacyConversationReply(opts: Record<string, unknown> = {}) {
     }
     const decoded = decodeResponseBytes
       ? decodeResponseBytes(
-        rule.responseBytes || new Uint8Array(0),
+        rule.responseBytes instanceof Uint8Array ? rule.responseBytes : new Uint8Array(0),
         script,
         Number(rule.responseStartPc),
         Number(rule.responseEndPc),
-        opts.vmContext || null
+        vmContext
       )
       : { lines: [] };
-    const out = [];
+    const out: string[] = [];
     for (const line of (Array.isArray(decoded?.lines) ? decoded.lines : [])) {
-      const msg = renderMacros(line, opts.vmContext || null);
+      const msg = renderMacros(line, vmContext);
       if (msg) out.push(msg);
     }
     if (out.length > 0) {
@@ -46,27 +136,22 @@ export function legacyConversationReply(opts: Record<string, unknown> = {}) {
   }
   if (String(queryUse).toLowerCase() === "look" && opts.descText) {
     const formatter = (typeof opts.formatYouSeeLine === "function")
-      ? opts.formatYouSeeLine
-      : ((s) => `You see ${String(s || "").trim()}.`);
+      ? opts.formatYouSeeLine as FormatYouSeeLineRuntime
+      : ((s: unknown) => `You see ${String(s || "").trim()}.`);
     return { kind: "ok", lines: [formatter(opts.descText)] };
   }
   return { kind: "no-match", lines: [] };
 }
 
-export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {}) {
+export function conversationRunFromKeyCursor(opts: ConversationRunFromKeyCursorOptions = {}): ConversationRunFromKeyCursorResult {
   const scriptBytes = (opts.scriptBytes instanceof Uint8Array) ? opts.scriptBytes : null;
   if (!scriptBytes) {
     return { kind: "no-match", lines: [], nextPc: -1, stopOpcode: 0 };
   }
-  const decodeResponseOpcodeAware = (typeof opts.decodeResponseOpcodeAware === "function")
-    ? opts.decodeResponseOpcodeAware
-    : null;
-  const renderMacros = (typeof opts.renderMacros === "function")
-    ? opts.renderMacros
-    : ((line) => String(line || ""));
-  const keyMatchesInput = (typeof opts.keyMatchesInput === "function")
-    ? opts.keyMatchesInput
-    : (() => false);
+  const decodeResponseOpcodeAware = asDecodeResponseOpcodeAware(opts.decodeResponseOpcodeAware);
+  const renderMacros = asRenderMacros(opts.renderMacros);
+  const keyMatchesInput = asKeyMatchesInput(opts.keyMatchesInput);
+  const vmContext = asVmContext(opts.vmContext);
   const op = (opts.opcodes && typeof opts.opcodes === "object")
     ? opts.opcodes as Record<string, unknown>
     : {};
@@ -98,9 +183,9 @@ export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {})
       continue;
     }
     pc += 1;
-    const keys = [];
+    const keys: string[] = [];
     while (pc < scriptBytes.length) {
-      const keyBytes = [];
+      const keyBytes: number[] = [];
       while (
         pc < scriptBytes.length
         && (scriptBytes[pc] & 0xff) !== 0x2c
@@ -132,7 +217,7 @@ export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {})
           stopOnGoto: true,
           followGoto: false,
           stopOnInput: true,
-          vmContext: opts.vmContext || null
+          vmContext
         }
       )
       : { lines: [], stopOpcode: 0, stopPc: -1, nextPc: responseStartPc + 1 };
@@ -159,18 +244,18 @@ export function conversationRunFromKeyCursor(opts: Record<string, unknown> = {})
           responseStartPc,
           scriptBytes.length,
           {
-            stopOnGoto: false,
-            followGoto: true,
-            vmContext: opts.vmContext || null,
-            stopOnInput: true
-          }
-        )
-        : { lines: [], stopOpcode: 0, stopPc: afterResponsePc };
+          stopOnGoto: false,
+          followGoto: true,
+          vmContext,
+          stopOnInput: true
+        }
+      )
+      : { lines: [], stopOpcode: 0, stopPc: afterResponsePc };
 
       const lines = (Array.isArray(decoded?.lines) ? decoded.lines : [])
-        .map((line) => renderMacros(line, opts.vmContext || null))
-        .map((line) => String(line || "").trim())
-        .filter((line, idx, arr) => line || (idx > 0 && idx < (arr.length - 1)));
+        .map((line: unknown) => renderMacros(line, vmContext))
+        .map((line: string) => String(line || "").trim())
+        .filter((line: string, idx: number, arr: string[]) => line || (idx > 0 && idx < (arr.length - 1)));
       const stopOpcode = Number(decoded?.stopOpcode) | 0;
       let nextPc = afterResponsePc;
       if (stopOpcode) {

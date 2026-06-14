@@ -19,6 +19,7 @@
   },
   "include": [
     "modern/client-web/conversation/archive_runtime.ts",
+    "modern/client-web/conversation/dialog_runtime.ts",
     "modern/client-web/conversation/presentation_runtime.ts",
     "modern/client-web/conversation/rules_runtime.ts",
     "modern/client-web/conversation/text_runtime.ts",
