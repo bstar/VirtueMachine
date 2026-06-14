@@ -42,7 +42,7 @@ Rule: if a refactor slice introduces an abstraction that changes structure, timi
 
 - Status: `temporary`
 - Location: multiple `modern/client-web/net/*.ts`, `modern/client-web/sim/*.ts`
-- Note: many runtime signatures still use broad object typing to keep slices moving. World object take keys and inventory projection now use typed net-runtime boundary sources, with unknown server inventory JSON decoded before projection; net presence remote-player and authoritative-NPC rows now use explicit JSON decoders before projection/application, session state now uses the typed remote-player shape, and login state application shares the auth-runtime login payload contract.
+- Note: many runtime signatures still use broad object typing to keep slices moving. World object take keys and inventory projection now use typed net-runtime boundary sources, with unknown server inventory JSON decoded before projection; net presence remote-player and authoritative-NPC rows now use explicit JSON decoders before projection/application, character-list rows decode before selection, session state now uses the typed remote-player shape, and login state application shares the auth-runtime login payload contract.
 - Risk: silent shape drift and late runtime failures.
 - Exit criteria: define shared interfaces for `state.net`, `sim`, object/entity records; increase strictness incrementally.
 
