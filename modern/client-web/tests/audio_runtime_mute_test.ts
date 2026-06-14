@@ -3,7 +3,7 @@ import { createU6AudioRuntime } from "../audio/audio_runtime.ts";
 
 let pendingPlayResolve: (() => void) | null = null;
 let pauseCount = 0;
-const audioInstances: any[] = [];
+const audioInstances: MockAudio[] = [];
 
 class MockAudio {
   preload = "";
@@ -38,10 +38,10 @@ class MockAudio {
   load(): void {}
 }
 
-(globalThis as any).Audio = MockAudio;
-(globalThis as any).fetch = async () => {
+Object.defineProperty(globalThis, "Audio", { value: MockAudio, configurable: true });
+Object.defineProperty(globalThis, "fetch", { value: async () => {
   throw new Error("audio asset fetch disabled in mute test");
-};
+}, configurable: true });
 
 const audio = createU6AudioRuntime();
 audio.setBackendMode("adlib");

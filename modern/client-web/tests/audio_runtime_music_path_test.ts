@@ -5,6 +5,10 @@ let audioElementCount = 0;
 let sourceStartCount = 0;
 let sourceStopCount = 0;
 
+type DecodedMockAudioBuffer = {
+  readonly duration: number;
+};
+
 class MockAudio {
   constructor() {
     audioElementCount += 1;
@@ -18,7 +22,7 @@ class MockGain {
 }
 
 class MockSource {
-  buffer: any = null;
+  buffer: DecodedMockAudioBuffer | null = null;
   loop = false;
   loopStart = 0;
   loopEnd = 0;
@@ -52,9 +56,9 @@ class MockAudioContext {
   }
 }
 
-(globalThis as any).Audio = MockAudio;
-(globalThis as any).AudioContext = MockAudioContext;
-(globalThis as any).fetch = async (input: string) => {
+Object.defineProperty(globalThis, "Audio", { value: MockAudio, configurable: true });
+Object.defineProperty(globalThis, "AudioContext", { value: MockAudioContext, configurable: true });
+Object.defineProperty(globalThis, "fetch", { value: async (input: string) => {
   const path = String(input || "");
   if (path.endsWith(".json")) {
     return {
@@ -74,7 +78,7 @@ class MockAudioContext {
     };
   }
   return { ok: false };
-};
+}, configurable: true });
 
 async function waitForMusicPlaying(audio: ReturnType<typeof createU6AudioRuntime>): Promise<void> {
   for (let i = 0; i < 20 && !audio.status().musicPlaying; i += 1) {
