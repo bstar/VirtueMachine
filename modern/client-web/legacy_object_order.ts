@@ -19,11 +19,13 @@ type LegacyObj = {
 } | null | undefined;
 
 function coordUseOf(obj: LegacyObj): number {
-  return (obj && Number.isFinite(obj.coordUse)) ? (obj.coordUse & OBJ_COORD_USE_MASK) : OBJ_COORD_USE_LOCXYZ;
+  const coordUse = Number(obj?.coordUse);
+  return Number.isFinite(coordUse) ? (coordUse & OBJ_COORD_USE_MASK) : OBJ_COORD_USE_LOCXYZ;
 }
 
 function is0010(obj: LegacyObj): boolean {
-  const status = (obj && Number.isFinite(obj.status)) ? (obj.status | 0) : 0;
+  const statusRaw = Number(obj?.status);
+  const status = Number.isFinite(statusRaw) ? (statusRaw | 0) : 0;
   return (status & OBJ_STATUS_IS_0010) !== 0;
 }
 
@@ -55,13 +57,13 @@ function resolveContainedAnchor(obj: LegacyObj): LegacyObj {
  Legacy comparator model from C_1184_29C4.
  This function intentionally returns 0 for same-anchor same-position ties.
 */
-export function compareLegacyObjectOrderStrict(a, b) {
+export function compareLegacyObjectOrderStrict(a: LegacyObj, b: LegacyObj): number {
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
 
-  let assocA = resolveContainedAnchor(a);
-  let assocB = resolveContainedAnchor(b);
+  let assocA = resolveContainedAnchor(a) || a;
+  let assocB = resolveContainedAnchor(b) || b;
 
   if (coordUseOf(assocA) !== OBJ_COORD_USE_LOCXYZ && coordUseOf(b) === OBJ_COORD_USE_LOCXYZ) {
     return -1;
@@ -70,18 +72,18 @@ export function compareLegacyObjectOrderStrict(a, b) {
     return 1;
   }
   if (is0010(assocA)) {
-    assocA = resolveAssoc(assocA);
+    assocA = resolveAssoc(assocA) || assocA;
   }
   if (is0010(assocB)) {
-    assocB = resolveAssoc(assocB);
+    assocB = resolveAssoc(assocB) || assocB;
   }
 
-  let dist = (assocA.y | 0) - (assocB.y | 0);
+  let dist = (Number(assocA.y) | 0) - (Number(assocB.y) | 0);
   if (dist === 0) {
-    dist = (assocA.x | 0) - (assocB.x | 0);
+    dist = (Number(assocA.x) | 0) - (Number(assocB.x) | 0);
   }
   if (dist === 0) {
-    dist = (assocB.z | 0) - (assocA.z | 0);
+    dist = (Number(assocB.z) | 0) - (Number(assocA.z) | 0);
   }
   if (assocA === assocB) {
     if (coordUseOf(assocA) === OBJ_COORD_USE_LOCXYZ) {
@@ -97,7 +99,7 @@ export function compareLegacyObjectOrderStrict(a, b) {
  Deterministic comparator used by modern arrays/sort sites when strict legacy
  compare ties, without changing primary legacy precedence rules.
 */
-export function compareLegacyObjectOrderStable(a, b) {
+export function compareLegacyObjectOrderStable(a: LegacyObj, b: LegacyObj): number {
   const base = compareLegacyObjectOrderStrict(a, b);
   if (base !== 0) {
     return base;

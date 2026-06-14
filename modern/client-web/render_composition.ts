@@ -1,6 +1,112 @@
 import { compareLegacyObjectOrderStable } from "./legacy_object_order.ts";
 
-export function isLegacyPixelTransparent(mask, tileId, palIdx) {
+type TileFlagsRuntime = ArrayLike<number> | null | undefined;
+
+type OverlaySourceType = "main" | "spill-left" | "spill-up" | "spill-up-left" | "legacy-special" | string;
+
+export type RenderCompositionObject = {
+  assocObj?: RenderCompositionObject | null;
+  coordUse?: number;
+  order?: number;
+  renderable?: boolean;
+  sourceArea?: number;
+  sourceIndex?: number;
+  status?: number;
+  tileId?: number;
+  type?: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type RenderOverlaySource = {
+  objType: number | undefined;
+  type: OverlaySourceType;
+  x: number;
+  y: number;
+};
+
+export type RenderOverlayCell = {
+  dbg: string;
+  floor: boolean;
+  occluder: boolean;
+  sourceObjType: number | undefined;
+  sourceType: OverlaySourceType;
+  sourceX: number;
+  sourceY: number;
+  tileId: number;
+};
+
+export type RenderOverlayGrid = RenderOverlayCell[][];
+
+type RenderViewContext = {
+  openAtWorld?: (x: number, y: number) => boolean;
+  visibleAtWorld?: (x: number, y: number) => boolean;
+} | null | undefined;
+
+type RenderObjectLayer<TObject extends RenderCompositionObject = RenderCompositionObject> = {
+  objectsAt(x: number, y: number, z: number): readonly TObject[];
+  objectsInWindowLegacyOrder?(
+    startX: number,
+    startY: number,
+    viewW: number,
+    viewH: number,
+    z: number
+  ): readonly TObject[];
+} | null | undefined;
+
+type LegacyOverlayInjectionArgs<TObject extends RenderCompositionObject = RenderCompositionObject> = {
+  insertWorldTile(
+    wx: number,
+    wy: number,
+    tileId: number,
+    bp06?: number,
+    source?: RenderOverlaySource | null,
+    debugLabel?: string
+  ): void;
+  startX: number;
+  startY: number;
+  stream: readonly TObject[] | null;
+  viewCtx: RenderViewContext;
+  viewH: number;
+  viewW: number;
+  wz: number;
+};
+
+type BuildOverlayCellsOptions<TObject extends RenderCompositionObject = RenderCompositionObject> = {
+  hasWallTerrain?: ((tileId: number) => boolean) | null;
+  injectLegacyOverlays?: ((args: LegacyOverlayInjectionArgs<TObject>) => number) | null;
+  isBackgroundObjectTile?: ((tileId: number, obj: TObject) => boolean) | null;
+  objectLayer: RenderObjectLayer<TObject>;
+  resolveAnimatedObjectTile(obj: TObject): number;
+  resolveFootprintTile?: ((obj: TObject) => number) | null;
+  startX: number;
+  startY: number;
+  tileFlags?: TileFlagsRuntime;
+  viewCtx?: RenderViewContext;
+  viewH: number;
+  viewW: number;
+  wz: number;
+};
+
+type OverlayParity = {
+  hiddenSuppressedCount: number;
+  spillOutOfBoundsCount: number;
+  unsortedSourceCount: number;
+};
+
+type BuildOverlayCellsResult = {
+  overlayCells: RenderOverlayGrid | null;
+  overlayCount: number;
+  parity: OverlayParity;
+};
+
+type ActorOcclusionEntity = {
+  x: number;
+  y: number;
+};
+
+export function isLegacyPixelTransparent(mask: number, tileId: number, palIdx: number): boolean {
   const zeroIsTransparent = tileId <= 0x01ff;
   if (mask === 10 || mask === 5) {
     return palIdx === 0xff || (zeroIsTransparent && palIdx === 0x00);
@@ -8,14 +114,18 @@ export function isLegacyPixelTransparent(mask, tileId, palIdx) {
   return false;
 }
 
-function overlayTileIsFloor(tileId, tileFlags) {
+function overlayTileIsFloor(tileId: number, tileFlags: TileFlagsRuntime): boolean {
   if (!tileFlags) {
     return false;
   }
   return (tileFlags[tileId & 0x07ff] & 0x10) !== 0;
 }
 
-function overlayTileIsOccluder(tileId, tileFlags, hasWallTerrain) {
+function overlayTileIsOccluder(
+  tileId: number,
+  tileFlags: TileFlagsRuntime,
+  hasWallTerrain: ((tileId: number) => boolean) | null | undefined
+): boolean {
   if (!tileFlags) {
     return false;
   }
@@ -26,7 +136,9 @@ function overlayTileIsOccluder(tileId, tileFlags, hasWallTerrain) {
   return Boolean(hasWallTerrain && hasWallTerrain(tileId));
 }
 
-export function buildOverlayCellsModel(opts) {
+export function buildOverlayCellsModel<TObject extends RenderCompositionObject>(
+  opts: BuildOverlayCellsOptions<TObject>
+): BuildOverlayCellsResult {
   const {
     viewW,
     viewH,
@@ -55,27 +167,34 @@ export function buildOverlayCellsModel(opts) {
     };
   }
 
-  const overlayCells = Array.from({ length: viewW * viewH }, () => []);
+  const overlayCells: RenderOverlayGrid = Array.from({ length: viewW * viewH }, () => []);
   const parity = {
     hiddenSuppressedCount: 0,
     spillOutOfBoundsCount: 0,
     unsortedSourceCount: 0
   };
-  const cellIndex = (gx, gy) => (gy * viewW) + gx;
-  const inView = (gx, gy) => gx >= 0 && gy >= 0 && gx < viewW && gy < viewH;
+  const cellIndex = (gx: number, gy: number): number => (gy * viewW) + gx;
+  const inView = (gx: number, gy: number): boolean => gx >= 0 && gy >= 0 && gx < viewW && gy < viewH;
   const visibleAtWorld = viewCtx && typeof viewCtx.visibleAtWorld === "function"
     ? viewCtx.visibleAtWorld.bind(viewCtx)
     : null;
-  const compareLegacySourceOrder = (a, b) => compareLegacyObjectOrderStable(a, b);
+  const compareLegacySourceOrder = (a: TObject, b: TObject): number => compareLegacyObjectOrderStable(a, b);
 
-  const insertLegacyCellTile = (gx, gy, tileId, bp06, source, debugLabel = "") => {
+  const insertLegacyCellTile = (
+    gx: number,
+    gy: number,
+    tileId: number,
+    bp06: number,
+    source: RenderOverlaySource,
+    debugLabel = ""
+  ): void => {
     if (!inView(gx, gy)) {
       parity.spillOutOfBoundsCount += 1;
       return;
     }
     const list = overlayCells[cellIndex(gx, gy)];
     const isFloor = overlayTileIsFloor(tileId, tileFlags);
-    const entry = {
+    const entry: RenderOverlayCell = {
       tileId: tileId & 0xffff,
       floor: isFloor,
       occluder: overlayTileIsOccluder(tileId, tileFlags, hasWallTerrain),
@@ -110,7 +229,7 @@ export function buildOverlayCellsModel(opts) {
     : null;
 
   if (Array.isArray(stream)) {
-    let prev = null;
+    let prev: TObject | null = null;
     for (const o of stream) {
       if (!o || !o.renderable) {
         continue;
@@ -164,7 +283,7 @@ export function buildOverlayCellsModel(opts) {
         const wx = startX + gx;
         const wy = startY + gy;
         const overlays = objectLayer.objectsAt(wx, wy, wz);
-        let prev = null;
+        let prev: TObject | null = null;
         for (const o of overlays) {
           if (!o.renderable) {
             continue;
@@ -221,7 +340,14 @@ export function buildOverlayCellsModel(opts) {
       wz,
       viewCtx,
       stream,
-      insertWorldTile(wx, wy, tileId, bp06 = 0, source = null, debugLabel = "") {
+      insertWorldTile(
+        wx: number,
+        wy: number,
+        tileId: number,
+        bp06 = 0,
+        source: RenderOverlaySource | null = null,
+        debugLabel = ""
+      ): void {
         const src = source || { x: wx, y: wy, type: "legacy-special", objType: 0 };
         insertLegacyCellTile((wx | 0) - startX, (wy | 0) - startY, tileId, bp06, src, debugLabel);
       }
@@ -234,7 +360,15 @@ export function buildOverlayCellsModel(opts) {
   return { overlayCells, overlayCount, parity };
 }
 
-export function topInteractiveOverlayAtModel(overlayCells, viewW, viewH, startX, startY, wx, wy) {
+export function topInteractiveOverlayAtModel(
+  overlayCells: RenderOverlayGrid | null,
+  viewW: number,
+  viewH: number,
+  startX: number,
+  startY: number,
+  wx: number,
+  wy: number
+): RenderOverlayCell | null {
   if (!overlayCells) {
     return null;
   }
@@ -256,7 +390,15 @@ export function topInteractiveOverlayAtModel(overlayCells, viewW, viewH, startX,
   return null;
 }
 
-export function measureActorOcclusionParityModel(overlayCells, viewW, viewH, startX, startY, viewCtx, entities) {
+export function measureActorOcclusionParityModel(
+  overlayCells: RenderOverlayGrid | null,
+  viewW: number,
+  viewH: number,
+  startX: number,
+  startY: number,
+  viewCtx: RenderViewContext,
+  entities: readonly ActorOcclusionEntity[] | null | undefined
+): number {
   if (!overlayCells || !entities || entities.length === 0) {
     return 0;
   }
@@ -281,7 +423,7 @@ export function measureActorOcclusionParityModel(overlayCells, viewW, viewH, sta
     if (!list || list.length === 0) {
       continue;
     }
-    const hasOccluder = list.some((entry) => entry.occluder);
+    const hasOccluder = list.some((entry: RenderOverlayCell) => entry.occluder);
     const cellOpen = !openAtWorld || openAtWorld(e.x, e.y);
     if (cellOpen && hasOccluder) {
       mismatches += 1;
