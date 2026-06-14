@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
-import { performNetLoginFlow } from "../net/auth_runtime.ts";
+import {
+  netLoginEmailRuntime,
+  netLoginEmailVerifiedRuntime,
+  netLoginSnapshotBase64Runtime,
+  netLoginTokenRuntime,
+  netLoginUserIdRuntime,
+  netLoginUsernameRuntime,
+  performNetLoginFlow
+} from "../net/auth_runtime.ts";
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
+
+assert.equal(netLoginTokenRuntime({ token: "token" }), "token");
+assert.equal(netLoginUserIdRuntime({ user: { user_id: "u1" } }), "u1");
+assert.equal(netLoginUsernameRuntime({ user: { username: "avatar" } }, "fallback"), "avatar");
+assert.equal(netLoginUsernameRuntime({}, "fallback"), "fallback");
+assert.equal(netLoginEmailRuntime({ user: { email: "avatar@example.com" } }), "avatar@example.com");
+assert.equal(netLoginEmailVerifiedRuntime({ user: { email_verified: true } }), true);
+assert.equal(netLoginEmailVerifiedRuntime({}), false);
+assert.equal(netLoginSnapshotBase64Runtime({ snapshot_base64: " encoded " }), "encoded");
+assert.equal(netLoginSnapshotBase64Runtime(null), "");
 
 const loadedSnapshot = {
   tick: 1,

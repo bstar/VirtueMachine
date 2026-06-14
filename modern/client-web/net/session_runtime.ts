@@ -1,4 +1,11 @@
-import type { NetLoginPayload } from "./auth_runtime.ts";
+import {
+  netLoginEmailRuntime,
+  netLoginEmailVerifiedRuntime,
+  netLoginTokenRuntime,
+  netLoginUserIdRuntime,
+  netLoginUsernameRuntime,
+  type NetLoginPayload
+} from "./auth_runtime.ts";
 import type { RemotePresencePlayer } from "./presence_runtime.ts";
 
 export type NetSessionState = {
@@ -36,12 +43,11 @@ export function resetNetPollingState(netState: NetSessionState): void {
  * Apply login response fields to net session state.
  */
 export function applyNetLoginState(netState: NetSessionState, loginPayload: NetLoginPayload | null | undefined, fallbackUsername: string): void {
-  const login = loginPayload || {};
-  netState.token = String(login?.token || "");
-  netState.userId = String(login?.user?.user_id || "");
-  netState.username = String(login?.user?.username || fallbackUsername || "");
-  netState.email = String(login?.user?.email || "");
-  netState.emailVerified = !!login?.user?.email_verified;
+  netState.token = netLoginTokenRuntime(loginPayload);
+  netState.userId = netLoginUserIdRuntime(loginPayload);
+  netState.username = netLoginUsernameRuntime(loginPayload, fallbackUsername);
+  netState.email = netLoginEmailRuntime(loginPayload);
+  netState.emailVerified = netLoginEmailVerifiedRuntime(loginPayload);
   resetNetPollingState(netState);
 }
 

@@ -62,6 +62,12 @@ assert.equal(netAccountUsernameRuntime({}, "fallback"), "fallback");
   assert.equal(netState.token, "");
   assert.equal(netState.userId, "");
   assert.equal(netState.characterId, "");
+
+  applyNetLoginState(netState, { token: "fallback-token" }, "fallback-user");
+  assert.equal(netState.token, "fallback-token");
+  assert.equal(netState.username, "fallback-user");
+  assert.equal(netState.email, "");
+  assert.equal(netState.emailVerified, false);
 }
 
 {

@@ -18,6 +18,30 @@ export type NetLoginRequest = (
   auth?: boolean
 ) => Promise<NetLoginPayload | null>;
 
+export function netLoginTokenRuntime(payload: NetLoginPayload | null | undefined): string {
+  return String(payload?.token || "");
+}
+
+export function netLoginUserIdRuntime(payload: NetLoginPayload | null | undefined): string {
+  return String(payload?.user?.user_id || "");
+}
+
+export function netLoginUsernameRuntime(payload: NetLoginPayload | null | undefined, fallback = ""): string {
+  return String(payload?.user?.username || fallback || "");
+}
+
+export function netLoginEmailRuntime(payload: NetLoginPayload | null | undefined): string {
+  return String(payload?.user?.email || "");
+}
+
+export function netLoginEmailVerifiedRuntime(payload: NetLoginPayload | null | undefined): boolean {
+  return !!payload?.user?.email_verified;
+}
+
+export function netLoginSnapshotBase64Runtime(payload: NetLoginPayload | null | undefined): string {
+  return String(payload?.snapshot_base64 || "").trim();
+}
+
 export async function performNetLoginFlow(
   inputs: {
     apiBaseInput: string;
@@ -73,8 +97,9 @@ export async function performNetLoginFlow(
   try {
     const route = deps.snapshotRoute() || "/api/world/snapshot";
     const out = await deps.request(route, { method: "GET" }, true);
-    if (out?.snapshot_base64) {
-      const loaded = deps.decodeSnapshot(String(out.snapshot_base64));
+    const snapshotBase64 = netLoginSnapshotBase64Runtime(out);
+    if (snapshotBase64) {
+      const loaded = deps.decodeSnapshot(snapshotBase64);
       if (loaded) {
         deps.applyLoadedSim(loaded);
         resumedFromSnapshot = true;
