@@ -36,6 +36,11 @@ export interface CriticalMaintenanceEvent {
   [key: string]: unknown;
 }
 
+export type WorldRuntimeInventoryItem = Record<string, unknown> & {
+  frame: number;
+  type: number;
+};
+
 export function serverObjectKeyForWorldObjectRuntime(obj: unknown): string {
   const row = obj && typeof obj === "object" ? obj as Record<string, unknown> : {};
   const direct = String(row.object_key || row.objectKey || "").trim();
@@ -63,6 +68,49 @@ export function inventoryProjectionFromServerObjectsRuntime(objects: unknown): R
     next[key] = ((Number(next[key]) >>> 0) + 1) >>> 0;
   }
   return next;
+}
+
+function normalizeInventoryItemRuntime(value: unknown): WorldRuntimeInventoryItem {
+  const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    ...row,
+    frame: Number(row.frame) | 0,
+    type: Number(row.type) | 0
+  };
+}
+
+export function inventoryItemFromTakeResponseRuntime(out: unknown, fallback: unknown): WorldRuntimeInventoryItem {
+  const row = out && typeof out === "object" ? out as Record<string, unknown> : {};
+  return normalizeInventoryItemRuntime(row.inventory_item || row.target || fallback);
+}
+
+export async function requestTakeWorldObjectRuntime(
+  args: {
+    actorId: unknown;
+    actorX: unknown;
+    actorY: unknown;
+    actorZ: unknown;
+    target: unknown;
+  },
+  request: WorldRuntimeRequest
+): Promise<WorldRuntimeJson | null> {
+  const targetKey = serverObjectKeyForWorldObjectRuntime(args.target);
+  if (!targetKey) {
+    throw new Error("target object has no authoritative key");
+  }
+  const out = await request("/api/world/objects/interact", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      verb: "take",
+      target_key: targetKey,
+      actor_id: String(args.actorId || "Avatar"),
+      actor_x: Number(args.actorX) | 0,
+      actor_y: Number(args.actorY) | 0,
+      actor_z: Number(args.actorZ) | 0
+    })
+  }, true);
+  return out && typeof out === "object" ? out : null;
 }
 
 export function normalizeIntroPhaseRuntime(phase: unknown): "pre_intro" | "post_intro" {

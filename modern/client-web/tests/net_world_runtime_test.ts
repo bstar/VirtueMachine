@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  inventoryItemFromTakeResponseRuntime,
   inventoryProjectionFromServerObjectsRuntime,
   normalizeIntroPhaseRuntime,
   requestIntroPhaseRuntime,
+  requestTakeWorldObjectRuntime,
   serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime,
   runCriticalMaintenanceRuntime
@@ -26,6 +28,48 @@ assert.deepEqual(inventoryProjectionFromServerObjectsRuntime([
   "0x123:0x01": 1
 });
 assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(null), {});
+
+assert.deepEqual(inventoryItemFromTakeResponseRuntime({
+  inventory_item: { frame: 2, object_key: "inv", type: 0x123 },
+  target: { frame: 1, object_key: "target", type: 0x122 }
+}, { frame: 0, object_key: "fallback", type: 0x121 }), { frame: 2, object_key: "inv", type: 0x123 });
+assert.deepEqual(inventoryItemFromTakeResponseRuntime({
+  target: { frame: 1, object_key: "target", type: 0x122 }
+}, { frame: 0, object_key: "fallback", type: 0x121 }), { frame: 1, object_key: "target", type: 0x122 });
+assert.deepEqual(inventoryItemFromTakeResponseRuntime(null, { frame: 0, object_key: "fallback", type: 0x121 }), {
+  frame: 0,
+  object_key: "fallback",
+  type: 0x121
+});
+
+{
+  const requested: string[] = [];
+  const out = await requestTakeWorldObjectRuntime({
+    actorId: "avatar-1",
+    actorX: "307",
+    actorY: "347",
+    actorZ: "0",
+    target: { object_key: "target-1" }
+  }, async (route, init, auth) => {
+    requested.push(`${route}:${init?.method}:${auth}:${String(init?.body || "")}`);
+    return { ok: true };
+  });
+  assert.deepEqual(requested, [
+    "/api/world/objects/interact:POST:true:{\"verb\":\"take\",\"target_key\":\"target-1\",\"actor_id\":\"avatar-1\",\"actor_x\":307,\"actor_y\":347,\"actor_z\":0}"
+  ]);
+  assert.deepEqual(out, { ok: true });
+}
+
+await assert.rejects(
+  () => requestTakeWorldObjectRuntime({
+    actorId: "avatar-1",
+    actorX: 0,
+    actorY: 0,
+    actorZ: 0,
+    target: {}
+  }, async () => ({})),
+  /target object has no authoritative key/
+);
 
 assert.equal(normalizeIntroPhaseRuntime("pre_intro"), "pre_intro");
 assert.equal(normalizeIntroPhaseRuntime("PRE_INTRO"), "pre_intro");

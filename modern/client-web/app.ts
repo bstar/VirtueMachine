@@ -123,11 +123,12 @@ import {
 } from "./net/presence_runtime.ts";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  inventoryItemFromTakeResponseRuntime,
   inventoryProjectionFromServerObjectsRuntime,
   requestIntroPhaseRuntime,
+  requestTakeWorldObjectRuntime,
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
-  serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
@@ -5002,10 +5003,6 @@ function tryTalkAtCell(sim, tx, ty) {
   return true;
 }
 
-function serverObjectKeyForLocalObject(obj) {
-  return serverObjectKeyForWorldObjectRuntime(obj);
-}
-
 function applyInventoryProjectionFromServerObjects(sim, objects) {
   if (!sim) {
     return;
@@ -5026,23 +5023,14 @@ async function netSyncInventoryProjection() {
 }
 
 async function netTakeWorldObject(obj, tx, ty, tz) {
-  const targetKey = serverObjectKeyForLocalObject(obj);
-  if (!targetKey) {
-    throw new Error("target object has no authoritative key");
-  }
-  const out = await netRequest("/api/world/objects/interact", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      verb: "take",
-      target_key: targetKey,
-      actor_id: String(state.net.characterId || state.net.userId || "Avatar"),
-      actor_x: state.sim.world.map_x | 0,
-      actor_y: state.sim.world.map_y | 0,
-      actor_z: state.sim.world.map_z | 0
-    })
-  }, true);
-  const item = out?.inventory_item || out?.target || obj;
+  const out = await requestTakeWorldObjectRuntime({
+    actorId: state.net.characterId || state.net.userId || "Avatar",
+    actorX: state.sim.world.map_x,
+    actorY: state.sim.world.map_y,
+    actorZ: state.sim.world.map_z,
+    target: obj
+  }, netRequest);
+  const item = inventoryItemFromTakeResponseRuntime(out, obj);
   addObjectToInventoryRuntime(state.sim, item);
   markObjectRemovedRuntime(state.sim, obj);
   const invKey = inventoryKeyForObjectRuntime(item);
