@@ -63,11 +63,11 @@ export function legacyDropVerbRuntime(
   const sx = Number(sim?.world?.map_x) | 0;
   const sy = Number(sim?.world?.map_y) | 0;
   const tz = Number(sim?.world?.map_z) | 0;
-  if (!isWithinChebyshevRangeRuntime(sx, sy, tx | 0, ty | 0, 1)) {
+  if (!isWithinChebyshevRangeRuntime(sx, sy, tx | 0, ty | 0, 5)) {
     return {
       diagClass: "warn",
       ok: false,
-      text: `Drop: target must be adjacent (${tx},${ty}).`
+      text: `Drop: target out of range (${tx},${ty}).`
     };
   }
   const key = firstInventoryKeyRuntime(sim);

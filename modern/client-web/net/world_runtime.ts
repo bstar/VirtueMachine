@@ -356,6 +356,7 @@ export function inventoryDisplayEntriesFromObjectsRuntime(
 
 export interface WorldRuntimeTakeResponse {
   inventory_item?: WorldRuntimeInventorySource | null;
+  respawn?: { due_at_ms?: unknown; source_object_key?: unknown };
   target?: WorldRuntimeInventorySource | null;
 }
 
@@ -395,6 +396,20 @@ export function inventoryItemFromTakeResponseRuntime(
   return normalizeInventoryItemRuntime(out?.inventory_item || out?.target || fallback);
 }
 
+export function sourceObjectKeyFromTakeResponseRuntime(
+  out: WorldRuntimeTakeResponse | null | undefined,
+  item: WorldRuntimeInventorySource | null | undefined,
+  fallback: WorldRuntimeObjectKeySource | null | undefined
+): string {
+  return String(
+    out?.respawn?.source_object_key
+      || item?.source_object_key
+      || out?.target?.source_object_key
+      || serverObjectKeyForWorldObjectRuntime(fallback)
+      || ""
+  ).trim();
+}
+
 export async function requestTakeWorldObjectRuntime(
   args: {
     actorId: string | number | null | undefined;
@@ -430,6 +445,9 @@ export async function requestDropWorldObjectRuntime(
     actorX: number;
     actorY: number;
     actorZ: number;
+    dropX?: number;
+    dropY?: number;
+    dropZ?: number;
     targetKey: string | number | null | undefined;
   },
   request: WorldRuntimeRequest
@@ -447,7 +465,10 @@ export async function requestDropWorldObjectRuntime(
       actor_id: String(args.actorId || "Avatar"),
       actor_x: Number(args.actorX) | 0,
       actor_y: Number(args.actorY) | 0,
-      actor_z: Number(args.actorZ) | 0
+      actor_z: Number(args.actorZ) | 0,
+      drop_x: Number(args.dropX ?? args.actorX) | 0,
+      drop_y: Number(args.dropY ?? args.actorY) | 0,
+      drop_z: Number(args.dropZ ?? args.actorZ) | 0
     })
   }, true);
   return out && typeof out === "object" ? out : null;
@@ -527,8 +548,23 @@ export async function requestWorldObjectsAtCell(
   z: number,
   request: WorldRuntimeRequest
 ): Promise<WorldRuntimeJson | null> {
+  return requestWorldObjectsAroundRuntime({ x, y, z, radius: 0, limit: 128 }, request);
+}
+
+export async function requestWorldObjectsAroundRuntime(
+  args: {
+    limit?: number;
+    radius?: number;
+    x: number;
+    y: number;
+    z: number;
+  },
+  request: WorldRuntimeRequest
+): Promise<WorldRuntimeJson | null> {
+  const radius = Math.max(0, Math.min(16, Number(args.radius) | 0));
+  const limit = Math.max(1, Math.min(4096, Number(args.limit) | 0 || 512));
   const out = await request(
-    `/api/world/objects?x=${encodeURIComponent(x | 0)}&y=${encodeURIComponent(y | 0)}&z=${encodeURIComponent(z | 0)}&radius=0&limit=128&projection=footprint&include_footprint=1`,
+    `/api/world/objects?x=${encodeURIComponent(args.x | 0)}&y=${encodeURIComponent(args.y | 0)}&z=${encodeURIComponent(args.z | 0)}&radius=${encodeURIComponent(radius)}&limit=${encodeURIComponent(limit)}&projection=footprint&include_footprint=1`,
     { method: "GET" },
     true
   );

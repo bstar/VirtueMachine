@@ -20,6 +20,7 @@ export type U6ObjectEntryRuntime = {
   legacyOrder?: number;
   order: number;
   renderable: boolean;
+  objectKey?: string;
   sourceArea: number;
   sourceIndex: number;
   status: number;
@@ -211,6 +212,65 @@ export class U6ObjectLayerRuntime {
     for (const e of assocEntries) {
       this.assocEntries.push(e);
     }
+  }
+
+  removeRuntimeEntryByObjectKey(objectKey: unknown): void {
+    const key = String(objectKey || "").trim();
+    if (!key) {
+      return;
+    }
+    this.entries = this.entries.filter((entry) => String(entry.objectKey || "") !== key);
+    for (const [coordKey, list] of this.byCoord.entries()) {
+      const next = list.filter((entry) => String(entry.objectKey || "") !== key);
+      if (next.length === 0) {
+        this.byCoord.delete(coordKey);
+      } else if (next.length !== list.length) {
+        this.byCoord.set(coordKey, next);
+      }
+    }
+  }
+
+  removeRuntimeEntryByServerKey(objectKey: unknown): void {
+    const key = String(objectKey || "").trim();
+    if (!key) {
+      return;
+    }
+    const match = /^a([0-9a-f]+)i([0-9a-f]+)$/i.exec(key);
+    const sourceArea = match ? parseInt(match[1], 16) : Number.NaN;
+    const sourceIndex = match ? parseInt(match[2], 16) : Number.NaN;
+    const matches = (entry: U6ObjectEntryRuntime): boolean => (
+      String(entry.objectKey || "") === key
+      || (
+        Number.isFinite(sourceArea)
+        && Number.isFinite(sourceIndex)
+        && (Number(entry.sourceArea) >>> 0) === (sourceArea >>> 0)
+        && (Number(entry.sourceIndex) >>> 0) === (sourceIndex >>> 0)
+      )
+    );
+    this.entries = this.entries.filter((entry) => !matches(entry));
+    for (const [coordKey, list] of this.byCoord.entries()) {
+      const next = list.filter((entry) => !matches(entry));
+      if (next.length === 0) {
+        this.byCoord.delete(coordKey);
+      } else if (next.length !== list.length) {
+        this.byCoord.set(coordKey, next);
+      }
+    }
+  }
+
+  upsertRuntimeEntry(entry: U6ObjectEntryRuntime): void {
+    const key = String(entry.objectKey || "").trim();
+    if (key) {
+      this.removeRuntimeEntryByServerKey(key);
+    }
+    const coordKey = this.coordKey(entry.x, entry.y, entry.z);
+    const normalized = this.applyLegacyRuntimeFixes(entry);
+    const bucket = this.byCoord.get(coordKey) || [];
+    bucket.push(normalized);
+    bucket.sort((a, b) => this.compareLegacyRenderOrder(a, b));
+    this.byCoord.set(coordKey, bucket);
+    this.entries.push(normalized);
+    this.entries.sort((a, b) => this.compareLegacyRenderOrder(a, b));
   }
 
   hasMirrorReflector(obj: U6ObjectEntryRuntime): boolean {

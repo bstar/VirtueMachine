@@ -36,10 +36,10 @@ const farDropSim = {
   inventory: { "0x123:0x00": 1 },
   world: { map_x: 10, map_y: 10, map_z: 0 }
 };
-assert.deepEqual(legacyDropVerbRuntime(farDropSim, 12, 10), {
+assert.deepEqual(legacyDropVerbRuntime(farDropSim, 16, 10), {
   diagClass: "warn",
   ok: false,
-  text: "Drop: target must be adjacent (12,10)."
+  text: "Drop: target out of range (16,10)."
 });
 assert.deepEqual(farDropSim.inventory, { "0x123:0x00": 1 });
 

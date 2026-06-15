@@ -13,6 +13,7 @@ import {
   requestTakeWorldObjectRuntime,
   serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime,
+  sourceObjectKeyFromTakeResponseRuntime,
   runCriticalMaintenanceRuntime,
   worldInventorySourcesFromJsonRuntime
 } from "../net/world_runtime.ts";
@@ -239,6 +240,18 @@ assert.deepEqual(inventoryItemFromTakeResponseRuntime(null, { frame: 0, object_k
   object_key: "fallback",
   type: 0x121
 });
+assert.equal(sourceObjectKeyFromTakeResponseRuntime({
+  inventory_item: { frame: 2, object_key: "inv:a01i002:avatar:1", source_object_key: "a01i002", type: 0x123 },
+  respawn: { source_object_key: "a01i002" },
+  target: { frame: 2, object_key: "inv:a01i002:avatar:1", source_object_key: "a01i002", type: 0x123 }
+}, { frame: 2, object_key: "inv:a01i002:avatar:1", source_object_key: "a01i002", type: 0x123 }, {
+  object_key: "a01i002"
+}), "a01i002");
+assert.equal(sourceObjectKeyFromTakeResponseRuntime({
+  target: { frame: 1, object_key: "runtime-object", type: 0x122 }
+}, { frame: 1, object_key: "runtime-object", type: 0x122 }, {
+  object_key: "runtime-object"
+}), "runtime-object");
 
 {
   const requested: string[] = [];
@@ -273,16 +286,19 @@ await assert.rejects(
   const requested: string[] = [];
   const out = await requestDropWorldObjectRuntime({
     actorId: "avatar-1",
-    actorX: 11,
-    actorY: 12,
+    actorX: 10,
+    actorY: 10,
     actorZ: 0,
+    dropX: 11,
+    dropY: 12,
+    dropZ: 0,
     targetKey: "inv:a05i009:avatar-1:1"
   }, async (route, init, auth) => {
     requested.push(`${route}:${init?.method}:${auth}:${String(init?.body || "")}`);
     return { ok: true };
   });
   assert.deepEqual(requested, [
-    "/api/world/objects/interact:POST:true:{\"verb\":\"drop\",\"target_key\":\"inv:a05i009:avatar-1:1\",\"actor_id\":\"avatar-1\",\"actor_x\":11,\"actor_y\":12,\"actor_z\":0}"
+    "/api/world/objects/interact:POST:true:{\"verb\":\"drop\",\"target_key\":\"inv:a05i009:avatar-1:1\",\"actor_id\":\"avatar-1\",\"actor_x\":10,\"actor_y\":10,\"actor_z\":0,\"drop_x\":11,\"drop_y\":12,\"drop_z\":0}"
   ]);
   assert.deepEqual(out, { ok: true });
 }

@@ -117,4 +117,69 @@ await fetched.loadOutdoor(async (name) => {
 assert.equal(fetched.filesLoaded, 1);
 assert.equal(fetched.totalLoaded, 3);
 
+fetched.upsertRuntimeEntry({
+  assocIndex: 0,
+  baseTile: 0x400,
+  coordUse: 0,
+  frame: 2,
+  index: 0xf001,
+  legacyOrder: 0x7001,
+  objectKey: "inv:a00i001:avatar:1",
+  order: 0xf001,
+  renderable: true,
+  sourceArea: 0x3f,
+  sourceIndex: 0xf001,
+  status: 0,
+  tileId: 0x402,
+  type: 0x080,
+  x: 10,
+  y: 11,
+  z: 0
+});
+assert.equal(fetched.objectsAt(10, 11, 0).some((obj) => obj.objectKey === "inv:a00i001:avatar:1"), true);
+fetched.upsertRuntimeEntry({
+  assocIndex: 0,
+  baseTile: 0x400,
+  coordUse: 0,
+  frame: 2,
+  index: 0xf001,
+  legacyOrder: 0x7001,
+  objectKey: "inv:a00i001:avatar:1",
+  order: 0xf001,
+  renderable: true,
+  sourceArea: 0x3f,
+  sourceIndex: 0xf001,
+  status: 0,
+  tileId: 0x402,
+  type: 0x080,
+  x: 12,
+  y: 13,
+  z: 0
+});
+assert.equal(fetched.objectsAt(10, 11, 0).some((obj) => obj.objectKey === "inv:a00i001:avatar:1"), false);
+assert.equal(fetched.objectsAt(12, 13, 0).some((obj) => obj.objectKey === "inv:a00i001:avatar:1"), true);
+fetched.removeRuntimeEntryByObjectKey("inv:a00i001:avatar:1");
+assert.equal(fetched.objectsAt(12, 13, 0).some((obj) => obj.objectKey === "inv:a00i001:avatar:1"), false);
+fetched.upsertRuntimeEntry({
+  assocIndex: 0,
+  baseTile: 0x400,
+  coordUse: 0,
+  frame: 2,
+  index: 0x01f,
+  legacyOrder: 0x701f,
+  order: 0x01f,
+  renderable: true,
+  sourceArea: 0x1a,
+  sourceIndex: 0x01f,
+  status: 0,
+  tileId: 0x402,
+  type: 0x080,
+  x: 14,
+  y: 15,
+  z: 0
+});
+assert.equal(fetched.objectsAt(14, 15, 0).some((obj) => obj.sourceArea === 0x1a && obj.sourceIndex === 0x01f), true);
+fetched.removeRuntimeEntryByServerKey("a1ai01f");
+assert.equal(fetched.objectsAt(14, 15, 0).some((obj) => obj.sourceArea === 0x1a && obj.sourceIndex === 0x01f), false);
+
 console.log("object_layer_runtime_test: ok");

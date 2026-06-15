@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import {
   LEGACY_COMMAND_TYPE_RUNTIME,
+  LEGACY_MOUSE_CURSOR_INDEX_RUNTIME,
   LEGACY_TARGET_VERB_RUNTIME,
+  LEGACY_WORLD_CURSOR_TILE_RUNTIME,
   buildLegacyWireCommandRuntime,
   legacyVerbCommandTypeRuntime,
   legacyVerbLabelRuntime,
+  legacyVerbMouseCursorIndexRuntime,
   legacyVerbSelectRangeRuntime,
+  legacyVerbWorldCursorTileRuntime,
   normalizeLegacyTargetVerbRuntime
 } from "../sim/legacy_command_runtime.ts";
 import {
@@ -28,6 +32,10 @@ assert.equal(normalizeLegacyTargetVerbRuntime("Attack"), LEGACY_TARGET_VERB_RUNT
 assert.equal(normalizeLegacyTargetVerbRuntime("invalid"), null);
 assert.equal(legacyVerbLabelRuntime("cast"), "Cast");
 assert.equal(legacyVerbSelectRangeRuntime("get"), -1);
+assert.equal(legacyVerbWorldCursorTileRuntime("get"), LEGACY_WORLD_CURSOR_TILE_RUNTIME.DIRECTION);
+assert.equal(legacyVerbWorldCursorTileRuntime("drop"), LEGACY_WORLD_CURSOR_TILE_RUNTIME.SELECT);
+assert.equal(legacyVerbMouseCursorIndexRuntime("drop"), LEGACY_MOUSE_CURSOR_INDEX_RUNTIME.SELECT);
+assert.equal(legacyVerbMouseCursorIndexRuntime("invalid"), LEGACY_MOUSE_CURSOR_INDEX_RUNTIME.POINTER);
 assert.equal(legacyVerbCommandTypeRuntime("talk"), LEGACY_COMMAND_TYPE_RUNTIME.TALK_AT_CELL);
 assert.deepEqual(buildLegacyWireCommandRuntime(7, LEGACY_COMMAND_TYPE_RUNTIME.USE_AT_CELL, 10, 11), {
   tick: 7,

@@ -230,6 +230,9 @@ type ServerRequestBody = {
   code?: unknown;
   container_key?: unknown;
   critical_item_policy?: unknown;
+  drop_x?: unknown;
+  drop_y?: unknown;
+  drop_z?: unknown;
   email?: unknown;
   name?: unknown;
   new_password?: unknown;
@@ -1309,6 +1312,9 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     const actorX = Number.isFinite(Number(body && body.actor_x)) ? (Number(body.actor_x) | 0) : null;
     const actorY = Number.isFinite(Number(body && body.actor_y)) ? (Number(body.actor_y) | 0) : null;
     const actorZ = Number.isFinite(Number(body && body.actor_z)) ? (Number(body.actor_z) | 0) : null;
+    const dropX = Number.isFinite(Number(body && body.drop_x)) ? (Number(body.drop_x) | 0) : null;
+    const dropY = Number.isFinite(Number(body && body.drop_y)) ? (Number(body.drop_y) | 0) : null;
+    const dropZ = Number.isFinite(Number(body && body.drop_z)) ? (Number(body.drop_z) | 0) : null;
     if (verb === "talk") {
       const start = startAuthoritativeConversation(state, {
         npcId,
@@ -1343,6 +1349,11 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       y: actorY === null ? (target.y | 0) : actorY,
       z: actorZ === null ? (target.z | 0) : actorZ
     };
+    const dropPos = {
+      x: dropX === null ? actorPos.x : dropX,
+      y: dropY === null ? actorPos.y : dropY,
+      z: dropZ === null ? actorPos.z : dropZ
+    };
 
     const container = containerKey ? findActiveObjectByKey(state, containerKey) : null;
     if (verb === "put" && !container) {
@@ -1362,6 +1373,17 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     ) {
       sendError(res, 409, "object_not_held", "target object is not held by actor");
       return;
+    }
+    if (verb === "drop") {
+      const dropDistance = Math.max(Math.abs((actorPos.x | 0) - (dropPos.x | 0)), Math.abs((actorPos.y | 0) - (dropPos.y | 0)));
+      if (dropDistance > 5 || (actorPos.z | 0) !== (dropPos.z | 0)) {
+        sendError(res, 409, "drop_out_of_range", "drop target is out of range");
+        return;
+      }
+      if (!canNpcStepInto(state, { to_x: dropPos.x, to_y: dropPos.y, to_z: dropPos.z })) {
+        sendError(res, 409, "drop_blocked", "drop target is blocked");
+        return;
+      }
     }
 
     const targetChainResult = analyzeContainmentChainViaSimCore(state.worldObjects.active, target);
@@ -1388,7 +1410,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       target,
       container,
       actorId,
-      actorPos,
+      actorPos: verb === "drop" ? dropPos : actorPos,
       chainAccessible: targetChain.chain_accessible,
       containerCycle
     });

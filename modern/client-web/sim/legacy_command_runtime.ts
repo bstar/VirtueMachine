@@ -51,6 +51,16 @@ export const LEGACY_VERB_SELECT_RANGE_RUNTIME: Record<LegacyTargetVerbRuntime, n
   [LEGACY_TARGET_VERB_RUNTIME.USE]: -1
 };
 
+export const LEGACY_WORLD_CURSOR_TILE_RUNTIME = {
+  DIRECTION: 0x16c,
+  SELECT: 0x16d
+} as const;
+
+export const LEGACY_MOUSE_CURSOR_INDEX_RUNTIME = {
+  POINTER: 0,
+  SELECT: 1
+} as const;
+
 export const LEGACY_VERB_COMMAND_TYPE_RUNTIME: Record<LegacyTargetVerbRuntime, number> = {
   [LEGACY_TARGET_VERB_RUNTIME.ATTACK]: LEGACY_COMMAND_TYPE_RUNTIME.ATTACK_AT_CELL,
   [LEGACY_TARGET_VERB_RUNTIME.CAST]: LEGACY_COMMAND_TYPE_RUNTIME.CAST_AT_CELL,
@@ -77,6 +87,17 @@ export function legacyVerbCommandTypeRuntime(value: unknown): number {
 export function legacyVerbSelectRangeRuntime(value: unknown): number {
   const verb = normalizeLegacyTargetVerbRuntime(value);
   return verb ? LEGACY_VERB_SELECT_RANGE_RUNTIME[verb] : 0;
+}
+
+export function legacyVerbWorldCursorTileRuntime(value: unknown): number {
+  return legacyVerbSelectRangeRuntime(value) < 0
+    ? LEGACY_WORLD_CURSOR_TILE_RUNTIME.DIRECTION
+    : LEGACY_WORLD_CURSOR_TILE_RUNTIME.SELECT;
+}
+
+export function legacyVerbMouseCursorIndexRuntime(value: unknown): number {
+  const verb = normalizeLegacyTargetVerbRuntime(value);
+  return verb ? LEGACY_MOUSE_CURSOR_INDEX_RUNTIME.SELECT : LEGACY_MOUSE_CURSOR_INDEX_RUNTIME.POINTER;
 }
 
 export function legacyVerbLabelRuntime(value: unknown): string {
