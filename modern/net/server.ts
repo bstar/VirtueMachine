@@ -62,6 +62,7 @@ const {
 } = require("./world_object_collision.ts");
 const {
   canTakeWorldObject,
+  DEFAULT_DROPPED_CLONE_DESPAWN_MS,
   inventoryCloneKeyForTake,
   isBaselineWorldObject,
   pickupRespawnPolicyForObject,
@@ -214,6 +215,7 @@ type ServerState = {
   scheduleRuntime: U6ScheduleTableRuntime;
   tokens: ServerTokenRuntime[];
   users: ServerUserRuntime[];
+  recentExpiredWorldObjectKeys: string[];
   worldClock: WorldClockRuntime;
   worldInteractionLog: WorldInteractionLogRuntime;
   worldObjects: WorldObjectState;
@@ -448,19 +450,39 @@ function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown): WorldObj
 }
 
 function worldObjectMeta(state: Pick<ServerState, "worldObjects">) {
-  return buildWorldObjectMeta(state, OBJECT_BASELINE_DIR);
+  return {
+    ...buildWorldObjectMeta(state, OBJECT_BASELINE_DIR),
+    expired_objects: Array.isArray((state as Partial<ServerState>).recentExpiredWorldObjectKeys)
+      ? [...((state as Partial<ServerState>).recentExpiredWorldObjectKeys || [])]
+      : []
+  };
 }
 
-function expireDueWorldObjectRespawns(state: ServerState, nowMs = Date.now()): boolean {
+function expireDueWorldObjectLifecycles(state: ServerState, nowMs = Date.now()): boolean {
+  state.recentExpiredWorldObjectKeys = [];
   const respawns = state.worldObjects.deltas.respawns || {};
   const maturedKeys = Object.keys(respawns).filter((key) => Number(respawns[key]?.due_at_ms) <= nowMs);
-  if (maturedKeys.length === 0) {
+  const spawned = state.worldObjects.deltas.spawned || [];
+  const expiredSpawnedKeys = spawned
+    .filter((obj) => {
+      const despawnAtMs = Number(obj.despawn_at_ms) || 0;
+      return despawnAtMs > 0 && despawnAtMs <= nowMs;
+    })
+    .map((obj) => String(obj.object_key || ""))
+    .filter(Boolean);
+  const activeSpawned = spawned.filter((obj) => {
+    const despawnAtMs = Number(obj.despawn_at_ms) || 0;
+    return despawnAtMs <= 0 || despawnAtMs > nowMs;
+  });
+  if (maturedKeys.length === 0 && activeSpawned.length === spawned.length) {
     return false;
   }
   for (const key of maturedKeys) {
     delete state.worldObjects.deltas.removed[key];
     delete state.worldObjects.deltas.respawns[key];
   }
+  state.recentExpiredWorldObjectKeys = expiredSpawnedKeys;
+  state.worldObjects.deltas.spawned = activeSpawned;
   state.worldObjects = buildWorldObjectState(RUNTIME_DIR, state.worldObjects.deltas);
   refreshWorldObjectIndexes(state);
   return true;
@@ -558,6 +580,7 @@ function loadState(): ServerState {
     criticalPolicy: readJsonValidated(FILES.criticalPolicy, defaultCriticalPolicy(), normalizeCriticalPolicyRuntime),
     worldObjects,
     mapRuntime: new U6MapRuntime(RUNTIME_DIR),
+    recentExpiredWorldObjectKeys: [],
     worldInteractionLog: readJsonValidated(FILES.worldInteractionLog, defaultWorldInteractionLog(), normalizeWorldInteractionLog)
   };
   if (!Array.isArray(state.presence)) {
@@ -1206,7 +1229,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/objects") {
-    if (expireDueWorldObjectRespawns(state)) {
+    if (expireDueWorldObjectLifecycles(state)) {
       persistState(state);
     }
     const runtimeContract = runtimeContractFromHeaders(req);
@@ -1223,8 +1246,11 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       : "anchor";
     const includeFootprint = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
     const withFootprint = includeFootprint === "1" || includeFootprint === "true" || includeFootprint === "on";
+    const queryableWorldObjects = state.worldObjects.active.filter(
+      (obj) => coordUseOfStatus(obj.status) === OBJ_COORD_USE_LOCXYZ
+    );
     const selection = selectWorldObjectsViaSimCore({
-      objects: state.worldObjects.active,
+      objects: queryableWorldObjects,
       tileFlags: state.worldObjects.tileFlags,
       hasX,
       x: wx,
@@ -1241,7 +1267,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return;
     }
     const byKey = new Map<string, WorldObject>();
-    for (const obj of state.worldObjects.active) {
+    for (const obj of queryableWorldObjects) {
       const key = String(obj.object_key || "");
       if (key) byKey.set(key, obj);
     }
@@ -1293,7 +1319,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/objects/interact") {
-    if (expireDueWorldObjectRespawns(state)) {
+    if (expireDueWorldObjectLifecycles(state)) {
       persistState(state);
     }
     const runtimeContract = runtimeContractFromHeaders(req);
@@ -1446,7 +1472,10 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (baselineTakeCreatesClone) {
       const clone = {
         ...target,
+        despawn_at_ms: 0,
+        dropped_at_ms: 0,
         object_key: inventoryCloneKeyForTake(state, target, actorId),
+        source_object_key: String(target.object_key || ""),
         source_kind: "spawned"
       };
       Object.assign(clone, applied.patch || {});
@@ -1475,6 +1504,16 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       };
     } else {
       Object.assign(target, applied.patch || {});
+      if (String(target.source_kind || "").startsWith("spawned")) {
+        if (verb === "drop") {
+          const droppedAtMs = Date.now();
+          target.dropped_at_ms = droppedAtMs;
+          target.despawn_at_ms = droppedAtMs + DEFAULT_DROPPED_CLONE_DESPAWN_MS;
+        } else if (verb === "take" || verb === "put" || verb === "equip") {
+          target.dropped_at_ms = 0;
+          target.despawn_at_ms = 0;
+        }
+      }
       persistPatchedObject(state, target);
     }
     const event = recordWorldInteractionEvent(state, {
@@ -1518,7 +1557,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/inventory") {
-    if (expireDueWorldObjectRespawns(state)) {
+    if (expireDueWorldObjectLifecycles(state)) {
       persistState(state);
     }
     const actorId = String(url.searchParams.get("actor_id") || user.user_id || "").trim();

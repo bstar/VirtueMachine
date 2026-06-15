@@ -1,5 +1,5 @@
 import { coordUseOfStatus } from "../common/u6_object_constants.ts";
-import { DEFAULT_PICKUP_RESPAWN_MS } from "./world_object_policy.ts";
+import { DEFAULT_DROPPED_CLONE_DESPAWN_MS, DEFAULT_PICKUP_RESPAWN_MS } from "./world_object_policy.ts";
 import type {
   MovedWorldObjectDelta,
   RespawnWorldObjectDelta,
@@ -41,11 +41,14 @@ type MovedWorldObjectDeltaSourceRuntime = {
 
 type SpawnedWorldObjectDeltaSourceRuntime = MovedWorldObjectDeltaSourceRuntime & {
   amount?: unknown;
+  despawn_at_ms?: unknown;
+  dropped_at_ms?: unknown;
   frame?: unknown;
   object_key?: unknown;
   shape_type?: unknown;
   source_area?: unknown;
   source_index?: unknown;
+  source_object_key?: unknown;
   tile_id?: unknown;
   type?: unknown;
 };
@@ -73,6 +76,11 @@ export type WorldObjectMetaRuntime = {
   }>;
   loaded_at?: string;
   source_dir?: string;
+};
+
+export type WorldObjectInventorySafetyIssueRuntime = {
+  code: string;
+  object_key: string;
 };
 
 function parseU16LE(bytes: Uint8Array, off: number): number {
@@ -237,9 +245,57 @@ export function parseObjBlkRecordsRuntime(
   return out;
 }
 
-function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, index: number): SpawnedWorldObjectDelta {
+function sourceObjectKeyFromCloneKey(objectKey: string): string {
+  const match = /^inv:([^:]+):/.exec(objectKey);
+  return match ? match[1] : "";
+}
+
+function repairSpawnedCloneIdentity(
+  spawned: SpawnedWorldObjectDelta,
+  baselineByKey: Map<string, WorldObject>,
+  nowMs: number
+): SpawnedWorldObjectDelta {
+  const sourceObjectKey = String(spawned.source_object_key || sourceObjectKeyFromCloneKey(String(spawned.object_key || ""))).trim();
+  const isLooseInventoryClone = String(spawned.object_key || "").startsWith("inv:")
+    && coordUseOfStatus(spawned.status) === 0
+    && String(spawned.holder_kind || "none") === "none";
+  const migratedDropTimestamps = isLooseInventoryClone && !(Number(spawned.despawn_at_ms) > 0)
+    ? {
+        dropped_at_ms: Math.floor(nowMs),
+        despawn_at_ms: Math.floor(nowMs + DEFAULT_DROPPED_CLONE_DESPAWN_MS)
+      }
+    : {};
+  if (!sourceObjectKey) {
+    return { ...spawned, ...migratedDropTimestamps };
+  }
+  const parent = baselineByKey.get(sourceObjectKey);
+  if (!parent) {
+    return { ...spawned, source_object_key: sourceObjectKey, ...migratedDropTimestamps };
+  }
+  const sourceMatchesParent = (Number(spawned.source_area) >>> 0) === (Number(parent.source_area) >>> 0)
+    && (Number(spawned.source_index) >>> 0) === (Number(parent.source_index) >>> 0);
+  if (!sourceMatchesParent) {
+    return { ...spawned, source_object_key: sourceObjectKey, ...migratedDropTimestamps };
+  }
   return {
-    object_key: String(value.object_key || `spawn_${index}`),
+    ...spawned,
+    ...migratedDropTimestamps,
+    source_object_key: sourceObjectKey,
+    shape_type: Number(parent.shape_type) & 0xffff,
+    type: Number(parent.type) & 0x3ff,
+    frame: Number(parent.frame) & 0x3f,
+    tile_id: Number(parent.tile_id) & 0xffff
+  };
+}
+
+function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, index: number): SpawnedWorldObjectDelta {
+  const objectKey = String(value.object_key || `spawn_${index}`);
+  const sourceObjectKey = String(value.source_object_key || sourceObjectKeyFromCloneKey(objectKey));
+  return {
+    object_key: objectKey,
+    source_object_key: sourceObjectKey,
+    despawn_at_ms: Number.isFinite(Number(value.despawn_at_ms)) ? Math.max(0, Math.floor(Number(value.despawn_at_ms))) : 0,
+    dropped_at_ms: Number.isFinite(Number(value.dropped_at_ms)) ? Math.max(0, Math.floor(Number(value.dropped_at_ms))) : 0,
     source_area: Number(value.source_area) >>> 0,
     source_index: Number(value.source_index) >>> 0,
     status: Number(value.status) & 0xff,
@@ -345,8 +401,21 @@ export function buildWorldObjectStateRuntime(args: {
 }): WorldObjectState {
   const baselineObjects = Array.isArray(args.baseline.objects) ? args.baseline.objects : [];
   const deltas = normalizeWorldObjectDeltas(args.rawDeltas);
-  const active: WorldObject[] = [];
   const nowMs = Number(args.nowMs);
+  const baselineByKey = new Map<string, WorldObject>();
+  for (const b of baselineObjects) {
+    const key = String(b.object_key || "");
+    if (key) {
+      baselineByKey.set(key, b);
+    }
+  }
+  deltas.spawned = deltas.spawned
+    .filter((spawned) => {
+      const despawnAtMs = Number(spawned.despawn_at_ms) || 0;
+      return despawnAtMs <= 0 || despawnAtMs > nowMs;
+    })
+    .map((spawned) => repairSpawnedCloneIdentity(spawned, baselineByKey, nowMs));
+  const active: WorldObject[] = [];
   for (const b of baselineObjects) {
     const objectKey = String(b.object_key || "");
     const respawn = deltas.respawns[objectKey];
@@ -385,6 +454,37 @@ export function buildWorldObjectStateRuntime(args: {
     active,
     activeByAnchor: args.buildObjectAnchorIndex(active)
   };
+}
+
+export function inventorySafetyIssuesForSpawnedWorldObjectsRuntime(
+  spawnedObjects: readonly SpawnedWorldObjectDelta[] | null | undefined
+): WorldObjectInventorySafetyIssueRuntime[] {
+  const issues: WorldObjectInventorySafetyIssueRuntime[] = [];
+  for (const obj of spawnedObjects || []) {
+    if (coordUseOfStatus(obj.status) !== 0x10) {
+      continue;
+    }
+    const objectKey = String(obj.object_key || "").trim();
+    const sourceObjectKey = String(obj.source_object_key || "").trim();
+    const holderKind = String(obj.holder_kind || "").trim();
+    const holderId = String(obj.holder_id || "").trim();
+    if (!objectKey.startsWith("inv:")) {
+      issues.push({ code: "held_inventory_key_not_clone", object_key: objectKey });
+    }
+    if (!sourceObjectKey) {
+      issues.push({ code: "held_inventory_missing_source", object_key: objectKey });
+    }
+    if (objectKey && sourceObjectKey && objectKey === sourceObjectKey) {
+      issues.push({ code: "held_inventory_aliases_source", object_key: objectKey });
+    }
+    if (holderKind !== "npc" || !holderId) {
+      issues.push({ code: "held_inventory_missing_holder", object_key: objectKey });
+    }
+    if (Number(obj.dropped_at_ms) > 0 || Number(obj.despawn_at_ms) > 0) {
+      issues.push({ code: "held_inventory_has_drop_timer", object_key: objectKey });
+    }
+  }
+  return issues;
 }
 
 function isStatus0010(status: unknown): boolean {
@@ -518,7 +618,9 @@ export function persistPatchedObject(state: WorldObjectStateContainer, obj: Worl
         status: moved.status ?? (Number(state.worldObjects.deltas.spawned[index].status) & 0xff),
         holder_kind: moved.holder_kind,
         holder_id: moved.holder_id,
-        holder_key: moved.holder_key
+        holder_key: moved.holder_key,
+        despawn_at_ms: Number(obj.despawn_at_ms) > 0 ? Math.floor(Number(obj.despawn_at_ms)) : 0,
+        dropped_at_ms: Number(obj.dropped_at_ms) > 0 ? Math.floor(Number(obj.dropped_at_ms)) : 0
       };
     }
     return;

@@ -10,6 +10,7 @@ export interface TargetWorldObjectRuntime {
   type: number;
   frame: number;
   baseTile?: number;
+  footprint?: ReadonlyArray<{ x?: unknown; y?: unknown; z?: unknown }>;
   tile_id?: number;
   renderable?: boolean;
   legacyOrder?: number;
@@ -112,6 +113,31 @@ function targetObjectCoordUseRuntime(obj: TargetWorldObjectRuntime | null | unde
   return coordUseOfStatus(Number(obj?.status) | 0);
 }
 
+function targetObjectOccupiesCellRuntime(obj: TargetWorldObjectRuntime, tx: number, ty: number, tz: number): boolean {
+  if (Array.isArray(obj.footprint)) {
+    for (const cell of obj.footprint) {
+      if ((Number(cell?.x) | 0) === (tx | 0)
+        && (Number(cell?.y) | 0) === (ty | 0)
+        && (Number(cell?.z) | 0) === (tz | 0)) {
+        return true;
+      }
+    }
+  }
+  const ox = Number(obj.x);
+  const oy = Number(obj.y);
+  const oz = Number(obj.z);
+  if (Number.isFinite(ox) && (ox | 0) !== (tx | 0)) {
+    return false;
+  }
+  if (Number.isFinite(oy) && (oy | 0) !== (ty | 0)) {
+    return false;
+  }
+  if (Number.isFinite(oz) && (oz | 0) !== (tz | 0)) {
+    return false;
+  }
+  return true;
+}
+
 function targetObjectOrderRuntime(obj: TargetWorldObjectRuntime, fallbackIndex: number): number {
   const legacyOrder = Number(obj.legacyOrder ?? obj.legacy_order);
   if (Number.isFinite(legacyOrder)) {
@@ -140,16 +166,7 @@ function orderedLegacyLocationObjectsRuntime(
     if (targetObjectCoordUseRuntime(obj) !== OBJ_COORD_USE_LOCXYZ) {
       continue;
     }
-    const ox = Number(obj.x);
-    const oy = Number(obj.y);
-    const oz = Number(obj.z);
-    if (Number.isFinite(ox) && (ox | 0) !== (tx | 0)) {
-      continue;
-    }
-    if (Number.isFinite(oy) && (oy | 0) !== (ty | 0)) {
-      continue;
-    }
-    if (Number.isFinite(oz) && (oz | 0) !== (tz | 0)) {
+    if (!targetObjectOccupiesCellRuntime(obj, tx, ty, tz)) {
       continue;
     }
     out.push({ obj, order: targetObjectOrderRuntime(obj, idx), index: idx });

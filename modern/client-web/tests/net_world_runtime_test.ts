@@ -13,6 +13,7 @@ import {
   requestTakeWorldObjectRuntime,
   serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime,
+  shouldHideServerWorldObjectFromLayerRuntime,
   sourceObjectKeyFromTakeResponseRuntime,
   runCriticalMaintenanceRuntime,
   worldInventorySourcesFromJsonRuntime
@@ -24,6 +25,23 @@ assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: 5, index: 9 }), 
 assert.equal(serverObjectKeyForWorldObjectRuntime({ source_area: 0x2a, source_index: 0x1b }), "a2ai01b");
 assert.equal(serverObjectKeyForWorldObjectRuntime({ sourceArea: "bad", index: 9 }), "");
 assert.equal(serverObjectKeyForWorldObjectRuntime(null), "");
+
+const hiddenKeys = new Set(["a1ai228"]);
+const isHiddenForLayerTest = (key: string): boolean => hiddenKeys.has(key);
+assert.equal(shouldHideServerWorldObjectFromLayerRuntime({
+  object_key: "a1ai228",
+  source_kind: "baseline"
+}, isHiddenForLayerTest), true);
+assert.equal(shouldHideServerWorldObjectFromLayerRuntime({
+  object_key: "inv:a1ai228:avatar:1",
+  source_kind: "spawned",
+  source_object_key: "a1ai228"
+}, isHiddenForLayerTest), false);
+assert.equal(shouldHideServerWorldObjectFromLayerRuntime({
+  object_key: "a1ai999",
+  source_kind: "baseline_moved",
+  source_object_key: "a1ai228"
+}, isHiddenForLayerTest), true);
 
 const decodedInventorySources = worldInventorySourcesFromJsonRuntime([
   { type: 0x123, frame: 0, tile_id: 0x345 },

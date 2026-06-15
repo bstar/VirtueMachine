@@ -3,6 +3,7 @@ import {
   compareLegacyWorldObjectOrder,
   buildWorldObjectStateRuntime,
   findActiveObjectByKey,
+  inventorySafetyIssuesForSpawnedWorldObjectsRuntime,
   normalizeWorldObjectDeltas,
   parseBaseTileMapRuntime,
   parseObjBlkRecordsRuntime,
@@ -310,5 +311,261 @@ assert.deepEqual(worldObjectMeta(hiddenMetaState, "savegame").hidden_objects.map
   respawn_ms: 600000,
   policy: "default"
 }]);
+
+const cloneLifecycleBaseline = {
+  source_dir: "/baseline",
+  objects: [
+    {
+      object_key: "a00i010",
+      source_area: 0,
+      source_index: 0x10,
+      source_kind: "baseline",
+      status: 0,
+      x: 10,
+      y: 11,
+      z: 0,
+      legacy_order: 1
+    }
+  ]
+};
+const cloneLifecycleDeltas = {
+  removed: {
+    a00i010: true
+  },
+  respawns: {
+    a00i010: {
+      due_at_ms: 2000,
+      taken_at_ms: 1000,
+      respawn_ms: 1000,
+      policy: "default"
+    }
+  },
+  spawned: [{
+    object_key: "inv:a00i010:avatar:1",
+    source_object_key: "a00i010",
+    source_area: 0,
+    source_index: 0x10,
+    status: 0x10,
+    type: 0x123,
+    frame: 0,
+    tile_id: 0x345,
+    x: 10,
+    y: 11,
+    z: 0,
+    holder_kind: "npc",
+    holder_id: "avatar",
+    holder_key: ""
+  }]
+};
+const hiddenParentState = buildWorldObjectStateRuntime({
+  baseline: cloneLifecycleBaseline,
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 1500,
+  rawDeltas: cloneLifecycleDeltas,
+  terrainType: new Uint8Array(),
+  tileFlags: new Uint8Array()
+});
+assert.deepEqual(
+  hiddenParentState.active.map((obj) => String(obj.object_key || "")),
+  ["inv:a00i010:avatar:1"],
+  "picked-up parent should hide while clone persists"
+);
+const respawnedParentState = buildWorldObjectStateRuntime({
+  baseline: cloneLifecycleBaseline,
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 2500,
+  rawDeltas: cloneLifecycleDeltas,
+  terrainType: new Uint8Array(),
+  tileFlags: new Uint8Array()
+});
+assert.deepEqual(
+  respawnedParentState.active.map((obj) => String(obj.object_key || "")).sort(),
+  ["a00i010", "inv:a00i010:avatar:1"],
+  "respawned parent should return without deleting existing clone"
+);
+assert.equal(respawnedParentState.active.find((obj) => obj.object_key === "a00i010")?.source_kind, "baseline");
+assert.equal(respawnedParentState.active.find((obj) => obj.object_key === "inv:a00i010:avatar:1")?.source_kind, "spawned");
+assert.equal(respawnedParentState.active.find((obj) => obj.object_key === "inv:a00i010:avatar:1")?.source_object_key, "a00i010");
+
+const legacyCloneDeltas = normalizeWorldObjectDeltas({
+  spawned: [{
+    object_key: "inv:a00i010:avatar:2",
+    source_object_key: "",
+    source_area: 0,
+    source_index: 0x10,
+    status: 0x10,
+    type: 0x123,
+    frame: 0,
+    tile_id: 0x345,
+    x: 10,
+    y: 11,
+    z: 0,
+    holder_kind: "npc",
+    holder_id: "avatar",
+    holder_key: ""
+  }]
+});
+assert.equal(
+  legacyCloneDeltas.spawned[0]?.source_object_key,
+  "a00i010",
+  "legacy inventory clone records should recover the parent object key from inv:<parent>:... ids"
+);
+
+const corruptedCloneIdentityState = buildWorldObjectStateRuntime({
+  baseline: {
+    objects: [{
+      object_key: "a00i020",
+      source_area: 0,
+      source_index: 0x20,
+      shape_type: 0,
+      type: 0x132,
+      frame: 1,
+      tile_id: 0x470,
+      status: 0,
+      x: 20,
+      y: 21,
+      z: 0
+    }]
+  },
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 2500,
+  rawDeltas: {
+    spawned: [{
+      object_key: "inv:a00i020:avatar:3",
+      source_area: 0,
+      source_index: 0x20,
+      status: 0x10,
+      type: 0x0e8,
+      frame: 0,
+      tile_id: 0x357,
+      x: 20,
+      y: 21,
+      z: 0,
+      holder_kind: "npc",
+      holder_id: "avatar"
+    }]
+  },
+  terrainType: new Uint8Array(),
+  tileFlags: new Uint8Array()
+});
+const repairedClone = corruptedCloneIdentityState.deltas.spawned.find((obj) => obj.object_key === "inv:a00i020:avatar:3");
+assert.equal(repairedClone?.source_object_key, "a00i020");
+assert.equal(repairedClone?.type, 0x132);
+assert.equal(repairedClone?.frame, 1);
+assert.equal(repairedClone?.tile_id, 0x470);
+
+const droppedCloneBeforeDespawnState = buildWorldObjectStateRuntime({
+  baseline: { objects: [] },
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 1500,
+  rawDeltas: {
+    spawned: [{
+      object_key: "inv:a00i020:avatar:4",
+      source_object_key: "a00i020",
+      source_area: 0,
+      source_index: 0x20,
+      status: 0,
+      type: 0x132,
+      frame: 1,
+      tile_id: 0x470,
+      x: 20,
+      y: 21,
+      z: 0,
+      holder_kind: "none",
+      holder_id: "",
+      holder_key: "",
+      dropped_at_ms: 1000,
+      despawn_at_ms: 2000
+    }]
+  },
+  terrainType: new Uint8Array(),
+  tileFlags: new Uint8Array()
+});
+assert.equal(droppedCloneBeforeDespawnState.active.some((obj) => obj.object_key === "inv:a00i020:avatar:4"), true);
+assert.equal(droppedCloneBeforeDespawnState.deltas.spawned.length, 1);
+
+const droppedCloneAfterDespawnState = buildWorldObjectStateRuntime({
+  baseline: { objects: [] },
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 2500,
+  rawDeltas: droppedCloneBeforeDespawnState.deltas,
+  terrainType: new Uint8Array(),
+  tileFlags: new Uint8Array()
+});
+assert.equal(droppedCloneAfterDespawnState.active.some((obj) => obj.object_key === "inv:a00i020:avatar:4"), false);
+assert.equal(droppedCloneAfterDespawnState.deltas.spawned.length, 0);
+
+const legacyLooseCloneTimerState = buildWorldObjectStateRuntime({
+  baseline: { objects: [] },
+  buildObjectAnchorIndex: (objects) => new Map([["all", objects]]),
+  nowMs: 3000,
+  rawDeltas: {
+    spawned: [{
+      object_key: "inv:a00i020:avatar:5",
+      source_object_key: "a00i020",
+      source_area: 0,
+      source_index: 0x20,
+      status: 0,
+      type: 0x132,
+      frame: 1,
+      tile_id: 0x470,
+      x: 20,
+      y: 21,
+      z: 0,
+      holder_kind: "none",
+      holder_id: "",
+      holder_key: ""
+    }, {
+      object_key: "inv:a00i020:avatar:6",
+      source_object_key: "a00i020",
+      source_area: 0,
+      source_index: 0x20,
+      status: 0x10,
+      type: 0x132,
+      frame: 1,
+      tile_id: 0x470,
+      x: 20,
+      y: 21,
+      z: 0,
+      holder_kind: "npc",
+      holder_id: "avatar",
+      holder_key: ""
+    }]
+  },
+  terrainType: new Uint8Array(),
+  tileFlags: new Uint8Array()
+});
+const migratedLooseClone = legacyLooseCloneTimerState.deltas.spawned.find((obj) => obj.object_key === "inv:a00i020:avatar:5");
+const heldClone = legacyLooseCloneTimerState.deltas.spawned.find((obj) => obj.object_key === "inv:a00i020:avatar:6");
+assert.equal(migratedLooseClone?.dropped_at_ms, 3000);
+assert.equal(migratedLooseClone?.despawn_at_ms, 603000);
+assert.equal(heldClone?.dropped_at_ms, 0);
+assert.equal(heldClone?.despawn_at_ms, 0);
+assert.deepEqual(inventorySafetyIssuesForSpawnedWorldObjectsRuntime(legacyLooseCloneTimerState.deltas.spawned), []);
+assert.deepEqual(inventorySafetyIssuesForSpawnedWorldObjectsRuntime([{
+  object_key: "a00i020",
+  source_object_key: "a00i020",
+  source_area: 0,
+  source_index: 0x20,
+  status: 0x10,
+  shape_type: 0x132,
+  amount: 0,
+  type: 0x132,
+  frame: 1,
+  tile_id: 0x470,
+  x: 20,
+  y: 21,
+  z: 0,
+  holder_kind: "none",
+  holder_id: "",
+  holder_key: "",
+  dropped_at_ms: 3000,
+  despawn_at_ms: 603000
+}]).map((issue) => issue.code), [
+  "held_inventory_key_not_clone",
+  "held_inventory_aliases_source",
+  "held_inventory_missing_holder",
+  "held_inventory_has_drop_timer"
+]);
 
 console.log("world_object_state_runtime_test: ok");

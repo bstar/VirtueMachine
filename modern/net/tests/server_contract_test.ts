@@ -354,6 +354,21 @@ async function main() {
       assert.deepEqual(take.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
       carriedKey = String(take.body?.target?.object_key || "");
 
+      const afterTakeObjects = await jsonFetch(baseUrl, `/api/world/objects?x=${actorX}&y=${actorY}&z=${actorZ}&radius=0&limit=64&projection=footprint&include_footprint=1`, {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(afterTakeObjects.status, 200);
+      assert.equal(
+        findObjectByKey(afterTakeObjects.body?.objects || [], targetKey),
+        null,
+        "taken baseline source object must be absent from world queries until respawn"
+      );
+      assert.ok(
+        (afterTakeObjects.body?.meta?.hidden_objects || []).some((row) => String(row?.object_key || "") === targetKey),
+        "taken baseline source object must be advertised as hidden in world-object metadata"
+      );
+
       const equip = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,
@@ -589,6 +604,8 @@ async function main() {
       assert.equal(takeAgain.status, 200);
       assert.equal(coordUseOfStatus(takeAgain.body?.target?.status), OBJ_COORD_USE_INVEN);
       assert.equal(String(takeAgain.body?.target?.holder_kind || ""), "npc");
+      assert.equal(Number(takeAgain.body?.target?.despawn_at_ms || 0), 0);
+      assert.equal(Number(takeAgain.body?.target?.dropped_at_ms || 0), 0);
 
       const drop = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
@@ -605,6 +622,11 @@ async function main() {
       assert.equal(drop.status, 200);
       assert.equal(coordUseOfStatus(drop.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
       assert.equal(String(drop.body?.target?.holder_kind || ""), "none");
+      assert.ok(Number(drop.body?.target?.dropped_at_ms || 0) > 0);
+      assert.equal(
+        Number(drop.body?.target?.despawn_at_ms || 0) - Number(drop.body?.target?.dropped_at_ms || 0),
+        10 * 60 * 1000
+      );
       assert.equal(Number(drop.body?.interaction_checkpoint?.seq), 7);
       assert.ok(String(drop.body?.interaction_checkpoint?.hash || "").length > 0);
       return {
@@ -627,6 +649,7 @@ async function main() {
     assert.ok(targetAfter, "cloned inventory object must remain addressable by object_key after lifecycle");
     assert.equal(coordUseOfStatus(targetAfter.status), OBJ_COORD_USE_LOCXYZ);
     assert.equal(String(targetAfter.holder_kind || ""), "none");
+    assert.ok(Number(targetAfter.despawn_at_ms || 0) > Number(targetAfter.dropped_at_ms || 0));
 
     const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", {
       method: "POST",

@@ -185,6 +185,31 @@ function testLegacyGetSelectionResolution() {
     deps
   });
   assert.equal(ignored.ok && ignored.object.object_key, "real", "tile-ignored selections should fall back like C_27A1_0919");
+
+  const footprintObject = resolveLegacyGetSelectionRuntime({
+    world,
+    objects: [
+      { object_key: "foot_rail", renderable: true, legacy_order: 568, type: 0x0e0, frame: 2, tile_id: 0x349, status: 0, x: 11, y: 10, z: 0 },
+      {
+        object_key: "jug",
+        renderable: true,
+        legacy_order: 567,
+        type: 0x078,
+        frame: 0,
+        tile_id: 0x285,
+        status: 0,
+        x: 12,
+        y: 10,
+        z: 0,
+        footprint: [{ x: 11, y: 10, z: 0 }]
+      }
+    ],
+    sim: {},
+    tx: 11,
+    ty: 10,
+    deps
+  });
+  assert.equal(footprintObject.ok && footprintObject.object.object_key, "jug", "server footprint objects should be selectable at occupied cells");
 }
 
 function testAttackTargetResolution() {

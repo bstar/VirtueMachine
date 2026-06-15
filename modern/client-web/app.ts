@@ -172,6 +172,7 @@ import {
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
   setIntroPhaseRuntime,
+  shouldHideServerWorldObjectFromLayerRuntime,
   sourceObjectKeyFromTakeResponseRuntime,
   worldInventorySourcesFromJsonRuntime,
   type CriticalMaintenanceEvent,
@@ -5092,14 +5093,20 @@ async function netTakeWorldObject(
   applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
   const item = inventoryItemFromTakeResponseRuntime(out, obj);
   const sourceObj = obj as InventoryObjectRuntime & { key?: unknown; object_key?: unknown };
-  const sourceObjectKey = sourceObjectKeyFromTakeResponseRuntime(out, item, sourceObj);
-  if (sourceObjectKey && state.objectLayer) {
-    state.objectLayer.removeRuntimeEntryByServerKey(sourceObjectKey);
+  const takenObjectKey = String(sourceObj.object_key || sourceObj.key || "").trim();
+  if (takenObjectKey.startsWith("inv:") && state.objectLayer) {
+    state.objectLayer.removeRuntimeEntryByAuthoritativeKey(takenObjectKey);
   }
-  markAuthoritativeWorldObjectHidden(
-    sourceObjectKey,
-    out?.respawn?.due_at_ms
-  );
+  const sourceObjectKey = sourceObjectKeyFromTakeResponseRuntime(out, item, sourceObj);
+  if (out?.respawn?.source_object_key || out?.respawn?.due_at_ms) {
+    if (state.objectLayer) {
+      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(sourceObjectKey);
+    }
+    markAuthoritativeWorldObjectHidden(
+      sourceObjectKey,
+      out?.respawn?.due_at_ms
+    );
+  }
   const inventoryObjects = inventoryObjectsFromServerObjectsRuntime([item]);
   if (!state.sim.inventoryObjects) {
     state.sim.inventoryObjects = [];
@@ -5132,6 +5139,7 @@ function targetObjectsFromServerObjects(objects: readonly WorldRuntimeServerObje
     const objectKey = String(row.object_key || "").trim();
     const type = Number(row.type);
     const frame = Number(row.frame);
+    const sourceIndex = Number(row.source_index) >>> 0;
     if (!objectKey || !Number.isFinite(type) || !Number.isFinite(frame)) {
       continue;
     }
@@ -5140,15 +5148,16 @@ function targetObjectsFromServerObjects(objects: readonly WorldRuntimeServerObje
       key: objectKey,
       type: Number(type) & 0x3ff,
       frame: Number(frame) & 0x3f,
+      footprint: Array.isArray(row.footprint) ? row.footprint : undefined,
       tile_id: Number(row.tile_id) & 0xffff,
       status: Number(row.status) & 0xff,
       x: Number(row.x) | 0,
       y: Number(row.y) | 0,
       z: Number(row.z) | 0,
-      index: Number(row.source_index) >>> 0,
-      order: Number(row.source_index) >>> 0,
-      source_index: Number(row.source_index) >>> 0,
-      legacy_order: Number(row.legacy_order) | 0,
+      index: sourceIndex,
+      order: sourceIndex,
+      source_index: sourceIndex,
+      legacy_order: runtimeObjectLegacyOrder(objectKey, row.legacy_order, sourceIndex),
       renderable: true
     });
   }
@@ -5161,6 +5170,14 @@ function runtimeObjectStableIndex(objectKey: string): number {
     hash = (((hash << 5) - hash) + objectKey.charCodeAt(i)) | 0;
   }
   return hash & 0xffff;
+}
+
+function runtimeObjectLegacyOrder(objectKey: string, legacyOrder: unknown, sourceIndex: number): number {
+  const order = Number(legacyOrder);
+  if (Number.isFinite(order)) {
+    return Number(order) | 0;
+  }
+  return 0x7000 + (sourceIndex & 0x0fff) + (objectKey.startsWith("inv:") ? 0x1000 : 0);
 }
 
 function objectLayerEntryFromServerObject(row: unknown): U6ObjectEntryRuntime | null {
@@ -5203,7 +5220,7 @@ function objectLayerEntryFromServerObject(row: unknown): U6ObjectEntryRuntime | 
     coordUse: OBJ_COORD_USE_LOCXYZ,
     frame: normalizedFrame,
     index: sourceIndex,
-    legacyOrder: Number.isFinite(Number(src.legacy_order)) ? Number(src.legacy_order) | 0 : 0x7000 + (sourceIndex & 0x0fff),
+    legacyOrder: runtimeObjectLegacyOrder(objectKey, src.legacy_order, sourceIndex),
     objectKey,
     order: sourceIndex,
     renderable: true,
@@ -5223,6 +5240,16 @@ function applyAuthoritativeWorldObjectsToLayer(objects: readonly unknown[] | nul
     return;
   }
   for (const row of objects) {
+    const record = row && typeof row === "object" ? row as {
+      object_key?: unknown;
+      source_kind?: unknown;
+      source_object_key?: unknown;
+    } : null;
+    const objectKey = String(record?.object_key || "").trim();
+    if (shouldHideServerWorldObjectFromLayerRuntime(record, isAuthoritativeWorldObjectHidden)) {
+      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(objectKey);
+      continue;
+    }
     const entry = objectLayerEntryFromServerObject(row);
     if (entry) {
       state.objectLayer.upsertRuntimeEntry(entry);
@@ -7882,8 +7909,23 @@ function markAuthoritativeWorldObjectHidden(sourceKey: unknown, dueAtMs: unknown
     : Date.now() + DEFAULT_PICKUP_RESPAWN_MS_RUNTIME;
 }
 
+function purgeAuthoritativeHiddenWorldObjectsFromLayer(): void {
+  if (!state.objectLayer) {
+    return;
+  }
+  for (const key of Object.keys(state.net.hiddenWorldObjectKeys || {})) {
+    state.objectLayer.removeRuntimeEntryByAuthoritativeKey(key);
+  }
+}
+
 function applyAuthoritativeHiddenWorldObjectsFromMeta(meta: unknown): void {
   const metaRecord = meta && typeof meta === "object" ? meta as WorldRuntimeJson["meta"] : null;
+  const expiredObjects = Array.isArray(metaRecord?.expired_objects) ? metaRecord.expired_objects : [];
+  if (state.objectLayer) {
+    for (const key of expiredObjects) {
+      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(key);
+    }
+  }
   const next = hiddenWorldObjectKeysFromMetaRuntime(
     metaRecord,
     Date.now(),
@@ -7891,11 +7933,7 @@ function applyAuthoritativeHiddenWorldObjectsFromMeta(meta: unknown): void {
   );
   if (next) {
     state.net.hiddenWorldObjectKeys = next;
-    if (state.objectLayer) {
-      for (const key of Object.keys(next)) {
-        state.objectLayer.removeRuntimeEntryByServerKey(key);
-      }
-    }
+    purgeAuthoritativeHiddenWorldObjectsFromLayer();
   }
 }
 
@@ -7928,7 +7966,7 @@ async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise
   return loadPristineObjectBaselineRuntime({
     baseTiles,
     isObjectRemoved: isObjectRemovedForObjectLayer,
-    paths: [RUNTIME_OBJECT_PATH, PRISTINE_OBJECT_PATH]
+    paths: [PRISTINE_OBJECT_PATH, RUNTIME_OBJECT_PATH]
   });
 }
 
@@ -7948,6 +7986,7 @@ async function refreshPristineBaseline(force = false): Promise<boolean> {
     const loaded = await loadPristineObjectBaseline(state.objectLayer.baseTiles);
     state.objectLayer = loaded.objectLayer;
     state.entityLayer = loaded.entityLayer;
+    purgeAuthoritativeHiddenWorldObjectsFromLayer();
     state.pristineBaselineVersion = version;
     clearObjectTransientState();
     diagBox.className = "diag ok";
@@ -8240,6 +8279,7 @@ async function loadRuntimeAssets() {
       const loaded = await loadPristineObjectBaseline(baseTiles);
       state.objectLayer = loaded.objectLayer;
       state.entityLayer = loaded.entityLayer;
+      purgeAuthoritativeHiddenWorldObjectsFromLayer();
       state.pristineBaselineVersion = await fetchPristineBaselineVersion();
       state.pristineBaselineLastPollTick = state.sim.tick >>> 0;
       if (animRes.ok && animBuf.byteLength >= 2) {

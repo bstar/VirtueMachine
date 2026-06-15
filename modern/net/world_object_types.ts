@@ -1,8 +1,11 @@
 import type { U6MapRuntime } from "./world_map_runtime.ts";
 
 export interface WorldObject {
+  despawn_at_ms?: number;
+  dropped_at_ms?: number;
   index?: number;
   object_key?: string;
+  source_object_key?: string;
   source_area?: number;
   source_index?: number;
   source_kind?: string;
@@ -27,7 +30,10 @@ export interface WorldObject {
 }
 
 export interface SpawnedWorldObjectDelta {
+  despawn_at_ms?: number;
+  dropped_at_ms?: number;
   object_key: string;
+  source_object_key?: string;
   source_area: number;
   source_index: number;
   status: number;

@@ -140,6 +140,10 @@ World object authority note:
 - server loads baseline world objects from `VM_NET_OBJECT_BASELINE_DIR` (`objblk??` + `objlist`) and uses runtime `basetile` for tile mapping
 - deltas are persisted in `modern/net/data/world_object_deltas.json`
 - use `/api/world/objects` for explicit server truth during parity debugging
+- client and server must use the same object baseline provenance; mismatched `objblk??` sources can make the server hide one key while the renderer draws a shifted sibling key
+- baseline pickup creates an `inv:<source_key>:<actor_id>:<seq>` spawned clone, hides the baseline source via `removed` + `respawns`, and keeps the clone independently persistent
+- dropped inventory clones remain visible spawned objects even while their baseline `source_object_key` is hidden; they receive a dropped-clone despawn timer
+- held inventory clones should have inventory coord-use, a non-empty holder id, a distinct `source_object_key`, and no drop/despawn timers
 - interaction responses include `interaction_checkpoint` (`seq`, `hash`) so repeated command streams can be replay-checked for determinism
 - contained-item `take` operations enforce chain accessibility via sim-core assoc-chain traversal (cycle/missing-parent/parent-owned blocks reported via `blocked_by`)
 - `GET /api/world/objects` containment diagnostics (`assoc_chain`, `root_anchor_key`, `blocked_by`) are produced by sim-core batch assoc-chain analysis (no net-side JS chain walker)

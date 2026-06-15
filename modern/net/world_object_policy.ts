@@ -13,6 +13,7 @@ import {
 } from "../common/u6_object_constants.ts";
 
 export const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
+export const DEFAULT_DROPPED_CLONE_DESPAWN_MS = 10 * 60 * 1000;
 export const LOOT_PICKUP_RESPAWN_MS = 60 * 60 * 1000;
 const OBJECT_TYPES_NON_PICKUP = u6ObjectTypeSet([
   ...OBJECT_TYPE_DOOR_VALUES,
@@ -110,19 +111,45 @@ export function isBaselineWorldObject(obj: Pick<WorldObject, "source_kind"> | nu
 }
 
 export function inventoryCloneKeyForTake(
-  state: Pick<WorldObjectRuntimeState, "worldInteractionLog"> | null | undefined,
+  state: Pick<WorldObjectRuntimeState, "worldInteractionLog" | "worldObjects"> | null | undefined,
   target: Pick<WorldObject, "object_key"> | null | undefined,
   actorId: unknown
 ): string {
   const nextSeq = (Number(state?.worldInteractionLog?.seq || 0) + 1) >>> 0;
   const source = String(target?.object_key || "object").replace(/[^a-zA-Z0-9:_-]+/g, "_");
   const actor = String(actorId || "actor").replace(/[^a-zA-Z0-9:_-]+/g, "_");
-  return `inv:${source}:${actor}:${nextSeq}`;
+  const base = `inv:${source}:${actor}:${nextSeq}`;
+  const existing = new Set<string>();
+  for (const obj of state?.worldObjects?.active || []) {
+    const key = String(obj?.object_key || "");
+    if (key) {
+      existing.add(key);
+    }
+  }
+  for (const obj of state?.worldObjects?.deltas?.spawned || []) {
+    const key = String(obj?.object_key || "");
+    if (key) {
+      existing.add(key);
+    }
+  }
+  if (!existing.has(base)) {
+    return base;
+  }
+  for (let i = 2; i < 10000; i += 1) {
+    const candidate = `${base}:${i}`;
+    if (!existing.has(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error("unable to allocate unique inventory clone key");
 }
 
 export function spawnedWorldObjectDeltaFromObject(obj: WorldObject): SpawnedWorldObjectDelta {
   return {
     object_key: String(obj.object_key || ""),
+    source_object_key: String(obj.source_object_key || ""),
+    despawn_at_ms: Number.isFinite(Number(obj.despawn_at_ms)) ? Math.floor(Number(obj.despawn_at_ms)) : 0,
+    dropped_at_ms: Number.isFinite(Number(obj.dropped_at_ms)) ? Math.floor(Number(obj.dropped_at_ms)) : 0,
     source_area: Number(obj.source_area) >>> 0,
     source_index: Number(obj.source_index) >>> 0,
     status: Number(obj.status) & 0xff,
@@ -146,6 +173,8 @@ export function pushSpawnedWorldObject(state: WorldObjectStateContainer, obj: Wo
 
 export type WorldObjectApiCommonPayload = {
   coord_use: number;
+  despawn_at_ms: number;
+  dropped_at_ms: number;
   frame: number;
   holder_id: string;
   holder_key: string;
@@ -191,6 +220,8 @@ export function worldObjectApiCommonPayload(obj: WorldObject): WorldObjectApiCom
     object_key: String(obj.object_key || ""),
     status: Number(obj.status) & 0xff,
     coord_use: coordUseOfStatus(obj.status),
+    despawn_at_ms: Number(obj.despawn_at_ms) > 0 ? Math.floor(Number(obj.despawn_at_ms)) : 0,
+    dropped_at_ms: Number(obj.dropped_at_ms) > 0 ? Math.floor(Number(obj.dropped_at_ms)) : 0,
     holder_kind: String(obj.holder_kind || "none"),
     holder_id: String(obj.holder_id || ""),
     holder_key: String(obj.holder_key || ""),
@@ -214,7 +245,9 @@ export function worldObjectInteractionPayload(
 ): WorldObjectInteractionPayload {
   return {
     ...worldObjectApiCommonPayload(obj),
-    source_object_key: args.sourceObject ? String(args.sourceObject.object_key || "") : "",
+    source_object_key: args.sourceObject
+      ? String(args.sourceObject.object_key || "")
+      : String(obj.source_object_key || ""),
     assoc_chain: Array.isArray(args.assocChain) ? args.assocChain.map((entry) => String(entry)) : [],
     root_anchor_key: String(args.rootAnchorKey || ""),
     blocked_by: String(args.blockedBy || "")
@@ -234,14 +267,23 @@ export function worldObjectTakeInventoryPayload(
   };
 }
 
+function sourceObjectKeyForClone(obj: WorldObject): string {
+  const explicit = String(obj.source_object_key || "").trim();
+  if (explicit) {
+    return explicit;
+  }
+  if (String(obj.source_kind || "") !== "spawned") {
+    return "";
+  }
+  return String(obj.object_key || "").split(":")[1] || "";
+}
+
 export function worldObjectInventoryPayload(obj: WorldObject): WorldObjectInventoryPayload {
   return {
     ...worldObjectApiCommonPayload(obj),
     amount: Number(obj.amount) & 0xffff,
     inventory_key: inventoryKeyForWorldObject(obj),
-    source_object_key: String(obj.source_kind || "") === "spawned"
-      ? String(obj.object_key || "").split(":")[1] || ""
-      : "",
+    source_object_key: sourceObjectKeyForClone(obj),
     source_kind: String(obj.source_kind || "")
   };
 }

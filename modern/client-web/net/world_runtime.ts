@@ -90,6 +90,23 @@ export interface WorldRuntimeServerObject {
   z?: unknown;
 }
 
+export function shouldHideServerWorldObjectFromLayerRuntime(
+  row: { object_key?: unknown; source_kind?: unknown; source_object_key?: unknown } | null | undefined,
+  isHidden: (key: string) => boolean
+): boolean {
+  const objectKey = String(row?.object_key || "").trim();
+  if (objectKey && isHidden(objectKey)) {
+    return true;
+  }
+  const sourceKind = String(row?.source_kind || "").trim();
+  const isSpawnedClone = sourceKind.startsWith("spawned") || objectKey.startsWith("inv:");
+  if (isSpawnedClone) {
+    return false;
+  }
+  const sourceObjectKey = String(row?.source_object_key || "").trim();
+  return !!sourceObjectKey && isHidden(sourceObjectKey);
+}
+
 export interface WorldRuntimeObjectLayer {
   byCoord?: Map<string, WorldRuntimeObject[]>;
 }

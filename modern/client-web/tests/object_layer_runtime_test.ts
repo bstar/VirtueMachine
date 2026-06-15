@@ -162,24 +162,25 @@ fetched.removeRuntimeEntryByObjectKey("inv:a00i001:avatar:1");
 assert.equal(fetched.objectsAt(12, 13, 0).some((obj) => obj.objectKey === "inv:a00i001:avatar:1"), false);
 fetched.upsertRuntimeEntry({
   assocIndex: 0,
-  baseTile: 0x400,
+  baseTile: 0x300,
   coordUse: 0,
-  frame: 2,
-  index: 0x01f,
-  legacyOrder: 0x701f,
-  order: 0x01f,
+  frame: 0,
+  index: 0x228,
+  legacyOrder: 0x0228,
+  objectKey: "",
+  order: 0x0228,
   renderable: true,
   sourceArea: 0x1a,
-  sourceIndex: 0x01f,
+  sourceIndex: 0x228,
   status: 0,
-  tileId: 0x402,
-  type: 0x080,
-  x: 14,
-  y: 15,
+  tileId: 0x357,
+  type: 0x0e8,
+  x: 20,
+  y: 21,
   z: 0
 });
-assert.equal(fetched.objectsAt(14, 15, 0).some((obj) => obj.sourceArea === 0x1a && obj.sourceIndex === 0x01f), true);
-fetched.removeRuntimeEntryByServerKey("a1ai01f");
-assert.equal(fetched.objectsAt(14, 15, 0).some((obj) => obj.sourceArea === 0x1a && obj.sourceIndex === 0x01f), false);
+assert.equal(fetched.objectsAt(20, 21, 0).some((obj) => obj.sourceArea === 0x1a && obj.sourceIndex === 0x228), true);
+fetched.removeRuntimeEntryByAuthoritativeKey("a1ai228");
+assert.equal(fetched.objectsAt(20, 21, 0).some((obj) => obj.sourceArea === 0x1a && obj.sourceIndex === 0x228), false);
 
 console.log("object_layer_runtime_test: ok");

@@ -31,8 +31,8 @@ function assertQueryBridgeReady() {
 
 const QUERY_BIN = assertQueryBridgeReady();
 
-function objectArg(obj, tileFlags) {
-  const key = String(obj?.object_key || "");
+function objectArg(obj, tileFlags, queryKey) {
+  const key = String(queryKey || "");
   const status = Number(obj?.status) & 0xff;
   const tileId = Number(obj?.tile_id) & 0xffff;
   const tf = tileFlags ? (Number(tileFlags[tileId & 0x07ff]) & 0xff) : 0;
@@ -68,6 +68,7 @@ function selectWorldObjectsViaSimCore(input) {
   if (!QUERY_BIN) {
     return { ok: false, code: "world_query_bridge_unavailable", message: "sim-core world query bridge unavailable" };
   }
+  const queryKeyToObjectKey = new Map();
   const args = [
     input?.hasX ? "1" : "0",
     String(Number(input?.x) | 0),
@@ -78,7 +79,11 @@ function selectWorldObjectsViaSimCore(input) {
     String(Number(input?.radius) | 0),
     String(input?.projection === "footprint" ? "footprint" : "anchor"),
     String(Math.max(1, Number(input?.limit) | 0)),
-    ...objects.map((obj) => objectArg(obj, tileFlags))
+    ...objects.map((obj, index) => {
+      const queryKey = `q${index}`;
+      queryKeyToObjectKey.set(queryKey, String(obj?.object_key || ""));
+      return objectArg(obj, tileFlags, queryKey);
+    })
   ];
   const proc = spawnSync(QUERY_BIN, args, { encoding: "utf8", timeout: 8000, maxBuffer: 16 * 1024 * 1024 });
   if (proc.error || (proc.status | 0) !== 0) {
@@ -88,7 +93,10 @@ function selectWorldObjectsViaSimCore(input) {
   if (!keys) {
     return { ok: false, code: "world_query_bridge_parse_failed", message: "sim-core world query bridge emitted invalid output" };
   }
-  return { ok: true, keys };
+  return {
+    ok: true,
+    keys: keys.map((key) => queryKeyToObjectKey.get(String(key)) || String(key)).filter(Boolean)
+  };
 }
 
 module.exports = {

@@ -230,7 +230,7 @@ export class U6ObjectLayerRuntime {
     }
   }
 
-  removeRuntimeEntryByServerKey(objectKey: unknown): void {
+  removeRuntimeEntryByAuthoritativeKey(objectKey: unknown): void {
     const key = String(objectKey || "").trim();
     if (!key) {
       return;
@@ -261,7 +261,7 @@ export class U6ObjectLayerRuntime {
   upsertRuntimeEntry(entry: U6ObjectEntryRuntime): void {
     const key = String(entry.objectKey || "").trim();
     if (key) {
-      this.removeRuntimeEntryByServerKey(key);
+      this.removeRuntimeEntryByAuthoritativeKey(key);
     }
     const coordKey = this.coordKey(entry.x, entry.y, entry.z);
     const normalized = this.applyLegacyRuntimeFixes(entry);
