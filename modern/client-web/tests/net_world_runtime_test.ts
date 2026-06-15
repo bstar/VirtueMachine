@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  hiddenWorldObjectKeysFromMetaRuntime,
+  inventoryDisplayEntriesFromObjectsRuntime,
   inventoryItemFromTakeResponseRuntime,
+  inventoryObjectsFromServerObjectsRuntime,
   inventoryProjectionFromServerObjectsRuntime,
   inventoryTileProjectionFromServerObjectsRuntime,
   normalizeIntroPhaseRuntime,
+  requestDropWorldObjectRuntime,
   requestIntroPhaseRuntime,
   requestTakeWorldObjectRuntime,
   serverObjectKeyForWorldObjectRuntime,
@@ -35,10 +39,193 @@ assert.deepEqual(inventoryTileProjectionFromServerObjectsRuntime(decodedInventor
   "0x123:0x00": 0x345,
   "0x123:0x01": 0x346
 });
+assert.deepEqual(inventoryObjectsFromServerObjectsRuntime([
+  {
+    amount: 3,
+    frame: 2,
+    holder_id: "avatar",
+    holder_kind: "npc",
+    inventory_key: "0x113:0x02",
+    object_key: "inv:a01i002:avatar:1",
+    source_object_key: "a01i002",
+    status: 0x10,
+    tile_id: 0x914,
+    type: 0x113,
+    x: 11,
+    y: 12,
+    z: 0
+  },
+  { type: 0x123, frame: 0 }
+]), [{
+  amount: 3,
+  frame: 2,
+  holder_id: "avatar",
+  holder_key: "",
+  holder_kind: "npc",
+  inventory_key: "0x113:0x02",
+  object_key: "inv:a01i002:avatar:1",
+  source_kind: "",
+  source_object_key: "a01i002",
+  status: 0x10,
+  tile_id: 0x914,
+  type: 0x113,
+  x: 11,
+  y: 12,
+  z: 0
+}]);
+assert.deepEqual(inventoryDisplayEntriesFromObjectsRuntime([
+  {
+    amount: 0,
+    frame: 0,
+    holder_id: "avatar",
+    holder_key: "",
+    holder_kind: "npc",
+    inventory_key: "0x120:0x00",
+    object_key: "cup-1",
+    source_kind: "spawned",
+    source_object_key: "a00i001",
+    status: 0x10,
+    tile_id: 0x500,
+    type: 0x120,
+    x: 0,
+    y: 0,
+    z: 0
+  },
+  {
+    amount: 0,
+    frame: 0,
+    holder_id: "avatar",
+    holder_key: "",
+    holder_kind: "npc",
+    inventory_key: "0x120:0x00",
+    object_key: "cup-2",
+    source_kind: "spawned",
+    source_object_key: "a00i002",
+    status: 0x10,
+    tile_id: 0x500,
+    type: 0x120,
+    x: 0,
+    y: 0,
+    z: 0
+  },
+  {
+    amount: 2,
+    frame: 0,
+    holder_id: "avatar",
+    holder_key: "",
+    holder_kind: "npc",
+    inventory_key: "0x05a:0x00",
+    object_key: "torch-stack-a",
+    source_kind: "spawned",
+    source_object_key: "a00i003",
+    status: 0x10,
+    tile_id: 0x240,
+    type: 0x05a,
+    x: 0,
+    y: 0,
+    z: 0
+  },
+  {
+    amount: 3,
+    frame: 0,
+    holder_id: "avatar",
+    holder_key: "",
+    holder_kind: "npc",
+    inventory_key: "0x05a:0x00",
+    object_key: "torch-stack-b",
+    source_kind: "spawned",
+    source_object_key: "a00i004",
+    status: 0x10,
+    tile_id: 0x240,
+    type: 0x05a,
+    x: 0,
+    y: 0,
+    z: 0
+  },
+  {
+    amount: 1,
+    frame: 1,
+    holder_id: "avatar",
+    holder_key: "",
+    holder_kind: "npc",
+    inventory_key: "0x05a:0x01",
+    object_key: "torch-lit",
+    source_kind: "spawned",
+    source_object_key: "a00i005",
+    status: 0x10,
+    tile_id: 0x241,
+    type: 0x05a,
+    x: 0,
+    y: 0,
+    z: 0
+  }
+]), [
+  {
+    count: 1,
+    frame: 0,
+    inventory_key: "0x120:0x00",
+    key: "cup-1",
+    object_key: "cup-1",
+    stackable: false,
+    tile_hex: "0x500",
+    tile_id: 0x500,
+    type: 0x120
+  },
+  {
+    count: 1,
+    frame: 0,
+    inventory_key: "0x120:0x00",
+    key: "cup-2",
+    object_key: "cup-2",
+    stackable: false,
+    tile_hex: "0x500",
+    tile_id: 0x500,
+    type: 0x120
+  },
+  {
+    count: 5,
+    frame: 0,
+    inventory_key: "0x05a:0x00",
+    key: "0x05a:0x00",
+    stackable: true,
+    tile_hex: "0x240",
+    tile_id: 0x240,
+    type: 0x05a
+  },
+  {
+    count: 1,
+    frame: 1,
+    inventory_key: "0x05a:0x01",
+    key: "torch-lit",
+    object_key: "torch-lit",
+    stackable: false,
+    tile_hex: "0x241",
+    tile_id: 0x241,
+    type: 0x05a
+  }
+]);
 assert.equal(decodedInventorySources.length, 4);
 assert.deepEqual(worldInventorySourcesFromJsonRuntime(null), []);
 assert.deepEqual(inventoryProjectionFromServerObjectsRuntime(null), {});
 assert.deepEqual(inventoryTileProjectionFromServerObjectsRuntime(null), {});
+
+assert.deepEqual(hiddenWorldObjectKeysFromMetaRuntime({
+  hidden_objects: [
+    { object_key: "a00i001", due_at_ms: 2000 },
+    { object_key: "a00i002", due_at_ms: 9000 },
+    { object_key: "a00i003" },
+    { object_key: "" },
+    null
+  ]
+}, 1000, 600), {
+  a00i001: 2000,
+  a00i002: 9000,
+  a00i003: 1600
+});
+assert.deepEqual(hiddenWorldObjectKeysFromMetaRuntime({ hidden_objects: [
+  { object_key: "expired", due_at_ms: 999 }
+] }, 1000, 600), {});
+assert.equal(hiddenWorldObjectKeysFromMetaRuntime({}, 1000, 600), null);
 
 assert.deepEqual(inventoryItemFromTakeResponseRuntime({
   inventory_item: { frame: 2, object_key: " inv ", tile_id: 0x347, type: 0x123 },
@@ -80,6 +267,35 @@ await assert.rejects(
     target: {}
   }, async () => ({})),
   /target object has no authoritative key/
+);
+
+{
+  const requested: string[] = [];
+  const out = await requestDropWorldObjectRuntime({
+    actorId: "avatar-1",
+    actorX: 11,
+    actorY: 12,
+    actorZ: 0,
+    targetKey: "inv:a05i009:avatar-1:1"
+  }, async (route, init, auth) => {
+    requested.push(`${route}:${init?.method}:${auth}:${String(init?.body || "")}`);
+    return { ok: true };
+  });
+  assert.deepEqual(requested, [
+    "/api/world/objects/interact:POST:true:{\"verb\":\"drop\",\"target_key\":\"inv:a05i009:avatar-1:1\",\"actor_id\":\"avatar-1\",\"actor_x\":11,\"actor_y\":12,\"actor_z\":0}"
+  ]);
+  assert.deepEqual(out, { ok: true });
+}
+
+await assert.rejects(
+  () => requestDropWorldObjectRuntime({
+    actorId: "avatar-1",
+    actorX: 0,
+    actorY: 0,
+    actorZ: 0,
+    targetKey: ""
+  }, async () => ({})),
+  /inventory object has no authoritative key/
 );
 
 assert.equal(normalizeIntroPhaseRuntime("pre_intro"), "pre_intro");

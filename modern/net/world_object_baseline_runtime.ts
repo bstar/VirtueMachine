@@ -9,7 +9,8 @@ import {
 import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
 import {
   loadTerrainTypeMap,
-  loadTileFlagMap
+  loadTileFlagMap,
+  loadTypeWeightMap
 } from "./world_map_runtime.ts";
 
 export type WorldObjectBaselineRuntime = {
@@ -100,6 +101,7 @@ export function buildWorldObjectStateFromBaselineRuntime(args: {
     nowMs: args.nowMs(),
     rawDeltas: args.rawDeltas,
     tileFlags: loadTileFlagMap(args.runtimeDir),
-    terrainType: loadTerrainTypeMap(args.runtimeDir)
+    terrainType: loadTerrainTypeMap(args.runtimeDir),
+    typeWeights: loadTypeWeightMap(args.runtimeDir)
   });
 }

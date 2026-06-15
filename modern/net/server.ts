@@ -448,6 +448,21 @@ function worldObjectMeta(state: Pick<ServerState, "worldObjects">) {
   return buildWorldObjectMeta(state, OBJECT_BASELINE_DIR);
 }
 
+function expireDueWorldObjectRespawns(state: ServerState, nowMs = Date.now()): boolean {
+  const respawns = state.worldObjects.deltas.respawns || {};
+  const maturedKeys = Object.keys(respawns).filter((key) => Number(respawns[key]?.due_at_ms) <= nowMs);
+  if (maturedKeys.length === 0) {
+    return false;
+  }
+  for (const key of maturedKeys) {
+    delete state.worldObjects.deltas.removed[key];
+    delete state.worldObjects.deltas.respawns[key];
+  }
+  state.worldObjects = buildWorldObjectState(RUNTIME_DIR, state.worldObjects.deltas);
+  refreshWorldObjectIndexes(state);
+  return true;
+}
+
 function defaultWorldInteractionLog(): WorldInteractionLogRuntime {
   return defaultWorldInteractionLogRuntime();
 }
@@ -1188,6 +1203,9 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/objects") {
+    if (expireDueWorldObjectRespawns(state)) {
+      persistState(state);
+    }
     const runtimeContract = runtimeContractFromHeaders(req);
     const hasX = url.searchParams.has("x");
     const hasY = url.searchParams.has("y");
@@ -1272,6 +1290,9 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/objects/interact") {
+    if (expireDueWorldObjectRespawns(state)) {
+      persistState(state);
+    }
     const runtimeContract = runtimeContractFromHeaders(req);
     let body;
     try {
@@ -1328,8 +1349,18 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       sendError(res, 404, "container_not_found", "container_key not found");
       return;
     }
-    if (verb === "take" && !canTakeWorldObject(target)) {
+    if (verb === "take" && !canTakeWorldObject(target, state.worldObjects.typeWeights)) {
       sendError(res, 409, "object_not_takeable", "target object is not portable");
+      return;
+    }
+    if ((verb === "drop" || verb === "put" || verb === "equip")
+      && (
+        String(target.holder_kind || "") !== "npc"
+        || String(target.holder_id || "") !== actorId
+        || (coordUseOfStatus(target.status) !== OBJ_COORD_USE_INVEN && coordUseOfStatus(target.status) !== OBJ_COORD_USE_EQUIP)
+      )
+    ) {
+      sendError(res, 409, "object_not_held", "target object is not held by actor");
       return;
     }
 
@@ -1465,6 +1496,9 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/inventory") {
+    if (expireDueWorldObjectRespawns(state)) {
+      persistState(state);
+    }
     const actorId = String(url.searchParams.get("actor_id") || user.user_id || "").trim();
     const objects = state.worldObjects.active
       .filter((obj) => (

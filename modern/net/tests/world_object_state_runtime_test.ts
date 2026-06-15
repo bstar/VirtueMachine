@@ -186,7 +186,8 @@ const builtWorldState = buildWorldObjectStateRuntime({
     ]
   },
   terrainType: new Uint8Array([1]),
-  tileFlags: new Uint8Array([2])
+  tileFlags: new Uint8Array([2]),
+  typeWeights: new Uint8Array([3])
 });
 assert.deepEqual(builtWorldState.active.map((obj) => obj.object_key), ["spawned", "moved", "respawned"]);
 assert.equal(builtWorldState.active[1].source_kind, "baseline_moved");
@@ -197,6 +198,7 @@ assert.equal(builtWorldState.active[0].source_kind, "spawned");
 assert.equal(builtWorldState.activeByAnchor?.get("all")?.length, 3);
 assert.equal(builtWorldState.tileFlags?.[0], 2);
 assert.equal(builtWorldState.terrainType?.[0], 1);
+assert.equal(builtWorldState.typeWeights?.[0], 3);
 
 assert.equal(
   compareLegacyWorldObjectOrder(
@@ -276,7 +278,37 @@ assert.deepEqual(worldObjectMeta(state, "savegame"), {
   active_count: 2,
   delta_removed_count: 1,
   delta_moved_count: 1,
-  delta_spawned_count: 1
+  delta_spawned_count: 1,
+  hidden_objects: []
 });
+
+const hiddenMetaState: WorldObjectStateContainer = {
+  worldObjects: {
+    ...state.worldObjects,
+    deltas: normalizeWorldObjectDeltas({
+      ...state.worldObjects.deltas,
+      removed: {
+        a00i001: true
+      },
+      respawns: {
+        a00i001: {
+          due_at_ms: Date.now() + 600000,
+          taken_at_ms: Date.now(),
+          respawn_ms: 600000,
+          policy: "default"
+        }
+      }
+    })
+  }
+};
+assert.deepEqual(worldObjectMeta(hiddenMetaState, "savegame").hidden_objects.map((row) => ({
+  object_key: row.object_key,
+  respawn_ms: row.respawn_ms,
+  policy: row.policy
+})), [{
+  object_key: "a00i001",
+  respawn_ms: 600000,
+  policy: "default"
+}]);
 
 console.log("world_object_state_runtime_test: ok");

@@ -1,4 +1,5 @@
 import { inventoryKeyForObjectRuntime } from "../sim/inventory_runtime.ts";
+import { isU6InventoryStackableObjectType } from "../../common/u6_object_constants.ts";
 
 export type WorldRuntimeRequest = (
   route: string,
@@ -10,10 +11,19 @@ export interface WorldRuntimeJson {
   events?: CriticalMaintenanceEvent[];
   inventory_item?: WorldRuntimeInventorySource | null;
   intro_state?: { phase?: unknown };
+  meta?: WorldRuntimeMeta;
   objects?: WorldRuntimeServerObject[];
   ok?: unknown;
+  respawn?: { due_at_ms?: unknown; source_object_key?: unknown };
   target?: WorldRuntimeInventorySource | null;
 }
+
+export interface WorldRuntimeMeta {
+  hidden_objects?: unknown;
+  [key: string]: unknown;
+}
+
+export type HiddenWorldObjectMapRuntime = Record<string, number>;
 
 export interface WorldRuntimeObject {
   frame?: number;
@@ -38,11 +48,22 @@ export type WorldRuntimeObjectKeySource = object & {
 };
 
 export type WorldRuntimeInventorySource = object & {
+  amount?: unknown;
   frame?: unknown;
+  holder_id?: unknown;
+  holder_key?: unknown;
+  holder_kind?: unknown;
+  inventory_key?: unknown;
   objectKey?: unknown;
   object_key?: unknown;
+  source_kind?: unknown;
+  source_object_key?: unknown;
+  status?: unknown;
   tile_id?: unknown;
   type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
 };
 
 export interface WorldRuntimeServerObject {
@@ -84,9 +105,47 @@ export interface CriticalMaintenanceEvent {
 }
 
 export type WorldRuntimeInventoryItem = {
+  amount?: number;
   frame: number;
+  holder_id?: string;
+  holder_key?: string;
+  holder_kind?: string;
+  inventory_key?: string;
   objectKey?: string;
   object_key?: string;
+  source_kind?: string;
+  source_object_key?: string;
+  status?: number;
+  tile_id?: number;
+  type: number;
+  x?: number;
+  y?: number;
+  z?: number;
+};
+
+export type WorldRuntimeInventoryObject = Required<Pick<WorldRuntimeInventoryItem, "frame" | "object_key" | "type">> & {
+  amount: number;
+  holder_id: string;
+  holder_key: string;
+  holder_kind: string;
+  inventory_key: string;
+  source_kind: string;
+  source_object_key: string;
+  status: number;
+  tile_id: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type WorldRuntimeInventoryDisplayEntry = {
+  count: number;
+  frame: number;
+  inventory_key: string;
+  key: string;
+  object_key?: string;
+  stackable: boolean;
+  tile_hex?: string;
   tile_id?: number;
   type: number;
 };
@@ -148,7 +207,7 @@ export function inventoryTileProjectionFromServerObjectsRuntime(
   return next;
 }
 
-function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null | undefined): WorldRuntimeInventoryItem {
+export function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null | undefined): WorldRuntimeInventoryItem {
   const row = value || {};
   const out: WorldRuntimeInventoryItem = {
     frame: Number(row.frame) | 0,
@@ -166,12 +225,167 @@ function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null
   if (Number.isFinite(tileId)) {
     out.tile_id = Number(tileId) & 0xffff;
   }
+  const amount = Number(row.amount);
+  if (Number.isFinite(amount)) {
+    out.amount = Number(amount) & 0xffff;
+  }
+  const status = Number(row.status);
+  if (Number.isFinite(status)) {
+    out.status = Number(status) & 0xff;
+  }
+  const inventoryKey = String(row.inventory_key || "").trim();
+  if (inventoryKey) {
+    out.inventory_key = inventoryKey;
+  }
+  const sourceObjectKey = String(row.source_object_key || "").trim();
+  if (sourceObjectKey) {
+    out.source_object_key = sourceObjectKey;
+  }
+  const sourceKind = String(row.source_kind || "").trim();
+  if (sourceKind) {
+    out.source_kind = sourceKind;
+  }
+  const holderKind = String(row.holder_kind || "").trim();
+  if (holderKind) {
+    out.holder_kind = holderKind;
+  }
+  const holderId = String(row.holder_id || "").trim();
+  if (holderId) {
+    out.holder_id = holderId;
+  }
+  const holderKey = String(row.holder_key || "").trim();
+  if (holderKey) {
+    out.holder_key = holderKey;
+  }
+  for (const key of ["x", "y", "z"] as const) {
+    const n = Number(row[key]);
+    if (Number.isFinite(n)) {
+      out[key] = Number(n) | 0;
+    }
+  }
+  return out;
+}
+
+export function inventoryObjectsFromServerObjectsRuntime(
+  objects: readonly WorldRuntimeInventorySource[] | null | undefined
+): WorldRuntimeInventoryObject[] {
+  const out: WorldRuntimeInventoryObject[] = [];
+  for (const src of objects || []) {
+    const item = normalizeInventoryItemRuntime(src);
+    const objectKey = String(item.object_key || item.objectKey || "").trim();
+    if (!objectKey) {
+      continue;
+    }
+    out.push({
+      amount: Number(item.amount) & 0xffff,
+      frame: Number(item.frame) & 0x3f,
+      holder_id: String(item.holder_id || ""),
+      holder_key: String(item.holder_key || ""),
+      holder_kind: String(item.holder_kind || ""),
+      inventory_key: String(item.inventory_key || inventoryKeyForObjectRuntime(item)),
+      object_key: objectKey,
+      source_kind: String(item.source_kind || ""),
+      source_object_key: String(item.source_object_key || ""),
+      status: Number(item.status) & 0xff,
+      tile_id: Number(item.tile_id) & 0xffff,
+      type: Number(item.type) & 0x3ff,
+      x: Number(item.x) | 0,
+      y: Number(item.y) | 0,
+      z: Number(item.z) | 0
+    });
+  }
+  return out;
+}
+
+function tileHexFromRuntimeTile(tileId: number): string | undefined {
+  return Number.isFinite(tileId) && tileId > 0
+    ? `0x${(tileId & 0xffff).toString(16).padStart(3, "0")}`
+    : undefined;
+}
+
+export function inventoryDisplayEntriesFromObjectsRuntime(
+  objects: readonly WorldRuntimeInventoryObject[] | null | undefined,
+  limit = 12
+): WorldRuntimeInventoryDisplayEntry[] {
+  const out: WorldRuntimeInventoryDisplayEntry[] = [];
+  const stackIndexByKey = new Map<string, number>();
+  const max = Math.max(0, Number(limit) | 0);
+  for (const obj of objects || []) {
+    if (max > 0 && out.length >= max) {
+      break;
+    }
+    const type = Number(obj.type) & 0x3ff;
+    const frame = Number(obj.frame) & 0x3f;
+    const inventoryKey = String(obj.inventory_key || inventoryKeyForObjectRuntime({ type, frame }));
+    const tileId = Number(obj.tile_id) & 0xffff;
+    const stackable = isU6InventoryStackableObjectType(type, frame);
+    const count = Math.max(1, Number(obj.amount) >>> 0);
+    if (stackable) {
+      const existingIndex = stackIndexByKey.get(inventoryKey);
+      if (existingIndex !== undefined) {
+        out[existingIndex].count = (Number(out[existingIndex].count) + count) >>> 0;
+        continue;
+      }
+      stackIndexByKey.set(inventoryKey, out.length);
+      out.push({
+        count,
+        frame,
+        inventory_key: inventoryKey,
+        key: inventoryKey,
+        stackable: true,
+        tile_hex: tileHexFromRuntimeTile(tileId),
+        tile_id: tileId,
+        type
+      });
+      continue;
+    }
+    out.push({
+      count: 1,
+      frame,
+      inventory_key: inventoryKey,
+      key: String(obj.object_key || inventoryKey),
+      object_key: String(obj.object_key || ""),
+      stackable: false,
+      tile_hex: tileHexFromRuntimeTile(tileId),
+      tile_id: tileId,
+      type
+    });
+  }
   return out;
 }
 
 export interface WorldRuntimeTakeResponse {
   inventory_item?: WorldRuntimeInventorySource | null;
   target?: WorldRuntimeInventorySource | null;
+}
+
+export function hiddenWorldObjectKeysFromMetaRuntime(
+  meta: WorldRuntimeMeta | null | undefined,
+  nowMs: number,
+  fallbackRespawnMs: number
+): HiddenWorldObjectMapRuntime | null {
+  if (!meta || !Array.isArray(meta.hidden_objects)) {
+    return null;
+  }
+  const out: HiddenWorldObjectMapRuntime = {};
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const fallback = Math.max(0, Number(fallbackRespawnMs) || 0);
+  for (const row of meta.hidden_objects) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+    const record = row as { due_at_ms?: unknown; object_key?: unknown };
+    const key = String(record.object_key || "").trim();
+    if (!key) {
+      continue;
+    }
+    const due = Number(record.due_at_ms);
+    const dueAtMs = Number.isFinite(due) && due > 0 ? due : now + fallback;
+    if (dueAtMs > now) {
+      out[key] = dueAtMs;
+    }
+  }
+  return out;
 }
 
 export function inventoryItemFromTakeResponseRuntime(
@@ -200,6 +414,35 @@ export async function requestTakeWorldObjectRuntime(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       verb: "take",
+      target_key: targetKey,
+      actor_id: String(args.actorId || "Avatar"),
+      actor_x: Number(args.actorX) | 0,
+      actor_y: Number(args.actorY) | 0,
+      actor_z: Number(args.actorZ) | 0
+    })
+  }, true);
+  return out && typeof out === "object" ? out : null;
+}
+
+export async function requestDropWorldObjectRuntime(
+  args: {
+    actorId: string | number | null | undefined;
+    actorX: number;
+    actorY: number;
+    actorZ: number;
+    targetKey: string | number | null | undefined;
+  },
+  request: WorldRuntimeRequest
+): Promise<WorldRuntimeJson | null> {
+  const targetKey = String(args.targetKey || "").trim();
+  if (!targetKey) {
+    throw new Error("inventory object has no authoritative key");
+  }
+  const out = await request("/api/world/objects/interact", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      verb: "drop",
       target_key: targetKey,
       actor_id: String(args.actorId || "Avatar"),
       actor_x: Number(args.actorX) | 0,

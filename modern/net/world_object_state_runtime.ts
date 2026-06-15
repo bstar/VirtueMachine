@@ -65,6 +65,12 @@ export type WorldObjectMetaRuntime = {
   delta_removed_count: number;
   delta_spawned_count: number;
   files_loaded: number;
+  hidden_objects: Array<{
+    due_at_ms: number;
+    object_key: string;
+    policy: string;
+    respawn_ms: number;
+  }>;
   loaded_at?: string;
   source_dir?: string;
 };
@@ -335,6 +341,7 @@ export function buildWorldObjectStateRuntime(args: {
   rawDeltas: unknown;
   terrainType: Uint8Array;
   tileFlags: Uint8Array;
+  typeWeights?: Uint8Array;
 }): WorldObjectState {
   const baselineObjects = Array.isArray(args.baseline.objects) ? args.baseline.objects : [];
   const deltas = normalizeWorldObjectDeltas(args.rawDeltas);
@@ -373,6 +380,7 @@ export function buildWorldObjectStateRuntime(args: {
     baseline: args.baseline,
     tileFlags: args.tileFlags,
     terrainType: args.terrainType,
+    typeWeights: args.typeWeights,
     deltas,
     active,
     activeByAnchor: args.buildObjectAnchorIndex(active)
@@ -418,6 +426,23 @@ export function compareLegacyWorldObjectOrder(a: WorldObject, b: WorldObject): n
 
 export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: string): WorldObjectMetaRuntime {
   const wo = state.worldObjects;
+  const respawns = wo.deltas.respawns || {};
+  const nowMs = Date.now();
+  const hiddenObjects = Object.keys(wo.deltas.removed || {})
+    .filter((key) => !!wo.deltas.removed[key])
+    .filter((key) => {
+      const respawn = respawns[key];
+      return !respawn || Number(respawn.due_at_ms) > nowMs;
+    })
+    .map((key) => {
+      const respawn: RespawnWorldObjectDeltaSourceRuntime = respawns[key] || {};
+      return {
+        object_key: key,
+        due_at_ms: Number(respawn.due_at_ms) || 0,
+        respawn_ms: Number(respawn.respawn_ms) || 0,
+        policy: String(respawn.policy || "")
+      };
+    });
   return {
     baseline_dir: baselineDir,
     source_dir: wo.baseline?.source_dir,
@@ -427,7 +452,8 @@ export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: s
     active_count: wo.active.length >>> 0,
     delta_removed_count: Object.keys(wo.deltas.removed || {}).length >>> 0,
     delta_moved_count: Object.keys(wo.deltas.moved || {}).length >>> 0,
-    delta_spawned_count: Array.isArray(wo.deltas.spawned) ? wo.deltas.spawned.length >>> 0 : 0
+    delta_spawned_count: Array.isArray(wo.deltas.spawned) ? wo.deltas.spawned.length >>> 0 : 0,
+    hidden_objects: hiddenObjects
   };
 }
 

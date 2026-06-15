@@ -3,6 +3,7 @@ import {
   buildTargetResolverRegressionProbesRuntime,
   nearestTalkTargetAtCellRuntime,
   resolveAttackTargetAtCellRuntime,
+  resolveLegacyGetSelectionRuntime,
   resolveLookTargetAtCellRuntime,
   resolvePickupTargetAtCellRuntime,
   resolveTalkTargetAtCellRuntime,
@@ -109,11 +110,12 @@ function testTalkTargetResolution() {
 
 function testPickupTargetResolution() {
   const objectLayer: TargetObjectLayerRuntime = {
-    objectsAt: () => [
+    objectsAt: (x: number, y: number) => (x === 11 && y === 10 ? [
       { key: "door", renderable: true, legacyOrder: 50, type: 0x129, frame: 0 },
       { key: "shadow", renderable: true, legacyOrder: 40, type: 0x104, frame: 0 },
+      { key: "sign", renderable: true, legacyOrder: 30, type: 0x14c, frame: 3 },
       { key: "item", renderable: true, legacyOrder: 10, type: 0x90, frame: 0 }
-    ]
+    ] : [])
   };
   const deps = {
     isObjectRemoved: (_sim: unknown, _obj: TargetWorldObjectRuntime) => false,
@@ -136,6 +138,53 @@ function testPickupTargetResolution() {
     ty: 10,
     deps
   }), { object: null, ok: false, reason: "no_object", x: 11, y: 10, z: 0 });
+}
+
+function testLegacyGetSelectionResolution() {
+  const deps = {
+    isObjectRemoved: (_sim: unknown, _obj: TargetWorldObjectRuntime) => false,
+    isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime,
+    isTileIgnored: (tileId: number) => tileId === 0x777,
+    isTerrainDamageTile: (_tileId: number) => false
+  };
+  const world = { map_x: 10, map_y: 10, map_z: 0 };
+  const stack = [
+    { object_key: "mug", renderable: true, legacy_order: 443, type: 0x078, frame: 0, tile_id: 0x285, status: 0, x: 11, y: 10, z: 0 },
+    { object_key: "table", renderable: true, legacy_order: 444, type: 0x117, frame: 1, tile_id: 0x3c1, status: 0, x: 11, y: 10, z: 0 }
+  ];
+  const mug = resolveLegacyGetSelectionRuntime({
+    world,
+    objects: stack,
+    sim: {},
+    tx: 11,
+    ty: 10,
+    deps
+  });
+  assert.equal(mug.ok && mug.object.object_key, "mug", "legacy get should select the first visible stack object before validating portability");
+
+  const fixture = resolveLegacyGetSelectionRuntime({
+    world,
+    objects: [{ object_key: "table", renderable: true, legacy_order: 1, type: 0x117, frame: 1, tile_id: 0x3c1, status: 0, x: 11, y: 10, z: 0 }],
+    sim: {},
+    tx: 11,
+    ty: 10,
+    deps
+  });
+  assert.equal(fixture.ok, false);
+  assert.equal(!fixture.ok && fixture.reason, "not_portable", "selected fixtures should fail instead of scanning for unrelated objects");
+
+  const ignored = resolveLegacyGetSelectionRuntime({
+    world,
+    objects: [
+      { object_key: "ignored", renderable: true, legacy_order: 1, type: 0x090, frame: 0, tile_id: 0x777, status: 0, x: 11, y: 10, z: 0 },
+      { object_key: "real", renderable: true, legacy_order: 2, type: 0x090, frame: 0, tile_id: 0x300, status: 0, x: 11, y: 10, z: 0 }
+    ],
+    sim: {},
+    tx: 11,
+    ty: 10,
+    deps
+  });
+  assert.equal(ignored.ok && ignored.object.object_key, "real", "tile-ignored selections should fall back like C_27A1_0919");
 }
 
 function testAttackTargetResolution() {
@@ -170,6 +219,7 @@ testRegressionProbes();
 testLookTargetResolution();
 testTalkTargetResolution();
 testPickupTargetResolution();
+testLegacyGetSelectionResolution();
 testAttackTargetResolution();
 
 console.log("ui_target_runtime_test: ok");

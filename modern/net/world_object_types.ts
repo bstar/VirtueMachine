@@ -78,6 +78,7 @@ export interface WorldObjectState {
   };
   terrainType?: Uint8Array;
   tileFlags?: Uint8Array;
+  typeWeights?: Uint8Array;
   active: WorldObject[];
   activeByAnchor?: Map<string, WorldObject[]>;
   deltas: WorldObjectDeltas;

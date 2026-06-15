@@ -1,8 +1,10 @@
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
+import type { WorldRuntimeInventoryObject } from "../net/world_runtime.ts";
 import { normalizePartyMemberIdsRuntime } from "./party_runtime.ts";
 
 export type AppSimState = Omit<SimSnapshotRuntime, "doorOpenStates"> & {
   doorOpenStates: Record<string, number>;
+  inventoryObjects?: WorldRuntimeInventoryObject[];
   inventoryTiles?: Record<string, number>;
   partySize: number;
 };
@@ -21,6 +23,7 @@ export function createInitialAppSimState(
     removedObjectAtTick: {},
     removedObjectCount: 0,
     inventory: {},
+    inventoryObjects: [],
     inventoryTiles: {},
     spawnedWorldObjects: [],
     spawnedWorldSeq: 0,

@@ -28,6 +28,19 @@ export function loadTerrainTypeMap(runtimeDir: string): Uint8Array {
   }
 }
 
+export function loadTypeWeightMap(runtimeDir: string): Uint8Array {
+  const tileflagPath = path.join(runtimeDir, "tileflag");
+  try {
+    const buf = fs.readFileSync(tileflagPath);
+    if (buf.length >= 0x1400) {
+      return new Uint8Array(buf.slice(0x1000, 0x1400));
+    }
+    return new Uint8Array(0x400);
+  } catch (_err) {
+    return new Uint8Array(0x400);
+  }
+}
+
 export class U6MapRuntime {
   map: Buffer;
   chunks: Buffer;

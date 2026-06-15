@@ -3,8 +3,11 @@ import {
   OBJECT_TYPE_BED_VALUES,
   OBJECT_TYPE_CHAIR_VALUES,
   OBJECT_TYPE_DOOR_VALUES,
+  OBJECT_TYPE_ENV_FIXTURE_VALUES,
+  OBJECT_TYPE_SIGN_VALUES,
   OBJECT_TYPE_SOLID_ENV_VALUES,
   OBJECT_TYPE_TOP_DECOR_VALUES,
+  OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_VALUES,
   coordUseOfStatus,
   u6ObjectTypeSet
 } from "../common/u6_object_constants.ts";
@@ -17,11 +20,14 @@ const OBJECT_TYPES_NON_PICKUP = u6ObjectTypeSet([
   ...OBJECT_TYPE_BED_VALUES,
   ...OBJECT_TYPE_SOLID_ENV_VALUES,
   ...OBJECT_TYPE_TOP_DECOR_VALUES,
+  ...OBJECT_TYPE_SIGN_VALUES,
+  ...OBJECT_TYPE_ENV_FIXTURE_VALUES,
   0x103, /* table leg */
   0x104, /* shadow */
   0x105, /* table leg */
   0x106  /* shadow */
 ]);
+const OBJECT_TYPES_ZERO_WEIGHT_TAKEABLE = u6ObjectTypeSet(OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_VALUES);
 
 export interface PickupRespawnPolicy {
   policy: string;
@@ -50,9 +56,18 @@ export function pickupRespawnPolicyForObject(obj: Pick<WorldObject, "type"> | nu
   };
 }
 
-export function canTakeWorldObject(obj: Pick<WorldObject, "type"> | null | undefined): boolean {
+export function canTakeWorldObject(
+  obj: Pick<WorldObject, "type"> | null | undefined,
+  typeWeights?: ArrayLike<number> | null
+): boolean {
   const type = Number(obj?.type) & 0x3ff;
-  return !OBJECT_TYPES_NON_PICKUP.has(type);
+  if (OBJECT_TYPES_NON_PICKUP.has(type)) {
+    return false;
+  }
+  if (typeWeights && (Number(typeWeights[type]) | 0) === 0 && !OBJECT_TYPES_ZERO_WEIGHT_TAKEABLE.has(type)) {
+    return false;
+  }
+  return true;
 }
 
 export function canPersistSnapshotInventoryKey(key: unknown): boolean {
@@ -152,13 +167,24 @@ export type WorldObjectInteractionPayload = WorldObjectApiCommonPayload & {
 };
 
 export type WorldObjectTakeInventoryPayload = WorldObjectApiCommonPayload & {
+  amount: number;
+  inventory_key: string;
   source_object_key: string;
+  source_kind: string;
 };
 
 export type WorldObjectInventoryPayload = WorldObjectApiCommonPayload & {
   amount: number;
+  inventory_key: string;
+  source_object_key: string;
   source_kind: string;
 };
+
+export function inventoryKeyForWorldObject(obj: Pick<WorldObject, "type" | "frame">): string {
+  const typeHex = (Number(obj.type) & 0x3ff).toString(16).padStart(3, "0");
+  const frameHex = (Number(obj.frame) & 0x3f).toString(16).padStart(2, "0");
+  return `0x${typeHex}:0x${frameHex}`;
+}
 
 export function worldObjectApiCommonPayload(obj: WorldObject): WorldObjectApiCommonPayload {
   return {
@@ -201,7 +227,10 @@ export function worldObjectTakeInventoryPayload(
 ): WorldObjectTakeInventoryPayload {
   return {
     ...worldObjectApiCommonPayload(obj),
-    source_object_key: sourceObject ? String(sourceObject.object_key || "") : ""
+    amount: Number(obj.amount) & 0xffff,
+    inventory_key: inventoryKeyForWorldObject(obj),
+    source_object_key: sourceObject ? String(sourceObject.object_key || "") : "",
+    source_kind: String(obj.source_kind || "")
   };
 }
 
@@ -209,6 +238,10 @@ export function worldObjectInventoryPayload(obj: WorldObject): WorldObjectInvent
   return {
     ...worldObjectApiCommonPayload(obj),
     amount: Number(obj.amount) & 0xffff,
+    inventory_key: inventoryKeyForWorldObject(obj),
+    source_object_key: String(obj.source_kind || "") === "spawned"
+      ? String(obj.object_key || "").split(":")[1] || ""
+      : "",
     source_kind: String(obj.source_kind || "")
   };
 }

@@ -33,8 +33,21 @@ assert.deepEqual(
 assert.equal(canTakeWorldObject({ type: 0x113 }), true, "potions should be takeable");
 assert.equal(canTakeWorldObject({ type: 0x117 }), false, "tables must not be takeable");
 assert.equal(canTakeWorldObject({ type: 0x104 }), false, "structural shadows must not be takeable");
+assert.equal(canTakeWorldObject({ type: 0x14c }), false, "signs must not be takeable");
+assert.equal(canTakeWorldObject({ type: 0x0e0 }), false, "foot rails must not be takeable");
+{
+  const typeWeights = new Uint8Array(0x400);
+  typeWeights[0x113] = 3;
+  typeWeights[0x132] = 0;
+  typeWeights[0x058] = 0;
+  assert.equal(canTakeWorldObject({ type: 0x113 }, typeWeights), true, "weighted potions should be takeable");
+  assert.equal(canTakeWorldObject({ type: 0x132 }, typeWeights), false, "zero-weight fixtures must not be takeable");
+  assert.equal(canTakeWorldObject({ type: 0x058 }, typeWeights), true, "gold remains takeable despite zero-weight exception");
+}
 assert.equal(canPersistSnapshotInventoryKey("0x113:0x00"), true, "potion inventory keys should persist");
 assert.equal(canPersistSnapshotInventoryKey("0x117:0x04"), false, "table inventory keys should be scrubbed");
+assert.equal(canPersistSnapshotInventoryKey("0x14c:0x03"), false, "sign inventory keys should be scrubbed");
+assert.equal(canPersistSnapshotInventoryKey("0x0e0:0x03"), false, "foot rail inventory keys should be scrubbed");
 assert.equal(canPersistSnapshotInventoryKey("not-a-type-key"), true, "unknown inventory key formats should be preserved");
 
 const dirtySnapshotBase64 = Buffer.from(JSON.stringify({
@@ -42,7 +55,9 @@ const dirtySnapshotBase64 = Buffer.from(JSON.stringify({
   inventory: {
     "0x113:0x00": 1,
     "0x117:0x04": 2,
-    "0x104:0x00": 1
+    "0x104:0x00": 1,
+    "0x14c:0x03": 1,
+    "0x0e0:0x03": 1
   }
 }), "utf8").toString("base64");
 const cleanSnapshot = JSON.parse(Buffer.from(sanitizeSnapshotInventoryBase64(dirtySnapshotBase64), "base64").toString("utf8"));
@@ -137,6 +152,7 @@ assert.deepEqual(worldObjectInteractionPayload(payloadObject, {
 assert.deepEqual(worldObjectTakeInventoryPayload(payloadObject, { object_key: "src_1" }), {
   object_key: "obj_1",
   source_object_key: "src_1",
+  source_kind: "spawned",
   status: 0x10,
   coord_use: 0x10,
   holder_kind: "npc",
@@ -145,6 +161,8 @@ assert.deepEqual(worldObjectTakeInventoryPayload(payloadObject, { object_key: "s
   type: 88,
   frame: 2,
   tile_id: 0x220,
+  amount: 17,
+  inventory_key: "0x058:0x02",
   x: 10,
   y: 11,
   z: 1
@@ -161,6 +179,8 @@ assert.deepEqual(worldObjectInventoryPayload(payloadObject), {
   frame: 2,
   tile_id: 0x220,
   amount: 17,
+  inventory_key: "0x058:0x02",
+  source_object_key: "",
   x: 10,
   y: 11,
   z: 1,

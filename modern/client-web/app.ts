@@ -158,10 +158,14 @@ import {
 } from "./net/presence_runtime.ts";
 import {
   collectWorldItemsForMaintenanceFromLayer,
+  hiddenWorldObjectKeysFromMetaRuntime,
+  inventoryDisplayEntriesFromObjectsRuntime,
   inventoryItemFromTakeResponseRuntime,
+  inventoryObjectsFromServerObjectsRuntime,
   inventoryProjectionFromServerObjectsRuntime,
   inventoryTileProjectionFromServerObjectsRuntime,
   requestIntroPhaseRuntime,
+  requestDropWorldObjectRuntime,
   requestTakeWorldObjectRuntime,
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
@@ -169,7 +173,8 @@ import {
   worldInventorySourcesFromJsonRuntime,
   type CriticalMaintenanceEvent,
   type CriticalMaintenanceWorldItem,
-  type WorldRuntimeJson
+  type WorldRuntimeJson,
+  type WorldRuntimeServerObject
 } from "./net/world_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
@@ -313,10 +318,11 @@ import {
 } from "./sim/object_types_runtime.ts";
 import {
   resolveAttackTargetAtCellRuntime,
+  resolveLegacyGetSelectionRuntime,
   resolveLookTargetAtCellRuntime,
-  resolvePickupTargetAtCellRuntime,
   resolveTalkTargetAtCellRuntime,
-  type TargetObjectLayerRuntime
+  type TargetObjectLayerRuntime,
+  type TargetWorldObjectRuntime
 } from "./sim/target_runtime.ts";
 import {
   beginTargetCursorRuntime,
@@ -438,6 +444,7 @@ const PRISTINE_BASELINE_POLL_TICKS = 20;
 const TICKS_PER_MINUTE = 4;
 const WORLD_PROP_RESET_MINUTES = 5;
 const WORLD_PROP_RESET_TICKS = WORLD_PROP_RESET_MINUTES * 60 * TICKS_PER_MINUTE;
+const DEFAULT_PICKUP_RESPAWN_MS_RUNTIME = 10 * 60 * 1000;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 28;
@@ -471,7 +478,7 @@ const FALLBACK_RENDER_PALETTE: RgbPaletteRuntime = Array.from(
 );
 const WORLD_OBJECT_LOOKUP_DEPS = {
   isObjectRemoved: isObjectRemovedRuntime,
-  isLikelyPickupObjectType: isLikelyPickupObjectTypeRuntime
+  isLikelyPickupObjectType: (type: number) => isLikelyPickupObjectTypeRuntime(type, state.typeWeights)
 };
 
 type UiProbeContract = ReturnType<typeof buildUiProbeContract>;
@@ -631,6 +638,9 @@ type LegacyPanelSlotEntry = {
 type LegacyInventoryDisplayEntry = {
   key: string;
   count: number;
+  inventory_key?: string;
+  object_key?: string;
+  stackable?: boolean;
   tile_hex?: unknown;
 };
 type LegacyBackdropRenderStateView = {
@@ -705,6 +715,7 @@ type AppNetState = {
   lastPresenceHeartbeatTick: number;
   lastPresencePollTick: number;
   lastSavedTick: number;
+  hiddenWorldObjectKeys: Record<string, number>;
   maintenanceAuto: boolean;
   maintenanceInFlight: boolean;
   presencePollInFlight: boolean;
@@ -838,6 +849,7 @@ type AppState = {
   terrainType: Uint8Array | null;
   tileFlags: Uint8Array | null;
   tileFlags2: Uint8Array | null;
+  typeWeights: Uint8Array | null;
   tileSet: U6TileSetRuntime | null;
   u6MainFont: Uint8Array | null;
   uiProbeMode: string;
@@ -1202,6 +1214,7 @@ const state: AppState = {
   basePalette: null,
   tileFlags: null,
   tileFlags2: null,
+  typeWeights: null,
   terrainType: null,
   paletteFrameTick: -1,
   paletteFrame: null,
@@ -1275,6 +1288,7 @@ const state: AppState = {
     lastPresenceHeartbeatTick: -1,
     lastPresencePollTick: -1,
     lastClockPollTick: -1,
+    hiddenWorldObjectKeys: {},
     presencePollInFlight: false,
     clockPollInFlight: false,
     backgroundSyncPaused: false,
@@ -2447,6 +2461,12 @@ function renderLegacyHudStubOnBackdrop(): void {
   const buildDisplayInventoryEntries = (): LegacyInventoryDisplayEntry[] => {
     const out: LegacyInventoryDisplayEntry[] = [];
     const seen = new Set<string>();
+    const inventoryObjects = state.sim && Array.isArray(state.sim.inventoryObjects)
+      ? state.sim.inventoryObjects
+      : [];
+    if (inventoryObjects.length > 0) {
+      return inventoryDisplayEntriesFromObjectsRuntime(inventoryObjects, 12);
+    }
     const inv = state.sim && state.sim.inventory ? state.sim.inventory : null;
     if (inv) {
       /* Prefer local runtime state so Get/Drop feedback is immediately visible. */
@@ -3924,6 +3944,7 @@ function netSnapshotRoute(): string {
 function applyLoadedSimSnapshot(loaded: SimSnapshotRuntime): void {
   const fallbackPartySize = Array.isArray(state.sim.partyMembers) ? state.sim.partyMembers.length : 1;
   state.sim = toAppSimStateRuntime(loaded, fallbackPartySize);
+  state.sim.inventoryObjects = [];
   state.sim.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
   state.queue = [];
   state.commandLog = [];
@@ -3991,6 +4012,16 @@ async function netLogin(): Promise<void> {
     await netGetIntroPhase();
   } catch (_err) {
     // Clock sync will refresh intro phase shortly even if this fetch fails.
+  }
+  try {
+    await netSyncInventoryProjection();
+  } catch (_err) {
+    // Inventory also syncs when the session starts; avoid failing login for a transient inventory poll.
+  }
+  try {
+    await netSyncAuthoritativeWorldObjectsMeta();
+  } catch (_err) {
+    // The next object query will refresh pickup respawn metadata.
   }
   return out;
 }
@@ -4163,7 +4194,7 @@ async function netAutosaveSnapshot(): Promise<void> {
 }
 
 async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
-  return performNetLoadSnapshot({
+  const out = await performNetLoadSnapshot({
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
     request: netRequest,
@@ -4175,6 +4206,9 @@ async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
     resetBackgroundFailures,
     setStatus: setNetStatus
   });
+  await netSyncInventoryProjection();
+  await netSyncAuthoritativeWorldObjectsMeta();
+  return out;
 }
 
 function collectWorldItemsForMaintenance(): CriticalMaintenanceWorldItem[] {
@@ -4201,7 +4235,9 @@ async function netFetchWorldObjectsAtCell(x: number, y: number, z: number): Prom
   if (!isNetAuthenticated()) {
     return null;
   }
-  return requestWorldObjectsAtCell(x, y, z, netRequest);
+  const out = await requestWorldObjectsAtCell(x, y, z, netRequest);
+  applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
+  return out;
 }
 
 async function netSendPresenceHeartbeat(): Promise<void> {
@@ -4982,6 +5018,7 @@ function applyInventoryProjectionFromServerObjects(sim: AppSimState | null | und
     return;
   }
   const sources = worldInventorySourcesFromJsonRuntime(objects);
+  sim.inventoryObjects = inventoryObjectsFromServerObjectsRuntime(sources);
   sim.inventory = inventoryProjectionFromServerObjectsRuntime(sources);
   sim.inventoryTiles = inventoryTileProjectionFromServerObjectsRuntime(sources);
 }
@@ -4994,8 +5031,22 @@ async function netSyncInventoryProjection() {
   const out = await netRequest(`/api/world/inventory?actor_id=${encodeURIComponent(actorId)}`, {
     method: "GET"
   }, true);
+  applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
   applyInventoryProjectionFromServerObjects(state.sim, out?.objects || []);
   return out;
+}
+
+async function netSyncAuthoritativeWorldObjectsMeta(): Promise<void> {
+  if (!isNetAuthenticated() || !state.sim) {
+    return;
+  }
+  const out = await requestWorldObjectsAtCell(
+    state.sim.world.map_x | 0,
+    state.sim.world.map_y | 0,
+    state.sim.world.map_z | 0,
+    netRequest
+  );
+  applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
 }
 
 async function netTakeWorldObject(
@@ -5011,7 +5062,23 @@ async function netTakeWorldObject(
     actorZ: state.sim.world.map_z,
     target: obj
   }, netRequest);
+  applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
   const item = inventoryItemFromTakeResponseRuntime(out, obj);
+  const sourceObj = obj as InventoryObjectRuntime & { key?: unknown; object_key?: unknown };
+  markAuthoritativeWorldObjectHidden(
+    out?.respawn?.source_object_key || item.source_object_key || sourceObj.object_key || sourceObj.key,
+    out?.respawn?.due_at_ms
+  );
+  const inventoryObjects = inventoryObjectsFromServerObjectsRuntime([item]);
+  if (!state.sim.inventoryObjects) {
+    state.sim.inventoryObjects = [];
+  }
+  if (inventoryObjects[0]) {
+    state.sim.inventoryObjects = [
+      ...state.sim.inventoryObjects.filter((entry) => String(entry.object_key || "") !== String(inventoryObjects[0].object_key || "")),
+      inventoryObjects[0]
+    ];
+  }
   addObjectToInventoryRuntime(state.sim, item);
   const tileId = Number(item.tile_id);
   if (Number.isFinite(tileId)) {
@@ -5028,17 +5095,162 @@ async function netTakeWorldObject(
   return out;
 }
 
-function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
-  const interactionState = state as GameplayInteractionStateView;
-  const target = resolvePickupTargetAtCellRuntime({
+function targetObjectsFromServerObjects(objects: readonly WorldRuntimeServerObject[] | null | undefined): TargetWorldObjectRuntime[] {
+  const out: TargetWorldObjectRuntime[] = [];
+  for (const row of objects || []) {
+    const objectKey = String(row.object_key || "").trim();
+    const type = Number(row.type);
+    const frame = Number(row.frame);
+    if (!objectKey || !Number.isFinite(type) || !Number.isFinite(frame)) {
+      continue;
+    }
+    out.push({
+      object_key: objectKey,
+      key: objectKey,
+      type: Number(type) & 0x3ff,
+      frame: Number(frame) & 0x3f,
+      tile_id: Number(row.tile_id) & 0xffff,
+      status: Number(row.status) & 0xff,
+      x: Number(row.x) | 0,
+      y: Number(row.y) | 0,
+      z: Number(row.z) | 0,
+      index: Number(row.source_index) >>> 0,
+      order: Number(row.source_index) >>> 0,
+      source_index: Number(row.source_index) >>> 0,
+      legacy_order: Number(row.legacy_order) | 0,
+      renderable: true
+    });
+  }
+  return out;
+}
+
+function isTileIgnoredForGet(tileId: number): boolean {
+  return !!state.tileFlags2 && ((state.tileFlags2[tileId & 0x07ff] ?? 0) & 0x10) !== 0;
+}
+
+function isTerrainDamageTileForGet(tileId: number): boolean {
+  return !!state.terrainType && ((state.terrainType[tileId & 0x07ff] ?? 0) & 0x08) !== 0;
+}
+
+function getFailureText(
+  reason: string,
+  selected: { type?: number; object_key?: string; key?: string } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number
+): string {
+  const selectedKey = String(selected?.object_key || selected?.key || "").trim();
+  const label = selected
+    ? `0x${(Number(selected.type) & 0x3ff).toString(16)}${selectedKey ? ` ${selectedKey}` : ""}`
+    : `cell ${tx},${ty},${tz}`;
+  if (reason === "out_of_range") {
+    return `Get: target must be adjacent (${tx},${ty}).`;
+  }
+  if (reason === "terrain_damage") {
+    return `Get: ${label} is hazardous.`;
+  }
+  if (reason === "not_portable") {
+    return `Get: ${label} is not portable.`;
+  }
+  return `Get: nothing selectable at ${tx},${ty},${tz}.`;
+}
+
+async function netGetAtCell(sim: AppSimState, tx: number, ty: number): Promise<boolean> {
+  const tz = sim.world.map_z | 0;
+  const out = await netFetchWorldObjectsAtCell(tx, ty, tz);
+  const objects = targetObjectsFromServerObjects(out?.objects || []);
+  const result = resolveLegacyGetSelectionRuntime({
     world: sim.world,
-    objectLayer: interactionState.objectLayer,
+    objects,
     sim,
     tx,
     ty,
-    deps: WORLD_OBJECT_LOOKUP_DEPS
+    deps: {
+      ...WORLD_OBJECT_LOOKUP_DEPS,
+      isTerrainDamageTile: isTerrainDamageTileForGet,
+      isTileIgnored: isTileIgnoredForGet
+    }
   });
-  const tz = target.z;
+  if (result.ok === false) {
+    diagBox.className = "diag warn";
+    diagBox.textContent = getFailureText(result.reason, result.selected, tx, ty, tz);
+    return false;
+  }
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Get: taking 0x${(result.object.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
+  await netTakeWorldObject(result.object as InventoryObjectRuntime & { frame: number }, tx, ty, tz);
+  return true;
+}
+
+function firstInventoryObjectForDrop(sim: AppSimState): NonNullable<AppSimState["inventoryObjects"]>[number] | null {
+  const selected = state.legacyHudSelection;
+  const objects = Array.isArray(sim.inventoryObjects) ? sim.inventoryObjects : [];
+  if (selected && selected.kind === "inventory") {
+    const entries = inventoryDisplayEntriesFromObjectsRuntime(objects, 12);
+    const entry = entries[Number(selected.index) | 0] || null;
+    const objectKey = String(entry?.object_key || "").trim();
+    if (objectKey) {
+      return objects.find((obj) => String(obj.object_key || "") === objectKey) || null;
+    }
+    const inventoryKey = String(entry?.inventory_key || entry?.key || "").trim();
+    if (inventoryKey) {
+      return objects.find((obj) => String(obj.inventory_key || inventoryKeyForObjectRuntime(obj)) === inventoryKey) || null;
+    }
+    return objects[Number(selected.index) | 0] || null;
+  }
+  return objects[0] || null;
+}
+
+async function netDropInventoryObject(sim: AppSimState, tx: number, ty: number) {
+  const item = firstInventoryObjectForDrop(sim);
+  if (!item) {
+    throw new Error("inventory is empty");
+  }
+  const out = await requestDropWorldObjectRuntime({
+    actorId: state.net.characterId || state.net.userId || "Avatar",
+    actorX: tx | 0,
+    actorY: ty | 0,
+    actorZ: sim.world.map_z | 0,
+    targetKey: item.object_key
+  }, netRequest);
+  await netSyncInventoryProjection();
+  diagBox.className = "diag ok";
+  diagBox.textContent = `Drop: ${String(item.inventory_key || inventoryKeyForObjectRuntime(item))} at ${tx},${ty},${sim.world.map_z | 0}.`;
+  return out;
+}
+
+function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  if (isNetAuthenticated()) {
+    diagBox.className = "diag ok";
+    diagBox.textContent = `Get: checking ${tx},${ty},${sim.world.map_z | 0}...`;
+    void netGetAtCell(sim, tx, ty).catch((err: unknown) => {
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Get failed: ${errorMessageRuntime(err)}`;
+    });
+    return true;
+  }
+  const interactionState = state as GameplayInteractionStateView;
+  const tz = sim.world.map_z | 0;
+  const objects = interactionState.objectLayer
+    ? interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz).map((obj) => ({
+      ...obj,
+      object_key: objectLayerAnchorKeyRuntime(obj),
+      tile_id: obj.tileId,
+      legacy_order: obj.legacyOrder
+    }))
+    : [];
+  const target = resolveLegacyGetSelectionRuntime({
+    world: sim.world,
+    objects,
+    sim,
+    tx,
+    ty,
+    deps: {
+      ...WORLD_OBJECT_LOOKUP_DEPS,
+      isTerrainDamageTile: isTerrainDamageTileForGet,
+      isTileIgnored: isTileIgnoredForGet
+    }
+  });
   if (target.ok === false && target.reason === "out_of_range") {
     diagBox.className = "diag warn";
     diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
@@ -5046,19 +5258,10 @@ function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   }
   if (target.ok === false) {
     diagBox.className = "diag warn";
-    diagBox.textContent = `Get: nothing portable at ${tx},${ty},${tz}.`;
+    diagBox.textContent = getFailureText(target.reason, target.selected, tx, ty, tz);
     return false;
   }
   const obj = target.object;
-  if (isNetAuthenticated()) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Get: taking 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
-    void netTakeWorldObject(obj as InventoryObjectRuntime & { frame: number }, tx, ty, tz).catch((err: unknown) => {
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Get failed: ${errorMessageRuntime(err)}`;
-    });
-    return true;
-  }
   addObjectToInventoryRuntime(sim, obj);
   markObjectRemovedRuntime(sim, obj);
   const invKey = inventoryKeyForObjectRuntime(obj);
@@ -5098,6 +5301,24 @@ function tryCastAtCell(sim: AppSimState, tx: number, ty: number): boolean {
 }
 
 function tryDropAtCell(sim: AppSimState, tx: number, ty: number): boolean {
+  if (isNetAuthenticated()) {
+    const validation = legacyDropVerbRuntime({
+      inventory: Object.keys(sim.inventory || {}).length
+        ? { ...sim.inventory }
+        : Object.fromEntries((sim.inventoryObjects || []).map((item) => [String(item.inventory_key || inventoryKeyForObjectRuntime(item)), 1])),
+      world: sim.world
+    }, tx, ty);
+    if (!validation.ok) {
+      diagBox.className = `diag ${validation.diagClass}`;
+      diagBox.textContent = validation.text;
+      return false;
+    }
+    void netDropInventoryObject(sim, tx, ty).catch((err: unknown) => {
+      diagBox.className = "diag warn";
+      diagBox.textContent = `Drop failed: ${errorMessageRuntime(err)}`;
+    });
+    return true;
+  }
   const result = legacyDropVerbRuntime(sim, tx, ty);
   diagBox.className = `diag ${result.diagClass}`;
   diagBox.textContent = result.text;
@@ -7428,20 +7649,58 @@ function clearObjectTransientState(): void {
   state.sim.removedObjectCount = 0;
 }
 
+function serverObjectKeyForObjectLayer(obj: U6ObjectEntryRuntime): string {
+  const areaHex = (Number(obj.sourceArea) >>> 0).toString(16).padStart(2, "0");
+  const indexHex = (Number(obj.sourceIndex) >>> 0).toString(16).padStart(3, "0");
+  return `a${areaHex}i${indexHex}`;
+}
+
+function markAuthoritativeWorldObjectHidden(sourceKey: unknown, dueAtMs: unknown): void {
+  const key = String(sourceKey || "").trim();
+  if (!key) {
+    return;
+  }
+  const due = Number(dueAtMs);
+  state.net.hiddenWorldObjectKeys[key] = Number.isFinite(due) && due > Date.now()
+    ? due
+    : Date.now() + DEFAULT_PICKUP_RESPAWN_MS_RUNTIME;
+}
+
+function applyAuthoritativeHiddenWorldObjectsFromMeta(meta: unknown): void {
+  const metaRecord = meta && typeof meta === "object" ? meta as WorldRuntimeJson["meta"] : null;
+  const next = hiddenWorldObjectKeysFromMetaRuntime(
+    metaRecord,
+    Date.now(),
+    DEFAULT_PICKUP_RESPAWN_MS_RUNTIME
+  );
+  if (next) {
+    state.net.hiddenWorldObjectKeys = next;
+  }
+}
+
+function isAuthoritativeWorldObjectHidden(sourceKey: string): boolean {
+  const due = Number(state.net.hiddenWorldObjectKeys[sourceKey] || 0);
+  if (!due) {
+    return false;
+  }
+  if (due <= Date.now()) {
+    delete state.net.hiddenWorldObjectKeys[sourceKey];
+    return false;
+  }
+  return true;
+}
+
 async function fetchPristineBaselineVersion() {
   return fetchObjectBaselineVersionRuntime(PRISTINE_BASELINE_VERSION_PATH);
 }
 
 function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime): boolean {
-  const removedCount = Number(state?.sim?.removedObjectCount) >>> 0;
-  if (!removedCount) {
-    return false;
-  }
   const removed = state?.sim?.removedObjectKeys;
   if (!removed || typeof removed !== "object") {
-    return false;
+    return isAuthoritativeWorldObjectHidden(serverObjectKeyForObjectLayer(obj));
   }
-  return !!removed[objectLayerAnchorKeyRuntime(obj)];
+  return !!removed[objectLayerAnchorKeyRuntime(obj)]
+    || isAuthoritativeWorldObjectHidden(serverObjectKeyForObjectLayer(obj));
 }
 
 async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise<ObjectBaselineLoadResultRuntime> {
@@ -7710,22 +7969,27 @@ async function loadRuntimeAssets() {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
       /* Legacy tileflag layout: terrain(0x800), flag1(0x800), typeWeight(0x400), flag2/D_B3EF(0x800). */
+      state.typeWeights = new Uint8Array(flagBuf.slice(0x1000, 0x1400));
       state.tileFlags2 = new Uint8Array(flagBuf.slice(0x1400, 0x1c00));
     } else if (flagRes.ok && flagBuf.byteLength >= 0x1800) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
+      state.typeWeights = null;
       state.tileFlags2 = new Uint8Array(flagBuf.slice(0x1000, 0x1800));
     } else if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
+      state.typeWeights = null;
       state.tileFlags2 = null;
     } else if (flagRes.ok && flagBuf.byteLength >= 0x800) {
       state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
       state.tileFlags = new Uint8Array(flagBuf.slice(0, 0x800));
+      state.typeWeights = null;
       state.tileFlags2 = null;
     } else {
       state.tileFlags = null;
       state.tileFlags2 = null;
+      state.typeWeights = null;
       state.terrainType = null;
     }
 
@@ -7824,6 +8088,7 @@ async function loadRuntimeAssets() {
     state.lookStringEntries = null;
     state.tileFlags = null;
     state.tileFlags2 = null;
+    state.typeWeights = null;
     state.terrainType = null;
     state.pristineBaselineVersion = "";
     state.pristineBaselineLastPollTick = -1;
@@ -7903,6 +8168,43 @@ function commitUseCursorInteract(): void {
   }
   state.useCursorActive = false;
   state.targetVerb = "";
+}
+
+function pickupOverlaySourceFromMouseCell(cell: HoveredWorldCellRuntime): { x: number; y: number } | null {
+  if (!state.mapCtx || !state.objectLayer) {
+    return null;
+  }
+  const viewCtx = buildLegacyViewContext(cell.startX, cell.startY, cell.z);
+  const overlayBuild = buildOverlayCells(cell.startX, cell.startY, cell.z, viewCtx);
+  const list = overlayBuild.overlayCells
+    ? (overlayBuild.overlayCells[(cell.gy * VIEW_W) + cell.gx] || [])
+    : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const overlay = list[i] as RenderOverlayCell;
+    if (Number.isFinite(Number(overlay.sourceX)) && Number.isFinite(Number(overlay.sourceY))) {
+      return { x: overlay.sourceX | 0, y: overlay.sourceY | 0 };
+    }
+  }
+  return null;
+}
+
+function commitActiveTargetCursorFromMouse(ev: MouseEvent): boolean {
+  if (!state.useCursorActive) {
+    return false;
+  }
+  const cell = hoveredWorldCellFromMouse();
+  if (!cell) {
+    return false;
+  }
+  const verb = String(state.targetVerb || "");
+  const source = verb === LEGACY_TARGET_VERB_RUNTIME.GET
+    ? pickupOverlaySourceFromMouseCell(cell)
+    : null;
+  state.useCursorX = source ? source.x : (cell.x | 0);
+  state.useCursorY = source ? source.y : (cell.y | 0);
+  commitUseCursorInteract();
+  ev.preventDefault();
+  return true;
 }
 
 function cancelTargetCursor(): void {
@@ -8773,6 +9075,9 @@ if (legacyBackdropCanvas) {
     primeAudioFromUserGesture();
     updateCanvasMouseFromEvent(ev, legacyBackdropCanvas);
     if (state.sessionStarted) {
+      if (commitActiveTargetCursorFromMouse(ev)) {
+        return;
+      }
       if (handleLegacyHudClick(ev, legacyBackdropCanvas)) {
         return;
       }
@@ -8833,6 +9138,14 @@ if (legacyViewportCanvas) {
 
   legacyViewportCanvas.addEventListener("mousedown", (ev) => {
     handleShiftRightMouseDownCopy(ev, legacyViewportCanvas);
+  });
+
+  legacyViewportCanvas.addEventListener("click", (ev) => {
+    primeAudioFromUserGesture();
+    updateCanvasMouseFromEvent(ev, legacyViewportCanvas);
+    if (state.sessionStarted && commitActiveTargetCursorFromMouse(ev)) {
+      return;
+    }
   });
 
   legacyViewportCanvas.addEventListener("mouseleave", () => {

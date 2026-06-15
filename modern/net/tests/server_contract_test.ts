@@ -312,6 +312,21 @@ async function main() {
 
     async function runInteractionLifecycle() {
       let carriedKey = targetKey;
+      const blockedDropWorldObject = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "drop",
+          target_key: targetKey,
+          actor_id: "contract-avatar",
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(blockedDropWorldObject.status, 409);
+      assert.equal(String(blockedDropWorldObject.body?.error?.code || ""), "object_not_held");
+
       const take = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,

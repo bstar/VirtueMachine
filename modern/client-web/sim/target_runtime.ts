@@ -1,14 +1,26 @@
 import { isWithinChebyshevRangeRuntime } from "./range_runtime.ts";
+import {
+  OBJ_COORD_USE_LOCXYZ,
+  coordUseOfStatus
+} from "../../common/u6_object_constants.ts";
 
 export interface TargetWorldObjectRuntime {
   key?: string;
+  object_key?: string;
   type: number;
   frame: number;
   baseTile?: number;
+  tile_id?: number;
   renderable?: boolean;
   legacyOrder?: number;
+  legacy_order?: number;
   order?: number;
   index?: number;
+  source_index?: number;
+  status?: number;
+  x?: number;
+  y?: number;
+  z?: number;
 }
 
 export interface TargetObjectLayerRuntime {
@@ -59,7 +71,7 @@ export function topWorldObjectAtCellRuntime(
   const candidates: Array<{ obj: TargetWorldObjectRuntime; sortOrder: number; index: number }> = [];
   for (let i = 0; i < list.length; i += 1) {
     const o = list[i];
-    if (!o || !o.renderable || deps.isObjectRemoved(sim, o)) {
+    if (!o || o.renderable === false || deps.isObjectRemoved(sim, o)) {
       continue;
     }
     if (pickupOnly && !deps.isLikelyPickupObjectType(o.type)) {
@@ -79,6 +91,157 @@ export function topWorldObjectAtCellRuntime(
     return b.index - a.index;
   });
   return candidates[0].obj || null;
+}
+
+function targetObjectKeyRuntime(obj: TargetWorldObjectRuntime | null | undefined): string {
+  return String(obj?.key || obj?.object_key || "").trim();
+}
+
+function targetObjectTileRuntime(obj: TargetWorldObjectRuntime | null | undefined): number {
+  if (!obj) {
+    return 0;
+  }
+  const tileId = Number(obj.tile_id);
+  if (Number.isFinite(tileId)) {
+    return tileId & 0xffff;
+  }
+  return ((Number(obj.baseTile) | 0) + (Number(obj.frame) | 0)) & 0xffff;
+}
+
+function targetObjectCoordUseRuntime(obj: TargetWorldObjectRuntime | null | undefined): number {
+  return coordUseOfStatus(Number(obj?.status) | 0);
+}
+
+function targetObjectOrderRuntime(obj: TargetWorldObjectRuntime, fallbackIndex: number): number {
+  const legacyOrder = Number(obj.legacyOrder ?? obj.legacy_order);
+  if (Number.isFinite(legacyOrder)) {
+    return legacyOrder | 0;
+  }
+  const order = Number(obj.order ?? obj.index ?? obj.source_index);
+  return Number.isFinite(order) ? (order | 0) : (fallbackIndex | 0);
+}
+
+function orderedLegacyLocationObjectsRuntime(
+  objects: readonly TargetWorldObjectRuntime[] | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number,
+  sim: TargetSimRuntime | null | undefined,
+  deps: TargetLookupDepsRuntime
+): TargetWorldObjectRuntime[] {
+  const out: Array<{ obj: TargetWorldObjectRuntime; order: number; index: number }> = [];
+  let index = 0;
+  for (const obj of objects || []) {
+    const idx = index;
+    index += 1;
+    if (!obj || obj.renderable === false || deps.isObjectRemoved(sim, obj)) {
+      continue;
+    }
+    if (targetObjectCoordUseRuntime(obj) !== OBJ_COORD_USE_LOCXYZ) {
+      continue;
+    }
+    const ox = Number(obj.x);
+    const oy = Number(obj.y);
+    const oz = Number(obj.z);
+    if (Number.isFinite(ox) && (ox | 0) !== (tx | 0)) {
+      continue;
+    }
+    if (Number.isFinite(oy) && (oy | 0) !== (ty | 0)) {
+      continue;
+    }
+    if (Number.isFinite(oz) && (oz | 0) !== (tz | 0)) {
+      continue;
+    }
+    out.push({ obj, order: targetObjectOrderRuntime(obj, idx), index: idx });
+  }
+  out.sort((a, b) => {
+    if (a.order !== b.order) {
+      return a.order - b.order;
+    }
+    return a.index - b.index;
+  });
+  return out.map((entry) => entry.obj);
+}
+
+export type LegacyGetSelectionFailureReasonRuntime =
+  | "out_of_range"
+  | "no_object"
+  | "not_locxyz"
+  | "terrain_damage"
+  | "not_portable";
+
+export type LegacyGetSelectionRuntime = {
+  object: null;
+  ok: false;
+  reason: LegacyGetSelectionFailureReasonRuntime;
+  selected?: TargetWorldObjectRuntime | null;
+  x: number;
+  y: number;
+  z: number;
+} | {
+  object: TargetWorldObjectRuntime;
+  ok: true;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export function resolveLegacyGetSelectionRuntime(args: {
+  world: TargetWorldRuntime;
+  objects: readonly TargetWorldObjectRuntime[] | null | undefined;
+  sim: TargetSimRuntime | null | undefined;
+  tx: number;
+  ty: number;
+  deps: TargetLookupDepsRuntime & {
+    isTerrainDamageTile?: (tileId: number) => boolean;
+    isTileIgnored?: (tileId: number) => boolean;
+  };
+  maxRange?: number;
+}): LegacyGetSelectionRuntime {
+  const tx = Number(args.tx) | 0;
+  const ty = Number(args.ty) | 0;
+  const tz = targetZRuntime(args.world);
+  if (!targetInRangeRuntime(args.world, tx, ty, Number(args.maxRange ?? 1) | 0)) {
+    return { object: null, ok: false, reason: "out_of_range", x: tx, y: ty, z: tz };
+  }
+
+  const ordered = orderedLegacyLocationObjectsRuntime(args.objects, tx, ty, tz, args.sim, args.deps);
+  let selected: TargetWorldObjectRuntime | null = null;
+  let firstFallback: TargetWorldObjectRuntime | null = null;
+  for (const obj of ordered) {
+    const tileId = targetObjectTileRuntime(obj);
+    const tileIgnored = Boolean(args.deps.isTileIgnored && args.deps.isTileIgnored(tileId));
+    if (!tileIgnored) {
+      selected = obj;
+      break;
+    }
+    if (!firstFallback) {
+      firstFallback = obj;
+    }
+  }
+  if (!selected) {
+    selected = firstFallback;
+  }
+  if (!selected) {
+    return { object: null, ok: false, reason: "no_object", x: tx, y: ty, z: tz };
+  }
+
+  const selectedTileId = targetObjectTileRuntime(selected);
+  if (args.deps.isTileIgnored && args.deps.isTileIgnored(selectedTileId)) {
+    selected = ordered.find((obj) => targetObjectKeyRuntime(obj) !== targetObjectKeyRuntime(selected)
+      && !args.deps.isTileIgnored?.(targetObjectTileRuntime(obj))) || selected;
+  }
+
+  if (targetObjectCoordUseRuntime(selected) !== OBJ_COORD_USE_LOCXYZ) {
+    return { object: null, ok: false, reason: "not_locxyz", selected, x: tx, y: ty, z: tz };
+  }
+  if (args.deps.isTerrainDamageTile && args.deps.isTerrainDamageTile(targetObjectTileRuntime(selected))) {
+    return { object: null, ok: false, reason: "terrain_damage", selected, x: tx, y: ty, z: tz };
+  }
+  if (!args.deps.isLikelyPickupObjectType(Number(selected.type) & 0x3ff)) {
+    return { object: null, ok: false, reason: "not_portable", selected, x: tx, y: ty, z: tz };
+  }
+  return { object: selected, ok: true, x: tx, y: ty, z: tz };
 }
 
 function targetZRuntime(world: TargetWorldRuntime): number {

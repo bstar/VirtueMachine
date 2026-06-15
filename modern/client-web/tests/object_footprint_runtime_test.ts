@@ -43,6 +43,17 @@ assert.equal(isImplicitSolidObjectTileRuntime(0x100, 0x400, flags(0x90)), false)
 assert.equal(isSolidEnvTypeRuntime(0x097), true, "table type must be a solid environment object");
 assert.equal(isLikelyPickupObjectTypeRuntime(0x104), false, "shadow objects must not be picked up");
 assert.equal(isLikelyPickupObjectTypeRuntime(0x103), false, "table-leg objects must not be picked up");
+assert.equal(isLikelyPickupObjectTypeRuntime(0x14c), false, "sign objects must not be picked up");
+assert.equal(isLikelyPickupObjectTypeRuntime(0x0e0), false, "foot rail fixtures must not be picked up");
 assert.equal(isLikelyPickupObjectTypeRuntime(0x090), true, "ordinary inventory objects should remain pickable");
+{
+  const typeWeights = new Uint8Array(0x400);
+  typeWeights[0x113] = 3;
+  typeWeights[0x132] = 0;
+  typeWeights[0x058] = 0;
+  assert.equal(isLikelyPickupObjectTypeRuntime(0x113, typeWeights), true, "weighted potions should remain pickable");
+  assert.equal(isLikelyPickupObjectTypeRuntime(0x132, typeWeights), false, "zero-weight fixtures must not be picked up");
+  assert.equal(isLikelyPickupObjectTypeRuntime(0x058, typeWeights), true, "gold remains pickable despite zero-weight exception");
+}
 
 console.log("object_footprint_runtime_test: ok");
