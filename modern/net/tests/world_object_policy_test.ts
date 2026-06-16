@@ -377,6 +377,7 @@ const state = {
     deltas: {
       schema_version: 1,
       moved: {},
+      removed: {},
       spawned: [],
       respawns: {}
     }

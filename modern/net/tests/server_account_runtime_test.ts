@@ -148,13 +148,16 @@ assert.deepEqual(legacyUser, {
   email_verified: false,
   email_verification: null
 });
-legacyUser.email_verification = {
-  code: "111111",
-  issued_at: "issued",
-  expires_at_ms: 1
+const pendingVerificationUser: ServerUserRuntime = {
+  ...legacyUser,
+  email_verification: {
+    code: "111111",
+    issued_at: "issued",
+    expires_at_ms: 1
+  }
 };
-ensureUserSchemaRuntime(legacyUser);
-assert.equal(legacyUser.email_verification?.code, "111111");
+ensureUserSchemaRuntime(pendingVerificationUser);
+assert.equal(pendingVerificationUser.email_verification?.code, "111111");
 
 const users: ServerUserRuntime[] = [
   { user_id: "u1", username: "Avatar" },
