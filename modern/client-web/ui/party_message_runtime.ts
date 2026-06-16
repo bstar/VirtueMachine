@@ -18,6 +18,11 @@ export type PartySwitchResolutionRuntime = {
   reason: "applied" | "same_index" | "out_of_range" | "invalid_digit";
 };
 
+export type PartySwitchDigitDiagRuntime = {
+  diagClass: "diag ok";
+  diagText: string;
+};
+
 function toU32(v: unknown): number {
   return Number(v) >>> 0;
 }
@@ -118,6 +123,33 @@ export function resolvePartySwitchDigitRuntime(input: {
     requested_digit: requestedDigit,
     target_index: targetIndex,
     reason: "applied"
+  };
+}
+
+export function partySwitchDigitDiagTextRuntime(
+  digitKey: unknown,
+  resolution: PartySwitchResolutionRuntime
+): string {
+  const digit = String(digitKey || "");
+  if (resolution.changed) {
+    return `Party switch ${digit}: active index ${resolution.next_active_index}.`;
+  }
+  if (resolution.reason === "same_index") {
+    return `Party switch ${digit}: already active.`;
+  }
+  if (resolution.reason === "out_of_range") {
+    return `Party switch ${digit}: no party member at that slot.`;
+  }
+  return `Party switch ${digit}: ignored.`;
+}
+
+export function partySwitchDigitDiagRuntime(
+  digitKey: unknown,
+  resolution: PartySwitchResolutionRuntime
+): PartySwitchDigitDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: partySwitchDigitDiagTextRuntime(digitKey, resolution)
   };
 }
 

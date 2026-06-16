@@ -28,6 +28,71 @@ export type ServerTokenRuntime = {
   user_id?: unknown;
 };
 
+export type ServerPublicUserRuntime = {
+  email?: string;
+  email_verified?: boolean;
+  user_id: unknown;
+  username: unknown;
+};
+
+export type LoginAccountResultRuntime<TUser extends ServerUserRuntime = ServerUserRuntime> =
+  | {
+    ok: true;
+    token: string;
+    user: TUser;
+  }
+  | {
+    code: "bad_username" | "bad_password" | "auth_invalid";
+    http: 400 | 401;
+    message: string;
+    ok: false;
+  };
+
+export type AccountMutationResultRuntime =
+  | { ok: true }
+  | {
+    code:
+      | "bad_email"
+      | "bad_code"
+      | "no_pending_verification"
+      | "verification_expired"
+      | "verification_invalid"
+      | "bad_old_password"
+      | "bad_new_password"
+      | "auth_invalid"
+      | "password_unchanged";
+    http: 400 | 401 | 409 | 410;
+    message: string;
+    ok: false;
+  };
+
+export type PasswordRecoveryAccountResultRuntime<TUser extends ServerUserRuntime = ServerUserRuntime> =
+  | {
+    email: string;
+    ok: true;
+    user: TUser;
+  }
+  | {
+    code:
+      | "bad_username"
+      | "bad_email"
+      | "user_not_found"
+      | "email_unverified"
+      | "email_mismatch";
+    http: 400 | 401 | 403 | 404;
+    message: string;
+    ok: false;
+  };
+
+export type CharacterNameValidationRuntime =
+  | { name: string; ok: true }
+  | {
+    code: "bad_character_name";
+    http: 400;
+    message: string;
+    ok: false;
+  };
+
 type ServerEmailVerificationSourceRuntime = {
   code?: unknown;
   expires_at_ms?: unknown;
@@ -221,6 +286,14 @@ export function sixDigitEmailVerificationCodeRuntime(randomValue: number): strin
   return String(Math.floor(100000 + (n * 900000)));
 }
 
+export function secureSixDigitEmailVerificationCodeRuntime(
+  randomInt: (maxExclusive: number) => number
+): string {
+  const raw = Number(randomInt(900000));
+  const n = Number.isFinite(raw) ? Math.max(0, Math.min(899999, Math.floor(raw))) : 0;
+  return String(100000 + n);
+}
+
 export function normalizeUsernameRuntime(raw: unknown): string {
   return String(raw || "").trim().toLowerCase();
 }
@@ -322,6 +395,254 @@ export function issueTokenRuntime(
   return token;
 }
 
+export function publicUserPayloadRuntime(
+  user: ServerUserRuntime,
+  opts: { includeEmail?: boolean; includeEmailVerified?: boolean } = {}
+): ServerPublicUserRuntime {
+  const out: ServerPublicUserRuntime = {
+    user_id: user.user_id,
+    username: user.username
+  };
+  if (opts.includeEmail) {
+    out.email = String(user.email || "");
+  }
+  if (opts.includeEmailVerified) {
+    out.email_verified = !!user.email_verified;
+  }
+  return out;
+}
+
+export function loginAccountRuntime<TUser extends ServerUserRuntime>(
+  args: {
+    body: { password?: unknown; username?: unknown } | null | undefined;
+    nowIso: string;
+    nowMs: number;
+    randomHex: (bytes: number) => string;
+    tokens: ServerTokenRuntime[];
+    users: TUser[];
+  }
+): LoginAccountResultRuntime<TUser> {
+  const username = normalizeUsernameRuntime(args.body && args.body.username);
+  const password = String(args.body && args.body.password || "");
+  if (!username || username.length < 2) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_username",
+      message: "username is required"
+    };
+  }
+  if (!password) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_password",
+      message: "password is required"
+    };
+  }
+
+  let user = findUserByUsernameRuntime(args.users, username);
+  if (!user) {
+    user = {
+      user_id: newUserIdRuntime(args.users, args.randomHex),
+      username,
+      password_plaintext: password,
+      email: "",
+      email_verified: false,
+      email_verification: null,
+      created_at: String(args.nowIso || "")
+    } as unknown as TUser;
+    args.users.push(user);
+  } else if (!user.password_plaintext) {
+    user.password_plaintext = password;
+  } else if (user.password_plaintext !== password) {
+    return {
+      ok: false,
+      http: 401,
+      code: "auth_invalid",
+      message: "invalid username/password"
+    };
+  }
+
+  return {
+    ok: true,
+    user,
+    token: issueTokenRuntime(args.tokens, {
+      nowIso: args.nowIso,
+      nowMs: args.nowMs,
+      randomHex: args.randomHex,
+      userId: user.user_id
+    })
+  };
+}
+
+export function setAccountEmailRuntime(user: ServerUserRuntime, rawEmail: unknown): AccountMutationResultRuntime {
+  const email = normalizeEmailRuntime(rawEmail);
+  if (!isValidEmailRuntime(email)) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_email",
+      message: "valid email is required"
+    };
+  }
+  if (email !== normalizeEmailRuntime(user.email || "")) {
+    user.email_verified = false;
+    user.email_verification = null;
+  }
+  user.email = email;
+  return { ok: true };
+}
+
+export function verifyAccountEmailRuntime(
+  user: ServerUserRuntime,
+  args: {
+    code: unknown;
+    nowMs: number;
+  }
+): AccountMutationResultRuntime {
+  const code = String(args.code || "").trim();
+  if (!code) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_code",
+      message: "verification code is required"
+    };
+  }
+  const pending = user.email_verification;
+  if (!pending || typeof pending !== "object") {
+    return {
+      ok: false,
+      http: 409,
+      code: "no_pending_verification",
+      message: "no pending email verification"
+    };
+  }
+  if (Number(pending.expires_at_ms) < Number(args.nowMs || 0)) {
+    user.email_verification = null;
+    return {
+      ok: false,
+      http: 410,
+      code: "verification_expired",
+      message: "verification code expired"
+    };
+  }
+  if (String(pending.code || "") !== code) {
+    return {
+      ok: false,
+      http: 401,
+      code: "verification_invalid",
+      message: "invalid verification code"
+    };
+  }
+  user.email_verified = true;
+  user.email_verification = null;
+  return { ok: true };
+}
+
+export function changeAccountPasswordRuntime(
+  user: ServerUserRuntime,
+  args: {
+    newPassword?: unknown;
+    oldPassword?: unknown;
+  }
+): AccountMutationResultRuntime {
+  const oldPassword = String(args.oldPassword || "");
+  const newPassword = String(args.newPassword || "");
+  if (!oldPassword) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_old_password",
+      message: "old_password is required"
+    };
+  }
+  if (!newPassword) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_new_password",
+      message: "new_password is required"
+    };
+  }
+  if (String(user.password_plaintext || "") !== oldPassword) {
+    return {
+      ok: false,
+      http: 401,
+      code: "auth_invalid",
+      message: "invalid old password"
+    };
+  }
+  if (oldPassword === newPassword) {
+    return {
+      ok: false,
+      http: 409,
+      code: "password_unchanged",
+      message: "new password must differ from old password"
+    };
+  }
+  user.password_plaintext = newPassword;
+  return { ok: true };
+}
+
+export function passwordRecoveryAccountRuntime<TUser extends ServerUserRuntime>(
+  args: {
+    email: unknown;
+    username: unknown;
+    users: readonly TUser[];
+  }
+): PasswordRecoveryAccountResultRuntime<TUser> {
+  const username = normalizeUsernameRuntime(args.username);
+  const email = normalizeEmailRuntime(args.email);
+  if (!username || username.length < 2) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_username",
+      message: "username is required"
+    };
+  }
+  if (!isValidEmailRuntime(email)) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_email",
+      message: "email is required"
+    };
+  }
+  const user = findUserByUsernameRuntime(args.users, username);
+  if (!user) {
+    return {
+      ok: false,
+      http: 404,
+      code: "user_not_found",
+      message: "user not found"
+    };
+  }
+  if (!user.email_verified) {
+    return {
+      ok: false,
+      http: 403,
+      code: "email_unverified",
+      message: "email must be verified before password recovery"
+    };
+  }
+  if (normalizeEmailRuntime(user.email || "") !== email) {
+    return {
+      ok: false,
+      http: 401,
+      code: "email_mismatch",
+      message: "email does not match account"
+    };
+  }
+  return {
+    ok: true,
+    email,
+    user
+  };
+}
+
 export function listUserCharactersRuntime(
   characters: readonly ServerCharacterRuntime[],
   userId: unknown
@@ -341,4 +662,60 @@ export function listUserCharactersRuntime(
     updated_at: c.updated_at,
     snapshot_meta: c.snapshot_meta
   }));
+}
+
+export function validateCharacterNameRuntime(body: unknown): CharacterNameValidationRuntime {
+  const source = body && typeof body === "object" ? body as { name?: unknown } : {};
+  const name = String(source.name || "").trim();
+  if (!name || name.length < 2) {
+    return {
+      ok: false,
+      http: 400,
+      code: "bad_character_name",
+      message: "name is required"
+    };
+  }
+  return {
+    ok: true,
+    name
+  };
+}
+
+export function characterCreatedPayloadRuntime(character: Pick<
+  ServerCharacterRuntime,
+  "character_id" | "name" | "snapshot_meta" | "user_id"
+>): {
+  character_id: unknown;
+  name: unknown;
+  snapshot_meta: unknown;
+  user_id: unknown;
+} {
+  return {
+    character_id: character.character_id,
+    name: character.name,
+    user_id: character.user_id,
+    snapshot_meta: character.snapshot_meta
+  };
+}
+
+export function characterSnapshotPayloadRuntime(
+  character: Pick<ServerCharacterRuntime, "character_id" | "snapshot_meta">,
+  snapshotBase64?: unknown
+): {
+  character_id: unknown;
+  snapshot_base64?: unknown;
+  snapshot_meta: unknown;
+} {
+  const payload: {
+    character_id: unknown;
+    snapshot_base64?: unknown;
+    snapshot_meta: unknown;
+  } = {
+    character_id: character.character_id,
+    snapshot_meta: character.snapshot_meta
+  };
+  if (arguments.length >= 2) {
+    payload.snapshot_base64 = snapshotBase64;
+  }
+  return payload;
 }

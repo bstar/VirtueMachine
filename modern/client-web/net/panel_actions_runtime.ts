@@ -1,3 +1,15 @@
+export type NetPanelActionDiagRuntime = {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+};
+
+export function netPanelActionDiagRuntime(kind: unknown, text: unknown): NetPanelActionDiagRuntime {
+  return {
+    diagClass: kind === "ok" ? "diag ok" : "diag warn",
+    diagText: String(text || "")
+  };
+}
+
 export async function runNetPanelActionRuntime<TOutput = unknown>(args: {
   run: () => Promise<TOutput>;
   setStatus: (level: string, text: string) => void;
@@ -15,4 +27,33 @@ export async function runNetPanelActionRuntime<TOutput = unknown>(args: {
     args.setStatus("error", `${args.errorStatusPrefix}: ${msg}`);
     args.setDiag("warn", `${args.errorDiagPrefix}: ${msg}`);
   }
+}
+
+export type NetPanelActionButtonRuntime = {
+  addEventListener(type: "click", listener: () => void): void;
+};
+
+export function bindNetPanelActionButtonRuntime<TOutput = unknown>(args: {
+  button?: NetPanelActionButtonRuntime | null;
+  run: () => Promise<TOutput>;
+  setStatus: (level: string, text: string) => void;
+  setDiag: (kind: "ok" | "warn", text: string) => void;
+  okText: string | ((out: TOutput) => string);
+  errorStatusPrefix: string;
+  errorDiagPrefix: string;
+}): boolean {
+  if (!args.button) {
+    return false;
+  }
+  args.button.addEventListener("click", () => {
+    void runNetPanelActionRuntime({
+      run: args.run,
+      setStatus: args.setStatus,
+      setDiag: args.setDiag,
+      okText: args.okText,
+      errorStatusPrefix: args.errorStatusPrefix,
+      errorDiagPrefix: args.errorDiagPrefix
+    });
+  });
+  return true;
 }

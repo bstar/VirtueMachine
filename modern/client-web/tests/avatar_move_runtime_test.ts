@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { applyAvatarMoveCommandRuntime } from "../sim/avatar_move_runtime.ts";
+import {
+  applyAvatarMoveCommandRuntime,
+  avatarMoveAnimationPatchRuntime,
+  avatarWalkPresentationActiveRuntime,
+  countQueuedAvatarMoveCommandsRuntime
+} from "../sim/avatar_move_runtime.ts";
+import { LEGACY_COMMAND_TYPE_RUNTIME } from "../sim/legacy_command_runtime.ts";
 
 function makeSim(overrides = {}) {
   return {
@@ -104,5 +110,80 @@ function makeSim(overrides = {}) {
   });
   assert.deepEqual(sim.world, { map_x: 4095, map_y: -4096, map_z: 2 });
 }
+
+assert.deepEqual(avatarMoveAnimationPatchRuntime({
+  result: {
+    kind: "avatar-move",
+    moved: true,
+    targetX: 6,
+    targetY: 6,
+    targetZ: 1
+  },
+  simTick: 17,
+  nowMs: 1000,
+  walkAnimWindowMs: 280
+}), {
+  avatarLastMoveTick: 17,
+  avatarWalkAnimUntilMs: 1280
+});
+
+assert.equal(avatarWalkPresentationActiveRuntime({
+  queuedMoveCount: 1,
+  nowMs: 1500,
+  walkAnimUntilMs: 1200
+}), false);
+assert.equal(avatarWalkPresentationActiveRuntime({
+  queuedMoveCount: 0,
+  nowMs: 1199,
+  walkAnimUntilMs: 1200
+}), true);
+assert.equal(avatarWalkPresentationActiveRuntime({
+  queuedMoveCount: 0,
+  nowMs: 1201,
+  walkAnimUntilMs: 1200
+}), false);
+assert.equal(countQueuedAvatarMoveCommandsRuntime(null), 0);
+assert.equal(countQueuedAvatarMoveCommandsRuntime([
+  { type: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR },
+  { type: LEGACY_COMMAND_TYPE_RUNTIME.USE_FACING },
+  "bad",
+  { type: LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR }
+]), 2);
+
+for (const result of [
+  {
+    kind: "free-move" as const,
+    moved: true,
+    targetX: 6,
+    targetY: 6,
+    targetZ: 1
+  }
+] as const) {
+  assert.deepEqual(avatarMoveAnimationPatchRuntime({
+    result,
+    simTick: 17,
+    nowMs: 1000,
+    walkAnimWindowMs: 280
+  }), {
+    avatarLastMoveTick: null,
+    avatarWalkAnimUntilMs: null
+  });
+}
+
+assert.deepEqual(avatarMoveAnimationPatchRuntime({
+  result: {
+    kind: "blocked",
+    moved: false,
+    targetX: 6,
+    targetY: 6,
+    targetZ: 1
+  },
+  simTick: 17,
+  nowMs: 1000,
+  walkAnimWindowMs: 280
+}), {
+  avatarLastMoveTick: null,
+  avatarWalkAnimUntilMs: -1
+});
 
 console.log("avatar_move_runtime_test: ok");

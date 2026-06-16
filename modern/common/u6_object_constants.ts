@@ -18,6 +18,12 @@ export const OBJECT_TYPE_ENV_FIXTURE_VALUES = Object.freeze([
   0x0e0, /* foot rail */
   0x12f  /* carpet */
 ]);
+export const OBJECT_TYPE_STRUCTURAL_NON_PICKUP_VALUES = Object.freeze([
+  0x103, /* table leg */
+  0x104, /* shadow */
+  0x105, /* table leg */
+  0x106  /* shadow */
+]);
 export const OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_VALUES = Object.freeze([
   0x058, /* gold */
   0x041, /* reagent */
@@ -53,7 +59,6 @@ export const OBJECT_TYPE_STACKABLE_INVENTORY_VALUES = Object.freeze([
   0x151  /* effect */
 ]);
 export const OBJECT_TYPE_SOLID_ENV_VALUES = Object.freeze([
-  0x097, /* table */
   0x0a3, 0x0a4, 0x0b0, 0x0b1, 0x0c6, 0x0d8, 0x0d9,
   0x0e4, 0x0e6, 0x0ed, 0x0ef, 0x0fa, 0x117, 0x137,
   0x147
@@ -64,6 +69,17 @@ export function u6ObjectTypeSet(values: readonly number[]): Set<number> {
 }
 
 const OBJECT_TYPE_STACKABLE_INVENTORY_SET = u6ObjectTypeSet(OBJECT_TYPE_STACKABLE_INVENTORY_VALUES);
+const OBJECT_TYPE_NON_PICKUP_SET = u6ObjectTypeSet([
+  ...OBJECT_TYPE_DOOR_VALUES,
+  ...OBJECT_TYPE_CHAIR_VALUES,
+  ...OBJECT_TYPE_BED_VALUES,
+  ...OBJECT_TYPE_SOLID_ENV_VALUES,
+  ...OBJECT_TYPE_TOP_DECOR_VALUES,
+  ...OBJECT_TYPE_SIGN_VALUES,
+  ...OBJECT_TYPE_ENV_FIXTURE_VALUES,
+  ...OBJECT_TYPE_STRUCTURAL_NON_PICKUP_VALUES
+]);
+const OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_SET = u6ObjectTypeSet(OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_VALUES);
 
 export function isU6InventoryStackableObjectType(type: unknown, frame: unknown = 0): boolean {
   const objectType = Number(type) & 0x03ff;
@@ -71,4 +87,19 @@ export function isU6InventoryStackableObjectType(type: unknown, frame: unknown =
     return false;
   }
   return OBJECT_TYPE_STACKABLE_INVENTORY_SET.has(objectType);
+}
+
+export function isU6PortableObjectTypeRuntime(type: unknown, typeWeights?: ArrayLike<number> | null): boolean {
+  const objectType = Number(type) & 0x03ff;
+  if (OBJECT_TYPE_NON_PICKUP_SET.has(objectType)) {
+    return false;
+  }
+  if (
+    typeWeights
+    && (Number(typeWeights[objectType]) | 0) === 0
+    && !OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_SET.has(objectType)
+  ) {
+    return false;
+  }
+  return true;
 }

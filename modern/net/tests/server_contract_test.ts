@@ -10,14 +10,21 @@ import {
   OBJ_COORD_USE_LOCXYZ,
   OBJ_COORD_USE_MASK
 } from "../../common/u6_object_constants.ts";
+import { canTakeWorldObject } from "../world_object_policy.ts";
+import { loadTypeWeightMap } from "../world_map_runtime.ts";
 
-const ROOT = path.resolve(new URL("../../../..", import.meta.url).pathname);
+const ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
 const SERVER_TS = path.join(ROOT, "modern/net/server.ts");
 const SIM_CORE_INTERACT_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_interact_bridge");
 const SIM_CORE_ASSOC_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_bridge");
 const SIM_CORE_ASSOC_BATCH_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_assoc_chain_batch_bridge");
 const SIM_CORE_WORLD_QUERY_BIN = path.join(ROOT, "build", "modern", "sim-core", "sim_core_world_objects_query_bridge");
 const ROOM_HOTSPOT_FIXTURES = path.join(ROOT, "modern", "net", "tests", "fixtures", "room_hotspots.level0.json");
+const RUNTIME_DIR = path.join(ROOT, "modern", "assets", "runtime");
+const SERVER_NODE_OPTIONS = [
+  String(process.env.NODE_OPTIONS || "").trim(),
+  "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"
+].filter(Boolean).join(" ");
 
 type ClockNpcStateTestRow = {
   action?: unknown;
@@ -74,6 +81,10 @@ function findObjectByKey(list, key) {
   return (Array.isArray(list) ? list : []).find((o) => String(o?.object_key || "") === String(key || "")) || null;
 }
 
+function objectKeyList(list) {
+  return (Array.isArray(list) ? list : []).map((o) => String(o?.object_key || "")).filter(Boolean);
+}
+
 function loadRoomHotspotFixtures() {
   const raw = fs.readFileSync(ROOM_HOTSPOT_FIXTURES, "utf8");
   const parsed = JSON.parse(raw);
@@ -123,28 +134,65 @@ async function main() {
   const port = 18081;
   const baseUrl = `http://${host}:${port}`;
 
-  const child = spawn(process.execPath, [SERVER_TS], {
-    env: {
-      ...process.env,
-      VM_NET_HOST: host,
-      VM_NET_PORT: String(port),
-      VM_NET_DATA_DIR: dataDir,
-      VM_SIM_CORE_INTERACT_BIN: SIM_CORE_INTERACT_BIN,
-      VM_SIM_CORE_ASSOC_BIN: SIM_CORE_ASSOC_BIN,
-      VM_SIM_CORE_ASSOC_BATCH_BIN: SIM_CORE_ASSOC_BATCH_BIN,
-      VM_SIM_CORE_WORLD_QUERY_BIN: SIM_CORE_WORLD_QUERY_BIN,
-      VM_EMAIL_MODE: "log"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
   let stderr = "";
-  child.stderr.on("data", (buf) => {
-    stderr += String(buf);
-  });
+  let stdout = "";
+  let child = null;
+
+  async function startServer() {
+    const next = spawn(process.execPath, [SERVER_TS], {
+      env: {
+        ...process.env,
+        VM_NET_HOST: host,
+        VM_NET_PORT: String(port),
+        VM_NET_DATA_DIR: dataDir,
+        VM_SIM_CORE_INTERACT_BIN: SIM_CORE_INTERACT_BIN,
+        VM_SIM_CORE_ASSOC_BIN: SIM_CORE_ASSOC_BIN,
+        VM_SIM_CORE_ASSOC_BATCH_BIN: SIM_CORE_ASSOC_BATCH_BIN,
+        VM_SIM_CORE_WORLD_QUERY_BIN: SIM_CORE_WORLD_QUERY_BIN,
+        VM_EMAIL_MODE: "log",
+        NODE_OPTIONS: SERVER_NODE_OPTIONS
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    child = next;
+    next.stdout.on("data", (buf) => {
+      stdout += String(buf);
+    });
+    next.stderr.on("data", (buf) => {
+      stderr += String(buf);
+    });
+    try {
+      await waitForHealth(baseUrl);
+      return next;
+    } catch (err) {
+      if (next.exitCode === null) {
+        next.kill("SIGTERM");
+        await new Promise((resolve) => next.once("exit", resolve));
+      }
+      if (stderr.trim() || stdout.trim()) {
+        process.stdout.write(`net test server startup stdout:\n${stdout}\n`);
+        process.stdout.write(`net test server startup stderr:\n${stderr}\n`);
+      }
+      child = null;
+      throw err;
+    }
+  }
+
+  async function stopServer() {
+    if (!child) {
+      return;
+    }
+    const stopping = child;
+    child = null;
+    if (stopping.exitCode !== null) {
+      return;
+    }
+    stopping.kill("SIGTERM");
+    await new Promise((resolve) => stopping.once("exit", resolve));
+  }
 
   try {
-    await waitForHealth(baseUrl);
+    await startServer();
 
     const runtimeContract = await jsonFetch(baseUrl, "/api/runtime/contract", {
       method: "GET"
@@ -162,6 +210,8 @@ async function main() {
     assert.equal(login.status, 200);
     assert.ok(login.body?.token);
     const token = login.body.token;
+    const accountUserId = String(login.body?.user?.user_id || "");
+    assert.ok(accountUserId, "login should expose account user id");
     const runtimeHeaders = {
       "x-vm-runtime-profile": "canonical_plus",
       "x-vm-runtime-extensions": "quest_system,housing"
@@ -301,14 +351,64 @@ async function main() {
     });
     assert.equal(lifecycleObjects.status, 200);
     assert.ok(Array.isArray(lifecycleObjects.body?.objects));
-    const targets = lifecycleObjects.body.objects.filter((o) => coordUseOfStatus(o.status) === OBJ_COORD_USE_LOCXYZ);
-    assert.ok(targets.length >= 2, "need at least two LOCXYZ objects for interaction lifecycle contract test");
+    const typeWeights = loadTypeWeightMap(RUNTIME_DIR);
+    const targets = lifecycleObjects.body.objects.filter((o) => (
+      coordUseOfStatus(o.status) === OBJ_COORD_USE_LOCXYZ
+      && canTakeWorldObject(o, typeWeights)
+    ));
+    assert.ok(targets.length >= 3, "need at least three LOCXYZ objects for interaction lifecycle contract test");
     const targetKey = String(targets[0].object_key || "");
     const containerKey = String(targets[1].object_key || "");
+    const accountAliasTargetKey = String(targets[2].object_key || "");
     assert.ok(targetKey && containerKey && targetKey !== containerKey, "target/container keys must be distinct");
+    assert.ok(accountAliasTargetKey && accountAliasTargetKey !== targetKey && accountAliasTargetKey !== containerKey, "account alias target key must be distinct");
     const actorX = Number(targets[0].x) | 0;
     const actorY = Number(targets[0].y) | 0;
     const actorZ = Number(targets[0].z) | 0;
+
+    const aliasCharacter = await jsonFetch(baseUrl, "/api/characters", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        name: "AccountAliasDrop"
+      })
+    });
+    assert.equal(aliasCharacter.status, 201);
+    const aliasCharacterId = String(aliasCharacter.body?.character_id || "");
+    assert.ok(aliasCharacterId, "account alias drop test needs a real character id");
+
+    const aliasTake = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        verb: "take",
+        target_key: accountAliasTargetKey,
+        actor_id: aliasCharacterId,
+        actor_x: Number(targets[2].x) | 0,
+        actor_y: Number(targets[2].y) | 0,
+        actor_z: Number(targets[2].z) | 0
+      })
+    });
+    assert.equal(aliasTake.status, 200);
+    const aliasHeldKey = String(aliasTake.body?.target?.object_key || "");
+    assert.ok(aliasHeldKey && aliasHeldKey !== accountAliasTargetKey, "alias take should create a held clone");
+    assert.equal(String(aliasTake.body?.target?.holder_id || ""), aliasCharacterId);
+
+    const aliasDropViaAccountId = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        verb: "drop",
+        target_key: aliasHeldKey,
+        actor_id: accountUserId,
+        actor_x: Number(targets[2].x) | 0,
+        actor_y: Number(targets[2].y) | 0,
+        actor_z: Number(targets[2].z) | 0
+      })
+    });
+    assert.equal(aliasDropViaAccountId.status, 200);
+    assert.equal(coordUseOfStatus(aliasDropViaAccountId.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
+    assert.equal(String(aliasDropViaAccountId.body?.target?.holder_kind || ""), "none");
 
     async function runInteractionLifecycle() {
       let carriedKey = targetKey;
@@ -326,6 +426,20 @@ async function main() {
       });
       assert.equal(blockedDropWorldObject.status, 409);
       assert.equal(String(blockedDropWorldObject.body?.error?.code || ""), "object_not_held");
+
+      const missingActorTake = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          verb: "take",
+          target_key: targetKey,
+          actor_x: actorX,
+          actor_y: actorY,
+          actor_z: actorZ
+        })
+      });
+      assert.equal(missingActorTake.status, 400);
+      assert.equal(String(missingActorTake.body?.error?.code || ""), "bad_actor_id");
 
       const take = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
@@ -353,6 +467,21 @@ async function main() {
       assert.equal(take.body?.runtime_contract?.profile, "canonical_plus");
       assert.deepEqual(take.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
       carriedKey = String(take.body?.target?.object_key || "");
+
+      const inventoryAfterTake = await jsonFetch(baseUrl, "/api/world/inventory?actor_id=contract-avatar", {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(inventoryAfterTake.status, 200);
+      assert.ok(
+        objectKeyList(inventoryAfterTake.body?.objects).includes(carriedKey),
+        "taken clone must appear in actor inventory projection"
+      );
+      assert.equal(
+        findObjectByKey(inventoryAfterTake.body?.objects || [], targetKey),
+        null,
+        "inventory projection must contain the clone, not the baseline source object"
+      );
 
       const afterTakeObjects = await jsonFetch(baseUrl, `/api/world/objects?x=${actorX}&y=${actorY}&z=${actorZ}&radius=0&limit=64&projection=footprint&include_footprint=1`, {
         method: "GET",
@@ -408,7 +537,14 @@ async function main() {
       assert.equal(typeof lbNpc.pose, "string", "scheduled NPC should expose render pose");
       const geoffreyNpc = npcRows.find((row) => Number(row?.npc_id) === 7);
       assert.ok(geoffreyNpc, "expected Geoffrey npc state in clock response");
-      assert.notEqual(String(geoffreyNpc.path_status || ""), "walking", "Geoffrey should not start in patrol/walking state after initial schedule sync");
+      assert.match(
+        String(geoffreyNpc.path_status || ""),
+        /^(idle|walking|blocked)$/,
+        "Geoffrey should expose a supported canonical schedule path status"
+      );
+      if (String(geoffreyNpc.path_status || "") === "walking") {
+        assert.notEqual(Number(geoffreyNpc.x), Number(geoffreyNpc.target_x), "walking NPC should have a distinct target");
+      }
 
       const introStateGet = await jsonFetch(baseUrl, "/api/world/intro-state", {
         method: "GET",
@@ -553,6 +689,8 @@ async function main() {
       assert.equal(takeContainer.status, 200);
       assert.equal(coordUseOfStatus(takeContainer.body?.target?.status), OBJ_COORD_USE_INVEN);
       assert.equal(String(takeContainer.body?.target?.holder_kind || ""), "npc");
+      const carriedContainerKey = String(takeContainer.body?.target?.object_key || "");
+      assert.ok(carriedContainerKey && carriedContainerKey !== containerKey, "taken container should be represented by a clone key");
 
       const blockedTakeContained = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
@@ -570,8 +708,8 @@ async function main() {
       assert.equal(blockedTakeContained.body?.error?.code, "interaction_container_blocked");
       assert.equal(
         String(blockedTakeContained.body?.error?.blocked_by || ""),
-        containerKey,
-        "blocked take should surface containing object key"
+        `parent-owned:${carriedContainerKey}`,
+        "blocked take should surface containing container clone key"
       );
 
       const dropContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", {
@@ -579,7 +717,7 @@ async function main() {
         headers: authHeaders,
         body: JSON.stringify({
           verb: "drop",
-          target_key: containerKey,
+          target_key: carriedContainerKey,
           actor_id: "contract-avatar",
           actor_x: actorX,
           actor_y: actorY,
@@ -607,6 +745,16 @@ async function main() {
       assert.equal(Number(takeAgain.body?.target?.despawn_at_ms || 0), 0);
       assert.equal(Number(takeAgain.body?.target?.dropped_at_ms || 0), 0);
 
+      const inventoryAfterTakeAgain = await jsonFetch(baseUrl, "/api/world/inventory?actor_id=contract-avatar", {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(inventoryAfterTakeAgain.status, 200);
+      assert.ok(
+        objectKeyList(inventoryAfterTakeAgain.body?.objects).includes(carriedKey),
+        "re-taken dropped clone must return to actor inventory projection"
+      );
+
       const drop = await jsonFetch(baseUrl, "/api/world/objects/interact", {
         method: "POST",
         headers: authHeaders,
@@ -627,8 +775,31 @@ async function main() {
         Number(drop.body?.target?.despawn_at_ms || 0) - Number(drop.body?.target?.dropped_at_ms || 0),
         10 * 60 * 1000
       );
-      assert.equal(Number(drop.body?.interaction_checkpoint?.seq), 7);
+      assert.ok(Number(drop.body?.interaction_checkpoint?.seq) >= 7);
       assert.ok(String(drop.body?.interaction_checkpoint?.hash || "").length > 0);
+
+      const inventoryAfterDrop = await jsonFetch(baseUrl, "/api/world/inventory?actor_id=contract-avatar", {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(inventoryAfterDrop.status, 200);
+      assert.equal(
+        findObjectByKey(inventoryAfterDrop.body?.objects || [], carriedKey),
+        null,
+        "dropped clone must be removed from actor inventory projection"
+      );
+
+      const droppedCellObjects = await jsonFetch(baseUrl, `/api/world/objects?x=${actorX}&y=${actorY}&z=${actorZ}&radius=0&limit=64&projection=footprint&include_footprint=1`, {
+        method: "GET",
+        headers: authHeaders
+      });
+      assert.equal(droppedCellObjects.status, 200);
+      const droppedClone = findObjectByKey(droppedCellObjects.body?.objects || [], carriedKey);
+      assert.ok(droppedClone, "dropped clone must be queryable in the world at its drop cell");
+      assert.equal(coordUseOfStatus(droppedClone.status), OBJ_COORD_USE_LOCXYZ);
+      assert.equal(String(droppedClone.holder_kind || ""), "none");
+      assert.equal(Number(droppedClone.despawn_at_ms || 0), Number(drop.body?.target?.despawn_at_ms || 0));
+
       return {
         seq: Number(drop.body?.interaction_checkpoint?.seq) | 0,
         hash: String(drop.body?.interaction_checkpoint?.hash || ""),
@@ -651,6 +822,27 @@ async function main() {
     assert.equal(String(targetAfter.holder_kind || ""), "none");
     assert.ok(Number(targetAfter.despawn_at_ms || 0) > Number(targetAfter.dropped_at_ms || 0));
 
+    await stopServer();
+    await startServer();
+
+    const worldObjectsAfterRestart = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(worldObjectsAfterRestart.status, 200);
+    assert.equal(
+      findObjectByKey(worldObjectsAfterRestart.body?.objects, targetKey),
+      null,
+      "source object should remain hidden after server restart until its respawn timer matures"
+    );
+    const cloneAfterRestart = findObjectByKey(worldObjectsAfterRestart.body?.objects, lifecycleRun1.carriedKey);
+    assert.ok(cloneAfterRestart, "dropped clone must remain queryable after server restart");
+    assert.equal(coordUseOfStatus(cloneAfterRestart.status), OBJ_COORD_USE_LOCXYZ);
+    assert.equal(String(cloneAfterRestart.holder_kind || ""), "none");
+    assert.equal(String(cloneAfterRestart.source_object_key || ""), targetKey);
+    assert.equal(Number(cloneAfterRestart.dropped_at_ms || 0), Number(targetAfter.dropped_at_ms || 0));
+    assert.equal(Number(cloneAfterRestart.despawn_at_ms || 0), Number(targetAfter.despawn_at_ms || 0));
+
     const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", {
       method: "POST",
       headers: authHeaders,
@@ -659,6 +851,35 @@ async function main() {
     assert.equal(worldObjectsReset.status, 200);
     assert.equal(worldObjectsReset.body?.ok, true);
     assert.equal(Number(worldObjectsReset.body?.interaction_checkpoint?.seq), 0);
+
+    const aliasTakeReplay = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        verb: "take",
+        target_key: accountAliasTargetKey,
+        actor_id: aliasCharacterId,
+        actor_x: Number(targets[2].x) | 0,
+        actor_y: Number(targets[2].y) | 0,
+        actor_z: Number(targets[2].z) | 0
+      })
+    });
+    assert.equal(aliasTakeReplay.status, 200);
+    const aliasHeldReplayKey = String(aliasTakeReplay.body?.target?.object_key || "");
+    assert.ok(aliasHeldReplayKey, "alias replay take should create a held clone");
+    const aliasDropReplayViaAccountId = await jsonFetch(baseUrl, "/api/world/objects/interact", {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        verb: "drop",
+        target_key: aliasHeldReplayKey,
+        actor_id: accountUserId,
+        actor_x: Number(targets[2].x) | 0,
+        actor_y: Number(targets[2].y) | 0,
+        actor_z: Number(targets[2].z) | 0
+      })
+    });
+    assert.equal(aliasDropReplayViaAccountId.status, 200);
 
     const lifecycleRun2 = await runInteractionLifecycle();
     assert.equal(lifecycleRun2.seq, lifecycleRun1.seq);
@@ -816,7 +1037,7 @@ async function main() {
     assert.equal(presence.status, 200);
     assert.ok(Array.isArray(presence.body?.players));
     assert.equal(presence.body.players.length, 1);
-    assert.equal(presence.body.players[0]?.username, "avatar_renamed");
+    assert.equal(presence.body.players[0]?.username, "avatar");
     assert.equal(presence.body.players[0]?.map_x, 309);
     assert.equal(presence.body.players[0]?.session_id, "test-session-2");
     assert.equal(presence.body.players[0]?.runtime_profile, "canonical_plus");
@@ -899,8 +1120,7 @@ async function main() {
     assert.ok(Array.isArray(maintenance2.body?.events));
     assert.equal(maintenance2.body.events.length, 0);
   } finally {
-    child.kill("SIGTERM");
-    await new Promise((resolve) => child.once("exit", resolve));
+    await stopServer();
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 

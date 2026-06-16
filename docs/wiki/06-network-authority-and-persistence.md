@@ -134,6 +134,22 @@ Operational audit:
 - held inventory rows live in `spawned[]` with coord-use `0x10`
 - a healthy avatar inventory should have no held rows with drop/despawn timers
 
+## Implementation Boundary
+
+Canonical object identity and interaction legality stay anchored to legacy object data plus the
+compiled sim-core bridge. MMO-only lifecycle behavior is layered around that result:
+
+- `modern/net/world_object_policy.ts`: server-side clone, respawn, and despawn mutations.
+- `modern/net/server.ts`: endpoint orchestration, persistence, and object index refresh.
+- `modern/client-web/net/world_runtime.ts`: typed client projection helpers for take/drop,
+  inventory object selection, and hidden-parent visibility state.
+- `modern/client-web/net/world_object_projection_runtime.ts`: pure projection from server world
+  rows into client target/object-layer updates.
+
+When debugging pickup/drop bugs, prefer changing these boundary modules with focused tests before
+touching renderer code or legacy-derived object ordering. A baseline object being hidden and an
+`inv:` clone being visible are both correct at the same time.
+
 ## Contract Intent
 
 The network layer should not invent gameplay semantics. It should transport and persist authoritative state while preserving deterministic core behavior.

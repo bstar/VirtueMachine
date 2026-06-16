@@ -159,11 +159,24 @@ const terrainType = new Uint8Array(0x800);
 tileFlags[0x123] = 0x04;
 terrainType[0x124] = 0x04;
 tileFlags[0x321] = 0x04;
+tileFlags[0x322] = 0x20;
+tileFlags[0x400] = 0x80;
+tileFlags[0x500] = 0xc0;
 assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0x123 }, tileFlags, terrainType, null), true);
+assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0x322 }, tileFlags, terrainType, null), true);
 assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0x124 }, new Uint8Array(0x800), terrainType, null), true);
 assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0 }, tileFlags, terrainType, {
   objectsAt: () => [{ tileId: 0x321 }]
 }), true);
+assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0 }, tileFlags, terrainType, {
+  objectsAt: (x, y) => (x === 2 && y === 2 ? [{ tileId: 0x400 }] : [])
+}), true);
+assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0 }, tileFlags, terrainType, {
+  objectsAt: (x, y) => (x === 2 && y === 3 ? [{ tileId: 0x500 }] : [])
+}), true);
+assert.equal(layer.tileBlocks(1, 2, 0, { tileAt: () => 0 }, tileFlags, terrainType, {
+  objectsAt: () => [{ renderable: false, tileId: 0x321 }]
+}), false);
 assert.equal(layer.tileBlocks(1, 2, 0, null, tileFlags, terrainType, null), false);
 assert.equal(layer.step(1, null, null, null, null, null), 0);
 

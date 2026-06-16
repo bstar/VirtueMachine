@@ -587,6 +587,36 @@ export function abortBootIntroRuntime(state: BootIntroRuntimeState | null | unde
   state.sceneElapsedMs = 0;
 }
 
+export type BootIntroInputPlanRuntime = {
+  action: "none" | "abort" | "advance";
+  preventDefault: boolean;
+};
+
+export function bootIntroInputPlanRuntime(args: {
+  active: unknown;
+  awaitingGesture?: unknown;
+  key?: unknown;
+}): BootIntroInputPlanRuntime {
+  if (!args.active) {
+    return {
+      action: "none",
+      preventDefault: false
+    };
+  }
+  const preventDefault = !!args.awaitingGesture;
+  const key = String(args.key || "").toLowerCase();
+  if (key === "escape") {
+    return {
+      action: "abort",
+      preventDefault: true
+    };
+  }
+  return {
+    action: "advance",
+    preventDefault
+  };
+}
+
 export function advanceBootIntroInputRuntime(state: BootIntroRuntimeState | null | undefined): boolean {
   if (!state || !state.active || state.aborting) {
     return false;

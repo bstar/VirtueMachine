@@ -80,12 +80,48 @@ export type EntityLayerMapRuntime = {
 };
 
 export type EntityLayerObjectRuntime = {
+  renderable?: boolean;
   tileId: number;
 };
 
 export type EntityLayerObjectLayerRuntime = {
   objectsAt(x: number, y: number, z: number): EntityLayerObjectRuntime[];
 };
+
+function entityObjectFootprintHitsRuntime(
+  obj: EntityLayerObjectRuntime,
+  ox: number,
+  oy: number,
+  tx: number,
+  ty: number,
+  tileFlags: ArrayLike<number>
+): boolean {
+  if (obj.renderable === false) {
+    return false;
+  }
+  const wrap10 = (v: number): number => v & 0x3ff;
+  const sx = wrap10(ox);
+  const sy = wrap10(oy);
+  const x = wrap10(tx);
+  const y = wrap10(ty);
+  const tileId = Number(obj.tileId) & 0xffff;
+  const tf = tileFlags[tileId & 0x7ff] ?? 0;
+  if (sx === x && sy === y) {
+    return true;
+  }
+  if ((tf & 0x80) !== 0 && wrap10(sx - 1) === x && sy === y) {
+    return true;
+  }
+  if ((tf & 0x40) !== 0 && sx === x && wrap10(sy - 1) === y) {
+    return true;
+  }
+  return (tf & 0xc0) === 0xc0 && wrap10(sx - 1) === x && wrap10(sy - 1) === y;
+}
+
+function entityObjectTileBlocksRuntime(obj: EntityLayerObjectRuntime, tileFlags: ArrayLike<number>): boolean {
+  const tf = tileFlags[Number(obj.tileId) & 0x7ff] ?? 0;
+  return (tf & 0x04) !== 0 || (tf & 0x20) !== 0 || ((tf & 0xc0) !== 0 && (tf & 0x10) === 0);
+}
 
 export class U6EntityLayerRuntime {
   baseTiles: ArrayLike<number>;
@@ -248,18 +284,28 @@ export class U6EntityLayerRuntime {
       return false;
     }
     const t = mapCtx.tileAt(x, y, z);
-    if (tileFlags && ((tileFlags[t & 0x7ff] ?? 0) & 0x04)) {
+    if (tileFlags && (((tileFlags[t & 0x7ff] ?? 0) & 0x04) !== 0 || ((tileFlags[t & 0x7ff] ?? 0) & 0x20) !== 0)) {
       return true;
     }
     if (terrainType && ((terrainType[t & 0x7ff] ?? 0) & 0x04)) {
       return true;
     }
     if (objectLayer && tileFlags) {
-      const overlays = objectLayer.objectsAt(x, y, z);
-      for (const o of overlays) {
-        const tf = tileFlags[o.tileId & 0x7ff] ?? 0;
-        if (tf & 0x04) {
-          return true;
+      const sources = [
+        [x, y],
+        [x + 1, y],
+        [x, y + 1],
+        [x + 1, y + 1]
+      ] as const;
+      for (const [ox, oy] of sources) {
+        const overlays = objectLayer.objectsAt(ox, oy, z);
+        for (const o of overlays) {
+          if (
+            entityObjectFootprintHitsRuntime(o, ox, oy, x, y, tileFlags)
+            && entityObjectTileBlocksRuntime(o, tileFlags)
+          ) {
+            return true;
+          }
         }
       }
     }

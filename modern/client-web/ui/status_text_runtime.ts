@@ -9,6 +9,69 @@ export type StatusWorldRuntime = {
   time_m: number;
 };
 
+export type DiagPresentationRuntime = {
+  diagClass?: unknown;
+  diagText?: unknown;
+};
+
+export type DiagKindPresentationRuntime = DiagPresentationRuntime & {
+  message?: unknown;
+  text?: unknown;
+};
+
+export type DiagTargetRuntime = {
+  className: string;
+  textContent: string | null;
+};
+
+export type StatusPanelTextRuntime = {
+  audio: string;
+  avatarState: string;
+  centerBand: string;
+  centerTiles: string;
+  clock: string;
+  date: string;
+  entities: string;
+  hash: string;
+  inputMode: string;
+  loopHealth: string;
+  netPlayers: string;
+  npcOcclusionBlocks: string;
+  objects: string;
+  palettePhase: string;
+  position: string;
+  queued: string;
+  renderParity: string;
+  simLoop: string;
+  tick: string;
+  tile: string;
+  topTimeOfDay: string;
+};
+
+export function normalizeDiagKindPresentationRuntime(
+  presentation: DiagKindPresentationRuntime | null | undefined
+): DiagPresentationRuntime | null {
+  if (!presentation) {
+    return null;
+  }
+  const kind = String(presentation.diagClass || "ok").trim() || "ok";
+  return {
+    diagClass: kind.startsWith("diag ") ? kind : `diag ${kind}`,
+    diagText: presentation.diagText ?? presentation.text ?? presentation.message ?? ""
+  };
+}
+
+export function applyDiagPresentationRuntime(
+  target: DiagTargetRuntime | null | undefined,
+  presentation: DiagPresentationRuntime | null | undefined
+): void {
+  if (!target || !presentation) {
+    return;
+  }
+  target.className = String(presentation.diagClass || "");
+  target.textContent = String(presentation.diagText || "");
+}
+
 export function formatClockRuntime(world: Pick<StatusWorldRuntime, "time_h" | "time_m">): {
   hh: string;
   mm: string;
@@ -25,6 +88,10 @@ export function formatDateRuntime(world: Pick<StatusWorldRuntime, "date_d" | "da
 
 export function formatPositionRuntime(world: Pick<StatusWorldRuntime, "map_x" | "map_y" | "map_z">): string {
   return `${Number(world.map_x) | 0}, ${Number(world.map_y) | 0}, ${Number(world.map_z) | 0}`;
+}
+
+export function formatTopTimeOfDayRuntime(label: unknown, clockText: unknown): string {
+  return `${String(label || "")} (${String(clockText || "")})`;
 }
 
 export function formatInputModeRuntime(args: {
@@ -49,6 +116,27 @@ export function formatLayerCountRuntime(activeCount: unknown, totalCount: unknow
     return "0 / 0";
   }
   return `${Number(activeCount) | 0} / ${Number(totalCount) | 0}`;
+}
+
+export function formatSimpleCountRuntime(count: unknown): string {
+  return String(Number(count) | 0);
+}
+
+export function formatNetPlayerCountRuntime(remotePlayers: unknown): string {
+  const remote = Array.isArray(remotePlayers) ? remotePlayers.length : 0;
+  return String(1 + remote);
+}
+
+export function formatPalettePhaseRuntime(enabled: unknown, phase: unknown): string {
+  return enabled ? String(Number(phase) & 0xff) : "off";
+}
+
+export function formatCenterTilesRuntime(rawTile: unknown, animatedTile: unknown): string {
+  return `0x${(Number(rawTile) >>> 0).toString(16)} -> 0x${(Number(animatedTile) >>> 0).toString(16)}`;
+}
+
+export function formatSimLoopStateRuntime(paused: unknown): "paused" | "running" {
+  return paused ? "paused" : "running";
 }
 
 export function formatRenderParityRuntime(args: {
@@ -94,7 +182,143 @@ export function formatLoopHealthRuntime(args: {
   return `${prefix}dt ${last}ms / max ${max}ms | drop ${Number(args.backlogDrops) | 0} | vis ${Number(args.visibilityResets) | 0} | err ${Number(args.frameErrors) | 0}`;
 }
 
+export function formatAudioStatusRuntime(args: {
+  ambientLastSfx?: unknown;
+  ambientTriggerCount?: unknown;
+  backendMode?: unknown;
+  lastError?: unknown;
+  musicAwaitingGesture?: unknown;
+  musicLoading?: unknown;
+  musicPlaying?: unknown;
+  musicSong?: unknown;
+  outputMuted?: unknown;
+  soundEnabled?: unknown;
+}): string {
+  const muted = args.soundEnabled ? "" : " sound-off";
+  const outputMuted = args.outputMuted ? " output-muted" : "";
+  const song = String(args.musicSong || "");
+  const err = args.lastError ? ` err:${String(args.lastError)}` : "";
+  const music = args.musicAwaitingGesture
+    ? ` gesture:${song}`
+    : args.musicLoading
+      ? ` load:${song}`
+      : args.musicPlaying
+        ? ` music:${song}`
+        : "";
+  return `${String(args.backendMode || "")}${muted}${outputMuted}${music} ambient:${Number(args.ambientTriggerCount) | 0} ${String(args.ambientLastSfx || "-")}${err}`;
+}
+
 export function formatLedgerEntryCountRuntime(count: number): string {
   const n = Math.max(0, Number(count) | 0);
   return `${n} entr${n === 1 ? "y" : "ies"}`;
+}
+
+export function buildStatusPanelTextRuntime(args: {
+  audioStatus?: {
+    backendMode?: unknown;
+    lastError?: unknown;
+    musicAwaitingGesture?: unknown;
+    musicLoading?: unknown;
+    musicPlaying?: unknown;
+    musicSong?: unknown;
+    muted?: unknown;
+  } | null;
+  audioAmbientLastSfx?: unknown;
+  audioAmbientTriggerCount?: unknown;
+  avatarFacingDx: unknown;
+  avatarFacingDy: unknown;
+  avatarPose: unknown;
+  centerAnimatedTile: unknown;
+  centerPaletteBand: unknown;
+  centerRawTile: unknown;
+  enablePaletteFx: unknown;
+  entityLayerLoaded: boolean;
+  entityLayerTotalLoaded?: unknown;
+  entityOverlayCount: unknown;
+  hashText: unknown;
+  interactionProbeTile: number | null | undefined;
+  loopHealth: {
+    backlogDrops?: unknown;
+    frameErrors?: unknown;
+    lastDtMs?: unknown;
+    maxDtMs?: unknown;
+    visibilityResets?: unknown;
+  };
+  movementMode: string;
+  netRemotePlayers: unknown;
+  npcOcclusionBlockedMoves: unknown;
+  objectLayerTotalLoaded?: unknown;
+  objectLayerLoaded: boolean;
+  objectOverlayCount: unknown;
+  palettePhase: unknown;
+  queueLength: unknown;
+  renderParityMismatches: unknown;
+  sessionStarted: boolean;
+  simPaused: boolean;
+  soundEnabled?: unknown;
+  targetVerb: string;
+  targetVerbLabels: Record<string, string>;
+  tick: unknown;
+  tileId: unknown;
+  timeOfDayLabel: unknown;
+  useCursorActive: boolean;
+  world: StatusWorldRuntime;
+}): StatusPanelTextRuntime {
+  const clock = formatClockRuntime(args.world);
+  const audio = args.audioStatus || {};
+  return {
+    audio: formatAudioStatusRuntime({
+      ambientLastSfx: args.audioAmbientLastSfx,
+      ambientTriggerCount: args.audioAmbientTriggerCount,
+      backendMode: audio.backendMode,
+      lastError: audio.lastError,
+      musicAwaitingGesture: audio.musicAwaitingGesture,
+      musicLoading: audio.musicLoading,
+      musicPlaying: audio.musicPlaying,
+      musicSong: audio.musicSong,
+      outputMuted: audio.muted,
+      soundEnabled: args.soundEnabled
+    }),
+    avatarState: formatAvatarStateRuntime({
+      facingDx: Number(args.avatarFacingDx) | 0,
+      facingDy: Number(args.avatarFacingDy) | 0,
+      movementMode: args.movementMode,
+      pose: String(args.avatarPose || "")
+    }),
+    centerBand: String(args.centerPaletteBand || ""),
+    centerTiles: formatCenterTilesRuntime(args.centerRawTile, args.centerAnimatedTile),
+    clock: clock.text,
+    date: formatDateRuntime(args.world),
+    entities: formatLayerCountRuntime(args.entityOverlayCount, args.entityLayerTotalLoaded, args.entityLayerLoaded),
+    hash: String(args.hashText || ""),
+    inputMode: formatInputModeRuntime({
+      movementMode: args.movementMode,
+      sessionStarted: args.sessionStarted,
+      targetVerb: args.targetVerb,
+      targetVerbLabels: args.targetVerbLabels,
+      useCursorActive: args.useCursorActive
+    }),
+    loopHealth: formatLoopHealthRuntime({
+      backlogDrops: Number(args.loopHealth.backlogDrops) | 0,
+      frameErrors: Number(args.loopHealth.frameErrors) | 0,
+      lastDtMs: Number(args.loopHealth.lastDtMs) || 0,
+      maxDtMs: Number(args.loopHealth.maxDtMs) || 0,
+      paused: args.simPaused,
+      visibilityResets: Number(args.loopHealth.visibilityResets) | 0
+    }),
+    netPlayers: formatNetPlayerCountRuntime(args.netRemotePlayers),
+    npcOcclusionBlocks: formatSimpleCountRuntime(args.npcOcclusionBlockedMoves),
+    objects: formatLayerCountRuntime(args.objectOverlayCount, args.objectLayerTotalLoaded, args.objectLayerLoaded),
+    palettePhase: formatPalettePhaseRuntime(args.enablePaletteFx, args.palettePhase),
+    position: formatPositionRuntime(args.world),
+    queued: formatSimpleCountRuntime(args.queueLength),
+    renderParity: formatRenderParityRuntime({
+      interactionProbeTile: args.interactionProbeTile,
+      mismatchCount: Number(args.renderParityMismatches) | 0
+    }),
+    simLoop: formatSimLoopStateRuntime(args.simPaused),
+    tick: String(Number(args.tick) | 0),
+    tile: `0x${(Number(args.tileId) >>> 0).toString(16).padStart(2, "0")}`,
+    topTimeOfDay: formatTopTimeOfDayRuntime(args.timeOfDayLabel, clock.text)
+  };
 }

@@ -9,6 +9,29 @@ export type NetRuntimeRequestOptions = {
   onPulse?: () => void;
 };
 
+export function managedNetRequestOptionsRuntime(options: {
+  apiBase?: unknown;
+  route?: unknown;
+  init?: RequestInit;
+  auth?: boolean;
+  token?: unknown;
+  runtimeProfile?: unknown;
+  runtimeExtensions?: unknown;
+}): NetRuntimeRequestOptions {
+  const runtimeExtensions = Array.isArray(options.runtimeExtensions)
+    ? options.runtimeExtensions.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  return {
+    apiBase: String(options.apiBase || ""),
+    route: String(options.route || ""),
+    init: options.init,
+    auth: options.auth,
+    token: String(options.token || ""),
+    runtimeProfile: String(options.runtimeProfile || ""),
+    runtimeExtensions
+  };
+}
+
 export type NetJsonValue = null | boolean | number | string | NetJsonValue[] | { [key: string]: NetJsonValue };
 export type NetJsonBody = { [key: string]: NetJsonValue };
 

@@ -1,4 +1,5 @@
 import {
+  LEGACY_TARGET_VERB_RUNTIME,
   legacyVerbLabelRuntime,
   legacyVerbSelectRangeRuntime,
   normalizeLegacyTargetVerbRuntime
@@ -15,6 +16,36 @@ export type TargetCursorStateRuntime = {
 export type TargetCursorWorldRuntime = {
   map_x: number;
   map_y: number;
+};
+
+export type ActiveTargetCursorKeyActionRuntime =
+  | { kind: "none" }
+  | { kind: "move"; dx: number; dy: number }
+  | { kind: "commit" }
+  | { kind: "cancel" };
+
+export type TargetCursorCommitRuntime =
+  | { kind: "none" }
+  | { kind: "interact"; x: number; y: number }
+  | { kind: "legacy_verb"; verb: string; x: number; y: number };
+
+export type TargetCursorKeyRuntime = {
+  code?: unknown;
+  key?: unknown;
+};
+
+export type TargetCursorMouseCellRuntime = {
+  x: unknown;
+  y: unknown;
+};
+
+export type TargetCursorMouseCommitRuntime =
+  | { kind: "none" }
+  | { kind: "commit"; x: number; y: number };
+
+export type TargetCursorDiagRuntime = {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
 };
 
 export function clampTargetCursorToViewRuntime(args: {
@@ -55,7 +86,7 @@ export function beginTargetCursorRuntime(args: {
   verb: unknown;
   viewW: number;
   viewH: number;
-}): { ok: boolean; diagText: string } {
+}): { ok: false; diagText: "" } | ({ ok: true } & TargetCursorDiagRuntime) {
   const verb = normalizeLegacyTargetVerbRuntime(args.verb);
   if (!verb) {
     return { ok: false, diagText: "" };
@@ -69,6 +100,7 @@ export function beginTargetCursorRuntime(args: {
   const label = legacyVerbLabelRuntime(verb);
   const directional = (legacyVerbSelectRangeRuntime(verb) | 0) < 0;
   return {
+    diagClass: "diag ok",
     ok: true,
     diagText: directional
       ? `${label}: choose direction with arrow keys, cancel with Esc.`
@@ -110,4 +142,65 @@ export function cancelTargetCursorRuntime(state: TargetCursorStateRuntime): bool
   state.useCursorActive = false;
   state.targetVerb = "";
   return true;
+}
+
+export function targetCursorCancelledDiagRuntime(): TargetCursorDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: "Targeting cancelled."
+  };
+}
+
+export function commitTargetCursorRuntime(state: TargetCursorStateRuntime): TargetCursorCommitRuntime {
+  if (!state.useCursorActive) {
+    return { kind: "none" };
+  }
+  const x = Number(state.useCursorX) | 0;
+  const y = Number(state.useCursorY) | 0;
+  const verb = String(state.targetVerb || "");
+  state.useCursorActive = false;
+  state.targetVerb = "";
+  if (verb) {
+    return { kind: "legacy_verb", verb, x, y };
+  }
+  return { kind: "interact", x, y };
+}
+
+export function applyTargetCursorMouseCommitRuntime(
+  state: TargetCursorStateRuntime,
+  cell: TargetCursorMouseCellRuntime | null | undefined,
+  pickupSource: TargetCursorMouseCellRuntime | null | undefined
+): TargetCursorMouseCommitRuntime {
+  if (!state.useCursorActive || !cell) {
+    return { kind: "none" };
+  }
+  const verb = normalizeLegacyTargetVerbRuntime(state.targetVerb);
+  const source = verb === LEGACY_TARGET_VERB_RUNTIME.GET && pickupSource ? pickupSource : cell;
+  const x = Number(source.x) | 0;
+  const y = Number(source.y) | 0;
+  state.useCursorX = x;
+  state.useCursorY = y;
+  return { kind: "commit", x, y };
+}
+
+export function activeTargetCursorKeyActionRuntime(
+  ev: TargetCursorKeyRuntime,
+  moveDeltaFromKey: (ev: TargetCursorKeyRuntime, allowDiagonal: boolean) => readonly [number, number] | null
+): ActiveTargetCursorKeyActionRuntime {
+  const delta = moveDeltaFromKey(ev, true);
+  if (delta) {
+    return {
+      kind: "move",
+      dx: Number(delta[0]) | 0,
+      dy: Number(delta[1]) | 0
+    };
+  }
+  const k = String(ev.key || "").toLowerCase();
+  if (k === "u" || k === "enter" || k === " ") {
+    return { kind: "commit" };
+  }
+  if (k === "escape") {
+    return { kind: "cancel" };
+  }
+  return { kind: "none" };
 }

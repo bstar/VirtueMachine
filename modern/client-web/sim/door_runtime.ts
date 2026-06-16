@@ -101,9 +101,22 @@ export type DoorToggleObjectRuntime = {
   z: number;
 };
 
+export function facingDoorCellRuntime(args: {
+  facingDx: unknown;
+  facingDy: unknown;
+  world: { map_x?: unknown; map_y?: unknown; map_z?: unknown };
+}): { x: number; y: number; z: number } {
+  return {
+    x: ((Number(args.world?.map_x) | 0) + (Number(args.facingDx) | 0)) | 0,
+    y: ((Number(args.world?.map_y) | 0) + (Number(args.facingDy) | 0)) | 0,
+    z: Number(args.world?.map_z) | 0
+  };
+}
+
 export type ToggleDoorAtCellResultRuntime<TDoor extends DoorToggleObjectRuntime = DoorToggleObjectRuntime> = {
   afterOpen: boolean;
   beforeOpen: boolean;
+  diagClass: "diag ok";
   door: TDoor;
   message: string;
   toggled: true;
@@ -140,6 +153,7 @@ export function toggleDoorAtCellRuntime<TDoor extends DoorToggleObjectRuntime>(a
     return {
       afterOpen,
       beforeOpen,
+      diagClass: "diag ok",
       door,
       message: doorToggleMessageRuntime({ afterOpen, beforeOpen, x, y, z }),
       toggled: true,

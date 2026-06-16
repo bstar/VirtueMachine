@@ -48,6 +48,49 @@ export function saveNetPanelPref(storageKey: string, value: string): void {
   }
 }
 
+export type NetPanelInitialStateRuntime = {
+  apiBase: string;
+  username: string;
+  email: string;
+  characterName: string;
+  maintenanceAuto: boolean;
+};
+
+export type NetPanelStateTargetRuntime = {
+  apiBase: string;
+  username: string;
+  email: string;
+  characterName: string;
+  maintenanceAuto: boolean;
+};
+
+export function netPanelInitialStateFromPrefsRuntime(prefs: NetPanelDefaults): NetPanelInitialStateRuntime {
+  return {
+    apiBase: String(prefs.apiBase || ""),
+    username: String(prefs.username || ""),
+    email: String(prefs.email || ""),
+    characterName: String(prefs.characterName || "Avatar") || "Avatar",
+    maintenanceAuto: prefs.maintenance === "on"
+  };
+}
+
+export function applyNetPanelInitialStateRuntime(args: {
+  maintenanceToggle?: { value: string } | null;
+  prefs: NetPanelDefaults;
+  stateNet: NetPanelStateTargetRuntime;
+}): NetPanelInitialStateRuntime {
+  const initial = netPanelInitialStateFromPrefsRuntime(args.prefs);
+  args.stateNet.apiBase = initial.apiBase;
+  args.stateNet.username = initial.username;
+  args.stateNet.email = initial.email;
+  args.stateNet.characterName = initial.characterName;
+  args.stateNet.maintenanceAuto = initial.maintenanceAuto;
+  if (args.maintenanceToggle) {
+    args.maintenanceToggle.value = initial.maintenanceAuto ? "on" : "off";
+  }
+  return initial;
+}
+
 export function persistNetLoginSettings(
   keys: {
     apiBase: string;
@@ -78,4 +121,38 @@ export function setModalOpenRuntime(
   const visible = !!open;
   modal.classList.toggle("hidden", !visible);
   modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+export type NetPanelButtonRuntime = {
+  addEventListener(type: "click", listener: () => void): void;
+};
+
+export function bindNetPanelModalButtonsRuntime(args: {
+  backdrop?: NetPanelButtonRuntime | null;
+  closeButton?: NetPanelButtonRuntime | null;
+  openButton?: NetPanelButtonRuntime | null;
+  onBeforeOpen?: () => void;
+  setOpen: (open: boolean) => void;
+}): {
+  boundBackdrop: boolean;
+  boundClose: boolean;
+  boundOpen: boolean;
+} {
+  if (args.openButton) {
+    args.openButton.addEventListener("click", () => {
+      args.onBeforeOpen?.();
+      args.setOpen(true);
+    });
+  }
+  if (args.closeButton) {
+    args.closeButton.addEventListener("click", () => args.setOpen(false));
+  }
+  if (args.backdrop) {
+    args.backdrop.addEventListener("click", () => args.setOpen(false));
+  }
+  return {
+    boundBackdrop: !!args.backdrop,
+    boundClose: !!args.closeButton,
+    boundOpen: !!args.openButton
+  };
 }

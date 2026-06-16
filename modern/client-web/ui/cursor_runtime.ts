@@ -19,6 +19,32 @@ export type CursorDrawRectRuntime = {
   scaleY: number;
 };
 
+export type CursorCycleRuntime = {
+  diagClass: "diag ok";
+  diagText: string;
+  index: number;
+};
+
+export function cursorCycleRuntime(args: {
+  count: unknown;
+  currentIndex: unknown;
+  delta: unknown;
+}): CursorCycleRuntime | null {
+  const count = Number(args.count) | 0;
+  if (count <= 0) {
+    return null;
+  }
+  let index = ((Number(args.currentIndex) | 0) + (Number(args.delta) | 0)) % count;
+  if (index < 0) {
+    index += count;
+  }
+  return {
+    diagClass: "diag ok",
+    diagText: `Cursor ${index + 1}/${count}`,
+    index
+  };
+}
+
 export function cursorLogicalWidthRuntime(args: {
   isLegacyFramePreview: boolean;
   sessionStarted: boolean;

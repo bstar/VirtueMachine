@@ -3,6 +3,8 @@ import {
   fetchObjectBaselineVersionRuntime,
   loadObjectBaselineFromPathRuntime,
   loadPristineObjectBaselineRuntime,
+  pristineBaselineReloadedDiagRuntime,
+  pristineBaselineReloadFailedDiagRuntime,
   type ObjectBaselineFetchRuntime
 } from "../sim/object_baseline_runtime.ts";
 import { objectLayerAnchorKeyRuntime } from "../sim/object_layer_runtime.ts";
@@ -128,5 +130,17 @@ await assert.rejects(
   }),
   /invalid base tile table/
 );
+assert.deepEqual(pristineBaselineReloadedDiagRuntime("v2"), {
+  diagClass: "diag ok",
+  diagText: "Pristine baseline reloaded (version v2)."
+});
+assert.deepEqual(pristineBaselineReloadedDiagRuntime(""), {
+  diagClass: "diag ok",
+  diagText: "Pristine baseline reloaded (version unknown)."
+});
+assert.deepEqual(pristineBaselineReloadFailedDiagRuntime("offline"), {
+  diagClass: "diag warn",
+  diagText: "Pristine baseline reload failed: offline"
+});
 
 console.log("object_baseline_runtime_test: ok");

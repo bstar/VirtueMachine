@@ -1,5 +1,7 @@
 import nodeCrypto from "node:crypto";
 import {
+  RUNTIME_PROFILE_CANONICAL_STRICT,
+  RUNTIME_PROFILES,
   normalizeRuntimeProfile,
   parseRuntimeExtensionsHeader
 } from "../common/runtime_contract.ts";
@@ -49,6 +51,116 @@ export type WorldSnapshotRuntime = {
   updated_at: string;
 };
 
+export type RuntimeContractHeaderSourceRuntime = {
+  "x-vm-runtime-extensions"?: unknown;
+  "x-vm-runtime-profile"?: unknown;
+};
+
+export type RuntimeContractRuntime = {
+  extensions: string[];
+  profile: string;
+};
+
+export type WorldClockPayloadRuntime = {
+  date_d: number;
+  date_m: number;
+  date_y: number;
+  intro_state: unknown;
+  npc_overrides: unknown[];
+  npc_states: unknown[];
+  runtime_contract: RuntimeContractRuntime;
+  tick: number;
+  time_h: number;
+  time_m: number;
+};
+
+export type RuntimeContractSpecRuntime = {
+  default_profile: string;
+  extension_header_format: string;
+  notes: string[];
+  profiles: string[];
+};
+
+export type RuntimeContractPayloadRuntime = {
+  runtime_contract: RuntimeContractSpecRuntime;
+};
+
+export type ServerHealthPayloadRuntime = {
+  email_mode: string;
+  now: string;
+  ok: true;
+  service: string;
+  tick: number;
+  world_objects: unknown;
+};
+
+export type CriticalMaintenancePayloadRuntime = {
+  events: unknown[];
+};
+
+export type PresenceHeartbeatAckPayloadRuntime = {
+  now: string;
+  ok: true;
+  runtime_contract: RuntimeContractRuntime;
+  tick: number;
+};
+
+export type PresenceLeaveAckPayloadRuntime = {
+  ok: true;
+  removed: string;
+};
+
+export type PresenceListPayloadRuntime = {
+  players: PresenceRowRuntime[];
+};
+
+export type IntroStatePayloadRuntime = {
+  intro_state: unknown;
+};
+
+export type IntroStateSavedPayloadRuntime = IntroStatePayloadRuntime & {
+  ok: true;
+};
+
+export type WorldObjectsQueryRuntime = {
+  hasX: boolean;
+  hasY: boolean;
+  hasZ: boolean;
+  includeFootprint: boolean;
+  limit: number;
+  projection: "anchor" | "footprint";
+  radius: number;
+  responseQuery: {
+    include_footprint: boolean;
+    limit: number;
+    projection: "anchor" | "footprint";
+    radius: number;
+    x: number | null;
+    y: number | null;
+    z: number | null;
+  };
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type WorldObjectPositionRuntime = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type WorldObjectDropValidationRuntime = {
+  error?: ValidationErrorRuntime;
+  ok: boolean;
+};
+
+export type ValidationErrorRuntime = {
+  code: string;
+  http: number;
+  message: string;
+};
+
 type WorldSnapshotSourceRuntime = {
   snapshot_base64?: unknown;
   snapshot_meta?: {
@@ -59,6 +171,33 @@ type WorldSnapshotSourceRuntime = {
   };
   updated_at?: unknown;
 };
+
+export function runtimeContractFromHeadersRuntime(
+  headers: RuntimeContractHeaderSourceRuntime | null | undefined
+): RuntimeContractRuntime {
+  return {
+    profile: normalizeRuntimeProfile(headers?.["x-vm-runtime-profile"]),
+    extensions: parseRuntimeExtensionsHeader(headers?.["x-vm-runtime-extensions"])
+  };
+}
+
+export function runtimeContractSpecRuntime(): RuntimeContractSpecRuntime {
+  return {
+    profiles: [...RUNTIME_PROFILES].sort(),
+    default_profile: RUNTIME_PROFILE_CANONICAL_STRICT,
+    extension_header_format: "comma-separated ids or 'none'",
+    notes: [
+      "unknown/invalid profile falls back to canonical_strict",
+      "unknown/invalid extension tokens are ignored"
+    ]
+  };
+}
+
+export function runtimeContractPayloadRuntime(): RuntimeContractPayloadRuntime {
+  return {
+    runtime_contract: runtimeContractSpecRuntime()
+  };
+}
 
 type WorldInteractionEventSourceRuntime = {
   actor_id?: unknown;
@@ -241,6 +380,115 @@ export function queryIntOrRuntime(url: URL, key: string, fallback: number): numb
   return v | 0;
 }
 
+export function worldObjectsQueryRuntime(url: URL): WorldObjectsQueryRuntime {
+  const hasX = url.searchParams.has("x");
+  const hasY = url.searchParams.has("y");
+  const x = queryIntOrRuntime(url, "x", 0);
+  const y = queryIntOrRuntime(url, "y", 0);
+  const zRaw = queryIntOrRuntime(url, "z", Number.NaN);
+  const hasZ = Number.isFinite(zRaw);
+  const radius = clampIntRuntime(queryIntOrRuntime(url, "radius", 0), 0, 16);
+  const limit = clampIntRuntime(queryIntOrRuntime(url, "limit", 4096), 1, 200000);
+  const projection = String(url.searchParams.get("projection") || "anchor").trim().toLowerCase() === "footprint"
+    ? "footprint"
+    : "anchor";
+  const includeFootprintRaw = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
+  const includeFootprint = includeFootprintRaw === "1" || includeFootprintRaw === "true" || includeFootprintRaw === "on";
+  return {
+    hasX,
+    hasY,
+    hasZ,
+    includeFootprint,
+    limit,
+    projection,
+    radius,
+    x,
+    y,
+    z: zRaw,
+    responseQuery: {
+      x: hasX ? (x | 0) : null,
+      y: hasY ? (y | 0) : null,
+      z: hasZ ? (zRaw | 0) : null,
+      radius: radius | 0,
+      limit: limit | 0,
+      projection,
+      include_footprint: includeFootprint
+    }
+  };
+}
+
+export function validateWorldObjectDropPositionRuntime(args: {
+  actorPos: WorldObjectPositionRuntime;
+  canStepInto: (step: { to_x: number; to_y: number; to_z: number }) => boolean;
+  dropPos: WorldObjectPositionRuntime;
+}): WorldObjectDropValidationRuntime {
+  const actor = args.actorPos;
+  const drop = args.dropPos;
+  const dropDistance = Math.max(
+    Math.abs((Number(actor.x) | 0) - (Number(drop.x) | 0)),
+    Math.abs((Number(actor.y) | 0) - (Number(drop.y) | 0))
+  );
+  if (dropDistance > 5 || (Number(actor.z) | 0) !== (Number(drop.z) | 0)) {
+    return {
+      ok: false,
+      error: {
+        http: 409,
+        code: "drop_out_of_range",
+        message: "drop target is out of range"
+      }
+    };
+  }
+  if (!args.canStepInto({ to_x: Number(drop.x) | 0, to_y: Number(drop.y) | 0, to_z: Number(drop.z) | 0 })) {
+    return {
+      ok: false,
+      error: {
+        http: 409,
+        code: "drop_blocked",
+        message: "drop target is blocked"
+      }
+    };
+  }
+  return { ok: true };
+}
+
+export function worldClockPayloadRuntime(args: {
+  clock: WorldClockRuntime;
+  introState: unknown;
+  npcOverrides?: unknown;
+  npcStates?: unknown;
+  runtimeContract: RuntimeContractRuntime;
+}): WorldClockPayloadRuntime {
+  return {
+    tick: args.clock.tick >>> 0,
+    time_m: args.clock.time_m >>> 0,
+    time_h: args.clock.time_h >>> 0,
+    date_d: args.clock.date_d >>> 0,
+    date_m: args.clock.date_m >>> 0,
+    date_y: args.clock.date_y >>> 0,
+    intro_state: args.introState,
+    npc_states: Array.isArray(args.npcStates) ? args.npcStates : [],
+    npc_overrides: Array.isArray(args.npcOverrides) ? args.npcOverrides : [],
+    runtime_contract: args.runtimeContract
+  };
+}
+
+export function serverHealthPayloadRuntime(args: {
+  emailMode: unknown;
+  now: string;
+  service?: unknown;
+  tick: unknown;
+  worldObjects: unknown;
+}): ServerHealthPayloadRuntime {
+  return {
+    ok: true,
+    service: String(args.service || "virtuemachine-net"),
+    now: String(args.now || ""),
+    tick: Number(args.tick) >>> 0,
+    email_mode: String(args.emailMode || ""),
+    world_objects: args.worldObjects
+  };
+}
+
 export function advanceWorldClockMinuteRuntime(clock: WorldClockRuntime, args: {
   daysPerMonth: number;
   hoursPerDay: number;
@@ -264,6 +512,57 @@ export function advanceWorldClockMinuteRuntime(clock: WorldClockRuntime, args: {
 
 export function computeSnapshotHashRuntime(snapshotBase64: unknown): string {
   return nodeCrypto.createHash("sha256").update(String(snapshotBase64 || "")).digest("hex");
+}
+
+export function snapshotSaveRuntime(args: {
+  body: {
+    saved_tick?: unknown;
+    schema_version?: unknown;
+    sim_core_version?: unknown;
+    snapshot_base64?: unknown;
+  } | null | undefined;
+  nowIso: string;
+  sanitizeSnapshotBase64?: (snapshotBase64: string) => string;
+}): WorldSnapshotRuntime | null {
+  const rawSnapshotBase64 = String(args.body?.snapshot_base64 || "").trim();
+  const snapshotBase64 = args.sanitizeSnapshotBase64
+    ? args.sanitizeSnapshotBase64(rawSnapshotBase64)
+    : rawSnapshotBase64;
+  if (!snapshotBase64) {
+    return null;
+  }
+  return {
+    snapshot_base64: snapshotBase64,
+    snapshot_meta: {
+      schema_version: Number(args.body?.schema_version) || 1,
+      sim_core_version: String(args.body?.sim_core_version || "unknown"),
+      saved_tick: Number(args.body?.saved_tick) || 0,
+      snapshot_hash: computeSnapshotHashRuntime(snapshotBase64)
+    },
+    updated_at: String(args.nowIso || "")
+  };
+}
+
+export function worldSnapshotReadPayloadRuntime(snapshot: WorldSnapshotRuntime): {
+  snapshot_base64: string | null;
+  snapshot_meta: WorldSnapshotRuntime["snapshot_meta"];
+  updated_at: string;
+} {
+  return {
+    snapshot_meta: snapshot.snapshot_meta,
+    snapshot_base64: snapshot.snapshot_base64,
+    updated_at: snapshot.updated_at
+  };
+}
+
+export function worldSnapshotSavedPayloadRuntime(snapshot: WorldSnapshotRuntime): {
+  snapshot_meta: WorldSnapshotRuntime["snapshot_meta"];
+  updated_at: string;
+} {
+  return {
+    snapshot_meta: snapshot.snapshot_meta,
+    updated_at: snapshot.updated_at
+  };
 }
 
 export function deterministicRecoveryTickLastRuntime(
@@ -327,6 +626,40 @@ export function normalizeCriticalPolicyRuntime(raw: unknown): CriticalItemPolicy
     });
   }
   return out.length ? out : defaultCriticalPolicyRuntime();
+}
+
+export function criticalPolicyPayloadRuntime(policy: unknown): {
+  critical_item_policy: unknown;
+} {
+  return {
+    critical_item_policy: policy
+  };
+}
+
+export function criticalMaintenancePayloadRuntime(events: unknown): CriticalMaintenancePayloadRuntime {
+  return {
+    events: Array.isArray(events) ? events : []
+  };
+}
+
+export function validateCriticalPolicyBodyRuntime(
+  body: unknown
+): { ok: true; policy: unknown[] } | { ok: false; error: ValidationErrorRuntime } {
+  const source = body && typeof body === "object" ? body as { critical_item_policy?: unknown } : {};
+  if (!Array.isArray(source.critical_item_policy)) {
+    return {
+      ok: false,
+      error: {
+        http: 400,
+        code: "bad_policy",
+        message: "critical_item_policy array is required"
+      }
+    };
+  }
+  return {
+    ok: true,
+    policy: source.critical_item_policy
+  };
 }
 
 export function runCriticalItemMaintenanceRuntime(args: {
@@ -488,6 +821,35 @@ export function recordWorldInteractionEventRuntime(
   return row;
 }
 
+export function worldObjectBaselineMutationResponseRuntime(args: {
+  at: string;
+  kind: "reset" | "reload";
+  meta: unknown;
+  worldInteractionLog?: Partial<WorldInteractionLogRuntime> | null;
+}): {
+  interaction_checkpoint: {
+    hash: string;
+    seq: number;
+  };
+  meta: unknown;
+  ok: true;
+  reloaded_at?: string;
+  reset_at?: string;
+} {
+  const response = {
+    ok: true as const,
+    interaction_checkpoint: {
+      seq: Number(args.worldInteractionLog?.seq || 0) >>> 0,
+      hash: String(args.worldInteractionLog?.checkpoint_hash || "")
+    },
+    meta: args.meta
+  };
+  const at = String(args.at || "");
+  return args.kind === "reload"
+    ? { ...response, reloaded_at: at }
+    : { ...response, reset_at: at };
+}
+
 export function normalizePresenceRowsRuntime(raw: unknown): PresenceRowRuntime[] {
   if (!Array.isArray(raw)) {
     return [];
@@ -612,4 +974,88 @@ export function presenceRowsPayloadRuntime(rows: readonly PresenceRowRuntime[]):
     runtime_extensions: parseRuntimeExtensionsRuntime(p.runtime_extensions),
     updated_at_ms: Number(p.updated_at_ms || 0)
   }));
+}
+
+export function presenceListPayloadRuntime(rows: readonly PresenceRowRuntime[]): PresenceListPayloadRuntime {
+  return {
+    players: presenceRowsPayloadRuntime(rows)
+  };
+}
+
+export function presenceHeartbeatAckPayloadRuntime(args: {
+  now: string;
+  runtimeContract: RuntimeContractRuntime;
+  tick: unknown;
+}): PresenceHeartbeatAckPayloadRuntime {
+  return {
+    ok: true,
+    now: String(args.now || ""),
+    tick: Number(args.tick) >>> 0,
+    runtime_contract: args.runtimeContract
+  };
+}
+
+export function presenceLeaveAckPayloadRuntime(removed: unknown): PresenceLeaveAckPayloadRuntime {
+  return {
+    ok: true,
+    removed: String(removed || "")
+  };
+}
+
+export function introStatePayloadRuntime(introState: unknown): IntroStatePayloadRuntime {
+  return {
+    intro_state: introState
+  };
+}
+
+export function introStateSavedPayloadRuntime(introState: unknown): IntroStateSavedPayloadRuntime {
+  return {
+    ok: true,
+    intro_state: introState
+  };
+}
+
+export function validateIntroPhaseRuntime(
+  body: unknown,
+  prePhase: string,
+  postPhase: string
+): { ok: true; phase: string } | { ok: false; error: ValidationErrorRuntime } {
+  const source = body && typeof body === "object" ? body as { phase?: unknown } : {};
+  const phase = String(source.phase || "").trim().toLowerCase();
+  if (phase !== prePhase && phase !== postPhase) {
+    return {
+      ok: false,
+      error: {
+        http: 400,
+        code: "bad_intro_phase",
+        message: `phase must be one of: ${prePhase}, ${postPhase}`
+      }
+    };
+  }
+  return {
+    ok: true,
+    phase
+  };
+}
+
+export function validatePresenceSessionIdRuntime(
+  body: unknown,
+  minLength = 8
+): { ok: true; sessionId: string } | { ok: false; error: ValidationErrorRuntime } {
+  const source = body && typeof body === "object" ? body as { session_id?: unknown } : {};
+  const sessionId = String(source.session_id || "").trim();
+  if (!sessionId || sessionId.length < minLength) {
+    return {
+      ok: false,
+      error: {
+        http: 400,
+        code: "bad_session_id",
+        message: "session_id is required"
+      }
+    };
+  }
+  return {
+    ok: true,
+    sessionId
+  };
 }

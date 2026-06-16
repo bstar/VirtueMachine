@@ -1,5 +1,10 @@
 import { coordUseOfStatus } from "../common/u6_object_constants.ts";
-import { DEFAULT_DROPPED_CLONE_DESPAWN_MS, DEFAULT_PICKUP_RESPAWN_MS } from "./world_object_policy.ts";
+import {
+  DEFAULT_DROPPED_CLONE_DESPAWN_MS,
+  DEFAULT_PICKUP_RESPAWN_MS,
+  normalizeWorldObjectAmountRuntime,
+  sourceObjectKeyFromInventoryCloneKeyRuntime
+} from "./world_object_policy.ts";
 import type {
   MovedWorldObjectDelta,
   RespawnWorldObjectDelta,
@@ -245,17 +250,12 @@ export function parseObjBlkRecordsRuntime(
   return out;
 }
 
-function sourceObjectKeyFromCloneKey(objectKey: string): string {
-  const match = /^inv:([^:]+):/.exec(objectKey);
-  return match ? match[1] : "";
-}
-
 function repairSpawnedCloneIdentity(
   spawned: SpawnedWorldObjectDelta,
   baselineByKey: Map<string, WorldObject>,
   nowMs: number
 ): SpawnedWorldObjectDelta {
-  const sourceObjectKey = String(spawned.source_object_key || sourceObjectKeyFromCloneKey(String(spawned.object_key || ""))).trim();
+  const sourceObjectKey = String(spawned.source_object_key || sourceObjectKeyFromInventoryCloneKeyRuntime(spawned.object_key)).trim();
   const isLooseInventoryClone = String(spawned.object_key || "").startsWith("inv:")
     && coordUseOfStatus(spawned.status) === 0
     && String(spawned.holder_kind || "none") === "none";
@@ -290,7 +290,7 @@ function repairSpawnedCloneIdentity(
 
 function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, index: number): SpawnedWorldObjectDelta {
   const objectKey = String(value.object_key || `spawn_${index}`);
-  const sourceObjectKey = String(value.source_object_key || sourceObjectKeyFromCloneKey(objectKey));
+  const sourceObjectKey = String(value.source_object_key || sourceObjectKeyFromInventoryCloneKeyRuntime(objectKey));
   return {
     object_key: objectKey,
     source_object_key: sourceObjectKey,
@@ -300,7 +300,7 @@ function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, ind
     source_index: Number(value.source_index) >>> 0,
     status: Number(value.status) & 0xff,
     shape_type: Number(value.shape_type) & 0xffff,
-    amount: Number(value.amount) & 0xffff,
+    amount: normalizeWorldObjectAmountRuntime(value.amount),
     type: Number(value.type) & 0x3ff,
     frame: Number(value.frame) & 0x3f,
     tile_id: Number(value.tile_id) & 0xffff,
@@ -310,6 +310,29 @@ function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, ind
     holder_kind: String(value.holder_kind || "none"),
     holder_id: String(value.holder_id || ""),
     holder_key: String(value.holder_key || "")
+  };
+}
+
+export function spawnedWorldObjectDeltaFromObjectRuntime(obj: WorldObject): SpawnedWorldObjectDelta {
+  return {
+    object_key: String(obj.object_key || ""),
+    source_object_key: String(obj.source_object_key || sourceObjectKeyFromInventoryCloneKeyRuntime(obj.object_key)),
+    despawn_at_ms: Number(obj.despawn_at_ms) > 0 ? Math.floor(Number(obj.despawn_at_ms)) : 0,
+    dropped_at_ms: Number(obj.dropped_at_ms) > 0 ? Math.floor(Number(obj.dropped_at_ms)) : 0,
+    source_area: Number(obj.source_area) >>> 0,
+    source_index: Number(obj.source_index) >>> 0,
+    status: Number(obj.status) & 0xff,
+    shape_type: Number(obj.shape_type) & 0xffff,
+    amount: normalizeWorldObjectAmountRuntime(obj.amount),
+    type: Number(obj.type) & 0x3ff,
+    frame: Number(obj.frame) & 0x3f,
+    tile_id: Number(obj.tile_id) & 0xffff,
+    x: Number(obj.x) | 0,
+    y: Number(obj.y) | 0,
+    z: Number(obj.z) | 0,
+    holder_kind: String(obj.holder_kind || "none"),
+    holder_id: String(obj.holder_id || ""),
+    holder_key: String(obj.holder_key || "")
   };
 }
 
@@ -524,10 +547,9 @@ export function compareLegacyWorldObjectOrder(a: WorldObject, b: WorldObject): n
   return String(a.object_key || "").localeCompare(String(b.object_key || ""));
 }
 
-export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: string): WorldObjectMetaRuntime {
+export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: string, nowMs = Date.now()): WorldObjectMetaRuntime {
   const wo = state.worldObjects;
   const respawns = wo.deltas.respawns || {};
-  const nowMs = Date.now();
   const hiddenObjects = Object.keys(wo.deltas.removed || {})
     .filter((key) => !!wo.deltas.removed[key])
     .filter((key) => {
@@ -542,6 +564,12 @@ export function worldObjectMeta(state: WorldObjectStateContainer, baselineDir: s
         respawn_ms: Number(respawn.respawn_ms) || 0,
         policy: String(respawn.policy || "")
       };
+    })
+    .sort((a, b) => {
+      if (a.due_at_ms !== b.due_at_ms) {
+        return a.due_at_ms - b.due_at_ms;
+      }
+      return a.object_key.localeCompare(b.object_key);
     });
   return {
     baseline_dir: baselineDir,
@@ -622,6 +650,8 @@ export function persistPatchedObject(state: WorldObjectStateContainer, obj: Worl
         despawn_at_ms: Number(obj.despawn_at_ms) > 0 ? Math.floor(Number(obj.despawn_at_ms)) : 0,
         dropped_at_ms: Number(obj.dropped_at_ms) > 0 ? Math.floor(Number(obj.dropped_at_ms)) : 0
       };
+    } else {
+      state.worldObjects.deltas.spawned.push(spawnedWorldObjectDeltaFromObjectRuntime(obj));
     }
     return;
   }

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  bindNetLoginButtonRuntime,
+  netAutoLoginFailureRuntime,
+  netAutoLoginSuccessDiagRuntime,
   netLoginEmailRuntime,
   netLoginEmailVerifiedRuntime,
+  netLoginPanelFailureRuntime,
+  netLoginPanelSuccessDiagRuntime,
   netLoginSnapshotBase64Runtime,
   netLoginTokenRuntime,
   netLoginUserIdRuntime,
@@ -19,6 +24,132 @@ assert.equal(netLoginEmailVerifiedRuntime({ user: { email_verified: true } }), t
 assert.equal(netLoginEmailVerifiedRuntime({}), false);
 assert.equal(netLoginSnapshotBase64Runtime({ snapshot_base64: " encoded " }), "encoded");
 assert.equal(netLoginSnapshotBase64Runtime(null), "");
+assert.deepEqual(netLoginPanelSuccessDiagRuntime("avatar", "Avatar"), {
+  diagClass: "diag ok",
+  diagText: "Net login ok: avatar/Avatar"
+});
+assert.deepEqual(netLoginPanelFailureRuntime("bad password"), {
+  diagClass: "diag warn",
+  diagText: "Net login failed: bad password",
+  statusLevel: "error",
+  statusText: "Login failed: bad password"
+});
+assert.deepEqual(netAutoLoginSuccessDiagRuntime("avatar", "Avatar"), {
+  diagClass: "diag ok",
+  diagText: "Auto-login ok: avatar/Avatar"
+});
+assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
+  diagClass: "diag warn",
+  diagText: "Auto-login failed: offline",
+  statusLevel: "error",
+  statusText: "Auto-login failed: offline"
+});
+{
+  let listener: (() => void) | null = null;
+  const statuses: string[] = [];
+  const diags: string[] = [];
+  const modalStates: boolean[] = [];
+  let loginCount = 0;
+  assert.equal(bindNetLoginButtonRuntime({
+    button: {
+      addEventListener(type: "click", fn: () => void) {
+        assert.equal(type, "click");
+        listener = fn;
+      }
+    },
+    characterName: () => "Avatar",
+    errorMessage: String,
+    isAuthenticated: () => false,
+    login: async () => {
+      loginCount += 1;
+    },
+    logout: () => {
+      throw new Error("unexpected");
+    },
+    setAccountModalOpen: (open) => modalStates.push(open),
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    username: () => "avatar",
+    setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
+  }), true);
+  listener?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(loginCount, 1);
+  assert.deepEqual(modalStates, [false]);
+  assert.deepEqual(statuses, []);
+  assert.deepEqual(diags, ["diag ok:Net login ok: avatar/Avatar"]);
+}
+{
+  let listener: (() => void) | null = null;
+  const statuses: string[] = [];
+  const diags: string[] = [];
+  assert.equal(bindNetLoginButtonRuntime({
+    button: {
+      addEventListener(_type: "click", fn: () => void) {
+        listener = fn;
+      }
+    },
+    characterName: () => "Avatar",
+    errorMessage: (err) => err instanceof Error ? err.message : String(err),
+    isAuthenticated: () => false,
+    login: async () => {
+      throw new Error("bad password");
+    },
+    logout: () => {
+      throw new Error("unexpected");
+    },
+    setAccountModalOpen: () => {
+      throw new Error("unexpected");
+    },
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    username: () => "avatar",
+    setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
+  }), true);
+  listener?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(statuses, ["error:Login failed: bad password"]);
+  assert.deepEqual(diags, ["diag warn:Net login failed: bad password"]);
+}
+{
+  let listener: (() => void) | null = null;
+  let logoutCount = 0;
+  assert.equal(bindNetLoginButtonRuntime({
+    button: {
+      addEventListener(_type: "click", fn: () => void) {
+        listener = fn;
+      }
+    },
+    characterName: () => "Avatar",
+    errorMessage: String,
+    isAuthenticated: () => true,
+    login: async () => {
+      throw new Error("unexpected");
+    },
+    logout: () => {
+      logoutCount += 1;
+    },
+    setAccountModalOpen: () => {
+      throw new Error("unexpected");
+    },
+    setStatus: () => {},
+    username: () => "avatar",
+    setDiag: () => {}
+  }), true);
+  listener?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(logoutCount, 1);
+  assert.equal(bindNetLoginButtonRuntime({
+    button: null,
+    characterName: () => "Avatar",
+    errorMessage: String,
+    isAuthenticated: () => true,
+    login: async () => {},
+    logout: () => {},
+    setAccountModalOpen: () => {},
+    setStatus: () => {},
+    username: () => "avatar",
+    setDiag: () => {}
+  }), false);
+}
 
 const loadedSnapshot = {
   tick: 1,

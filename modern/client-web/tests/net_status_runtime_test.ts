@@ -5,14 +5,26 @@ import {
   resetBackgroundFailureState
 } from "../net/failure_runtime.ts";
 import {
+  applyNetStatusPresentationRuntime,
   applyNetStatusRuntime,
+  deriveCriticalRecoveryStatTextRuntime,
+  deriveIntroPhaseUiModelRuntime,
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
   deriveNetQuickStatusText,
   deriveNetSessionText,
   deriveTopNetStatusText,
+  netLogoutDiagRuntime,
+  netStatusAutoLoginRuntime,
+  netStatusChooseAccountRuntime,
+  netStatusNotLoggedInRuntime,
+  netStatusSessionExpiredRuntime,
   pulseNetIndicatorRuntime,
-  renderNetStatusViewRuntime
+  renderCriticalRecoveryStatRuntime,
+  renderIntroPhaseUiRuntime,
+  renderNetSessionUiRuntime,
+  renderNetStatusViewRuntime,
+  shouldShowInGameServerBrokenRuntime
 } from "../net/status_runtime.ts";
 
 assert.equal(backgroundFailureMessageRuntime(null), "");
@@ -24,6 +36,11 @@ assert.equal(deriveNetIndicatorState("idle", false), "offline");
 assert.equal(deriveNetIndicatorState("connecting", false), "connecting");
 assert.equal(deriveNetIndicatorState("sync", true), "sync");
 assert.equal(deriveNetIndicatorState("idle", true), "online");
+assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: false, statusLevel: "offline" }), false);
+assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "offline" }), true);
+assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "error" }), true);
+assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "sync" }), false);
+assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "online" }), false);
 assert.equal(deriveNetQuickStatusText(true), "Account: Signed in");
 assert.equal(deriveNetQuickStatusText(false), "Account: Signed out");
 assert.equal(deriveNetSessionText({ token: "", userId: "u", username: "avatar", characterName: "Avatar" }), "offline");
@@ -34,6 +51,72 @@ assert.deepEqual(deriveNetAuthButtonModel(true), {
   removeClasses: ["control-btn--login", "control-btn--logout"]
 });
 assert.equal(deriveTopNetStatusText("online", "ready"), "online - ready");
+assert.deepEqual(netStatusNotLoggedInRuntime(), {
+  level: "idle",
+  text: "Not logged in."
+});
+assert.deepEqual(netStatusSessionExpiredRuntime(), {
+  level: "idle",
+  text: "Session expired. Please log in."
+});
+assert.deepEqual(netStatusChooseAccountRuntime(), {
+  level: "idle",
+  text: "Choose an account in Account Setup, then login."
+});
+assert.deepEqual(netStatusAutoLoginRuntime(), {
+  level: "connecting",
+  text: "Auto-login..."
+});
+assert.deepEqual(deriveIntroPhaseUiModelRuntime("PRE_INTRO"), {
+  normalized: "pre_intro",
+  selectValue: "pre_intro",
+  statText: "pre_intro"
+});
+assert.deepEqual(deriveIntroPhaseUiModelRuntime("bad"), {
+  normalized: "post_intro",
+  selectValue: "post_intro",
+  statText: "post_intro"
+});
+assert.deepEqual(netLogoutDiagRuntime({
+  errorMessage: String
+}), {
+  diagClass: "diag ok",
+  diagText: "Logged out. Position saved and presence cleared."
+});
+assert.deepEqual(netLogoutDiagRuntime({
+  saveErr: new Error("disk full"),
+  errorMessage: (err) => err instanceof Error ? err.message : String(err)
+}), {
+  diagClass: "diag warn",
+  diagText: "Logged out with warnings (position save failed: disk full)."
+});
+assert.deepEqual(netLogoutDiagRuntime({
+  leaveErr: "presence timeout",
+  errorMessage: String
+}), {
+  diagClass: "diag warn",
+  diagText: "Logged out with warnings (presence cleanup failed: presence timeout)."
+});
+assert.deepEqual(netLogoutDiagRuntime({
+  saveErr: "snapshot timeout",
+  leaveErr: "presence timeout",
+  errorMessage: String
+}), {
+  diagClass: "diag warn",
+  diagText: "Logged out with warnings (position save failed: snapshot timeout; presence cleanup failed: presence timeout)."
+});
+assert.equal(deriveCriticalRecoveryStatTextRuntime({
+  recoveryEventCount: 0,
+  lastMaintenanceTick: -1
+}), "0");
+assert.equal(deriveCriticalRecoveryStatTextRuntime({
+  recoveryEventCount: 4,
+  lastMaintenanceTick: 123
+}), "4 @123");
+assert.equal(deriveCriticalRecoveryStatTextRuntime({
+  recoveryEventCount: "bad",
+  lastMaintenanceTick: "bad"
+}), "0");
 
 function fakeElement(): HTMLElement {
   return {
@@ -65,6 +148,39 @@ function fakeButton(): HTMLButtonElement {
       }
     }
   } as unknown as HTMLButtonElement;
+}
+
+{
+  const statIntroPhase = fakeElement();
+  const netIntroPhaseSelect = { value: "" } as HTMLSelectElement;
+  assert.deepEqual(renderIntroPhaseUiRuntime("PRE_INTRO", {
+    statIntroPhase,
+    netIntroPhaseSelect
+  }), {
+    normalized: "pre_intro",
+    selectValue: "pre_intro",
+    statText: "pre_intro"
+  });
+  assert.equal(statIntroPhase.textContent, "pre_intro");
+  assert.equal(netIntroPhaseSelect.value, "pre_intro");
+  assert.deepEqual(renderIntroPhaseUiRuntime("bad", {}), {
+    normalized: "post_intro",
+    selectValue: "post_intro",
+    statText: "post_intro"
+  });
+}
+
+{
+  const statCriticalRecoveries = fakeElement();
+  assert.equal(renderCriticalRecoveryStatRuntime(statCriticalRecoveries, {
+    recoveryEventCount: 9,
+    lastMaintenanceTick: 456
+  }), "9 @456");
+  assert.equal(statCriticalRecoveries.textContent, "9 @456");
+  assert.equal(renderCriticalRecoveryStatRuntime(null, {
+    recoveryEventCount: 2,
+    lastMaintenanceTick: -1
+  }), "2");
 }
 
 {
@@ -171,6 +287,65 @@ function fakeButton(): HTMLButtonElement {
   assert.equal(netQuickStatus.textContent, "Account: Signed out");
   assert.equal(netLoginButton.textContent, "Net Login (Shift+I)");
   assert.equal(netLoginButton.classList.contains("control-btn--login"), true);
+}
+
+{
+  const statNetSession = fakeElement();
+  const topNetStatus = fakeElement();
+  const topNetIndicator = fakeElement();
+  const netQuickStatus = fakeElement();
+  const netLoginButton = fakeButton();
+  const statIntroPhase = fakeElement();
+  const netIntroPhaseSelect = { value: "" } as HTMLSelectElement;
+  const stateNet = {
+    token: "token",
+    userId: "u1",
+    username: "rhy",
+    characterName: "Avatar",
+    statusLevel: "sync",
+    statusText: "Polling",
+    introPhase: "PRE_INTRO"
+  };
+  assert.deepEqual(renderNetSessionUiRuntime({
+    stateNet,
+    isAuthenticated: true,
+    elements: {
+      statNetSession,
+      topNetStatus,
+      topNetIndicator,
+      netQuickStatus,
+      netLoginButton,
+      statIntroPhase,
+      netIntroPhaseSelect
+    }
+  }), {
+    normalized: "pre_intro",
+    selectValue: "pre_intro",
+    statText: "pre_intro"
+  });
+  assert.equal(stateNet.introPhase, "pre_intro");
+  assert.equal(statNetSession.textContent, "rhy/Avatar");
+  assert.equal(topNetStatus.textContent, "sync - Polling");
+  assert.equal(topNetIndicator.dataset.state, "sync");
+  assert.equal(statIntroPhase.textContent, "pre_intro");
+  assert.equal(netIntroPhaseSelect.value, "pre_intro");
+
+  applyNetStatusPresentationRuntime({
+    stateNet,
+    presentation: { level: "offline", text: "Paused" },
+    isAuthenticated: false,
+    elements: {
+      statNetSession,
+      topNetStatus,
+      topNetIndicator,
+      netQuickStatus,
+      netLoginButton
+    }
+  });
+  assert.equal(stateNet.statusLevel, "offline");
+  assert.equal(stateNet.statusText, "Paused");
+  assert.equal(topNetStatus.textContent, "offline - Paused");
+  assert.equal(topNetIndicator.dataset.state, "offline");
 }
 
 {

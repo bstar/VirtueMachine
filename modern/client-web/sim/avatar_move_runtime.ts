@@ -1,4 +1,5 @@
 import { clearFurnitureAvatarPoseRuntime, type FurnitureInteractionSimRuntime } from "./furniture_pose_runtime.ts";
+import { LEGACY_COMMAND_TYPE_RUNTIME } from "./legacy_command_runtime.ts";
 import { clampI32Runtime } from "./sim_utils_runtime.ts";
 
 export type AvatarMoveRuntimeMode = "avatar" | string;
@@ -37,6 +38,56 @@ export type AvatarMoveRuntimeDeps = {
   isBlockedAt(x: number, y: number, z: number): boolean;
   movementMode: AvatarMoveRuntimeMode;
 };
+
+export type AvatarMoveAnimationPatchRuntime = {
+  avatarLastMoveTick: number | null;
+  avatarWalkAnimUntilMs: number | null;
+};
+
+export function countQueuedAvatarMoveCommandsRuntime(queue: unknown): number {
+  if (!Array.isArray(queue)) {
+    return 0;
+  }
+  return queue.reduce((count, entry) => {
+    const commandType = entry && typeof entry === "object"
+      ? Number((entry as { type?: unknown }).type) | 0
+      : 0;
+    return count + (commandType === LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR ? 1 : 0);
+  }, 0);
+}
+
+export function avatarWalkPresentationActiveRuntime(args: {
+  queuedMoveCount?: unknown;
+  nowMs: unknown;
+  walkAnimUntilMs: unknown;
+}): boolean {
+  void args.queuedMoveCount;
+  return Number(args.walkAnimUntilMs) >= Number(args.nowMs);
+}
+
+export function avatarMoveAnimationPatchRuntime(args: {
+  result: AvatarMoveRuntimeResult;
+  simTick: unknown;
+  nowMs: unknown;
+  walkAnimWindowMs: unknown;
+}): AvatarMoveAnimationPatchRuntime {
+  if (args.result.kind === "blocked") {
+    return {
+      avatarLastMoveTick: null,
+      avatarWalkAnimUntilMs: -1
+    };
+  }
+  if (args.result.kind !== "avatar-move") {
+    return {
+      avatarLastMoveTick: null,
+      avatarWalkAnimUntilMs: null
+    };
+  }
+  return {
+    avatarLastMoveTick: Number(args.simTick) >>> 0,
+    avatarWalkAnimUntilMs: Number(args.nowMs) + Number(args.walkAnimWindowMs)
+  };
+}
 
 export function applyAvatarMoveCommandRuntime(
   sim: FurnitureInteractionSimRuntime,

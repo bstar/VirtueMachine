@@ -1,4 +1,10 @@
-import { inventoryKeyForObjectRuntime } from "../sim/inventory_runtime.ts";
+import {
+  inventoryKeyForObjectRuntime,
+  pickObjectIntoInventoryRuntime,
+  type InventoryObjectRuntime,
+  type InventoryPickupRuntimeResult,
+  type SimInventoryRuntimeState
+} from "../sim/inventory_runtime.ts";
 import { isU6InventoryStackableObjectType } from "../../common/u6_object_constants.ts";
 
 export type WorldRuntimeRequest = (
@@ -24,6 +30,11 @@ export interface WorldRuntimeMeta {
 }
 
 export type HiddenWorldObjectMapRuntime = Record<string, number>;
+
+export type HiddenWorldObjectRowRuntime = {
+  due_at_ms: number;
+  object_key: string;
+};
 
 export interface WorldRuntimeObject {
   frame?: number;
@@ -167,6 +178,17 @@ export type WorldRuntimeInventoryDisplayEntry = {
   type: number;
 };
 
+export type WorldRuntimeInventoryProjection = {
+  inventory: Record<string, number>;
+  inventoryObjects: WorldRuntimeInventoryObject[];
+  inventoryTiles: Record<string, number>;
+};
+
+export type WorldRuntimeInventorySelection = {
+  index?: unknown;
+  kind?: unknown;
+} | null | undefined;
+
 export function serverObjectKeyForWorldObjectRuntime(obj: WorldRuntimeObjectKeySource | null | undefined): string {
   const row = obj || {};
   const direct = String(row.object_key || row.objectKey || "").trim();
@@ -191,6 +213,34 @@ export function worldInventorySourcesFromJsonRuntime(objects: unknown): WorldRun
     .filter((obj): obj is WorldRuntimeInventorySource => !!obj && typeof obj === "object");
 }
 
+export function requiredWorldObjectActorIdRuntime(actorId: unknown): string {
+  const id = String(actorId || "").trim();
+  if (!id) {
+    throw new Error("world object inventory requires a character id");
+  }
+  return id;
+}
+
+export function inventoryProjectionCountForObjectRuntime(
+  obj: Pick<WorldRuntimeInventorySource, "amount" | "frame" | "type"> | null | undefined
+): number {
+  const type = Number(obj?.type);
+  const frame = Number(obj?.frame);
+  if (!Number.isFinite(type) || !Number.isFinite(frame)) {
+    return 0;
+  }
+  if (!isU6InventoryStackableObjectType(type, frame)) {
+    return 1;
+  }
+  const amount = Math.floor(Number(obj?.amount) || 0);
+  return Math.max(1, Math.min(0xffff, amount));
+}
+
+function normalizeInventoryAmountRuntime(amount: unknown): number {
+  const n = Number(amount);
+  return Number.isFinite(n) ? Math.max(0, Math.min(0xffff, Math.floor(n))) : 0;
+}
+
 export function inventoryProjectionFromServerObjectsRuntime(
   objects: readonly WorldRuntimeInventorySource[] | null | undefined
 ): Record<string, number> {
@@ -202,7 +252,7 @@ export function inventoryProjectionFromServerObjectsRuntime(
       continue;
     }
     const key = inventoryKeyForObjectRuntime({ type, frame });
-    next[key] = ((Number(next[key]) >>> 0) + 1) >>> 0;
+    next[key] = ((Number(next[key]) >>> 0) + inventoryProjectionCountForObjectRuntime(obj)) >>> 0;
   }
   return next;
 }
@@ -224,6 +274,29 @@ export function inventoryTileProjectionFromServerObjectsRuntime(
   return next;
 }
 
+export function inventoryProjectionStateFromServerObjectsRuntime(objects: unknown): WorldRuntimeInventoryProjection {
+  const sources = worldInventorySourcesFromJsonRuntime(objects);
+  return {
+    inventory: inventoryProjectionFromServerObjectsRuntime(sources),
+    inventoryObjects: inventoryObjectsFromServerObjectsRuntime(sources),
+    inventoryTiles: inventoryTileProjectionFromServerObjectsRuntime(sources)
+  };
+}
+
+export function applyInventoryProjectionFromServerObjectsRuntime(
+  sim: WorldRuntimeTakeInventoryState | null | undefined,
+  objects: unknown
+): WorldRuntimeInventoryProjection | null {
+  if (!sim) {
+    return null;
+  }
+  const projection = inventoryProjectionStateFromServerObjectsRuntime(objects);
+  sim.inventory = projection.inventory;
+  sim.inventoryObjects = projection.inventoryObjects;
+  sim.inventoryTiles = projection.inventoryTiles;
+  return projection;
+}
+
 export function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource | null | undefined): WorldRuntimeInventoryItem {
   const row = value || {};
   const out: WorldRuntimeInventoryItem = {
@@ -242,9 +315,8 @@ export function normalizeInventoryItemRuntime(value: WorldRuntimeInventorySource
   if (Number.isFinite(tileId)) {
     out.tile_id = Number(tileId) & 0xffff;
   }
-  const amount = Number(row.amount);
-  if (Number.isFinite(amount)) {
-    out.amount = Number(amount) & 0xffff;
+  if (Number.isFinite(Number(row.amount))) {
+    out.amount = normalizeInventoryAmountRuntime(row.amount);
   }
   const status = Number(row.status);
   if (Number.isFinite(status)) {
@@ -294,7 +366,7 @@ export function inventoryObjectsFromServerObjectsRuntime(
       continue;
     }
     out.push({
-      amount: Number(item.amount) & 0xffff,
+      amount: normalizeInventoryAmountRuntime(item.amount),
       frame: Number(item.frame) & 0x3f,
       holder_id: String(item.holder_id || ""),
       holder_key: String(item.holder_key || ""),
@@ -336,7 +408,7 @@ export function inventoryDisplayEntriesFromObjectsRuntime(
     const inventoryKey = String(obj.inventory_key || inventoryKeyForObjectRuntime({ type, frame }));
     const tileId = Number(obj.tile_id) & 0xffff;
     const stackable = isU6InventoryStackableObjectType(type, frame);
-    const count = Math.max(1, Number(obj.amount) >>> 0);
+    const count = inventoryProjectionCountForObjectRuntime(obj);
     if (stackable) {
       const existingIndex = stackIndexByKey.get(inventoryKey);
       if (existingIndex !== undefined) {
@@ -371,10 +443,165 @@ export function inventoryDisplayEntriesFromObjectsRuntime(
   return out;
 }
 
+export function inventoryObjectForDropSelectionRuntime(
+  objects: readonly WorldRuntimeInventoryObject[] | null | undefined,
+  selected: WorldRuntimeInventorySelection,
+  limit = 12
+): WorldRuntimeInventoryObject | null {
+  const inventoryObjects = Array.isArray(objects) ? objects : [];
+  if (selected && selected.kind === "inventory") {
+    const entries = inventoryDisplayEntriesFromObjectsRuntime(inventoryObjects, limit);
+    const entry = entries[Number(selected.index) | 0] || null;
+    const objectKey = String(entry?.object_key || "").trim();
+    if (objectKey) {
+      return inventoryObjects.find((obj) => String(obj.object_key || "") === objectKey) || null;
+    }
+    const inventoryKey = String(entry?.inventory_key || entry?.key || "").trim();
+    if (inventoryKey) {
+      return inventoryObjects.find((obj) => String(obj.inventory_key || inventoryKeyForObjectRuntime(obj)) === inventoryKey) || null;
+    }
+    return inventoryObjects[Number(selected.index) | 0] || null;
+  }
+  return inventoryObjects[0] || null;
+}
+
+export function inventoryCountMapForDropValidationRuntime(
+  inventory: Record<string, number> | null | undefined,
+  objects: readonly WorldRuntimeInventoryObject[] | null | undefined
+): Record<string, number> {
+  if (inventory && Object.keys(inventory).length > 0) {
+    return { ...inventory };
+  }
+  const out: Record<string, number> = {};
+  for (const item of objects || []) {
+    const key = String(item.inventory_key || inventoryKeyForObjectRuntime(item));
+    out[key] = ((Number(out[key]) >>> 0) + inventoryProjectionCountForObjectRuntime(item)) >>> 0;
+  }
+  return out;
+}
+
 export interface WorldRuntimeTakeResponse {
   inventory_item?: WorldRuntimeInventorySource | null;
   respawn?: { due_at_ms?: unknown; source_object_key?: unknown };
   target?: WorldRuntimeInventorySource | null;
+}
+
+export type WorldRuntimeTakeProjection = {
+  hide_source: boolean;
+  inventory_item: WorldRuntimeInventoryItem;
+  inventory_object: WorldRuntimeInventoryObject | null;
+  inventory_tile_id: number | null;
+  inventory_tile_key: string;
+  remove_source_object_key: string;
+  remove_taken_object_key: string;
+  source_object_key: string;
+  source_respawn_due_at_ms: unknown;
+};
+
+export type WorldRuntimeTakeInventoryState = SimInventoryRuntimeState & {
+  inventoryObjects?: WorldRuntimeInventoryObject[];
+  inventoryTiles?: Record<string, number>;
+};
+
+export type WorldRuntimeTakeInventoryApplyResult = InventoryPickupRuntimeResult & {
+  inventoryObjectKey: string;
+  inventoryTileId: number | null;
+  inventoryTileKey: string;
+};
+
+export type WorldRuntimeDropThrowEffect = {
+  endMs: number;
+  fromX: number;
+  fromY: number;
+  landObject: WorldRuntimeJson["target"] | null;
+  objectKey: string;
+  startMs: number;
+  tileId: number;
+  toX: number;
+  toY: number;
+  z: number;
+};
+
+export type WorldRuntimeDropThrowPlan =
+  | { kind: "apply_now"; landObject: WorldRuntimeJson["target"] | null }
+  | { effect: WorldRuntimeDropThrowEffect; kind: "animate" };
+
+export type HiddenWorldObjectMetaUpdateRuntime = {
+  expiredObjectKeys: string[];
+  hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime | null;
+};
+
+export type HiddenWorldObjectLayerPlanRuntime = {
+  hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime | null;
+  removeObjectKeys: string[];
+};
+
+export type HiddenWorldObjectVisibilityRuntime = {
+  expiredKeys: string[];
+  hidden: boolean;
+  hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime;
+};
+
+export type HiddenWorldObjectClientStateRuntime = {
+  hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime;
+};
+
+export type HiddenWorldObjectLayerRuntime = {
+  removeRuntimeEntryByAuthoritativeKey(key: string): void;
+};
+
+export type ObjectTransientStateRuntime = {
+  doorOpenStates?: Record<string, unknown>;
+  removedObjectAtTick?: Record<string, unknown>;
+  removedObjectCount?: number;
+  removedObjectKeys?: Record<string, unknown>;
+};
+
+export function clearObjectTransientStateRuntime(state: ObjectTransientStateRuntime | null | undefined): boolean {
+  if (!state) {
+    return false;
+  }
+  state.doorOpenStates = {};
+  state.removedObjectKeys = {};
+  state.removedObjectAtTick = {};
+  state.removedObjectCount = 0;
+  return true;
+}
+
+function worldRuntimeMetaFromUnknown(meta: unknown): WorldRuntimeMeta | null {
+  return meta && typeof meta === "object" && !Array.isArray(meta)
+    ? meta as WorldRuntimeMeta
+    : null;
+}
+
+export function hiddenWorldObjectMetaUpdateRuntime(
+  meta: unknown,
+  nowMs: number,
+  fallbackRespawnMs: number
+): HiddenWorldObjectMetaUpdateRuntime {
+  const metaRecord = worldRuntimeMetaFromUnknown(meta);
+  return {
+    expiredObjectKeys: expiredWorldObjectKeysFromMetaRuntime(metaRecord),
+    hiddenWorldObjectKeys: hiddenWorldObjectKeysFromMetaRuntime(metaRecord, nowMs, fallbackRespawnMs)
+  };
+}
+
+export function hiddenWorldObjectLayerPlanRuntime(
+  meta: unknown,
+  nowMs: number,
+  fallbackRespawnMs: number
+): HiddenWorldObjectLayerPlanRuntime {
+  const update = hiddenWorldObjectMetaUpdateRuntime(meta, nowMs, fallbackRespawnMs);
+  const removeObjectKeys = new Set(update.expiredObjectKeys);
+  if (update.hiddenWorldObjectKeys) {
+    for (const key of Object.keys(update.hiddenWorldObjectKeys)) {
+      removeObjectKeys.add(key);
+    }
+  }
+  return {
+    hiddenWorldObjectKeys: update.hiddenWorldObjectKeys,
+    removeObjectKeys: [...removeObjectKeys]
+  };
 }
 
 export function hiddenWorldObjectKeysFromMetaRuntime(
@@ -382,10 +609,24 @@ export function hiddenWorldObjectKeysFromMetaRuntime(
   nowMs: number,
   fallbackRespawnMs: number
 ): HiddenWorldObjectMapRuntime | null {
+  const rows = hiddenWorldObjectRowsFromMetaRuntime(meta, nowMs, fallbackRespawnMs);
+  if (!rows) return null;
+  const out: HiddenWorldObjectMapRuntime = {};
+  for (const row of rows) {
+    out[row.object_key] = row.due_at_ms;
+  }
+  return out;
+}
+
+export function hiddenWorldObjectRowsFromMetaRuntime(
+  meta: WorldRuntimeMeta | null | undefined,
+  nowMs: number,
+  fallbackRespawnMs: number
+): HiddenWorldObjectRowRuntime[] | null {
   if (!meta || !Array.isArray(meta.hidden_objects)) {
     return null;
   }
-  const out: HiddenWorldObjectMapRuntime = {};
+  const rows: HiddenWorldObjectRowRuntime[] = [];
   const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
   const fallback = Math.max(0, Number(fallbackRespawnMs) || 0);
   for (const row of meta.hidden_objects) {
@@ -400,10 +641,158 @@ export function hiddenWorldObjectKeysFromMetaRuntime(
     const due = Number(record.due_at_ms);
     const dueAtMs = Number.isFinite(due) && due > 0 ? due : now + fallback;
     if (dueAtMs > now) {
-      out[key] = dueAtMs;
+      rows.push({
+        due_at_ms: Math.floor(dueAtMs),
+        object_key: key
+      });
+    }
+  }
+  rows.sort((a, b) => {
+    if (a.due_at_ms !== b.due_at_ms) {
+      return a.due_at_ms - b.due_at_ms;
+    }
+    return a.object_key.localeCompare(b.object_key);
+  });
+  return rows;
+}
+
+export function expiredWorldObjectKeysFromMetaRuntime(meta: WorldRuntimeMeta | null | undefined): string[] {
+  const rows = Array.isArray(meta?.expired_objects) ? meta.expired_objects : [];
+  const out: string[] = [];
+  for (const row of rows) {
+    const key = String(row || "").trim();
+    if (key) {
+      out.push(key);
     }
   }
   return out;
+}
+
+export function markedHiddenWorldObjectKeysRuntime(
+  current: HiddenWorldObjectMapRuntime | null | undefined,
+  sourceKey: unknown,
+  dueAtMs: unknown,
+  nowMs: number,
+  fallbackRespawnMs: number
+): HiddenWorldObjectMapRuntime {
+  const key = String(sourceKey || "").trim();
+  const next = { ...(current || {}) };
+  if (!key) {
+    return next;
+  }
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const due = Number(dueAtMs);
+  next[key] = Number.isFinite(due) && due > now
+    ? due
+    : now + Math.max(0, Number(fallbackRespawnMs) || 0);
+  return next;
+}
+
+export function purgeExpiredHiddenWorldObjectKeysRuntime(
+  current: HiddenWorldObjectMapRuntime | null | undefined,
+  nowMs: number
+): { expiredKeys: string[]; hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime } {
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime = {};
+  const expiredKeys: string[] = [];
+  for (const [key, rawDue] of Object.entries(current || {})) {
+    const due = Number(rawDue);
+    if (Number.isFinite(due) && due > now) {
+      hiddenWorldObjectKeys[key] = due;
+    } else {
+      expiredKeys.push(key);
+    }
+  }
+  return { expiredKeys, hiddenWorldObjectKeys };
+}
+
+export function isHiddenWorldObjectKeyRuntime(
+  current: HiddenWorldObjectMapRuntime | null | undefined,
+  sourceKey: unknown,
+  nowMs: number
+): boolean {
+  const key = String(sourceKey || "").trim();
+  if (!key) {
+    return false;
+  }
+  const due = Number(current?.[key] || 0);
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  return Number.isFinite(due) && due > now;
+}
+
+export function hiddenWorldObjectVisibilityRuntime(
+  current: HiddenWorldObjectMapRuntime | null | undefined,
+  sourceKey: unknown,
+  nowMs: number
+): HiddenWorldObjectVisibilityRuntime {
+  const next = purgeExpiredHiddenWorldObjectKeysRuntime(current, nowMs);
+  return {
+    expiredKeys: next.expiredKeys,
+    hidden: isHiddenWorldObjectKeyRuntime(next.hiddenWorldObjectKeys, sourceKey, nowMs),
+    hiddenWorldObjectKeys: next.hiddenWorldObjectKeys
+  };
+}
+
+export function markHiddenWorldObjectClientStateRuntime(
+  state: HiddenWorldObjectClientStateRuntime,
+  sourceKey: unknown,
+  dueAtMs: unknown,
+  nowMs: number,
+  fallbackRespawnMs: number
+): HiddenWorldObjectMapRuntime {
+  state.hiddenWorldObjectKeys = markedHiddenWorldObjectKeysRuntime(
+    state.hiddenWorldObjectKeys,
+    sourceKey,
+    dueAtMs,
+    nowMs,
+    fallbackRespawnMs
+  );
+  return state.hiddenWorldObjectKeys;
+}
+
+export function removeHiddenWorldObjectsFromLayerRuntime(
+  layer: HiddenWorldObjectLayerRuntime | null | undefined,
+  hiddenWorldObjectKeys: HiddenWorldObjectMapRuntime | null | undefined
+): string[] {
+  const removedKeys = Object.keys(hiddenWorldObjectKeys || {});
+  if (!layer) {
+    return removedKeys;
+  }
+  for (const key of removedKeys) {
+    layer.removeRuntimeEntryByAuthoritativeKey(key);
+  }
+  return removedKeys;
+}
+
+export function applyHiddenWorldObjectsMetaToClientRuntime(args: {
+  fallbackRespawnMs: number;
+  layer?: HiddenWorldObjectLayerRuntime | null;
+  meta: unknown;
+  nowMs: number;
+  state: HiddenWorldObjectClientStateRuntime;
+}): HiddenWorldObjectLayerPlanRuntime {
+  const plan = hiddenWorldObjectLayerPlanRuntime(args.meta, args.nowMs, args.fallbackRespawnMs);
+  if (args.layer) {
+    for (const key of plan.removeObjectKeys) {
+      args.layer.removeRuntimeEntryByAuthoritativeKey(key);
+    }
+  }
+  if (plan.hiddenWorldObjectKeys) {
+    args.state.hiddenWorldObjectKeys = plan.hiddenWorldObjectKeys;
+  }
+  return plan;
+}
+
+export function hiddenWorldObjectVisibilityForClientRuntime(
+  state: HiddenWorldObjectClientStateRuntime,
+  sourceKey: unknown,
+  nowMs: number
+): HiddenWorldObjectVisibilityRuntime {
+  const visibility = hiddenWorldObjectVisibilityRuntime(state.hiddenWorldObjectKeys, sourceKey, nowMs);
+  if (visibility.expiredKeys.length > 0) {
+    state.hiddenWorldObjectKeys = visibility.hiddenWorldObjectKeys;
+  }
+  return visibility;
 }
 
 export function inventoryItemFromTakeResponseRuntime(
@@ -427,6 +816,100 @@ export function sourceObjectKeyFromTakeResponseRuntime(
   ).trim();
 }
 
+export function takeProjectionFromResponseRuntime(
+  out: WorldRuntimeTakeResponse | null | undefined,
+  fallback: WorldRuntimeInventorySource & WorldRuntimeObjectKeySource
+): WorldRuntimeTakeProjection {
+  const item = inventoryItemFromTakeResponseRuntime(out, fallback);
+  const sourceObj = fallback as WorldRuntimeInventorySource & WorldRuntimeObjectKeySource & {
+    key?: unknown;
+  };
+  const takenObjectKey = String(sourceObj.object_key || sourceObj.key || "").trim();
+  const sourceObjectKey = sourceObjectKeyFromTakeResponseRuntime(out, item, sourceObj);
+  const inventoryObjects = inventoryObjectsFromServerObjectsRuntime([item]);
+  const inventoryObject = inventoryObjects[0] || null;
+  const tileId = Number(item.tile_id);
+  return {
+    hide_source: !!(out?.respawn?.source_object_key || out?.respawn?.due_at_ms),
+    inventory_item: item,
+    inventory_object: inventoryObject,
+    inventory_tile_id: Number.isFinite(tileId) ? Number(tileId) & 0xffff : null,
+    inventory_tile_key: inventoryKeyForObjectRuntime(item),
+    remove_source_object_key: sourceObjectKey,
+    remove_taken_object_key: takenObjectKey.startsWith("inv:") ? takenObjectKey : "",
+    source_object_key: sourceObjectKey,
+    source_respawn_due_at_ms: out?.respawn?.due_at_ms
+  };
+}
+
+export function applyTakeProjectionToInventoryRuntime(
+  sim: WorldRuntimeTakeInventoryState,
+  projection: WorldRuntimeTakeProjection,
+  removedObject: InventoryObjectRuntime | null | undefined
+): WorldRuntimeTakeInventoryApplyResult {
+  if (!Array.isArray(sim.inventoryObjects)) {
+    sim.inventoryObjects = [];
+  }
+  const inventoryObjectKey = String(projection.inventory_object?.object_key || "");
+  if (projection.inventory_object) {
+    sim.inventoryObjects = [
+      ...sim.inventoryObjects.filter((entry) => String(entry.object_key || "") !== inventoryObjectKey),
+      projection.inventory_object
+    ];
+  }
+  if (projection.inventory_tile_id !== null) {
+    if (!sim.inventoryTiles) {
+      sim.inventoryTiles = {};
+    }
+    sim.inventoryTiles[projection.inventory_tile_key] = projection.inventory_tile_id;
+  }
+  const pickup = pickObjectIntoInventoryRuntime(sim, projection.inventory_item, removedObject);
+  return {
+    ...pickup,
+    inventoryObjectKey,
+    inventoryTileId: projection.inventory_tile_id,
+    inventoryTileKey: projection.inventory_tile_key
+  };
+}
+
+export function dropThrowPlanRuntime(args: {
+  durationMs: number;
+  fromX: number;
+  fromY: number;
+  landObject: WorldRuntimeJson["target"] | null | undefined;
+  nowMs: number;
+  toX: number;
+  toY: number;
+  z: number;
+}): WorldRuntimeDropThrowPlan {
+  const landObject = args.landObject || null;
+  const objectKey = String(landObject?.object_key || "").trim();
+  const tileId = Number(landObject?.tile_id);
+  if (!objectKey || !Number.isFinite(tileId)) {
+    return { kind: "apply_now", landObject };
+  }
+  if ((args.fromX | 0) === (args.toX | 0) && (args.fromY | 0) === (args.toY | 0)) {
+    return { kind: "apply_now", landObject };
+  }
+  const nowMs = Number(args.nowMs) || 0;
+  const durationMs = Math.max(0, Number(args.durationMs) || 0);
+  return {
+    kind: "animate",
+    effect: {
+      endMs: nowMs + durationMs,
+      fromX: args.fromX | 0,
+      fromY: args.fromY | 0,
+      landObject,
+      objectKey,
+      startMs: nowMs,
+      tileId: Number(tileId) & 0xffff,
+      toX: args.toX | 0,
+      toY: args.toY | 0,
+      z: args.z | 0
+    }
+  };
+}
+
 export async function requestTakeWorldObjectRuntime(
   args: {
     actorId: string | number | null | undefined;
@@ -447,7 +930,7 @@ export async function requestTakeWorldObjectRuntime(
     body: JSON.stringify({
       verb: "take",
       target_key: targetKey,
-      actor_id: String(args.actorId || "Avatar"),
+      actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
       actor_x: Number(args.actorX) | 0,
       actor_y: Number(args.actorY) | 0,
       actor_z: Number(args.actorZ) | 0
@@ -479,7 +962,7 @@ export async function requestDropWorldObjectRuntime(
     body: JSON.stringify({
       verb: "drop",
       target_key: targetKey,
-      actor_id: String(args.actorId || "Avatar"),
+      actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
       actor_x: Number(args.actorX) | 0,
       actor_y: Number(args.actorY) | 0,
       actor_z: Number(args.actorZ) | 0,
@@ -493,6 +976,67 @@ export async function requestDropWorldObjectRuntime(
 
 export function normalizeIntroPhaseRuntime(phase: unknown): "pre_intro" | "post_intro" {
   return String(phase || "").trim().toLowerCase() === "pre_intro" ? "pre_intro" : "post_intro";
+}
+
+export interface IntroPhasePresentationRuntime {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+  statusLevel: "online" | "error";
+  statusText: string;
+}
+
+export function introPhaseSetPresentationRuntime(phase: unknown): IntroPhasePresentationRuntime {
+  const text = String(phase || "post_intro");
+  return {
+    diagClass: "diag ok",
+    diagText: `Intro phase set to ${text}.`,
+    statusLevel: "online",
+    statusText: `Intro phase: ${text}`
+  };
+}
+
+export function introPhaseUpdateFailureRuntime(reason: unknown): IntroPhasePresentationRuntime {
+  const text = String(reason || "unknown error");
+  return {
+    diagClass: "diag warn",
+    diagText: `Intro phase update failed: ${text}`,
+    statusLevel: "error",
+    statusText: `Intro phase update failed: ${text}`
+  };
+}
+
+export function bindIntroPhaseButtonRuntime(args: {
+  button?: { addEventListener: (type: "click", listener: () => void | Promise<void>) => void } | null;
+  currentPhase: () => unknown;
+  errorMessage: (err: unknown) => string;
+  isAuthenticated: () => boolean;
+  requestedPhase: () => unknown;
+  setDiag: (diag: IntroPhasePresentationRuntime) => void;
+  setIntroPhase: (phase: string) => Promise<unknown>;
+  setStatus: (level: string, text: string) => void;
+}): boolean {
+  if (!args.button) {
+    return false;
+  }
+  args.button.addEventListener("click", () => {
+    void (async () => {
+      try {
+        if (!args.isAuthenticated()) {
+          throw new Error("Login required");
+        }
+        const requested = String(args.requestedPhase() || args.currentPhase() || "post_intro");
+        await args.setIntroPhase(requested);
+        const presentation = introPhaseSetPresentationRuntime(args.currentPhase());
+        args.setDiag(presentation);
+        args.setStatus(presentation.statusLevel, presentation.statusText);
+      } catch (err) {
+        const presentation = introPhaseUpdateFailureRuntime(args.errorMessage(err));
+        args.setStatus(presentation.statusLevel, presentation.statusText);
+        args.setDiag(presentation);
+      }
+    })();
+  });
+  return true;
 }
 
 export async function requestIntroPhaseRuntime(
@@ -565,7 +1109,7 @@ export async function requestWorldObjectsAtCell(
   z: number,
   request: WorldRuntimeRequest
 ): Promise<WorldRuntimeJson | null> {
-  return requestWorldObjectsAroundRuntime({ x, y, z, radius: 0, limit: 128 }, request);
+  return requestWorldObjectsAroundRuntime({ x, y, z, radius: 1, limit: 256 }, request);
 }
 
 export async function requestWorldObjectsAroundRuntime(
@@ -608,6 +1152,78 @@ export interface RunCriticalMaintenanceDeps {
   updateCriticalRecoveryStat: () => void;
   setStatus: (level: string, text: string) => void;
   setDiag: (kind: "ok" | "warn", text: string) => void;
+}
+
+export interface CriticalMaintenanceFailureRuntime {
+  diagClass: "diag warn";
+  diagText: string;
+  statusLevel: "error";
+  statusText: string;
+}
+
+export interface CriticalMaintenanceDiagRuntime {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+}
+
+export type CriticalMaintenanceButtonRuntime = {
+  addEventListener(type: "click", listener: () => void): void;
+};
+
+export interface InventorySyncFailureDiagRuntime {
+  diagClass: "diag warn";
+  diagText: string;
+}
+
+export function inventorySyncFailureDiagRuntime(reason: string): InventorySyncFailureDiagRuntime {
+  return {
+    diagClass: "diag warn",
+    diagText: `Inventory sync failed: ${reason}`
+  };
+}
+
+export function criticalMaintenanceFailureRuntime(
+  err: unknown,
+  errorMessage: (err: unknown) => string
+): CriticalMaintenanceFailureRuntime {
+  const reason = errorMessage(err);
+  return {
+    diagClass: "diag warn",
+    diagText: `Critical maintenance failed: ${reason}`,
+    statusLevel: "error",
+    statusText: `Maintenance failed: ${reason}`
+  };
+}
+
+export function criticalMaintenanceDiagRuntime(kind: unknown, text: unknown): CriticalMaintenanceDiagRuntime {
+  return {
+    diagClass: kind === "ok" ? "diag ok" : "diag warn",
+    diagText: String(text || "")
+  };
+}
+
+export function bindCriticalMaintenanceButtonRuntime(args: {
+  button?: CriticalMaintenanceButtonRuntime | null;
+  errorMessage: (err: unknown) => string;
+  run: () => Promise<unknown>;
+  setDiag: (diag: CriticalMaintenanceDiagRuntime) => void;
+  setStatus: (level: string, text: string) => void;
+}): boolean {
+  if (!args.button) {
+    return false;
+  }
+  args.button.addEventListener("click", () => {
+    void (async () => {
+      try {
+        await args.run();
+      } catch (err) {
+        const failure = criticalMaintenanceFailureRuntime(err, args.errorMessage);
+        args.setStatus(failure.statusLevel, failure.statusText);
+        args.setDiag(failure);
+      }
+    })();
+  });
+  return true;
 }
 
 export async function runCriticalMaintenanceRuntime(

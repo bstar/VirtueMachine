@@ -75,6 +75,37 @@ export function sanitizeLegacyHudLabelTextRuntime(text: unknown): string {
     .trim();
 }
 
+export function legacyDropObjectLabelRuntime(
+  item: { inventory_key?: unknown; tile_id?: unknown; type?: unknown } | null | undefined,
+  entries: readonly LegacyLookStringEntryRuntime[] | null | undefined,
+  tileFlags2: ArrayLike<number> | null | undefined,
+  fallbackInventoryKey = ""
+): string {
+  if (!item) {
+    return "nothing";
+  }
+  const tileId = Number(item.tile_id) & 0xffff;
+  const name = sanitizeLegacyHudLabelTextRuntime(legacyLookupTileStringRuntime(tileId, entries));
+  if (name && name.toLowerCase() !== "nothing") {
+    const article = legacyArticleForTileRuntime(tileId, tileFlags2);
+    return `${article}${name}`.trim();
+  }
+  const invKey = sanitizeLegacyHudLabelTextRuntime(item.inventory_key || fallbackInventoryKey);
+  return invKey || `0x${(Number(item.type) & 0x03ff).toString(16)}`;
+}
+
+export function legacyDropTargetPromptLinesRuntime(
+  item: { inventory_key?: unknown; tile_id?: unknown; type?: unknown } | null | undefined,
+  entries: readonly LegacyLookStringEntryRuntime[] | null | undefined,
+  tileFlags2: ArrayLike<number> | null | undefined,
+  fallbackInventoryKey = ""
+): string[] {
+  return [
+    `>Drop-${legacyDropObjectLabelRuntime(item, entries, tileFlags2, fallbackInventoryKey)}`,
+    "Location:"
+  ];
+}
+
 export function areaIdForWorldXYRuntime(x: unknown, y: unknown): number {
   const ax = ((Number(x) | 0) >> 7) & 0x7;
   const ay = ((Number(y) | 0) >> 7) & 0x7;

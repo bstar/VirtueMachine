@@ -6,6 +6,7 @@ import {
   inventoryKeyForObjectRuntime,
   markObjectRemovedRuntime,
   objectAnchorKeyRuntime,
+  pickObjectIntoInventoryRuntime,
   resolveObjectByInventoryAnchorRuntime
 } from "../sim/inventory_runtime.ts";
 
@@ -32,6 +33,27 @@ assert.equal(inventoryKeyForObjectRuntime(portable), "0x10f:0x02");
   assert.equal(decrementInventoryKeyRuntime(sim, "0x10f:0x02"), 1);
   assert.equal(decrementInventoryKeyRuntime(sim, "0x10f:0x02"), 0);
   assert.equal(firstInventoryKeyRuntime(sim), "");
+}
+
+{
+  const sim = { tick: 55 };
+  const source = { frame: 0, order: 9, type: 0x120, x: 30, y: 31, z: 0 };
+  const item = { frame: 1, type: 0x113 };
+  assert.deepEqual(pickObjectIntoInventoryRuntime(sim, item, source), {
+    count: 1,
+    inventoryKey: "0x113:0x01"
+  });
+  assert.deepEqual(pickObjectIntoInventoryRuntime(sim, item, source), {
+    count: 2,
+    inventoryKey: "0x113:0x01"
+  });
+  assert.deepEqual(sim, {
+    inventory: { "0x113:0x01": 2 },
+    removedObjectAtTick: { "30,31,0,9,288": 55 },
+    removedObjectCount: 1,
+    removedObjectKeys: { "30,31,0,9,288": 1 },
+    tick: 55
+  });
 }
 
 {

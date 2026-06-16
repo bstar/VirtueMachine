@@ -8,6 +8,7 @@ import {
   parseBaseTileMapRuntime,
   parseObjBlkRecordsRuntime,
   persistPatchedObject,
+  spawnedWorldObjectDeltaFromObjectRuntime,
   worldObjectMeta
 } from "../world_object_state_runtime.ts";
 import type { WorldObjectStateContainer } from "../world_object_types.ts";
@@ -128,6 +129,20 @@ assert.equal(deltas.spawned[0].object_key, "inv:a00i001:avatar:1");
 assert.equal(deltas.spawned[0].type, 88);
 assert.equal(deltas.respawns.a00i001.due_at_ms, 2000);
 assert.equal(deltas.respawns.invalid, undefined);
+
+const clampedAmountDeltas = normalizeWorldObjectDeltas({
+  spawned: [{
+    object_key: "inv:a00i001:avatar:amount-negative",
+    amount: -1
+  }, {
+    object_key: "inv:a00i001:avatar:amount-fractional",
+    amount: 17.9
+  }, {
+    object_key: "inv:a00i001:avatar:amount-oversized",
+    amount: 0x1ffff
+  }]
+});
+assert.deepEqual(clampedAmountDeltas.spawned.map((obj) => obj.amount), [0, 17, 0xffff]);
 
 const malformedDeltaMaps = normalizeWorldObjectDeltas({
   removed: ["a00i001"],
@@ -270,6 +285,124 @@ persistPatchedObject(state, {
 });
 assert.equal(state.worldObjects.deltas.spawned[0].x, 30);
 
+assert.deepEqual(spawnedWorldObjectDeltaFromObjectRuntime({
+  object_key: "inv:a00i099:avatar:9",
+  source_object_key: "",
+  source_area: 1,
+  source_index: 0x99,
+  status: 0x10,
+  shape_type: 0x113,
+  amount: 2,
+  type: 0x113,
+  frame: 1,
+  tile_id: 0x451,
+  x: 40,
+  y: 41,
+  z: 0,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: "",
+  dropped_at_ms: 0,
+  despawn_at_ms: 0
+}), {
+  object_key: "inv:a00i099:avatar:9",
+  source_object_key: "a00i099",
+  source_area: 1,
+  source_index: 0x99,
+  status: 0x10,
+  shape_type: 0x113,
+  amount: 2,
+  type: 0x113,
+  frame: 1,
+  tile_id: 0x451,
+  x: 40,
+  y: 41,
+  z: 0,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: "",
+  dropped_at_ms: 0,
+  despawn_at_ms: 0
+});
+
+assert.equal(spawnedWorldObjectDeltaFromObjectRuntime({
+  object_key: "inv:a00i099:avatar:amount-negative",
+  source_area: 1,
+  source_index: 0x99,
+  status: 0x10,
+  shape_type: 0x113,
+  amount: -1,
+  type: 0x113,
+  frame: 1,
+  tile_id: 0x451,
+  x: 40,
+  y: 41,
+  z: 0,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: ""
+}).amount, 0);
+assert.equal(spawnedWorldObjectDeltaFromObjectRuntime({
+  object_key: "inv:a00i099:avatar:amount-oversized",
+  source_area: 1,
+  source_index: 0x99,
+  status: 0x10,
+  shape_type: 0x113,
+  amount: 0x1ffff,
+  type: 0x113,
+  frame: 1,
+  tile_id: 0x451,
+  x: 40,
+  y: 41,
+  z: 0,
+  holder_kind: "npc",
+  holder_id: "avatar",
+  holder_key: ""
+}).amount, 0xffff);
+
+const missingSpawnedDeltaState: WorldObjectStateContainer = {
+  worldObjects: {
+    baseline: {},
+    active: [],
+    deltas: normalizeWorldObjectDeltas({})
+  }
+};
+persistPatchedObject(missingSpawnedDeltaState, {
+  object_key: "inv:a00i099:avatar:9",
+  source_kind: "spawned",
+  source_area: 1,
+  source_index: 0x99,
+  status: 0,
+  shape_type: 0x113,
+  amount: 0,
+  type: 0x113,
+  frame: 1,
+  tile_id: 0x451,
+  x: 42,
+  y: 43,
+  z: 0,
+  holder_kind: "none",
+  holder_id: "",
+  holder_key: "",
+  dropped_at_ms: 1000,
+  despawn_at_ms: 2000
+});
+assert.deepEqual(missingSpawnedDeltaState.worldObjects.deltas.spawned.map((obj) => ({
+  object_key: obj.object_key,
+  source_object_key: obj.source_object_key,
+  x: obj.x,
+  y: obj.y,
+  dropped_at_ms: obj.dropped_at_ms,
+  despawn_at_ms: obj.despawn_at_ms
+})), [{
+  object_key: "inv:a00i099:avatar:9",
+  source_object_key: "a00i099",
+  x: 42,
+  y: 43,
+  dropped_at_ms: 1000,
+  despawn_at_ms: 2000
+}]);
+
 assert.deepEqual(worldObjectMeta(state, "savegame"), {
   baseline_dir: "savegame",
   source_dir: "/runtime/savegame",
@@ -289,28 +422,51 @@ const hiddenMetaState: WorldObjectStateContainer = {
     deltas: normalizeWorldObjectDeltas({
       ...state.worldObjects.deltas,
       removed: {
-        a00i001: true
+        a00i001: true,
+        a00i003: true,
+        a00i002: true
       },
       respawns: {
         a00i001: {
-          due_at_ms: Date.now() + 600000,
-          taken_at_ms: Date.now(),
+          due_at_ms: 1000 + 600000,
+          taken_at_ms: 1000,
           respawn_ms: 600000,
           policy: "default"
+        },
+        a00i003: {
+          due_at_ms: 1000 + 300000,
+          taken_at_ms: 1000,
+          respawn_ms: 300000,
+          policy: "fast"
+        },
+        a00i002: {
+          due_at_ms: 1000 + 300000,
+          taken_at_ms: 1000,
+          respawn_ms: 300000,
+          policy: "fast"
         }
       }
     })
   }
 };
-assert.deepEqual(worldObjectMeta(hiddenMetaState, "savegame").hidden_objects.map((row) => ({
+assert.deepEqual(worldObjectMeta(hiddenMetaState, "savegame", 1000).hidden_objects.map((row) => ({
   object_key: row.object_key,
   respawn_ms: row.respawn_ms,
   policy: row.policy
 })), [{
+  object_key: "a00i002",
+  respawn_ms: 300000,
+  policy: "fast"
+}, {
+  object_key: "a00i003",
+  respawn_ms: 300000,
+  policy: "fast"
+}, {
   object_key: "a00i001",
   respawn_ms: 600000,
   policy: "default"
 }]);
+assert.deepEqual(worldObjectMeta(hiddenMetaState, "savegame", 1000 + 600001).hidden_objects, []);
 
 const cloneLifecycleBaseline = {
   source_dir: "/baseline",

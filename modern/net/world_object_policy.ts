@@ -1,38 +1,39 @@
 import type { SpawnedWorldObjectDelta, WorldObject, WorldObjectRuntimeState, WorldObjectStateContainer } from "./world_object_types.ts";
 import {
-  OBJECT_TYPE_BED_VALUES,
-  OBJECT_TYPE_CHAIR_VALUES,
-  OBJECT_TYPE_DOOR_VALUES,
-  OBJECT_TYPE_ENV_FIXTURE_VALUES,
-  OBJECT_TYPE_SIGN_VALUES,
-  OBJECT_TYPE_SOLID_ENV_VALUES,
-  OBJECT_TYPE_TOP_DECOR_VALUES,
-  OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_VALUES,
   coordUseOfStatus,
-  u6ObjectTypeSet
+  isU6PortableObjectTypeRuntime
 } from "../common/u6_object_constants.ts";
 
 export const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
 export const DEFAULT_DROPPED_CLONE_DESPAWN_MS = 10 * 60 * 1000;
 export const LOOT_PICKUP_RESPAWN_MS = 60 * 60 * 1000;
-const OBJECT_TYPES_NON_PICKUP = u6ObjectTypeSet([
-  ...OBJECT_TYPE_DOOR_VALUES,
-  ...OBJECT_TYPE_CHAIR_VALUES,
-  ...OBJECT_TYPE_BED_VALUES,
-  ...OBJECT_TYPE_SOLID_ENV_VALUES,
-  ...OBJECT_TYPE_TOP_DECOR_VALUES,
-  ...OBJECT_TYPE_SIGN_VALUES,
-  ...OBJECT_TYPE_ENV_FIXTURE_VALUES,
-  0x103, /* table leg */
-  0x104, /* shadow */
-  0x105, /* table leg */
-  0x106  /* shadow */
-]);
-const OBJECT_TYPES_ZERO_WEIGHT_TAKEABLE = u6ObjectTypeSet(OBJECT_TYPE_ZERO_WEIGHT_TAKEABLE_VALUES);
 
 export interface PickupRespawnPolicy {
   policy: string;
   respawn_ms: number;
+}
+
+export interface WorldObjectLifecycleExpirationRuntime {
+  changed: boolean;
+  expired_object_keys: string[];
+  matured_respawn_keys: string[];
+}
+
+export interface BaselineTakeCloneRuntime {
+  clone: WorldObject;
+  respawn: {
+    due_at_ms: number;
+    policy: string;
+    respawn_ms: number;
+    source_object_key: string;
+  };
+  source: WorldObject;
+}
+
+export interface SpawnedObjectLifecycleMutationRuntime {
+  changed: boolean;
+  despawn_at_ms: number;
+  dropped_at_ms: number;
 }
 
 export function isSlowRespawnLootObject(obj: Pick<WorldObject, "type"> | null | undefined): boolean {
@@ -61,14 +62,7 @@ export function canTakeWorldObject(
   obj: Pick<WorldObject, "type"> | null | undefined,
   typeWeights?: ArrayLike<number> | null
 ): boolean {
-  const type = Number(obj?.type) & 0x3ff;
-  if (OBJECT_TYPES_NON_PICKUP.has(type)) {
-    return false;
-  }
-  if (typeWeights && (Number(typeWeights[type]) | 0) === 0 && !OBJECT_TYPES_ZERO_WEIGHT_TAKEABLE.has(type)) {
-    return false;
-  }
-  return true;
+  return isU6PortableObjectTypeRuntime(obj?.type, typeWeights);
 }
 
 export function canPersistSnapshotInventoryKey(key: unknown): boolean {
@@ -144,17 +138,38 @@ export function inventoryCloneKeyForTake(
   throw new Error("unable to allocate unique inventory clone key");
 }
 
+export function sourceObjectKeyFromInventoryCloneKeyRuntime(objectKey: unknown): string {
+  const match = /^inv:([^:]+):/.exec(String(objectKey || ""));
+  return match ? match[1] : "";
+}
+
+export function normalizeWorldObjectAmountRuntime(amount: unknown): number {
+  const n = Math.floor(Number(amount) || 0);
+  return Math.max(0, Math.min(0xffff, n));
+}
+
+function sourceObjectKeyForSpawnedObject(obj: Pick<WorldObject, "object_key" | "source_kind" | "source_object_key">): string {
+  const explicit = String(obj.source_object_key || "").trim();
+  if (explicit) {
+    return explicit;
+  }
+  if (!String(obj.source_kind || "").startsWith("spawned")) {
+    return "";
+  }
+  return sourceObjectKeyFromInventoryCloneKeyRuntime(obj.object_key);
+}
+
 export function spawnedWorldObjectDeltaFromObject(obj: WorldObject): SpawnedWorldObjectDelta {
   return {
     object_key: String(obj.object_key || ""),
-    source_object_key: String(obj.source_object_key || ""),
+    source_object_key: sourceObjectKeyForSpawnedObject(obj),
     despawn_at_ms: Number.isFinite(Number(obj.despawn_at_ms)) ? Math.floor(Number(obj.despawn_at_ms)) : 0,
     dropped_at_ms: Number.isFinite(Number(obj.dropped_at_ms)) ? Math.floor(Number(obj.dropped_at_ms)) : 0,
     source_area: Number(obj.source_area) >>> 0,
     source_index: Number(obj.source_index) >>> 0,
     status: Number(obj.status) & 0xff,
     shape_type: Number(obj.shape_type) & 0xffff,
-    amount: Number(obj.amount) & 0xffff,
+    amount: normalizeWorldObjectAmountRuntime(obj.amount),
     type: Number(obj.type) & 0x3ff,
     frame: Number(obj.frame) & 0x3f,
     tile_id: Number(obj.tile_id) & 0xffff,
@@ -169,6 +184,162 @@ export function spawnedWorldObjectDeltaFromObject(obj: WorldObject): SpawnedWorl
 
 export function pushSpawnedWorldObject(state: WorldObjectStateContainer, obj: WorldObject): void {
   state.worldObjects.deltas.spawned.push(spawnedWorldObjectDeltaFromObject(obj));
+}
+
+function reparentContainedChildrenToClone(
+  state: WorldObjectRuntimeState & WorldObjectStateContainer,
+  sourceObjectKey: string,
+  cloneObjectKey: string
+): void {
+  if (!sourceObjectKey || !cloneObjectKey) {
+    return;
+  }
+  for (const child of state.worldObjects.active || []) {
+    const childKey = String(child?.object_key || "");
+    if (!child || childKey === sourceObjectKey) {
+      continue;
+    }
+    if (String(child.holder_kind || "") !== "object") {
+      continue;
+    }
+    const holderRef = String(child.holder_key || child.holder_id || "");
+    if (holderRef !== sourceObjectKey) {
+      continue;
+    }
+    child.holder_id = cloneObjectKey;
+    child.holder_key = cloneObjectKey;
+    const spawned = (state.worldObjects.deltas.spawned || []).find((obj) => String(obj.object_key || "") === childKey);
+    if (spawned) {
+      spawned.holder_id = cloneObjectKey;
+      spawned.holder_key = cloneObjectKey;
+      continue;
+    }
+    if (childKey) {
+      state.worldObjects.deltas.moved[childKey] = {
+        x: Number(child.x) | 0,
+        y: Number(child.y) | 0,
+        z: Number(child.z) | 0,
+        status: Number.isFinite(Number(child.status)) ? (Number(child.status) & 0xff) : null,
+        holder_kind: "object",
+        holder_id: cloneObjectKey,
+        holder_key: cloneObjectKey
+      };
+    }
+  }
+}
+
+export function applyBaselineTakeCloneRuntime(
+  state: WorldObjectRuntimeState & WorldObjectStateContainer,
+  target: WorldObject,
+  actorId: unknown,
+  patch: Partial<WorldObject> | null | undefined,
+  takenAtMs: number
+): BaselineTakeCloneRuntime {
+  const sourceObjectKey = String(target.object_key || "");
+  const clone = {
+    ...target,
+    despawn_at_ms: 0,
+    dropped_at_ms: 0,
+    object_key: inventoryCloneKeyForTake(state, target, actorId),
+    source_object_key: sourceObjectKey,
+    source_kind: "spawned"
+  };
+  Object.assign(clone, patch || {});
+  reparentContainedChildrenToClone(state, sourceObjectKey, String(clone.object_key || ""));
+  pushSpawnedWorldObject(state, clone);
+  state.worldObjects.active.push(clone);
+
+  const policy = pickupRespawnPolicyForObject(target);
+  state.worldObjects.deltas.removed[sourceObjectKey] = true;
+  state.worldObjects.deltas.respawns[sourceObjectKey] = {
+    due_at_ms: takenAtMs + policy.respawn_ms,
+    taken_at_ms: takenAtMs,
+    respawn_ms: policy.respawn_ms,
+    policy: policy.policy
+  };
+  state.worldObjects.active = state.worldObjects.active.filter(
+    (obj) => String(obj.object_key || "") !== sourceObjectKey
+  );
+  return {
+    clone,
+    source: target,
+    respawn: {
+      source_object_key: sourceObjectKey,
+      due_at_ms: takenAtMs + policy.respawn_ms,
+      respawn_ms: policy.respawn_ms,
+      policy: policy.policy
+    }
+  };
+}
+
+export function applySpawnedObjectLifecycleForInteractionRuntime(
+  target: WorldObject,
+  verb: unknown,
+  nowMs: number
+): SpawnedObjectLifecycleMutationRuntime {
+  if (!String(target.source_kind || "").startsWith("spawned")) {
+    return {
+      changed: false,
+      dropped_at_ms: Number(target.dropped_at_ms) > 0 ? Math.floor(Number(target.dropped_at_ms)) : 0,
+      despawn_at_ms: Number(target.despawn_at_ms) > 0 ? Math.floor(Number(target.despawn_at_ms)) : 0
+    };
+  }
+  const action = String(verb || "");
+  const beforeDropped = Number(target.dropped_at_ms) > 0 ? Math.floor(Number(target.dropped_at_ms)) : 0;
+  const beforeDespawn = Number(target.despawn_at_ms) > 0 ? Math.floor(Number(target.despawn_at_ms)) : 0;
+  if (action === "drop") {
+    const droppedAtMs = Math.max(0, Math.floor(Number(nowMs) || 0));
+    target.dropped_at_ms = droppedAtMs;
+    target.despawn_at_ms = droppedAtMs + DEFAULT_DROPPED_CLONE_DESPAWN_MS;
+  } else if (action === "take" || action === "put" || action === "equip") {
+    target.dropped_at_ms = 0;
+    target.despawn_at_ms = 0;
+  }
+  const afterDropped = Number(target.dropped_at_ms) > 0 ? Math.floor(Number(target.dropped_at_ms)) : 0;
+  const afterDespawn = Number(target.despawn_at_ms) > 0 ? Math.floor(Number(target.despawn_at_ms)) : 0;
+  return {
+    changed: beforeDropped !== afterDropped || beforeDespawn !== afterDespawn,
+    dropped_at_ms: afterDropped,
+    despawn_at_ms: afterDespawn
+  };
+}
+
+export function expireDueWorldObjectLifecycleDeltasRuntime(
+  state: WorldObjectStateContainer,
+  nowMs: number
+): WorldObjectLifecycleExpirationRuntime {
+  const deltas = state.worldObjects.deltas;
+  const respawns = deltas.respawns || {};
+  const spawned = deltas.spawned || [];
+  const maturedRespawnKeys = Object.keys(respawns).filter((key) => Number(respawns[key]?.due_at_ms) <= nowMs);
+  const expiredObjectKeys = spawned
+    .filter((obj) => {
+      const despawnAtMs = Number(obj.despawn_at_ms) || 0;
+      return despawnAtMs > 0 && despawnAtMs <= nowMs;
+    })
+    .map((obj) => String(obj.object_key || ""))
+    .filter(Boolean);
+  const activeSpawned = spawned.filter((obj) => {
+    const despawnAtMs = Number(obj.despawn_at_ms) || 0;
+    return despawnAtMs <= 0 || despawnAtMs > nowMs;
+  });
+  if (maturedRespawnKeys.length === 0 && activeSpawned.length === spawned.length) {
+    return {
+      changed: false,
+      expired_object_keys: [],
+      matured_respawn_keys: []
+    };
+  }
+  for (const key of maturedRespawnKeys) {
+    delete deltas.removed[key];
+    delete deltas.respawns[key];
+  }
+  deltas.spawned = activeSpawned;
+  return {
+    changed: true,
+    expired_object_keys: expiredObjectKeys,
+    matured_respawn_keys: maturedRespawnKeys
+  };
 }
 
 export type WorldObjectApiCommonPayload = {
@@ -260,7 +431,7 @@ export function worldObjectTakeInventoryPayload(
 ): WorldObjectTakeInventoryPayload {
   return {
     ...worldObjectApiCommonPayload(obj),
-    amount: Number(obj.amount) & 0xffff,
+    amount: normalizeWorldObjectAmountRuntime(obj.amount),
     inventory_key: inventoryKeyForWorldObject(obj),
     source_object_key: sourceObject ? String(sourceObject.object_key || "") : "",
     source_kind: String(obj.source_kind || "")
@@ -268,20 +439,13 @@ export function worldObjectTakeInventoryPayload(
 }
 
 function sourceObjectKeyForClone(obj: WorldObject): string {
-  const explicit = String(obj.source_object_key || "").trim();
-  if (explicit) {
-    return explicit;
-  }
-  if (String(obj.source_kind || "") !== "spawned") {
-    return "";
-  }
-  return String(obj.object_key || "").split(":")[1] || "";
+  return sourceObjectKeyForSpawnedObject(obj);
 }
 
 export function worldObjectInventoryPayload(obj: WorldObject): WorldObjectInventoryPayload {
   return {
     ...worldObjectApiCommonPayload(obj),
-    amount: Number(obj.amount) & 0xffff,
+    amount: normalizeWorldObjectAmountRuntime(obj.amount),
     inventory_key: inventoryKeyForWorldObject(obj),
     source_object_key: sourceObjectKeyForClone(obj),
     source_kind: String(obj.source_kind || "")

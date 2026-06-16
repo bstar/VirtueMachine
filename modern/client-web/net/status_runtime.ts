@@ -1,3 +1,5 @@
+import { normalizeIntroPhaseRuntime } from "./world_runtime.ts";
+
 export function deriveNetIndicatorState(
   level: string,
   isAuthenticated: boolean
@@ -48,6 +50,82 @@ export function deriveTopNetStatusText(level: string, text: string): string {
   return `${String(level || "idle")} - ${String(text || "")}`;
 }
 
+export function shouldShowInGameServerBrokenRuntime(args: {
+  isAuthenticated: boolean;
+  statusLevel: unknown;
+}): boolean {
+  if (!args.isAuthenticated) {
+    return false;
+  }
+  const level = String(args.statusLevel || "").trim().toLowerCase();
+  return level === "offline" || level === "error";
+}
+
+export type NetStatusPresentationRuntime = {
+  level: "idle" | "error" | "offline" | "online" | "sync" | "connecting";
+  text: string;
+};
+
+export function netStatusNotLoggedInRuntime(): NetStatusPresentationRuntime {
+  return {
+    level: "idle",
+    text: "Not logged in."
+  };
+}
+
+export function netStatusSessionExpiredRuntime(): NetStatusPresentationRuntime {
+  return {
+    level: "idle",
+    text: "Session expired. Please log in."
+  };
+}
+
+export function netStatusChooseAccountRuntime(): NetStatusPresentationRuntime {
+  return {
+    level: "idle",
+    text: "Choose an account in Account Setup, then login."
+  };
+}
+
+export function netStatusAutoLoginRuntime(): NetStatusPresentationRuntime {
+  return {
+    level: "connecting",
+    text: "Auto-login..."
+  };
+}
+
+export function deriveIntroPhaseUiModelRuntime(phase: unknown): {
+  normalized: "pre_intro" | "post_intro";
+  selectValue: "pre_intro" | "post_intro";
+  statText: "pre_intro" | "post_intro";
+} {
+  const normalized = normalizeIntroPhaseRuntime(phase);
+  return {
+    normalized,
+    selectValue: normalized,
+    statText: normalized
+  };
+}
+
+export type IntroPhaseElementsRuntime = {
+  netIntroPhaseSelect?: HTMLSelectElement | null;
+  statIntroPhase?: HTMLElement | null;
+};
+
+export function renderIntroPhaseUiRuntime(
+  phase: unknown,
+  elements: IntroPhaseElementsRuntime
+): ReturnType<typeof deriveIntroPhaseUiModelRuntime> {
+  const model = deriveIntroPhaseUiModelRuntime(phase);
+  if (elements.statIntroPhase) {
+    elements.statIntroPhase.textContent = model.statText;
+  }
+  if (elements.netIntroPhaseSelect) {
+    elements.netIntroPhaseSelect.value = model.selectValue;
+  }
+  return model;
+}
+
 export function renderNetSessionStatRuntime(
   statNetSession: HTMLElement | null | undefined,
   args: {
@@ -93,6 +171,61 @@ export type NetStatusElementsRuntime = {
   netLoginButton?: HTMLButtonElement | null;
 };
 
+export type NetSessionUiElementsRuntime = NetStatusElementsRuntime & IntroPhaseElementsRuntime;
+
+export function deriveCriticalRecoveryStatTextRuntime(args: {
+  lastMaintenanceTick?: unknown;
+  recoveryEventCount?: unknown;
+}): string {
+  const count = Number(args.recoveryEventCount) >>> 0;
+  const tick = Number(args.lastMaintenanceTick);
+  const suffix = Number.isFinite(tick) && tick >= 0 ? ` @${tick | 0}` : "";
+  return `${count}${suffix}`;
+}
+
+export type NetLogoutDiagRuntime = {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+};
+
+export function netLogoutDiagRuntime(args: {
+  saveErr?: unknown;
+  leaveErr?: unknown;
+  errorMessage: (err: unknown) => string;
+}): NetLogoutDiagRuntime {
+  const parts: string[] = [];
+  if (args.saveErr) {
+    parts.push(`position save failed: ${args.errorMessage(args.saveErr)}`);
+  }
+  if (args.leaveErr) {
+    parts.push(`presence cleanup failed: ${args.errorMessage(args.leaveErr)}`);
+  }
+  if (parts.length > 0) {
+    return {
+      diagClass: "diag warn",
+      diagText: `Logged out with warnings (${parts.join("; ")}).`
+    };
+  }
+  return {
+    diagClass: "diag ok",
+    diagText: "Logged out. Position saved and presence cleared."
+  };
+}
+
+export function renderCriticalRecoveryStatRuntime(
+  statCriticalRecoveries: HTMLElement | null | undefined,
+  args: {
+    lastMaintenanceTick?: unknown;
+    recoveryEventCount?: unknown;
+  }
+): string {
+  const text = deriveCriticalRecoveryStatTextRuntime(args);
+  if (statCriticalRecoveries) {
+    statCriticalRecoveries.textContent = text;
+  }
+  return text;
+}
+
 export function renderNetStatusViewRuntime(args: {
   stateNet: NetStatusStateRuntime;
   isAuthenticated: boolean;
@@ -134,6 +267,36 @@ export function applyNetStatusRuntime(args: {
     isAuthenticated: args.isAuthenticated,
     elements: args.elements
   });
+}
+
+export function applyNetStatusPresentationRuntime(args: {
+  stateNet: NetStatusStateRuntime;
+  presentation: { level: string; text: string };
+  isAuthenticated: boolean;
+  elements: NetStatusElementsRuntime;
+}): void {
+  applyNetStatusRuntime({
+    stateNet: args.stateNet,
+    level: args.presentation.level,
+    text: args.presentation.text,
+    isAuthenticated: args.isAuthenticated,
+    elements: args.elements
+  });
+}
+
+export function renderNetSessionUiRuntime(args: {
+  stateNet: NetStatusStateRuntime & { introPhase?: unknown };
+  isAuthenticated: boolean;
+  elements: NetSessionUiElementsRuntime;
+}): ReturnType<typeof deriveIntroPhaseUiModelRuntime> {
+  renderNetStatusViewRuntime({
+    stateNet: args.stateNet,
+    isAuthenticated: args.isAuthenticated,
+    elements: args.elements
+  });
+  const intro = renderIntroPhaseUiRuntime(args.stateNet.introPhase, args.elements);
+  args.stateNet.introPhase = intro.normalized;
+  return intro;
 }
 
 export function pulseNetIndicatorRuntime(args: {

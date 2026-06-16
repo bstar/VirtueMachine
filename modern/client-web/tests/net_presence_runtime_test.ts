@@ -2,14 +2,54 @@ import assert from "node:assert/strict";
 import {
   applyAuthoritativeNpcStatesRuntime,
   applyAuthoritativeWorldClockToSim,
+  authoritativeWorldClockExtrasRuntime,
   authoritativeNpcStateRowsFromJsonRuntime,
+  createPresenceSessionIdRuntime,
   performPresenceHeartbeat,
   performPresencePoll,
   performWorldClockPoll,
+  presenceHeartbeatPayloadRuntime,
   projectRemotePresencePlayers,
   remotePresencePlayersFromJsonRuntime,
   type AuthoritativeNpcEntityRuntime
 } from "../net/presence_runtime.ts";
+
+assert.equal(createPresenceSessionIdRuntime({
+  randomUUID: () => " 550e8400-e29b-41d4-a716-446655440000 "
+}), "550e8400-e29b-41d4-a716-446655440000");
+assert.equal(createPresenceSessionIdRuntime({
+  getRandomValues: (bytes) => {
+    bytes.set([0, 1, 2, 3, 0xaa, 0xff]);
+    return bytes;
+  },
+  randomUUID: () => ""
+}), "sess_00010203aaff00000000000000000000");
+assert.match(createPresenceSessionIdRuntime({
+  getRandomValues: (bytes) => bytes,
+  nowMs: () => 123456,
+  randomUUID: () => ""
+}), /^sess_2n9c_[0-9a-z]+$/);
+assert.deepEqual(presenceHeartbeatPayloadRuntime({
+  avatarFacingDx: "1",
+  avatarFacingDy: -1,
+  characterName: "",
+  mapX: 307.9,
+  mapY: "352",
+  mapZ: 0,
+  mode: "avatar",
+  sessionId: "s1",
+  tick: -1
+}), {
+  session_id: "s1",
+  character_name: "Avatar",
+  map_x: 307,
+  map_y: 352,
+  map_z: 0,
+  facing_dx: 1,
+  facing_dy: -1,
+  tick: 0xffffffff,
+  mode: "avatar"
+});
 
 const decodedRemotePlayers = remotePresencePlayersFromJsonRuntime([
   { session_id: "self-session", user_id: "u1", username: "avatar", updated_at_ms: 10 },
@@ -87,6 +127,28 @@ assert.deepEqual(projected.map((p) => p.session_id), ["s3", "s4"]);
     date_y: 8
   }, (next) => { applied = next; });
   assert.deepEqual(applied, { tick: 123, time_m: 4, time_h: 5, date_d: 6, date_m: 7, date_y: 8 });
+}
+{
+  const npcStates = [{ npc_id: 1 }];
+  const npcOverrides = [{ npc_id: 2 }];
+  assert.deepEqual(authoritativeWorldClockExtrasRuntime({
+    intro_state: { phase: "pre_intro" },
+    npc_overrides: npcOverrides,
+    npc_states: npcStates
+  }, "post_intro"), {
+    introPhase: "pre_intro",
+    npcRows: npcStates
+  });
+  assert.deepEqual(authoritativeWorldClockExtrasRuntime({
+    npc_overrides: npcOverrides
+  }, "pre_intro"), {
+    introPhase: "pre_intro",
+    npcRows: npcOverrides
+  });
+  assert.deepEqual(authoritativeWorldClockExtrasRuntime(null, ""), {
+    introPhase: "post_intro",
+    npcRows: undefined
+  });
 }
 
 {

@@ -3,6 +3,7 @@ import {
   doorStateKeyRuntime,
   doorToggleMaskRuntime,
   doorToggleMessageRuntime,
+  facingDoorCellRuntime,
   isCloseableDoorTypeRuntime,
   isDoorFrameOpenRuntime,
   isDoorToggledRuntime,
@@ -18,6 +19,16 @@ assert.equal(isCloseableDoorTypeRuntime(0x100), false);
 assert.equal(doorStateKeyRuntime(door), "10,20,0,7");
 assert.equal(doorToggleMaskRuntime(0x129), 4);
 assert.equal(doorToggleMaskRuntime(0x14e), 1);
+assert.deepEqual(facingDoorCellRuntime({
+  world: { map_x: 10, map_y: 20, map_z: 1 },
+  facingDx: -1,
+  facingDy: 0
+}), { x: 9, y: 20, z: 1 });
+assert.deepEqual(facingDoorCellRuntime({
+  world: { map_x: "10.9", map_y: "20.9", map_z: "2.9" },
+  facingDx: "1.9",
+  facingDy: "-1.9"
+}), { x: 11, y: 19, z: 2 });
 
 const sim = {};
 assert.equal(isDoorToggledRuntime(sim, door), false);
@@ -63,6 +74,7 @@ assert.equal(
   assert.equal(result.toggled, true);
   assert.equal(result.toggled && result.beforeOpen, false);
   assert.equal(result.toggled && result.afterOpen, true);
+  assert.equal(result.toggled && result.diagClass, "diag ok");
   assert.equal(result.toggled && result.message, "Opened door at 4,5,0");
   assert.equal(isDoorToggledRuntime(sim, closedDoor), true);
 }

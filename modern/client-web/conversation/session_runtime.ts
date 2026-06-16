@@ -71,6 +71,35 @@ export interface ConversationPaginationOptions {
   nowMs?: number;
 }
 
+export function legacyLedgerPushOptionsRuntime(args: {
+  maxChars: unknown;
+  maxLines: unknown;
+  nowMs?: unknown;
+  tick?: unknown;
+}): PushLedgerOptions {
+  return {
+    maxChars: Math.max(1, Number(args.maxChars) | 0),
+    maxLines: Math.max(1, Number(args.maxLines) | 0),
+    tick: Number(args.tick) >>> 0,
+    nowMs: Number(args.nowMs) || Date.now()
+  };
+}
+
+export function legacyLedgerPaginationOptionsRuntime(args: {
+  maxChars: unknown;
+  maxLines: unknown;
+  nowMs?: unknown;
+  tick?: unknown;
+}): ConversationPaginationOptions {
+  const maxLines = Math.max(1, Number(args.maxLines) | 0);
+  return {
+    pageMaxLines: Math.max(1, maxLines - 1),
+    maxChars: Math.max(1, Number(args.maxChars) | 0),
+    tick: Number(args.tick) >>> 0,
+    nowMs: Number(args.nowMs) || Date.now()
+  };
+}
+
 export interface ConversationReply {
   kind: string;
   lines?: ConversationReplyLine[];
@@ -127,6 +156,36 @@ export interface BeginLegacyConversationSessionResult {
   openingBlock: string[];
   targetName: string;
   desc: string;
+}
+
+export type LegacyConversationDiagPresentationRuntime = {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+};
+
+export function legacyConversationOkDiagRuntime(diagText: unknown): LegacyConversationDiagPresentationRuntime | null {
+  const text = String(diagText || "").trim();
+  if (!text) {
+    return null;
+  }
+  return {
+    diagClass: "diag ok",
+    diagText: text
+  };
+}
+
+export function legacyConversationEndedDiagRuntime(): LegacyConversationDiagPresentationRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: "Conversation ended."
+  };
+}
+
+export function legacyConversationReplyFailedDiagRuntime(message: unknown): LegacyConversationDiagPresentationRuntime {
+  return {
+    diagClass: "diag warn",
+    diagText: `Conversation reply failed: ${String(message || "unknown error")}`
+  };
 }
 
 function normalizedConversationLines(lines: unknown): string[] {

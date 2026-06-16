@@ -3,14 +3,16 @@ import {
   OBJECT_TYPE_CLOSEABLE_DOOR_VALUES,
   OBJECT_TYPE_DOOR_VALUES,
   OBJECT_TYPE_SOLID_ENV_VALUES,
-  OBJECT_TYPE_TOP_DECOR_VALUES,
   u6ObjectTypeSet
 } from "../common/u6_object_constants.ts";
+import {
+  isU6ImplicitSolidObjectTileRuntime,
+  u6ObjectFootprintTilesRuntime
+} from "../common/u6_object_footprint.ts";
 import type { NpcStepTarget, WorldObject, WorldObjectRuntimeState } from "./world_object_types.ts";
 
 const OBJECT_TYPES_DOOR = u6ObjectTypeSet(OBJECT_TYPE_DOOR_VALUES);
 const OBJECT_TYPES_CLOSEABLE_DOOR = u6ObjectTypeSet(OBJECT_TYPE_CLOSEABLE_DOOR_VALUES);
-const OBJECT_TYPES_TOP_DECOR = u6ObjectTypeSet(OBJECT_TYPE_TOP_DECOR_VALUES);
 const OBJECT_TYPES_SOLID_ENV = u6ObjectTypeSet(OBJECT_TYPE_SOLID_ENV_VALUES);
 
 export interface ObjectFootprintCell {
@@ -21,25 +23,18 @@ export interface ObjectFootprintCell {
 }
 
 export function objectFootprintCells(obj: WorldObject, tileFlags: Uint8Array | null | undefined): ObjectFootprintCell[] {
-  const wrap10 = (v: unknown) => Number(v) & 0x3ff;
-  const x = wrap10(obj.x);
-  const y = wrap10(obj.y);
   const z = Number(obj.z) | 0;
-  const tileId = Number(obj.tile_id) & 0xffff;
-  const out = [{ x, y, z, tile_id: tileId }];
-  const tf = tileFlags ? (tileFlags[tileId & 0x07ff] ?? 0) : 0;
-  const dblH = (tf & 0x80) !== 0;
-  const dblV = (tf & 0x40) !== 0;
-  if (dblH) {
-    out.push({ x: wrap10(x - 1), y, z, tile_id: (tileId - 1) & 0xffff });
-  }
-  if (dblV) {
-    out.push({ x, y: wrap10(y - 1), z, tile_id: (tileId - (dblH ? 2 : 1)) & 0xffff });
-  }
-  if (dblH && dblV) {
-    out.push({ x: wrap10(x - 1), y: wrap10(y - 1), z, tile_id: (tileId - 3) & 0xffff });
-  }
-  return out;
+  return u6ObjectFootprintTilesRuntime(
+    obj.x,
+    obj.y,
+    obj.tile_id,
+    (tileId) => tileFlags ? (tileFlags[tileId & 0x07ff] ?? 0) : 0
+  ).map((cell) => ({
+    x: cell.x,
+    y: cell.y,
+    z,
+    tile_id: cell.tileId
+  }));
 }
 
 export function objectAnchorIndexKey(x: unknown, y: unknown, z: unknown): string {
@@ -105,24 +100,11 @@ function isSolidEnvObject(obj: WorldObject): boolean {
 }
 
 function isImplicitSolidObjectTile(obj: WorldObject, tileId: unknown, tileFlags: Uint8Array | null | undefined): boolean {
-  const type = Number(obj?.type) & 0x03ff;
-  if (OBJECT_TYPES_DOOR.has(type)) {
-    return false;
-  }
-  const tf = tileFlags ? (tileFlags[Number(tileId) & 0x07ff] ?? 0) : 0;
-  if ((tf & 0x20) !== 0) {
-    return true;
-  }
-  if ((tf & 0xc0) !== 0) {
-    if ((tf & 0x10) !== 0) {
-      return false;
-    }
-    if (OBJECT_TYPES_TOP_DECOR.has(type)) {
-      return false;
-    }
-    return true;
-  }
-  return false;
+  return isU6ImplicitSolidObjectTileRuntime(
+    obj?.type,
+    tileId,
+    (rawTileId) => tileFlags ? (tileFlags[rawTileId & 0x07ff] ?? 0) : 0
+  );
 }
 
 export function objectBlocksCell(obj: WorldObject, tx: number, ty: number, tz: number, tileFlags: Uint8Array | null | undefined): boolean {

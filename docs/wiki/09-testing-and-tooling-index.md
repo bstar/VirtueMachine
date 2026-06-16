@@ -30,7 +30,30 @@ Use these when hover reports indicate source/insertion ordering anomalies.
 
 ## CI Gate
 
+- `npm test`: top-level quality gate (`typecheck`, broad TypeScript unit tests, net contract wrapper)
+- `npm run typecheck`: TypeScript project checks only
+- `npm run test:ts`: broad Node test runner over client-web and net TypeScript tests
+- `npm run test:net-contracts`: net/sim-core bridge contract wrapper
+- `npm run test:ci-required`: heavier CI gate wrapper for sim-core, parity, strict contracts, and focused client tools
+- `npm run smoke:browser:movement`: optional Chrome/Chromium smoke against the local dev stack; validates the live `__vmGetUiProbe().canonical_runtime.movement` surface, drives repeated movement when a session starts, and requires active walk presentation plus landed position changes in strict mode
+- `npm run release:check`: release checklist wrapper; runs `npm test`, `test:ci-required`, and strict browser movement smoke when the local web/net stack is running
 - `modern/tools/ci_required_tests.sh`
+- `modern/tools/release_check.sh`
+
+Use `npm test` before claiming a broad quality/report-card improvement. Use the specialized
+tools below to isolate a narrower suspected layer. Use `npm run test:ci-required` before
+large merges or when touching shared render, sim-core, networking, or persistence surfaces.
+Use `./modern/tools/release_check.sh --browser-smoke` after starting `dev_stack.sh` when
+movement, input, startup, or browser-only behavior is in scope.
+
+Module note: the repo intentionally contains both ESM-style TypeScript tests and CommonJS
+server bridge modules. Do not set package-wide `"type": "module"` without first migrating the
+CommonJS bridge/server files; the TypeScript test command suppresses Node's module-less warning
+explicitly for readable TAP output.
+
+Tools note: `tsconfig.tools.strict.json` currently covers release/probe tooling (`browser_movement_probe_smoke.ts`
+and `generate_ui_probe_fixture.ts`). Older one-off migration/provenance scripts remain outside that
+strict lane until they are converted from global scripts into typed modules.
 
 ## Net/World Ops
 

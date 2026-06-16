@@ -35,7 +35,7 @@ assert.equal(objectBlocksCell(bed, 31, 40, 0, flags), false);
 const table: WorldObject = {
   object_key: "a00i002",
   coord_use: OBJ_COORD_USE_LOCXYZ,
-  type: 0x097,
+  type: 0x0fa,
   frame: 0,
   tile_id: 0x300,
   x: 50,

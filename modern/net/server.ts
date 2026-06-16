@@ -27,7 +27,6 @@ import type {
   EmailDeliveryLogRuntime,
   EmailDeliveryMetaRuntime
 } from "./email_runtime.ts";
-import type { JsonValueRuntime } from "./server_file_store.ts";
 import type { U6MapRuntime as U6MapRuntimeType } from "./world_map_runtime.ts";
 import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
 import type { ConversationSessionMapRuntime } from "./conversation_runtime_types.ts";
@@ -38,12 +37,6 @@ const path = require("node:path");
 const nodeCrypto = require("node:crypto");
 const net = require("node:net");
 const tls = require("node:tls");
-const {
-  RUNTIME_PROFILE_CANONICAL_STRICT,
-  RUNTIME_PROFILES,
-  normalizeRuntimeProfile,
-  parseRuntimeExtensionsHeader
-} = require("../common/runtime_contract.ts");
 const {
   OBJ_COORD_USE_LOCXYZ,
   OBJ_COORD_USE_CONTAINED,
@@ -61,12 +54,11 @@ const {
   refreshWorldObjectIndexes
 } = require("./world_object_collision.ts");
 const {
+  applyBaselineTakeCloneRuntime,
+  applySpawnedObjectLifecycleForInteractionRuntime,
   canTakeWorldObject,
-  DEFAULT_DROPPED_CLONE_DESPAWN_MS,
-  inventoryCloneKeyForTake,
+  expireDueWorldObjectLifecycleDeltasRuntime,
   isBaselineWorldObject,
-  pickupRespawnPolicyForObject,
-  pushSpawnedWorldObject,
   sanitizeSnapshotInventoryBase64,
   worldObjectInteractionPayload,
   worldObjectInventoryPayload,
@@ -101,43 +93,65 @@ const {
 } = require("./email_runtime.ts");
 const {
   ensureUserSchemaRuntime,
-  findUserByUsernameRuntime,
   findUserForBearerTokenRuntime,
+  changeAccountPasswordRuntime,
+  characterCreatedPayloadRuntime,
+  characterSnapshotPayloadRuntime,
   issueEmailVerificationCodeRuntime,
-  issueTokenRuntime,
   isValidEmailRuntime,
   listUserCharactersRuntime,
-  newUserIdRuntime,
+  loginAccountRuntime,
   normalizeEmailRuntime,
   normalizeServerCharactersRuntime,
   normalizeServerTokensRuntime,
   normalizeServerUsersRuntime,
-  normalizeUsernameRuntime,
   parseAuthHeaderRuntime,
-  sixDigitEmailVerificationCodeRuntime
+  passwordRecoveryAccountRuntime,
+  publicUserPayloadRuntime,
+  setAccountEmailRuntime,
+  secureSixDigitEmailVerificationCodeRuntime,
+  validateCharacterNameRuntime,
+  verifyAccountEmailRuntime
 } = require("./server_account_runtime.ts");
 const {
   advanceWorldClockMinuteRuntime,
   buildPresenceHeartbeatRowRuntime,
-  clampIntRuntime,
   computeSnapshotHashRuntime,
+  criticalMaintenancePayloadRuntime,
+  criticalPolicyPayloadRuntime,
   defaultCriticalPolicyRuntime,
   defaultWorldInteractionLogRuntime,
   defaultWorldClockRuntime,
   defaultWorldSnapshotRuntime,
+  introStatePayloadRuntime,
+  introStateSavedPayloadRuntime,
   normalizeCriticalPolicyRuntime,
   normalizePresenceRowsRuntime,
   normalizeWorldInteractionLogRuntime,
   normalizeWorldClockRuntime,
   normalizeWorldSnapshotRuntime,
-  presenceRowsPayloadRuntime,
-  queryIntOrRuntime,
+  presenceHeartbeatAckPayloadRuntime,
+  presenceListPayloadRuntime,
+  presenceLeaveAckPayloadRuntime,
   recordWorldInteractionEventRuntime,
   removePresenceForUserRuntime,
   removePresenceSessionRuntime,
   prunePresenceRowsRuntime,
+  runtimeContractFromHeadersRuntime,
+  runtimeContractPayloadRuntime,
+  serverHealthPayloadRuntime,
   runCriticalItemMaintenanceRuntime,
-  upsertPresenceRowRuntime
+  snapshotSaveRuntime,
+  upsertPresenceRowRuntime,
+  validateCriticalPolicyBodyRuntime,
+  validateIntroPhaseRuntime,
+  validatePresenceSessionIdRuntime,
+  validateWorldObjectDropPositionRuntime,
+  worldClockPayloadRuntime,
+  worldObjectsQueryRuntime,
+  worldSnapshotReadPayloadRuntime,
+  worldSnapshotSavedPayloadRuntime,
+  worldObjectBaselineMutationResponseRuntime
 } = require("./server_runtime.ts");
 const {
   appendJsonLineRuntime,
@@ -147,7 +161,8 @@ const {
   writeJsonFileRuntime
 } = require("./server_file_store.ts");
 const {
-  readJsonBodyRuntime,
+  readJsonBodyOrErrorRuntime,
+  sendCorsPreflightRuntime,
   sendErrorRuntime: sendError,
   sendJsonRuntime: sendJson
 } = require("./server_http_runtime.ts");
@@ -222,8 +237,6 @@ type ServerState = {
   worldSnapshot: WorldSnapshotRuntime;
 };
 
-type CreatedServerUser = ServerUserRuntime & { created_at: string };
-
 type ServerRequestBody = {
   actor_id?: unknown;
   actor_x?: unknown;
@@ -266,74 +279,6 @@ function ensureDataDir() {
   ensureServerDataDirRuntime(DATA_DIR);
 }
 
-function readJsonValidated<T>(filePath: string, fallback: T, validate: (raw: unknown) => T): T {
-  return readJsonFileValidatedRuntime(filePath, fallback, validate);
-}
-
-function writeJson(filePath: string, value: unknown): void {
-  writeJsonFileRuntime(filePath, value);
-}
-
-function appendJsonLine(filePath: string, value: unknown): void {
-  appendJsonLineRuntime(filePath, value);
-}
-
-function readJsonLines(filePath: string): JsonValueRuntime[] {
-  return readJsonLinesRuntime(filePath);
-}
-
-function normalizeUsername(raw: unknown): string {
-  return normalizeUsernameRuntime(raw);
-}
-
-function normalizeEmail(raw: unknown): string {
-  return normalizeEmailRuntime(raw);
-}
-
-function isValidEmail(raw: unknown): boolean {
-  return isValidEmailRuntime(raw);
-}
-
-function newUserId(state: Pick<ServerState, "users">): string {
-  return newUserIdRuntime(state.users, (bytes: number) => nodeCrypto.randomBytes(bytes).toString("hex"));
-}
-
-function findUserByUsername(state: Pick<ServerState, "users">, username: unknown): ServerUserRuntime | null {
-  return findUserByUsernameRuntime(state.users, username);
-}
-
-function ensureUserSchema(user: ServerUserRuntime): void {
-  ensureUserSchemaRuntime(user);
-}
-
-function parseAuth(req: IncomingMessage): string {
-  return parseAuthHeaderRuntime(req.headers.authorization || "");
-}
-
-function runtimeContractFromHeaders(req: IncomingMessage): { extensions: string[]; profile: string } {
-  return {
-    profile: normalizeRuntimeProfile(req?.headers?.["x-vm-runtime-profile"]),
-    extensions: parseRuntimeExtensionsHeader(req?.headers?.["x-vm-runtime-extensions"])
-  };
-}
-
-function runtimeContractSpec(): {
-  default_profile: string;
-  extension_header_format: string;
-  notes: string[];
-  profiles: string[];
-} {
-  return {
-    profiles: [...RUNTIME_PROFILES].sort(),
-    default_profile: RUNTIME_PROFILE_CANONICAL_STRICT,
-    extension_header_format: "comma-separated ids or 'none'",
-    notes: [
-      "unknown/invalid profile falls back to canonical_strict",
-      "unknown/invalid extension tokens are ignored"
-    ]
-  };
-}
-
 function asServerRequestBody(raw: unknown): ServerRequestBody {
   if (!raw || typeof raw !== "object") {
     return {};
@@ -341,29 +286,58 @@ function asServerRequestBody(raw: unknown): ServerRequestBody {
   return raw as ServerRequestBody;
 }
 
-async function readBody(req: IncomingMessage): Promise<ServerRequestBody> {
-  const body = await readJsonBodyRuntime(req, MAX_BODY);
-  return asServerRequestBody(body);
+function characterIdsForUser(state: ServerState, userId: unknown): Set<string> {
+  const uid = String(userId || "").trim();
+  const out = new Set<string>();
+  if (!uid) {
+    return out;
+  }
+  for (const character of state.characters || []) {
+    if (String(character?.user_id || "") !== uid) {
+      continue;
+    }
+    const id = String(character?.character_id || "").trim();
+    if (id) {
+      out.add(id);
+    }
+  }
+  return out;
 }
 
-function defaultCriticalPolicy(): CriticalItemPolicyRuntime[] {
-  return defaultCriticalPolicyRuntime();
+function resolveHeldWorldObjectActorIdRuntime(args: {
+  actorId: string;
+  state: ServerState;
+  target: WorldObject;
+  userId: string;
+  verb: string;
+}): string {
+  const verb = String(args.verb || "");
+  const actorId = String(args.actorId || "").trim();
+  if (actorId !== String(args.userId || "").trim()) {
+    return actorId;
+  }
+  if (verb !== "drop" && verb !== "put" && verb !== "equip") {
+    return actorId;
+  }
+  const holderId = String(args.target?.holder_id || "").trim();
+  if (!holderId) {
+    return actorId;
+  }
+  return characterIdsForUser(args.state, args.userId).has(holderId) ? holderId : actorId;
 }
 
-function defaultWorldClock(): WorldClockRuntime {
-  return defaultWorldClockRuntime();
+async function readBodyOrBadJson(req: IncomingMessage, res: ServerResponse): Promise<{ ok: true; body: ServerRequestBody } | { ok: false }> {
+  return readJsonBodyOrErrorRuntime({
+    req,
+    res,
+    maxBodyBytes: MAX_BODY,
+    coerce: asServerRequestBody,
+    errorMessage
+  });
 }
 
 function defaultWorldSnapshot(): WorldSnapshotRuntime {
   return defaultWorldSnapshotRuntime(nowIso());
-}
-
-function defaultNpcRuntimeState(baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined): NpcRuntimePersistRuntime {
-  return defaultNpcRuntimeStateRuntime(baseline);
-}
-
-function normalizeNpcRuntimeState(raw: unknown, baseline: Pick<NpcBaselineRuntime, "talkFlags"> | null | undefined): NpcRuntimePersistRuntime {
-  return normalizeNpcRuntimeStateRuntime(raw, baseline);
 }
 
 function rebuildNpcRuntimeState(state: ServerState): void {
@@ -372,7 +346,7 @@ function rebuildNpcRuntimeState(state: ServerState): void {
     : INTRO_PHASE_POST;
   const talkFlags = Array.isArray(state?.npcRuntimePersist?.talk_flags)
     ? state.npcRuntimePersist.talk_flags.slice(0, 0x100)
-    : defaultNpcRuntimeState(state.npcBaseline).talk_flags;
+    : defaultNpcRuntimeStateRuntime(state.npcBaseline).talk_flags;
   state.introState = {
     phase: introPhase
   };
@@ -427,18 +401,6 @@ function updateNpcScheduleStates(state: ServerState, elapsedTicks: number): void
   rebuildNpcScheduleIndex(state);
 }
 
-function normalizeWorldClock(raw: unknown): WorldClockRuntime {
-  return normalizeWorldClockRuntime(raw);
-}
-
-function clampInt(n: unknown, lo: number, hi: number): number {
-  return clampIntRuntime(n, lo, hi);
-}
-
-function queryIntOr(url: URL, key: string, fallback: number): number {
-  return queryIntOrRuntime(url, key, fallback);
-}
-
 function buildWorldObjectState(runtimeDir: string, rawDeltas: unknown): WorldObjectState {
   return buildWorldObjectStateFromBaselineRuntime({
     nowIso,
@@ -460,52 +422,22 @@ function worldObjectMeta(state: Pick<ServerState, "worldObjects">) {
 
 function expireDueWorldObjectLifecycles(state: ServerState, nowMs = Date.now()): boolean {
   state.recentExpiredWorldObjectKeys = [];
-  const respawns = state.worldObjects.deltas.respawns || {};
-  const maturedKeys = Object.keys(respawns).filter((key) => Number(respawns[key]?.due_at_ms) <= nowMs);
-  const spawned = state.worldObjects.deltas.spawned || [];
-  const expiredSpawnedKeys = spawned
-    .filter((obj) => {
-      const despawnAtMs = Number(obj.despawn_at_ms) || 0;
-      return despawnAtMs > 0 && despawnAtMs <= nowMs;
-    })
-    .map((obj) => String(obj.object_key || ""))
-    .filter(Boolean);
-  const activeSpawned = spawned.filter((obj) => {
-    const despawnAtMs = Number(obj.despawn_at_ms) || 0;
-    return despawnAtMs <= 0 || despawnAtMs > nowMs;
-  });
-  if (maturedKeys.length === 0 && activeSpawned.length === spawned.length) {
+  const expiration = expireDueWorldObjectLifecycleDeltasRuntime(state, nowMs);
+  if (!expiration.changed) {
     return false;
   }
-  for (const key of maturedKeys) {
-    delete state.worldObjects.deltas.removed[key];
-    delete state.worldObjects.deltas.respawns[key];
-  }
-  state.recentExpiredWorldObjectKeys = expiredSpawnedKeys;
-  state.worldObjects.deltas.spawned = activeSpawned;
+  state.recentExpiredWorldObjectKeys = expiration.expired_object_keys;
   state.worldObjects = buildWorldObjectState(RUNTIME_DIR, state.worldObjects.deltas);
   refreshWorldObjectIndexes(state);
   return true;
 }
 
-function defaultWorldInteractionLog(): WorldInteractionLogRuntime {
-  return defaultWorldInteractionLogRuntime();
-}
-
-function normalizeWorldInteractionLog(raw: unknown): WorldInteractionLogRuntime {
-  return normalizeWorldInteractionLogRuntime(raw);
-}
-
-function recordWorldInteractionEvent(state: Pick<ServerState, "worldInteractionLog">, event: unknown) {
-  return recordWorldInteractionEventRuntime(state, event);
-}
-
 function reloadWorldObjectBaseline(state: ServerState): void {
   state.worldObjects = buildWorldObjectState(RUNTIME_DIR, null);
   state.mapRuntime = new U6MapRuntime(RUNTIME_DIR);
-  writeJson(FILES.worldObjectDeltas, []);
-  state.worldInteractionLog = defaultWorldInteractionLog();
-  writeJson(FILES.worldInteractionLog, state.worldInteractionLog);
+  writeJsonFileRuntime(FILES.worldObjectDeltas, []);
+  state.worldInteractionLog = defaultWorldInteractionLogRuntime();
+  writeJsonFileRuntime(FILES.worldInteractionLog, state.worldInteractionLog);
 }
 
 function advanceWorldClockMinute(clock: Parameters<typeof advanceWorldClockMinuteRuntime>[0]): void {
@@ -520,7 +452,7 @@ function advanceWorldClockMinute(clock: Parameters<typeof advanceWorldClockMinut
 function updateAuthoritativeClock(state: ServerState): WorldClockRuntime {
   const nowMs = Date.now();
   if (!state.worldClock) {
-    state.worldClock = defaultWorldClock();
+    state.worldClock = defaultWorldClockRuntime();
   }
   const clock = state.worldClock;
   let deltaMs = nowMs - Number(clock.last_advanced_at_ms || 0);
@@ -546,26 +478,22 @@ function updateAuthoritativeClock(state: ServerState): WorldClockRuntime {
   return clock;
 }
 
-function normalizePresenceRows(raw: unknown): PresenceRowRuntime[] {
-  return normalizePresenceRowsRuntime(raw);
-}
-
 function loadState(): ServerState {
   ensureDataDir();
-  const rawWorldObjectDeltas = readJsonValidated(FILES.worldObjectDeltas, null, normalizeWorldObjectDeltas);
+  const rawWorldObjectDeltas = readJsonFileValidatedRuntime(FILES.worldObjectDeltas, null, normalizeWorldObjectDeltas);
   const worldObjects = buildWorldObjectState(RUNTIME_DIR, rawWorldObjectDeltas);
   const npcBaseline = loadNpcBaselineRuntime(RUNTIME_DIR);
   const scheduleRuntime = loadScheduleRuntime(RUNTIME_DIR);
   const state: ServerState = {
-    users: readJsonValidated(FILES.users, [], normalizeServerUsersRuntime),
-    tokens: readJsonValidated(FILES.tokens, [], normalizeServerTokensRuntime),
-    characters: readJsonValidated(FILES.characters, [], normalizeServerCharactersRuntime),
-    worldSnapshot: readJsonValidated(FILES.worldSnapshot, defaultWorldSnapshot(), (raw) => normalizeWorldSnapshotRuntime(raw, nowIso())),
-    presence: readJsonValidated(FILES.presence, [], normalizePresenceRows),
-    worldClock: readJsonValidated(FILES.worldClock, defaultWorldClock(), normalizeWorldClock),
+    users: readJsonFileValidatedRuntime(FILES.users, [], normalizeServerUsersRuntime),
+    tokens: readJsonFileValidatedRuntime(FILES.tokens, [], normalizeServerTokensRuntime),
+    characters: readJsonFileValidatedRuntime(FILES.characters, [], normalizeServerCharactersRuntime),
+    worldSnapshot: readJsonFileValidatedRuntime(FILES.worldSnapshot, defaultWorldSnapshot(), (raw: unknown) => normalizeWorldSnapshotRuntime(raw, nowIso())),
+    presence: readJsonFileValidatedRuntime(FILES.presence, [], normalizePresenceRowsRuntime),
+    worldClock: readJsonFileValidatedRuntime(FILES.worldClock, defaultWorldClockRuntime(), normalizeWorldClockRuntime),
     npcBaseline,
     scheduleRuntime,
-    npcRuntimePersist: readJsonValidated(FILES.npcRuntime, defaultNpcRuntimeState(npcBaseline), (raw) => normalizeNpcRuntimeState(raw, npcBaseline)),
+    npcRuntimePersist: readJsonFileValidatedRuntime(FILES.npcRuntime, defaultNpcRuntimeStateRuntime(npcBaseline), (raw: unknown) => normalizeNpcRuntimeStateRuntime(raw, npcBaseline)),
     introState: {
       phase: INTRO_PHASE_POST
     },
@@ -577,17 +505,17 @@ function loadState(): ServerState {
     npcPilotById: new Map<number, ScheduledNpcStateRuntime>(),
     conversationArchives: null,
     conversationSessions: Object.create(null),
-    criticalPolicy: readJsonValidated(FILES.criticalPolicy, defaultCriticalPolicy(), normalizeCriticalPolicyRuntime),
+    criticalPolicy: readJsonFileValidatedRuntime(FILES.criticalPolicy, defaultCriticalPolicyRuntime(), normalizeCriticalPolicyRuntime),
     worldObjects,
     mapRuntime: new U6MapRuntime(RUNTIME_DIR),
     recentExpiredWorldObjectKeys: [],
-    worldInteractionLog: readJsonValidated(FILES.worldInteractionLog, defaultWorldInteractionLog(), normalizeWorldInteractionLog)
+    worldInteractionLog: readJsonFileValidatedRuntime(FILES.worldInteractionLog, defaultWorldInteractionLogRuntime(), normalizeWorldInteractionLogRuntime)
   };
   if (!Array.isArray(state.presence)) {
     state.presence = [];
   }
   for (const user of state.users) {
-    ensureUserSchema(user);
+    ensureUserSchemaRuntime(user);
   }
   rebuildNpcRuntimeState(state);
   ensureConversationRuntimeState(state, RUNTIME_DIR);
@@ -595,16 +523,16 @@ function loadState(): ServerState {
 }
 
 function persistState(state: ServerState): void {
-  writeJson(FILES.users, state.users);
-  writeJson(FILES.tokens, state.tokens);
-  writeJson(FILES.characters, state.characters);
-  writeJson(FILES.worldSnapshot, state.worldSnapshot);
-  writeJson(FILES.presence, state.presence);
-  writeJson(FILES.worldClock, state.worldClock);
-  writeJson(FILES.npcRuntime, state.npcRuntimePersist || defaultNpcRuntimeState(state.npcBaseline));
-  writeJson(FILES.criticalPolicy, state.criticalPolicy);
-  writeJson(FILES.worldObjectDeltas, state.worldObjects.deltas);
-  writeJson(FILES.worldInteractionLog, state.worldInteractionLog || defaultWorldInteractionLog());
+  writeJsonFileRuntime(FILES.users, state.users);
+  writeJsonFileRuntime(FILES.tokens, state.tokens);
+  writeJsonFileRuntime(FILES.characters, state.characters);
+  writeJsonFileRuntime(FILES.worldSnapshot, state.worldSnapshot);
+  writeJsonFileRuntime(FILES.presence, state.presence);
+  writeJsonFileRuntime(FILES.worldClock, state.worldClock);
+  writeJsonFileRuntime(FILES.npcRuntime, state.npcRuntimePersist || defaultNpcRuntimeStateRuntime(state.npcBaseline));
+  writeJsonFileRuntime(FILES.criticalPolicy, state.criticalPolicy);
+  writeJsonFileRuntime(FILES.worldObjectDeltas, state.worldObjects.deltas);
+  writeJsonFileRuntime(FILES.worldInteractionLog, state.worldInteractionLog || defaultWorldInteractionLogRuntime());
 }
 
 function prunePresence(state: ServerState, nowMs = Date.now()): void {
@@ -622,7 +550,7 @@ function upsertPresenceRow(state: ServerState, row: PresenceRowRuntime, nowMs = 
 }
 
 function requireUser(state: ServerState, req: IncomingMessage, res: ServerResponse): ServerUserRuntime | null {
-  const token = parseAuth(req);
+  const token = parseAuthHeaderRuntime(req.headers.authorization || "");
   if (!token) {
     sendError(res, 401, "auth_required", "Missing bearer token");
     return null;
@@ -644,26 +572,9 @@ function requireUser(state: ServerState, req: IncomingMessage, res: ServerRespon
   return auth.user;
 }
 
-function issueToken(state: Pick<ServerState, "tokens">, userId: unknown): string {
-  return issueTokenRuntime(state.tokens, {
-    nowIso: nowIso(),
-    nowMs: Date.now(),
-    randomHex: (bytes: number) => nodeCrypto.randomBytes(bytes).toString("hex"),
-    userId
-  });
-}
-
-function issueEmailVerificationCode(user: ServerUserRuntime): string {
-  return issueEmailVerificationCodeRuntime(user, {
-    code: sixDigitEmailVerificationCodeRuntime(Math.random()),
-    issuedAt: nowIso(),
-    expiresAtMs: Date.now() + (1000 * 60 * 15)
-  });
-}
-
 async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknown, meta: EmailDeliveryMetaRuntime = {}) {
   return deliverEmailRuntime({
-    appendLog: (delivery: EmailDeliveryLogRuntime) => appendJsonLine(FILES.emailOutbox, delivery),
+    appendLog: (delivery: EmailDeliveryLogRuntime) => appendJsonLineRuntime(FILES.emailOutbox, delivery),
     bodyText,
     connect: (options: NetConnectOpts) => net.connect(options),
     errorMessage,
@@ -688,16 +599,8 @@ async function deliverEmail(toEmail: unknown, subject: unknown, bodyText: unknow
   });
 }
 
-function listUserCharacters(state: Pick<ServerState, "characters">, userId: unknown): ServerCharacterRuntime[] {
-  return listUserCharactersRuntime(state.characters, userId);
-}
-
-function computeSnapshotHash(snapshotBase64: unknown): string {
-  return computeSnapshotHashRuntime(snapshotBase64);
-}
-
 function runCriticalItemMaintenance(state: Pick<ServerState, "criticalPolicy">, payload: unknown) {
-  const recoveryEvents = readJsonLines(FILES.recoveriesLog);
+  const recoveryEvents = readJsonLinesRuntime(FILES.recoveriesLog);
   const emitted = runCriticalItemMaintenanceRuntime({
     criticalPolicy: state.criticalPolicy,
     nowIso: nowIso(),
@@ -705,7 +608,7 @@ function runCriticalItemMaintenance(state: Pick<ServerState, "criticalPolicy">, 
     recoveryEvents
   });
   for (const event of emitted) {
-    appendJsonLine(FILES.recoveriesLog, event);
+    appendJsonLineRuntime(FILES.recoveriesLog, event);
   }
   return emitted;
 }
@@ -716,13 +619,7 @@ persistState(state);
 
 const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
-      "access-control-allow-headers": "content-type,authorization,x-vm-runtime-profile,x-vm-runtime-extensions",
-      "access-control-max-age": "86400"
-    });
-    res.end();
+    sendCorsPreflightRuntime(res);
     return;
   }
 
@@ -731,77 +628,47 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   if (req.method === "GET" && url.pathname === "/health") {
     updateAuthoritativeClock(state);
     persistState(state);
-    sendJson(res, 200, {
-      ok: true,
-      service: "virtuemachine-net",
+    sendJson(res, 200, serverHealthPayloadRuntime({
+      emailMode: EMAIL_MODE,
       now: nowIso(),
-      tick: state.worldClock.tick >>> 0,
-      email_mode: EMAIL_MODE,
-      world_objects: worldObjectMeta(state)
-    });
+      tick: state.worldClock.tick,
+      worldObjects: worldObjectMeta(state)
+    }));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/runtime/contract") {
-    sendJson(res, 200, {
-      runtime_contract: runtimeContractSpec()
-    });
+    sendJson(res, 200, runtimeContractPayloadRuntime());
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const username = normalizeUsername(body && body.username);
-    const password = String(body && body.password || "");
-    if (!username || username.length < 2) {
-      sendError(res, 400, "bad_username", "username is required");
-      return;
-    }
-    if (!password) {
-      sendError(res, 400, "bad_password", "password is required");
-      return;
-    }
-
-    let user = findUserByUsername(state, username);
-    if (!user) {
-      const createdUser: CreatedServerUser = {
-        user_id: newUserId(state),
-        username,
-        password_plaintext: password,
-        email: "",
-        email_verified: false,
-        email_verification: null,
-        created_at: nowIso()
-      };
-      user = createdUser;
-      state.users.push(user);
-    } else if (!user.password_plaintext) {
-      user.password_plaintext = password;
-    } else if (user.password_plaintext !== password) {
-      sendError(res, 401, "auth_invalid", "invalid username/password");
+    const body = bodyResult.body;
+    const login = loginAccountRuntime({
+      body,
+      nowIso: nowIso(),
+      nowMs: Date.now(),
+      randomHex: (bytes: number) => nodeCrypto.randomBytes(bytes).toString("hex"),
+      tokens: state.tokens,
+      users: state.users
+    });
+    if (!login.ok) {
+      sendError(res, login.http, login.code, login.message);
       return;
     }
     // Ensure old sessions for this account do not survive re-login as ghost presences.
-    state.presence = removePresenceForUserRuntime(state.presence, user.user_id, {
+    state.presence = removePresenceForUserRuntime(state.presence, login.user.user_id, {
       nowMs: Date.now(),
       ttlMs: PRESENCE_TTL_MS
     });
-    const token = issueToken(state, user.user_id);
     persistState(state);
     sendJson(res, 200, {
-      token,
-      user: {
-        user_id: user.user_id,
-        username: user.username,
-        email: String(user.email || ""),
-        email_verified: !!user.email_verified
-      }
+      token: login.token,
+      user: publicUserPayloadRuntime(login.user, { includeEmail: true, includeEmailVerified: true })
     });
     return;
   }
@@ -811,31 +678,19 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (!user) {
       return;
     }
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const email = normalizeEmail(body && body.email);
-    if (!isValidEmail(email)) {
-      sendError(res, 400, "bad_email", "valid email is required");
+    const body = bodyResult.body;
+    const emailSet = setAccountEmailRuntime(user, body && body.email);
+    if (!emailSet.ok) {
+      sendError(res, emailSet.http, emailSet.code, emailSet.message);
       return;
     }
-    if (email !== normalizeEmail(user.email || "")) {
-      user.email_verified = false;
-      user.email_verification = null;
-    }
-    user.email = email;
     persistState(state);
     sendJson(res, 200, {
-      user: {
-        user_id: user.user_id,
-        username: user.username,
-        email: user.email,
-        email_verified: !!user.email_verified
-      }
+      user: publicUserPayloadRuntime(user, { includeEmail: true, includeEmailVerified: true })
     });
     return;
   }
@@ -845,12 +700,16 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (!user) {
       return;
     }
-    const email = normalizeEmail(user.email || "");
-    if (!isValidEmail(email)) {
+    const email = normalizeEmailRuntime(user.email || "");
+    if (!isValidEmailRuntime(email)) {
       sendError(res, 400, "bad_email", "set a valid email first");
       return;
     }
-    const code = issueEmailVerificationCode(user);
+    const code = issueEmailVerificationCodeRuntime(user, {
+      code: secureSixDigitEmailVerificationCodeRuntime((maxExclusive: number) => nodeCrypto.randomInt(maxExclusive)),
+      issuedAt: nowIso(),
+      expiresAtMs: Date.now() + (1000 * 60 * 15)
+    });
     const pendingVerification = user.email_verification;
     if (!pendingVerification) {
       sendError(res, 500, "verification_not_issued", "email verification could not be issued");
@@ -883,44 +742,26 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (!user) {
       return;
     }
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const code = String(body && body.code || "").trim();
-    if (!code) {
-      sendError(res, 400, "bad_code", "verification code is required");
+    const body = bodyResult.body;
+    const verified = verifyAccountEmailRuntime(user, {
+      code: body && body.code,
+      nowMs: Date.now()
+    });
+    if (!verified.ok) {
+      if (verified.code === "verification_expired") {
+        persistState(state);
+      }
+      sendError(res, verified.http, verified.code, verified.message);
       return;
     }
-    const pending = user.email_verification;
-    if (!pending || typeof pending !== "object") {
-      sendError(res, 409, "no_pending_verification", "no pending email verification");
-      return;
-    }
-    if (Number(pending.expires_at_ms) < Date.now()) {
-      user.email_verification = null;
-      persistState(state);
-      sendError(res, 410, "verification_expired", "verification code expired");
-      return;
-    }
-    if (String(pending.code || "") !== code) {
-      sendError(res, 401, "verification_invalid", "invalid verification code");
-      return;
-    }
-    user.email_verified = true;
-    user.email_verification = null;
     persistState(state);
     sendJson(res, 200, {
       ok: true,
-      user: {
-        user_id: user.user_id,
-        username: user.username,
-        email: String(user.email || ""),
-        email_verified: true
-      }
+      user: publicUserPayloadRuntime(user, { includeEmail: true, includeEmailVerified: true })
     });
     return;
   }
@@ -930,79 +771,49 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (!user) {
       return;
     }
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const oldPassword = String(body && body.old_password || "");
-    const newPassword = String(body && body.new_password || "");
-    if (!oldPassword) {
-      sendError(res, 400, "bad_old_password", "old_password is required");
+    const body = bodyResult.body;
+    const passwordChanged = changeAccountPasswordRuntime(user, {
+      oldPassword: body && body.old_password,
+      newPassword: body && body.new_password
+    });
+    if (!passwordChanged.ok) {
+      sendError(res, passwordChanged.http, passwordChanged.code, passwordChanged.message);
       return;
     }
-    if (!newPassword) {
-      sendError(res, 400, "bad_new_password", "new_password is required");
-      return;
-    }
-    if (String(user.password_plaintext || "") !== oldPassword) {
-      sendError(res, 401, "auth_invalid", "invalid old password");
-      return;
-    }
-    if (oldPassword === newPassword) {
-      sendError(res, 409, "password_unchanged", "new password must differ from old password");
-      return;
-    }
-    user.password_plaintext = newPassword;
     persistState(state);
     sendJson(res, 200, {
       ok: true,
-      user: {
-        user_id: user.user_id,
-        username: user.username
-      }
+      user: publicUserPayloadRuntime(user)
     });
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/auth/recover-password") {
-    const username = normalizeUsername(url.searchParams.get("username") || "");
-    const email = normalizeEmail(url.searchParams.get("email") || "");
-    if (!username || username.length < 2) {
-      sendError(res, 400, "bad_username", "username is required");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      sendError(res, 400, "bad_email", "email is required");
-      return;
-    }
-    const user = findUserByUsername(state, username);
-    if (!user) {
-      sendError(res, 404, "user_not_found", "user not found");
-      return;
-    }
-    if (!user.email_verified) {
-      sendError(res, 403, "email_unverified", "email must be verified before password recovery");
-      return;
-    }
-    if (normalizeEmail(user.email || "") !== email) {
-      sendError(res, 401, "email_mismatch", "email does not match account");
+    const recovery = passwordRecoveryAccountRuntime({
+      username: url.searchParams.get("username") || "",
+      email: url.searchParams.get("email") || "",
+      users: state.users
+    });
+    if (!recovery.ok) {
+      sendError(res, recovery.http, recovery.code, recovery.message);
       return;
     }
     let delivery;
     try {
       delivery = await deliverEmail(
-        email,
+        recovery.email,
         "VirtueMachine Password Recovery",
         [
-          `Your VirtueMachine password is: ${String(user.password_plaintext || "")}`,
+          `Your VirtueMachine password is: ${String(recovery.user.password_plaintext || "")}`,
           "",
           "Security notice: this prototype intentionally does not store passwords securely.",
           "Do not reuse any important or personal password here."
         ].join("\n"),
-        { user_id: user.user_id, template: "recover_password" }
+        { user_id: recovery.user.user_id, template: "recover_password" }
       );
     } catch (err) {
       sendError(res, 502, "email_delivery_failed", errorMessage(err));
@@ -1010,12 +821,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     }
     persistState(state);
     sendJson(res, 200, {
-      user: {
-        user_id: user.user_id,
-        username: user.username,
-        email: String(user.email || ""),
-        email_verified: !!user.email_verified
-      },
+      user: publicUserPayloadRuntime(recovery.user, { includeEmail: true, includeEmailVerified: true }),
       delivered: true,
       delivery_id: `${delivery.at}:${delivery.to}`
     });
@@ -1028,28 +834,26 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
 
   if (req.method === "GET" && url.pathname === "/api/characters") {
-    sendJson(res, 200, { characters: listUserCharacters(state, user.user_id) });
+    sendJson(res, 200, { characters: listUserCharactersRuntime(state.characters, user.user_id) });
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/characters") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const name = String(body && body.name || "").trim();
-    if (!name || name.length < 2) {
-      sendError(res, 400, "bad_character_name", "name is required");
+    const body = bodyResult.body;
+    const nameValidation = validateCharacterNameRuntime(body);
+    if (!nameValidation.ok) {
+      sendError(res, nameValidation.http, nameValidation.code, nameValidation.message);
       return;
     }
 
     const c = {
       character_id: nodeCrypto.randomUUID(),
       user_id: user.user_id,
-      name,
+      name: nameValidation.name,
       created_at: nowIso(),
       updated_at: nowIso(),
       snapshot_meta: {
@@ -1062,63 +866,53 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     };
     state.characters.push(c);
     persistState(state);
-    sendJson(res, 201, {
-      character_id: c.character_id,
-      name: c.name,
-      user_id: c.user_id,
-      snapshot_meta: c.snapshot_meta
-    });
+    sendJson(res, 201, characterCreatedPayloadRuntime(c));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/critical-items/policy") {
-    sendJson(res, 200, { critical_item_policy: state.criticalPolicy });
+    sendJson(res, 200, criticalPolicyPayloadRuntime(state.criticalPolicy));
     return;
   }
 
   if (req.method === "PUT" && url.pathname === "/api/world/critical-items/policy") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    if (!Array.isArray(body && body.critical_item_policy)) {
-      sendError(res, 400, "bad_policy", "critical_item_policy array is required");
+    const body = bodyResult.body;
+    const policyValidation = validateCriticalPolicyBodyRuntime(body);
+    if (!policyValidation.ok) {
+      sendError(res, policyValidation.error.http, policyValidation.error.code, policyValidation.error.message);
       return;
     }
-    state.criticalPolicy = normalizeCriticalPolicyRuntime(body.critical_item_policy);
+    state.criticalPolicy = normalizeCriticalPolicyRuntime(policyValidation.policy);
     persistState(state);
-    sendJson(res, 200, { critical_item_policy: state.criticalPolicy });
+    sendJson(res, 200, criticalPolicyPayloadRuntime(state.criticalPolicy));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/critical-items/maintenance") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
+    const body = bodyResult.body;
     const events = runCriticalItemMaintenance(state, body || {});
-    sendJson(res, 200, { events });
+    sendJson(res, 200, criticalMaintenancePayloadRuntime(events));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/presence/heartbeat") {
-    const runtimeContract = runtimeContractFromHeaders(req);
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const runtimeContract = runtimeContractFromHeadersRuntime(req.headers);
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const sessionId = String(body && body.session_id || "").trim();
-    if (!sessionId || sessionId.length < 8) {
-      sendError(res, 400, "bad_session_id", "session_id is required");
+    const body = bodyResult.body;
+    const sessionValidation = validatePresenceSessionIdRuntime(body);
+    if (!sessionValidation.ok) {
+      sendError(res, sessionValidation.error.http, sessionValidation.error.code, sessionValidation.error.message);
       return;
     }
     const nowMs = Date.now();
@@ -1133,98 +927,80 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     });
     upsertPresenceRow(state, row, nowMs);
     persistState(state);
-    sendJson(res, 200, {
-      ok: true,
+    sendJson(res, 200, presenceHeartbeatAckPayloadRuntime({
       now: nowIso(),
-      tick: clock.tick >>> 0,
-      runtime_contract: runtimeContract
-    });
+      tick: clock.tick,
+      runtimeContract
+    }));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/presence/leave") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const sessionId = String(body && body.session_id || "").trim();
-    if (!sessionId || sessionId.length < 8) {
-      sendError(res, 400, "bad_session_id", "session_id is required");
+    const body = bodyResult.body;
+    const sessionValidation = validatePresenceSessionIdRuntime(body);
+    if (!sessionValidation.ok) {
+      sendError(res, sessionValidation.error.http, sessionValidation.error.code, sessionValidation.error.message);
       return;
     }
     const removed = removePresenceSessionRuntime(state.presence, {
       nowMs: Date.now(),
-      sessionId,
+      sessionId: sessionValidation.sessionId,
       ttlMs: PRESENCE_TTL_MS,
       userId: user.user_id
     });
     state.presence = removed.rows;
     persistState(state);
-    sendJson(res, 200, { ok: true, removed: removed.key });
+    sendJson(res, 200, presenceLeaveAckPayloadRuntime(removed.key));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/clock") {
-    const runtimeContract = runtimeContractFromHeaders(req);
+    const runtimeContract = runtimeContractFromHeadersRuntime(req.headers);
     const clock = updateAuthoritativeClock(state);
     persistState(state);
-    sendJson(res, 200, {
-      tick: clock.tick >>> 0,
-      time_m: clock.time_m >>> 0,
-      time_h: clock.time_h >>> 0,
-      date_d: clock.date_d >>> 0,
-      date_m: clock.date_m >>> 0,
-      date_y: clock.date_y >>> 0,
-      intro_state: state.introState,
-      npc_states: Array.isArray(state.npcStates) ? state.npcStates : [],
-      npc_overrides: Array.isArray(state.npcPilot) ? state.npcPilot : [],
-      runtime_contract: runtimeContract
-    });
+    sendJson(res, 200, worldClockPayloadRuntime({
+      clock,
+      introState: state.introState,
+      npcStates: state.npcStates,
+      npcOverrides: state.npcPilot,
+      runtimeContract
+    }));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/intro-state") {
-    sendJson(res, 200, {
-      intro_state: state.introState
-    });
+    sendJson(res, 200, introStatePayloadRuntime(state.introState));
     return;
   }
 
   if (req.method === "PUT" && url.pathname === "/api/world/intro-state") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const phase = String(body && body.phase || "").trim().toLowerCase();
-    if (phase !== INTRO_PHASE_PRE && phase !== INTRO_PHASE_POST) {
-      sendError(res, 400, "bad_intro_phase", "phase must be one of: pre_intro, post_intro");
+    const phaseValidation = validateIntroPhaseRuntime(bodyResult.body, INTRO_PHASE_PRE, INTRO_PHASE_POST);
+    if (!phaseValidation.ok) {
+      sendError(res, phaseValidation.error.http, phaseValidation.error.code, phaseValidation.error.message);
       return;
     }
     state.npcRuntimePersist = {
       ...state.npcRuntimePersist,
-      intro_phase: phase
+      intro_phase: phaseValidation.phase
     };
     rebuildNpcRuntimeState(state);
     persistState(state);
-    sendJson(res, 200, {
-      ok: true,
-      intro_state: state.introState
-    });
+    sendJson(res, 200, introStateSavedPayloadRuntime(state.introState));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/presence") {
     prunePresence(state);
     persistState(state);
-    sendJson(res, 200, {
-      players: presenceRowsPayloadRuntime(state.presence)
-    });
+    sendJson(res, 200, presenceListPayloadRuntime(state.presence));
     return;
   }
 
@@ -1232,35 +1008,23 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (expireDueWorldObjectLifecycles(state)) {
       persistState(state);
     }
-    const runtimeContract = runtimeContractFromHeaders(req);
-    const hasX = url.searchParams.has("x");
-    const hasY = url.searchParams.has("y");
-    const wx = queryIntOr(url, "x", 0);
-    const wy = queryIntOr(url, "y", 0);
-    const wzRaw = queryIntOr(url, "z", Number.NaN);
-    const hasZ = Number.isFinite(wzRaw);
-    const radius = clampInt(queryIntOr(url, "radius", 0), 0, 16);
-    const limit = clampInt(queryIntOr(url, "limit", 4096), 1, 200000);
-    const projection = String(url.searchParams.get("projection") || "anchor").trim().toLowerCase() === "footprint"
-      ? "footprint"
-      : "anchor";
-    const includeFootprint = String(url.searchParams.get("include_footprint") || "").trim().toLowerCase();
-    const withFootprint = includeFootprint === "1" || includeFootprint === "true" || includeFootprint === "on";
+    const runtimeContract = runtimeContractFromHeadersRuntime(req.headers);
+    const query = worldObjectsQueryRuntime(url);
     const queryableWorldObjects = state.worldObjects.active.filter(
       (obj) => coordUseOfStatus(obj.status) === OBJ_COORD_USE_LOCXYZ
     );
     const selection = selectWorldObjectsViaSimCore({
       objects: queryableWorldObjects,
       tileFlags: state.worldObjects.tileFlags,
-      hasX,
-      x: wx,
-      hasY,
-      y: wy,
-      hasZ,
-      z: wzRaw,
-      radius,
-      projection,
-      limit
+      hasX: query.hasX,
+      x: query.x,
+      hasY: query.hasY,
+      y: query.y,
+      hasZ: query.hasZ,
+      z: query.z,
+      radius: query.radius,
+      projection: query.projection,
+      limit: query.limit
     });
     if (!selection.ok) {
       sendError(res, 500, "world_query_bridge_failed", String(selection.message || "world query bridge failed"));
@@ -1285,7 +1049,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
         root_anchor_key: "",
         blocked_by: "invalid-object"
       };
-      if (withFootprint) {
+      if (query.includeFootprint) {
         return {
           ...obj,
           footprint: objectFootprintCells(obj, state.worldObjects.tileFlags),
@@ -1303,15 +1067,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     });
     sendJson(res, 200, {
       meta: worldObjectMeta(state),
-      query: {
-        x: hasX ? (wx | 0) : null,
-        y: hasY ? (wy | 0) : null,
-        z: hasZ ? (wzRaw | 0) : null,
-        radius: radius | 0,
-        limit: limit | 0,
-        projection,
-        include_footprint: withFootprint
-      },
+      query: query.responseQuery,
       runtime_contract: runtimeContract,
       objects: out
     });
@@ -1322,18 +1078,17 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     if (expireDueWorldObjectLifecycles(state)) {
       persistState(state);
     }
-    const runtimeContract = runtimeContractFromHeaders(req);
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const runtimeContract = runtimeContractFromHeadersRuntime(req.headers);
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
+    const body = bodyResult.body;
     const verb = String(body && body.verb || "").trim().toLowerCase();
     const targetKey = String(body && body.target_key || "").trim();
     const containerKey = String(body && body.container_key || "").trim();
-    const actorId = String(body && body.actor_id || user.user_id || "").trim();
+    const bodyActorId = String(body && body.actor_id || "").trim();
+    let actorId = verb === "talk" ? String(bodyActorId || user.user_id || "").trim() : bodyActorId;
     const npcId = Number(body && body.npc_id) | 0;
     const actorX = Number.isFinite(Number(body && body.actor_x)) ? (Number(body.actor_x) | 0) : null;
     const actorY = Number.isFinite(Number(body && body.actor_y)) ? (Number(body.actor_y) | 0) : null;
@@ -1364,11 +1119,22 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       });
       return;
     }
+    if (!actorId) {
+      sendError(res, 400, "bad_actor_id", "actor_id is required for world object interaction");
+      return;
+    }
     const target = findActiveObjectByKey(state, targetKey);
     if (!target) {
       sendError(res, 404, "object_not_found", "target_key not found");
       return;
     }
+    actorId = resolveHeldWorldObjectActorIdRuntime({
+      actorId,
+      state,
+      target,
+      userId: String(user.user_id || ""),
+      verb
+    });
 
     const actorPos = {
       x: actorX === null ? (target.x | 0) : actorX,
@@ -1401,13 +1167,14 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return;
     }
     if (verb === "drop") {
-      const dropDistance = Math.max(Math.abs((actorPos.x | 0) - (dropPos.x | 0)), Math.abs((actorPos.y | 0) - (dropPos.y | 0)));
-      if (dropDistance > 5 || (actorPos.z | 0) !== (dropPos.z | 0)) {
-        sendError(res, 409, "drop_out_of_range", "drop target is out of range");
-        return;
-      }
-      if (!canNpcStepInto(state, { to_x: dropPos.x, to_y: dropPos.y, to_z: dropPos.z })) {
-        sendError(res, 409, "drop_blocked", "drop target is blocked");
+      const dropValidation = validateWorldObjectDropPositionRuntime({
+        actorPos,
+        dropPos,
+        canStepInto: (step: { to_x: number; to_y: number; to_z: number }) => canNpcStepInto(state, step)
+      });
+      if (!dropValidation.ok) {
+        const error = dropValidation.error;
+        sendError(res, Number(error?.http) || 409, String(error?.code || "drop_invalid"), String(error?.message || "drop target is invalid"));
         return;
       }
     }
@@ -1420,15 +1187,16 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     const targetChain = targetChainResult.value;
     let containerCycle = false;
     let containerChain = null;
+    let explicitSelfContainerCycle = false;
     if (verb === "put" && container) {
+      explicitSelfContainerCycle = String(container.object_key || "") === String(target.object_key || "");
       const containerChainResult = analyzeContainmentChainViaSimCore(state.worldObjects.active, container);
       if (!containerChainResult.ok) {
         sendError(res, 500, "assoc_bridge_failed", String(containerChainResult.message || "assoc-chain bridge failed"));
         return;
       }
       containerChain = containerChainResult.value;
-      containerCycle = String(container.object_key || "") === String(target.object_key || "")
-        || (containerChain.assoc_chain || []).includes(String(target.object_key || ""));
+      containerCycle = explicitSelfContainerCycle || (containerChain.assoc_chain || []).includes(String(target.object_key || ""));
     }
 
     const applied = applyCanonicalWorldInteractionCommand({
@@ -1456,7 +1224,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
           error: {
             code: "interaction_container_cycle",
             message: String(applied.message || "cannot create containment cycle"),
-            blocked_by: String(containerChain?.blocked_by || "")
+            blocked_by: explicitSelfContainerCycle ? "" : String(containerChain?.blocked_by || "")
           }
         });
         return;
@@ -1470,53 +1238,16 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     let respawn = null;
     const baselineTakeCreatesClone = verb === "take" && isBaselineWorldObject(target);
     if (baselineTakeCreatesClone) {
-      const clone = {
-        ...target,
-        despawn_at_ms: 0,
-        dropped_at_ms: 0,
-        object_key: inventoryCloneKeyForTake(state, target, actorId),
-        source_object_key: String(target.object_key || ""),
-        source_kind: "spawned"
-      };
-      Object.assign(clone, applied.patch || {});
-      pushSpawnedWorldObject(state, clone);
-      state.worldObjects.active.push(clone);
-
-      const policy = pickupRespawnPolicyForObject(target);
-      const takenAtMs = Date.now();
-      state.worldObjects.deltas.removed[String(target.object_key)] = true;
-      state.worldObjects.deltas.respawns[String(target.object_key)] = {
-        due_at_ms: takenAtMs + policy.respawn_ms,
-        taken_at_ms: takenAtMs,
-        respawn_ms: policy.respawn_ms,
-        policy: policy.policy
-      };
-      state.worldObjects.active = state.worldObjects.active.filter(
-        (obj) => String(obj.object_key || "") !== String(target.object_key || "")
-      );
-      sourceTarget = target;
-      responseTarget = clone;
-      respawn = {
-        source_object_key: String(target.object_key || ""),
-        due_at_ms: takenAtMs + policy.respawn_ms,
-        respawn_ms: policy.respawn_ms,
-        policy: policy.policy
-      };
+      const takeClone = applyBaselineTakeCloneRuntime(state, target, actorId, applied.patch || {}, Date.now());
+      sourceTarget = takeClone.source;
+      responseTarget = takeClone.clone;
+      respawn = takeClone.respawn;
     } else {
       Object.assign(target, applied.patch || {});
-      if (String(target.source_kind || "").startsWith("spawned")) {
-        if (verb === "drop") {
-          const droppedAtMs = Date.now();
-          target.dropped_at_ms = droppedAtMs;
-          target.despawn_at_ms = droppedAtMs + DEFAULT_DROPPED_CLONE_DESPAWN_MS;
-        } else if (verb === "take" || verb === "put" || verb === "equip") {
-          target.dropped_at_ms = 0;
-          target.despawn_at_ms = 0;
-        }
-      }
+      applySpawnedObjectLifecycleForInteractionRuntime(target, verb, Date.now());
       persistPatchedObject(state, target);
     }
-    const event = recordWorldInteractionEvent(state, {
+    const event = recordWorldInteractionEventRuntime(state, {
       verb,
       actor_id: actorId,
       target_key: String(sourceTarget?.object_key || responseTarget.object_key || ""),
@@ -1584,26 +1315,21 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   if (req.method === "POST" && url.pathname === "/api/world/objects/reset") {
     reloadWorldObjectBaseline(state);
     persistState(state);
-    sendJson(res, 200, {
-      ok: true,
-      reset_at: nowIso(),
-      interaction_checkpoint: {
-        seq: Number(state.worldInteractionLog?.seq || 0) >>> 0,
-        hash: String(state.worldInteractionLog?.checkpoint_hash || "")
-      },
-      meta: worldObjectMeta(state)
-    });
+    sendJson(res, 200, worldObjectBaselineMutationResponseRuntime({
+      at: nowIso(),
+      kind: "reset",
+      meta: worldObjectMeta(state),
+      worldInteractionLog: state.worldInteractionLog
+    }));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/world/conversation/respond") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
+    const body = bodyResult.body;
     const replied = replyAuthoritativeConversation(state, {
       sessionId: String(body && body.session_id || ""),
       typed: String(body && body.typed || "")
@@ -1620,53 +1346,34 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   if (req.method === "POST" && url.pathname === "/api/world/objects/reload-baseline") {
     reloadWorldObjectBaseline(state);
     persistState(state);
-    sendJson(res, 200, {
-      ok: true,
-      reloaded_at: nowIso(),
-      interaction_checkpoint: {
-        seq: Number(state.worldInteractionLog?.seq || 0) >>> 0,
-        hash: String(state.worldInteractionLog?.checkpoint_hash || "")
-      },
-      meta: worldObjectMeta(state)
-    });
+    sendJson(res, 200, worldObjectBaselineMutationResponseRuntime({
+      at: nowIso(),
+      kind: "reload",
+      meta: worldObjectMeta(state),
+      worldInteractionLog: state.worldInteractionLog
+    }));
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/world/snapshot") {
-    sendJson(res, 200, {
-      snapshot_meta: state.worldSnapshot.snapshot_meta,
-      snapshot_base64: state.worldSnapshot.snapshot_base64,
-      updated_at: state.worldSnapshot.updated_at
-    });
+    sendJson(res, 200, worldSnapshotReadPayloadRuntime(state.worldSnapshot));
     return;
   }
 
   if (req.method === "PUT" && url.pathname === "/api/world/snapshot") {
-    let body;
-    try {
-      body = await readBody(req);
-    } catch (err) {
-      sendError(res, 400, "bad_json", errorMessage(err));
+    const bodyResult = await readBodyOrBadJson(req, res);
+    if (!bodyResult.ok) {
       return;
     }
-    const snapshotBase64 = String(body && body.snapshot_base64 || "").trim();
-    if (!snapshotBase64) {
+    const body = bodyResult.body;
+    const saved = snapshotSaveRuntime({ body, nowIso: nowIso() });
+    if (!saved) {
       sendError(res, 400, "bad_snapshot", "snapshot_base64 is required");
       return;
     }
-    state.worldSnapshot.snapshot_base64 = snapshotBase64;
-    state.worldSnapshot.snapshot_meta = {
-      schema_version: Number(body.schema_version) || 1,
-      sim_core_version: String(body.sim_core_version || "unknown"),
-      saved_tick: Number(body.saved_tick) || 0,
-      snapshot_hash: computeSnapshotHash(snapshotBase64)
-    };
-    state.worldSnapshot.updated_at = nowIso();
+    state.worldSnapshot = saved;
     persistState(state);
-    sendJson(res, 200, {
-      snapshot_meta: state.worldSnapshot.snapshot_meta,
-      updated_at: state.worldSnapshot.updated_at
-    });
+    sendJson(res, 200, worldSnapshotSavedPayloadRuntime(state.worldSnapshot));
     return;
   }
 
@@ -1692,45 +1399,35 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
           schema_version: Number(snapshotMeta.schema_version) || 1,
           sim_core_version: String(snapshotMeta.sim_core_version || "unknown"),
           saved_tick: Number(snapshotMeta.saved_tick) || 0,
-          snapshot_hash: computeSnapshotHash(sanitizedSnapshotBase64)
+          snapshot_hash: computeSnapshotHashRuntime(sanitizedSnapshotBase64)
         };
         character.updated_at = nowIso();
         persistState(state);
       }
-      sendJson(res, 200, {
-        character_id: character.character_id,
-        snapshot_meta: character.snapshot_meta,
-        snapshot_base64: sanitizedSnapshotBase64
-      });
+      sendJson(res, 200, characterSnapshotPayloadRuntime(character, sanitizedSnapshotBase64));
       return;
     }
 
     if (req.method === "PUT") {
-      let body;
-      try {
-        body = await readBody(req);
-      } catch (err) {
-        sendError(res, 400, "bad_json", errorMessage(err));
+      const bodyResult = await readBodyOrBadJson(req, res);
+      if (!bodyResult.ok) {
         return;
       }
-      const snapshotBase64 = sanitizeSnapshotInventoryBase64(String(body && body.snapshot_base64 || "").trim());
-      if (!snapshotBase64) {
+      const body = bodyResult.body;
+      const saved = snapshotSaveRuntime({
+        body,
+        nowIso: nowIso(),
+        sanitizeSnapshotBase64: sanitizeSnapshotInventoryBase64
+      });
+      if (!saved) {
         sendError(res, 400, "bad_snapshot", "snapshot_base64 is required");
         return;
       }
-      character.snapshot_base64 = snapshotBase64;
-      character.snapshot_meta = {
-        schema_version: Number(body.schema_version) || 1,
-        sim_core_version: String(body.sim_core_version || "unknown"),
-        saved_tick: Number(body.saved_tick) || 0,
-        snapshot_hash: computeSnapshotHash(snapshotBase64)
-      };
-      character.updated_at = nowIso();
+      character.snapshot_base64 = saved.snapshot_base64;
+      character.snapshot_meta = saved.snapshot_meta;
+      character.updated_at = saved.updated_at;
       persistState(state);
-      sendJson(res, 200, {
-        character_id: character.character_id,
-        snapshot_meta: character.snapshot_meta
-      });
+      sendJson(res, 200, characterSnapshotPayloadRuntime(character));
       return;
     }
   }

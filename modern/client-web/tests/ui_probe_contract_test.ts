@@ -82,6 +82,22 @@ function runSampleProbeFixture() {
     "target resolver talk overlap probe count mismatch"
   );
   assert.deepEqual(
+    probe.canonical_runtime.movement,
+    {
+      mode: "avatar",
+      facing_dx: 0,
+      facing_dy: 1,
+      queue_depth: 1,
+      queued_move_count: 1,
+      session_started: true,
+      last_move_tick: 4241,
+      walk_anim_until_ms: 4522,
+      walk_anim_active: true,
+      probe_now_ms: 4242
+    },
+    "sample movement probe mismatch"
+  );
+  assert.deepEqual(
     probe.canonical_runtime.mechanics_capability.summary,
     { total: 8, implemented: 3, partial: 1, planned: 4 },
     "mechanics capability summary mismatch"
@@ -126,6 +142,18 @@ function runLiveProbeFixture() {
       runtimeExtensions: {
         quest_system: true,
         housing: true
+      },
+      movement: {
+        mode: "avatar",
+        facing_dx: -1,
+        facing_dy: 0,
+        queue_depth: 2,
+        queued_move_count: 1,
+        session_started: true,
+        last_move_tick: 98,
+        walk_anim_until_ms: 1200,
+        walk_anim_active: true,
+        probe_now_ms: 1000
       }
     }
   });
@@ -155,6 +183,22 @@ function runLiveProbeFixture() {
     probe.canonical_runtime.mechanics_capability.validation.missing_regression_gates,
     1,
     "live mechanics capability missing gate count mismatch"
+  );
+  assert.deepEqual(
+    probe.canonical_runtime.movement,
+    {
+      mode: "avatar",
+      facing_dx: -1,
+      facing_dy: 0,
+      queue_depth: 2,
+      queued_move_count: 1,
+      session_started: true,
+      last_move_tick: 98,
+      walk_anim_until_ms: 1200,
+      walk_anim_active: true,
+      probe_now_ms: 1000
+    },
+    "live movement probe mismatch"
   );
 }
 

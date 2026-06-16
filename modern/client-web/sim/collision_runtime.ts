@@ -52,7 +52,7 @@ export function isBlockedAtRuntime<TObject extends CollisionRuntimeObject>(
     ] as const;
     for (const [ox, oy] of sources) {
       for (const obj of deps.objectsAt(ox, oy, wz)) {
-        if (!obj.renderable) {
+        if (obj.renderable === false) {
           continue;
         }
         if (objectBlocksCellRuntime(obj, ox, oy, tx, ty, deps)) {

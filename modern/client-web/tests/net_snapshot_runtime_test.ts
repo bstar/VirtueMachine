@@ -6,10 +6,17 @@ import {
   type SimSnapshotRuntime
 } from "../net/snapshot_codec_runtime.ts";
 import {
+  bindRemoteSnapshotButtonRuntime,
+  performNetAutosaveSnapshotRuntime,
   performNetLoadSnapshot,
   performNetSaveSnapshot,
+  remoteSnapshotLoadedDiagRuntime,
+  remoteSnapshotLoadFailureRuntime,
+  remoteSnapshotSavedDiagRuntime,
+  remoteSnapshotSaveFailureRuntime,
   shouldAutosaveSnapshotRuntime,
   snapshotBase64Runtime,
+  snapshotRouteForCharacterRuntime,
   snapshotSavedTickRuntime
 } from "../net/snapshot_runtime.ts";
 
@@ -59,6 +66,93 @@ assert.equal(snapshotSavedTickRuntime({ snapshot_meta: { saved_tick: 12 } }), 12
 assert.equal(snapshotSavedTickRuntime(null), 0);
 assert.equal(snapshotBase64Runtime({ snapshot_base64: " encoded " }), "encoded");
 assert.equal(snapshotBase64Runtime({}), "");
+assert.equal(snapshotRouteForCharacterRuntime("char-1"), "/api/characters/char-1/snapshot");
+assert.equal(snapshotRouteForCharacterRuntime(" char-1 "), "/api/characters/char-1/snapshot");
+assert.equal(snapshotRouteForCharacterRuntime(""), "/api/world/snapshot");
+assert.equal(snapshotRouteForCharacterRuntime(null), "/api/world/snapshot");
+assert.deepEqual(remoteSnapshotSavedDiagRuntime(123), {
+  diagClass: "diag ok",
+  diagText: "Remote snapshot saved at tick 123."
+});
+assert.deepEqual(remoteSnapshotLoadedDiagRuntime(456), {
+  diagClass: "diag ok",
+  diagText: "Remote snapshot loaded at tick 456."
+});
+assert.deepEqual(remoteSnapshotSaveFailureRuntime("offline"), {
+  diagClass: "diag warn",
+  diagText: "Remote save failed: offline",
+  statusLevel: "error",
+  statusText: "Save failed: offline"
+});
+assert.deepEqual(remoteSnapshotLoadFailureRuntime("missing"), {
+  diagClass: "diag warn",
+  diagText: "Remote load failed: missing",
+  statusLevel: "error",
+  statusText: "Load failed: missing"
+});
+
+{
+  let listener: (() => void) | null = null;
+  const diags: string[] = [];
+  const statuses: string[] = [];
+  let sessionStatUpdates = 0;
+  assert.equal(bindRemoteSnapshotButtonRuntime({
+    button: {
+      addEventListener(type: "click", fn: () => void) {
+        assert.equal(type, "click");
+        listener = fn;
+      }
+    },
+    run: async () => ({ snapshot_meta: { saved_tick: 99 } }),
+    updateSessionStat: () => { sessionStatUpdates += 1; },
+    success: (out) => remoteSnapshotLoadedDiagRuntime(snapshotSavedTickRuntime(out)),
+    failure: remoteSnapshotLoadFailureRuntime,
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
+  }), true);
+  listener?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sessionStatUpdates, 1);
+  assert.deepEqual(statuses, []);
+  assert.deepEqual(diags, ["diag ok:Remote snapshot loaded at tick 99."]);
+}
+
+{
+  let listener: (() => void) | null = null;
+  const diags: string[] = [];
+  const statuses: string[] = [];
+  let sessionStatUpdates = 0;
+  assert.equal(bindRemoteSnapshotButtonRuntime({
+    button: {
+      addEventListener(_type: "click", fn: () => void) {
+        listener = fn;
+      }
+    },
+    run: async () => {
+      throw new Error("offline");
+    },
+    updateSessionStat: () => { sessionStatUpdates += 1; },
+    success: remoteSnapshotSavedDiagRuntime,
+    failure: remoteSnapshotSaveFailureRuntime,
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
+  }), true);
+  listener?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sessionStatUpdates, 0);
+  assert.deepEqual(statuses, ["error:Save failed: Error: offline"]);
+  assert.deepEqual(diags, ["diag warn:Remote save failed: Error: offline"]);
+}
+
+assert.equal(bindRemoteSnapshotButtonRuntime({
+  button: null,
+  run: async () => ({}),
+  updateSessionStat: () => {},
+  success: remoteSnapshotSavedDiagRuntime,
+  failure: remoteSnapshotSaveFailureRuntime,
+  setStatus: () => {},
+  setDiag: () => {}
+}), false);
 
 assert.equal(normalizeLoadedSimStateRuntime({}), null);
 const malformedSnapshot = normalizeLoadedSimStateRuntime({
@@ -158,6 +252,46 @@ assert.equal(shouldAutosaveSnapshotRuntime({
   assert.equal(snapshotSavedTickRuntime(out), 10);
   assert.equal(savedTick, 10);
   assert.deepEqual(statuses, ["sync:Saving world snapshot...", "online:Saved tick 10"]);
+}
+
+{
+  let requestCount = 0;
+  const state = { snapshotSaveInFlight: true };
+  const out = await performNetAutosaveSnapshotRuntime(state, {
+    ensureAuth: async () => {},
+    isAuthenticated: () => true,
+    request: async () => {
+      requestCount += 1;
+      return {};
+    },
+    encodeSnapshot: () => "encoded",
+    currentTick: () => 10,
+    onSavedTick: () => {},
+    resetBackgroundFailures: () => {},
+    setStatus: () => {}
+  });
+  assert.equal(out, null);
+  assert.equal(requestCount, 0);
+  assert.equal(state.snapshotSaveInFlight, true);
+}
+
+{
+  const state = { snapshotSaveInFlight: false };
+  const out = await performNetAutosaveSnapshotRuntime(state, {
+    ensureAuth: async () => {},
+    isAuthenticated: () => true,
+    request: async () => ({ snapshot_meta: { saved_tick: 11 } }),
+    snapshotRoute: () => "/snapshot",
+    encodeSnapshot: () => "encoded",
+    currentTick: () => 11,
+    onSavedTick: (tick) => {
+      assert.equal(tick, 11);
+    },
+    resetBackgroundFailures: () => {},
+    setStatus: () => {}
+  });
+  assert.equal(snapshotSavedTickRuntime(out), 11);
+  assert.equal(state.snapshotSaveInFlight, false);
 }
 
 {

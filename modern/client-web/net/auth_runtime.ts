@@ -41,6 +41,86 @@ export function netLoginSnapshotBase64Runtime(payload: NetLoginPayload | null | 
   return String(payload?.snapshot_base64 || "").trim();
 }
 
+export interface NetLoginDiagRuntime {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+}
+
+export interface NetLoginFailurePresentationRuntime extends NetLoginDiagRuntime {
+  diagClass: "diag warn";
+  statusLevel: "error";
+  statusText: string;
+}
+
+export function netLoginPanelSuccessDiagRuntime(username: unknown, characterName: unknown): NetLoginDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: `Net login ok: ${String(username || "")}/${String(characterName || "")}`
+  };
+}
+
+export function netLoginPanelFailureRuntime(reason: unknown): NetLoginFailurePresentationRuntime {
+  const text = String(reason || "unknown error");
+  return {
+    diagClass: "diag warn",
+    diagText: `Net login failed: ${text}`,
+    statusLevel: "error",
+    statusText: `Login failed: ${text}`
+  };
+}
+
+export function netAutoLoginSuccessDiagRuntime(username: unknown, characterName: unknown): NetLoginDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: `Auto-login ok: ${String(username || "")}/${String(characterName || "")}`
+  };
+}
+
+export function netAutoLoginFailureRuntime(reason: unknown): NetLoginFailurePresentationRuntime {
+  const text = String(reason || "unknown error");
+  return {
+    diagClass: "diag warn",
+    diagText: `Auto-login failed: ${text}`,
+    statusLevel: "error",
+    statusText: `Auto-login failed: ${text}`
+  };
+}
+
+export function bindNetLoginButtonRuntime(args: {
+  button?: { addEventListener: (type: "click", listener: () => void | Promise<void>) => void } | null;
+  characterName: () => unknown;
+  errorMessage: (err: unknown) => string;
+  isAuthenticated: () => boolean;
+  login: () => Promise<unknown>;
+  logout: () => void;
+  setAccountModalOpen: (open: boolean) => void;
+  setDiag: (diag: NetLoginDiagRuntime) => void;
+  setStatus: (level: string, text: string) => void;
+  username: () => unknown;
+}): boolean {
+  if (!args.button) {
+    return false;
+  }
+  args.button.addEventListener("click", () => {
+    void (async () => {
+      if (args.isAuthenticated()) {
+        args.logout();
+        return;
+      }
+      try {
+        await args.login();
+        args.setAccountModalOpen(false);
+        args.setDiag(netLoginPanelSuccessDiagRuntime(args.username(), args.characterName()));
+      } catch (err) {
+        const failure = netLoginPanelFailureRuntime(args.errorMessage(err));
+        args.setStatus(failure.statusLevel, failure.statusText);
+        args.setDiag(failure);
+      }
+    })();
+  });
+  return true;
+}
+
 export async function performNetLoginFlow(
   inputs: {
     apiBaseInput: string;

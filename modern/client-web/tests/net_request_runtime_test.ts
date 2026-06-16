@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   buildRuntimeContractHeaders,
+  managedNetRequestOptionsRuntime,
   netJsonRequest,
   netErrorMessageRuntime,
   performManagedNetRequest,
@@ -21,6 +22,32 @@ assert.deepEqual(buildRuntimeContractHeaders({
 });
 assert.equal(netErrorMessageRuntime({ error: { message: "bad request" } }), "bad request");
 assert.equal(netErrorMessageRuntime({ error: { message: 3 } }), "");
+assert.deepEqual(managedNetRequestOptionsRuntime({
+  apiBase: " http://net ",
+  auth: false,
+  init: { method: "POST" },
+  route: "/api/test",
+  runtimeExtensions: ["inventory", "", " world "],
+  runtimeProfile: "canonical_plus",
+  token: "abc"
+}), {
+  apiBase: " http://net ",
+  auth: false,
+  init: { method: "POST" },
+  route: "/api/test",
+  runtimeExtensions: ["inventory", "world"],
+  runtimeProfile: "canonical_plus",
+  token: "abc"
+});
+assert.deepEqual(managedNetRequestOptionsRuntime({}), {
+  apiBase: "",
+  auth: undefined,
+  init: undefined,
+  route: "",
+  runtimeExtensions: [],
+  runtimeProfile: "",
+  token: ""
+});
 
 const originalFetch = globalThis.fetch;
 const requests: string[] = [];
@@ -87,6 +114,27 @@ try {
     }),
     /500 Server Error/
   );
+
+  let unauthorizedCount = 0;
+  globalThis.fetch = (async (): Promise<Response> => new Response(JSON.stringify({
+    error: { message: "expired" }
+  } satisfies NetJsonBody), {
+    status: 401,
+    statusText: "Unauthorized"
+  })) as typeof fetch;
+  await assert.rejects(
+    () => performManagedNetRequest({
+      apiBase: "http://net",
+      route: "/api/private",
+      runtimeExtensions: [],
+      runtimeProfile: "canonical_strict",
+      onUnauthorized: () => {
+        unauthorizedCount += 1;
+      }
+    }),
+    /expired/
+  );
+  assert.equal(unauthorizedCount, 1);
 } finally {
   globalThis.fetch = originalFetch;
 }

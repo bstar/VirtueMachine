@@ -72,6 +72,35 @@ export const LEGACY_VERB_COMMAND_TYPE_RUNTIME: Record<LegacyTargetVerbRuntime, n
   [LEGACY_TARGET_VERB_RUNTIME.USE]: LEGACY_COMMAND_TYPE_RUNTIME.USE_VERB_AT_CELL
 };
 
+export type LegacyKeyboardCommandActionRuntime =
+  | { kind: "target"; verb: LegacyTargetVerbRuntime }
+  | { kind: "status_inventory" }
+  | { kind: "status_party" }
+  | { kind: "rest" }
+  | { kind: "toggle_combat" }
+  | { kind: "none" };
+
+export type LegacyNonTargetCommandPatchRuntime = {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+  handled: boolean;
+  inCombat?: 0 | 1;
+  legacyStatusDisplay?: number;
+};
+
+export type LegacyTargetStartPlanRuntime =
+  | {
+    action: "blocked";
+    diagClass: "diag warn";
+    diagText: string;
+    ledgerLines: readonly string[];
+  }
+  | {
+    action: "begin";
+    legacyStatusDisplay?: number;
+    shouldPromptDropTarget: boolean;
+  };
+
 export function normalizeLegacyTargetVerbRuntime(value: unknown): LegacyTargetVerbRuntime | null {
   const key = String(value || "").toLowerCase();
   return Object.prototype.hasOwnProperty.call(LEGACY_TARGET_VERB_LABEL_RUNTIME, key)
@@ -103,6 +132,120 @@ export function legacyVerbMouseCursorIndexRuntime(value: unknown): number {
 export function legacyVerbLabelRuntime(value: unknown): string {
   const verb = normalizeLegacyTargetVerbRuntime(value);
   return verb ? LEGACY_TARGET_VERB_LABEL_RUNTIME[verb] : "";
+}
+
+export function legacyKeyboardCommandActionRuntime(key: unknown): LegacyKeyboardCommandActionRuntime {
+  const k = String(key || "").toLowerCase();
+  switch (k) {
+    case "a":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.ATTACK };
+    case "c":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.CAST };
+    case "t":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.TALK };
+    case "l":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.LOOK };
+    case "g":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.GET };
+    case "d":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.DROP };
+    case "m":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.MOVE };
+    case "u":
+      return { kind: "target", verb: LEGACY_TARGET_VERB_RUNTIME.USE };
+    case "i":
+      return { kind: "status_inventory" };
+    case "p":
+      return { kind: "status_party" };
+    case "r":
+      return { kind: "rest" };
+    case "b":
+      return { kind: "toggle_combat" };
+    default:
+      return { kind: "none" };
+  }
+}
+
+export function legacyNonTargetCommandPatchRuntime(args: {
+  currentInCombat?: unknown;
+  inventoryStatusDisplay: unknown;
+  key: unknown;
+  partyStatusDisplay: unknown;
+}): LegacyNonTargetCommandPatchRuntime {
+  const action = legacyKeyboardCommandActionRuntime(args.key);
+  if (action.kind === "status_inventory") {
+    return {
+      diagClass: "diag ok",
+      diagText: "Status: inventory/equipment.",
+      handled: true,
+      legacyStatusDisplay: Number(args.inventoryStatusDisplay) | 0
+    };
+  }
+  if (action.kind === "status_party") {
+    return {
+      diagClass: "diag ok",
+      diagText: "Status: party/command.",
+      handled: true,
+      legacyStatusDisplay: Number(args.partyStatusDisplay) | 0
+    };
+  }
+  if (action.kind === "rest") {
+    return {
+      diagClass: "diag ok",
+      diagText: "Rest: legacy key mapped; rest system integration pending.",
+      handled: true
+    };
+  }
+  if (action.kind === "toggle_combat") {
+    const inCombat = args.currentInCombat ? 0 : 1;
+    return {
+      diagClass: "diag ok",
+      diagText: inCombat ? "Combat mode: ON" : "Combat mode: OFF",
+      handled: true,
+      inCombat
+    };
+  }
+  return {
+    diagClass: "diag warn",
+    diagText: "",
+    handled: false
+  };
+}
+
+export function legacyTargetStartPlanRuntime(args: {
+  dropStatusDisplay: unknown;
+  hasDropItem?: boolean;
+  movementMode: unknown;
+  verb: unknown;
+}): LegacyTargetStartPlanRuntime {
+  if (args.movementMode !== "avatar") {
+    return {
+      action: "blocked",
+      diagClass: "diag warn",
+      diagText: "Legacy targeting requires Avatar mode.",
+      ledgerLines: []
+    };
+  }
+  const verb = normalizeLegacyTargetVerbRuntime(args.verb);
+  if (verb === LEGACY_TARGET_VERB_RUNTIME.DROP) {
+    if (!args.hasDropItem) {
+      return {
+        action: "blocked",
+        diagClass: "diag warn",
+        diagText: "Drop: inventory is empty.",
+        ledgerLines: [">Drop-nothing", "Not possible"]
+      };
+    }
+    return {
+      action: "begin",
+      legacyStatusDisplay: Number(args.dropStatusDisplay) | 0,
+      shouldPromptDropTarget: true
+    };
+  }
+  return {
+    action: "begin",
+    shouldPromptDropTarget: false
+  };
 }
 
 export function buildLegacyWireCommandRuntime(

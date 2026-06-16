@@ -32,7 +32,7 @@ import {
 } from "./gameplay/verb_capability_runtime.ts";
 import type { RuntimeExtensions } from "../common/runtime_contract.ts";
 
-const UI_PROBE_SCHEMA_VERSION = 1;
+const UI_PROBE_SCHEMA_VERSION = 2;
 
 const LEGACY_EQUIP_SLOTS = Object.freeze([
   { index: 0, key: "head", legacy: "SLOT_HEAD" },
@@ -82,6 +82,18 @@ interface ProbeRuntimeInput {
       map_y?: unknown;
       map_z?: unknown;
     };
+  };
+  movement?: {
+    facing_dx?: unknown;
+    facing_dy?: unknown;
+    last_move_tick?: unknown;
+    mode?: unknown;
+    probe_now_ms?: unknown;
+    queue_depth?: unknown;
+    queued_move_count?: unknown;
+    session_started?: unknown;
+    walk_anim_active?: unknown;
+    walk_anim_until_ms?: unknown;
   };
   commandLog?: Array<{ tick?: unknown; kind?: unknown }>;
   partyMembers?: unknown;
@@ -223,7 +235,34 @@ function deterministicSample() {
         { tile_id: 0x220, object_key: "0x12c:1" },
         { tile_id: 0x208, object_key: "0x12e:1" }
       ]
+    },
+    movement: {
+      mode: "avatar",
+      facing_dx: 0,
+      facing_dy: 1,
+      queue_depth: 1,
+      queued_move_count: 1,
+      session_started: true,
+      last_move_tick: 4241,
+      walk_anim_until_ms: 4522,
+      walk_anim_active: true,
+      probe_now_ms: 4242
     }
+  };
+}
+
+function normalizeMovement(movement: ProbeRuntimeInput["movement"] | null | undefined) {
+  return {
+    mode: String(movement?.mode || "ghost"),
+    facing_dx: Number(movement?.facing_dx) | 0,
+    facing_dy: Number(movement?.facing_dy) | 0,
+    queue_depth: toU32(movement?.queue_depth || 0),
+    queued_move_count: toU32(movement?.queued_move_count || 0),
+    session_started: !!movement?.session_started,
+    last_move_tick: Number(movement?.last_move_tick) | 0,
+    walk_anim_until_ms: Number(movement?.walk_anim_until_ms ?? -1),
+    walk_anim_active: !!movement?.walk_anim_active,
+    probe_now_ms: Number(movement?.probe_now_ms || 0)
   };
 }
 
@@ -267,6 +306,7 @@ function fromRuntime(runtime: ProbeRuntimeInput) {
     active_party_index: activeIndex,
     inventory: { ...(sim.inventory || {}) } as ProbeInventoryCountMap,
     equipment: [], // pending canonical equip-state bridge
+    movement: normalizeMovement(runtime.movement),
     party: partyPanelMembers.length
       ? partyPanelMembers
       : [{ id: activeId || 1, name: activeId ? `Actor_${activeId}` : "Avatar", in_party: true, active: true, party_index: 0 }],
@@ -426,6 +466,7 @@ export function buildUiProbeContract(opts: BuildUiProbeOptions = {}) {
           talk_overlap_cases: targetResolverProbes.talk_overlap_cases.length >>> 0
         }
       },
+      movement: normalizeMovement(src.movement),
       mechanics_capability: {
         summary: mechanicsSummary,
         validation: mechanicsValidation,

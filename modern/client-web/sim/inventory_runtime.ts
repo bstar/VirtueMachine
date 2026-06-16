@@ -15,6 +15,11 @@ export interface SimInventoryRuntimeState {
   removedObjectCount?: number;
 }
 
+export type InventoryPickupRuntimeResult = {
+  count: number;
+  inventoryKey: string;
+};
+
 export function objectAnchorKeyRuntime(obj: InventoryObjectRuntime): string {
   return `${Number(obj.x) & 0x3ff},${Number(obj.y) & 0x3ff},${Number(obj.z) & 0x0f},${Number(obj.order) & 0xffff},${Number(obj.type) & 0x3ff}`;
 }
@@ -64,6 +69,19 @@ export function addObjectToInventoryRuntime(sim: SimInventoryRuntimeState, obj: 
   const prev = Number(sim.inventory[key]) >>> 0;
   sim.inventory[key] = (prev + 1) >>> 0;
   return key;
+}
+
+export function pickObjectIntoInventoryRuntime(
+  sim: SimInventoryRuntimeState,
+  inventoryObject: { type: number; frame: number },
+  removedObject: InventoryObjectRuntime | null | undefined = inventoryObject as InventoryObjectRuntime
+): InventoryPickupRuntimeResult {
+  const inventoryKey = addObjectToInventoryRuntime(sim, inventoryObject);
+  markObjectRemovedRuntime(sim, removedObject);
+  return {
+    count: Number(sim.inventory?.[inventoryKey]) >>> 0,
+    inventoryKey
+  };
 }
 
 export function resolveObjectByInventoryAnchorRuntime<TObject extends InventoryObjectRuntime>(args: {

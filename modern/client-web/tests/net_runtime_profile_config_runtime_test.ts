@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  applyRuntimeProfileConfigRuntime,
+  initRuntimeProfileConfigRuntime,
   persistRuntimeProfileConfigRuntime,
   resolveRuntimeProfileConfigRuntime
 } from "../net/runtime_profile_config_runtime.ts";
@@ -106,6 +108,98 @@ assert.deepEqual(resolveRuntimeProfileConfigRuntime({ keys }), {
   };
   assert.equal(resolveRuntimeProfileConfigRuntime({ keys, storage }).profile, "canonical_strict");
   assert.equal(persistRuntimeProfileConfigRuntime(storage, keys, resolveRuntimeProfileConfigRuntime({ keys })), false);
+}
+
+{
+  const attrs: Record<string, string> = {};
+  const state = {
+    runtimeProfile: "",
+    runtimeExtensions: {
+      quest_system: true,
+      party_mmo: true,
+      housing: true,
+      crafting: true,
+      farming: true
+    }
+  };
+  assert.deepEqual(applyRuntimeProfileConfigRuntime({
+    config: {
+      profile: "bad-profile",
+      extensions: { quest_system: true, unknown: true } as never
+    },
+    documentElement: {
+      setAttribute: (name, value) => {
+        attrs[name] = value;
+      }
+    },
+    state
+  }), {
+    profile: "canonical_strict",
+    extensions: {
+      quest_system: true,
+      party_mmo: false,
+      housing: false,
+      crafting: false,
+      farming: false
+    }
+  });
+  assert.equal(state.runtimeProfile, "canonical_strict");
+  assert.deepEqual(state.runtimeExtensions, {
+    quest_system: true,
+    party_mmo: false,
+    housing: false,
+    crafting: false,
+    farming: false
+  });
+  assert.equal(attrs["data-runtime-profile"], "canonical_strict");
+}
+
+{
+  const storage = memoryStorage({
+    profile: "canonical_strict",
+    extensions: JSON.stringify({ quest_system: false })
+  });
+  const attrs: Record<string, string> = {};
+  const state = {
+    runtimeProfile: "",
+    runtimeExtensions: {
+      quest_system: false,
+      party_mmo: false,
+      housing: false,
+      crafting: false,
+      farming: false
+    }
+  };
+  assert.deepEqual(initRuntimeProfileConfigRuntime({
+    documentElement: {
+      setAttribute: (name, value) => {
+        attrs[name] = value;
+      }
+    },
+    keys,
+    locationSearch: "?profile=canonical_plus&ext=party_mmo,housing",
+    state,
+    storage
+  }), {
+    profile: "canonical_plus",
+    extensions: {
+      quest_system: false,
+      party_mmo: true,
+      housing: true,
+      crafting: false,
+      farming: false
+    }
+  });
+  assert.equal(state.runtimeProfile, "canonical_plus");
+  assert.equal(attrs["data-runtime-profile"], "canonical_plus");
+  assert.equal(storage.data.profile, "canonical_plus");
+  assert.equal(storage.data.extensions, JSON.stringify({
+    quest_system: false,
+    party_mmo: true,
+    housing: true,
+    crafting: false,
+    farming: false
+  }));
 }
 
 console.log("net_runtime_profile_config_runtime_test: ok");

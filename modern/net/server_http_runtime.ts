@@ -8,8 +8,19 @@ export const DEFAULT_JSON_RESPONSE_HEADERS: Record<string, string> = {
   "access-control-allow-headers": "content-type,authorization,x-vm-runtime-profile,x-vm-runtime-extensions"
 };
 
+export const DEFAULT_CORS_PREFLIGHT_HEADERS: Record<string, string> = {
+  "access-control-allow-origin": DEFAULT_JSON_RESPONSE_HEADERS["access-control-allow-origin"],
+  "access-control-allow-methods": DEFAULT_JSON_RESPONSE_HEADERS["access-control-allow-methods"],
+  "access-control-allow-headers": DEFAULT_JSON_RESPONSE_HEADERS["access-control-allow-headers"],
+  "access-control-max-age": "86400"
+};
+
 export type JsonResponseLike = Pick<ServerResponse, "end" | "writeHead">;
 export type JsonRequestLike = Pick<IncomingMessage, "destroy" | "on">;
+
+export type ReadJsonBodyResultRuntime<T> =
+  | { ok: true; body: T }
+  | { ok: false };
 
 export function jsonResponseBodyRuntime(value: unknown): string {
   return `${JSON.stringify(value)}\n`;
@@ -36,6 +47,11 @@ export function sendErrorRuntime(
       message
     }
   });
+}
+
+export function sendCorsPreflightRuntime(res: JsonResponseLike): void {
+  res.writeHead(204, DEFAULT_CORS_PREFLIGHT_HEADERS);
+  res.end();
 }
 
 export function readJsonBodyRuntime(
@@ -73,4 +89,22 @@ export function readJsonBodyRuntime(
     });
     req.on("error", reject);
   });
+}
+
+export async function readJsonBodyOrErrorRuntime<T>(args: {
+  req: JsonRequestLike;
+  res: JsonResponseLike;
+  maxBodyBytes: number;
+  coerce: (raw: unknown | null) => T;
+  errorMessage?: (err: unknown) => string;
+}): Promise<ReadJsonBodyResultRuntime<T>> {
+  try {
+    return {
+      ok: true,
+      body: args.coerce(await readJsonBodyRuntime(args.req, args.maxBodyBytes))
+    };
+  } catch (err) {
+    sendErrorRuntime(args.res, 400, "bad_json", args.errorMessage ? args.errorMessage(err) : String(err));
+    return { ok: false };
+  }
 }

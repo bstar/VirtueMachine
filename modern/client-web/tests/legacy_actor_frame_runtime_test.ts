@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import {
+  authoritativeActorWalkingRuntime,
   directionGroupFromDxDyRuntime,
   isLegacyFourFrameActorTypeRuntime,
   isLegacyTwoFrameActorTypeRuntime,
   legacyActorDirectionGroupRuntime,
   legacyActorFrameForDirectionRuntime,
   legacyActorStandingTileIdRuntime,
-  remotePlayerFrameOffsetRuntime
+  remotePlayerFrameOffsetRuntime,
+  timedWalkAnimationActiveRuntime
 } from "../sim/legacy_actor_frame_runtime.ts";
 
 assert.equal(isLegacyFourFrameActorTypeRuntime(0x178), true);
@@ -40,6 +42,35 @@ assert.equal(
   legacyActorStandingTileIdRuntime({ baseTile: 0x400, frame: 7, type: 0x100 }, 2, false, 0),
   0x407
 );
+assert.equal(timedWalkAnimationActiveRuntime(1120, 1000), true);
+assert.equal(timedWalkAnimationActiveRuntime(1120, 1120), true);
+assert.equal(timedWalkAnimationActiveRuntime(1119, 1120), false);
+assert.equal(timedWalkAnimationActiveRuntime(-1, 0), false);
+assert.equal(authoritativeActorWalkingRuntime({
+  authoritativeMovedAtMs: 1000,
+  authoritativePathStatus: "walking",
+  authoritativePose: "walk"
+}, 1200), true);
+assert.equal(authoritativeActorWalkingRuntime({
+  authoritativeMovedAtMs: 1000,
+  authoritativePathStatus: "idle",
+  authoritativePose: "walk"
+}, 1200), false);
+assert.equal(authoritativeActorWalkingRuntime({
+  authoritativeMovedAtMs: 1000,
+  authoritativePathStatus: "walking",
+  authoritativePose: "stand"
+}, 1200), false);
+assert.equal(authoritativeActorWalkingRuntime({
+  authoritativeMovedAtMs: 1000,
+  authoritativePathStatus: "walking",
+  authoritativePose: "walk"
+}, 4000), false);
+assert.equal(authoritativeActorWalkingRuntime({
+  authoritativeMovedAtMs: Number.NaN,
+  authoritativePathStatus: "walking",
+  authoritativePose: "walk"
+}, 1200), false);
 
 assert.equal(directionGroupFromDxDyRuntime(0, -1), 0);
 assert.equal(directionGroupFromDxDyRuntime(1, 0), 1);

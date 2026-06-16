@@ -1,12 +1,37 @@
 import assert from "node:assert/strict";
 import {
   buildTargetResolverRegressionProbesRuntime,
+  formatLegacyGetFailureTextRuntime,
+  formatLegacyGetPickedTextRuntime,
+  formatLegacyGetTakingTextRuntime,
+  formatLegacyLookOutOfRangeTextRuntime,
+  formatLegacyLookResultTextRuntime,
+  formatLegacyTalkAuthoritativeStartTextRuntime,
+  formatLegacyTalkFailureTextRuntime,
+  formatLegacyTalkStartedTextRuntime,
+  legacyDropAsyncFailurePresentationRuntime,
+  legacyDropPlacedPresentationRuntime,
+  legacyGetTerrainDamageTileRuntime,
+  legacyGetAsyncFailurePresentationRuntime,
+  legacyGetCheckingPresentationRuntime,
+  legacyGetFailurePresentationRuntime,
+  legacyGetPickedPresentationRuntime,
+  legacyGetTakingPresentationRuntime,
+  legacyGetTileIgnoredRuntime,
+  legacyLookPresentationRuntime,
+  legacyTalkAsyncFailurePresentationRuntime,
+  legacyTalkAuthoritativeStartedPresentationRuntime,
+  legacyTalkAuthoritativeStartPresentationRuntime,
+  legacyTalkFallbackPresentationRuntime,
+  legacyTalkFailurePresentationRuntime,
+  legacyTalkStartedPresentationRuntime,
   nearestTalkTargetAtCellRuntime,
   resolveAttackTargetAtCellRuntime,
   resolveLegacyGetSelectionRuntime,
   resolveLookTargetAtCellRuntime,
   resolvePickupTargetAtCellRuntime,
   resolveTalkTargetAtCellRuntime,
+  targetObjectsFromObjectLayerEntriesRuntime,
   topWorldObjectAtCellRuntime,
   type TargetObjectLayerRuntime,
   type TargetWorldObjectRuntime
@@ -212,6 +237,274 @@ function testLegacyGetSelectionResolution() {
   assert.equal(footprintObject.ok && footprintObject.object.object_key, "jug", "server footprint objects should be selectable at occupied cells");
 }
 
+function testLegacyGetTileFlagPredicates() {
+  assert.equal(legacyGetTileIgnoredRuntime(0x123, null), false);
+  assert.equal(legacyGetTerrainDamageTileRuntime(0x123, null), false);
+
+  const tileFlags2 = new Uint8Array(0x800);
+  const terrainType = new Uint8Array(0x800);
+  tileFlags2[0x123] = 0x10;
+  terrainType[0x123] = 0x08;
+
+  assert.equal(legacyGetTileIgnoredRuntime(0x123, tileFlags2), true);
+  assert.equal(legacyGetTileIgnoredRuntime(0x923, tileFlags2), true);
+  assert.equal(legacyGetTileIgnoredRuntime(0x124, tileFlags2), false);
+
+  assert.equal(legacyGetTerrainDamageTileRuntime(0x123, terrainType), true);
+  assert.equal(legacyGetTerrainDamageTileRuntime(0x923, terrainType), true);
+  assert.equal(legacyGetTerrainDamageTileRuntime(0x124, terrainType), false);
+
+  tileFlags2[0x125] = 0x08;
+  terrainType[0x125] = 0x10;
+  assert.equal(legacyGetTileIgnoredRuntime(0x125, tileFlags2), false);
+  assert.equal(legacyGetTerrainDamageTileRuntime(0x125, terrainType), false);
+}
+
+function testObjectLayerTargetProjection() {
+  assert.deepEqual(targetObjectsFromObjectLayerEntriesRuntime([
+    {
+      assocIndex: 0,
+      baseTile: 0x280,
+      coordUse: 0,
+      frame: 5,
+      index: 12,
+      legacyOrder: 44,
+      order: 33,
+      renderable: true,
+      sourceArea: 0x1a,
+      sourceIndex: 0x123,
+      status: 0,
+      tileId: 0x285,
+      type: 0x078,
+      x: 11,
+      y: 10,
+      z: 0
+    },
+    {
+      assocIndex: 0,
+      baseTile: 0x300,
+      coordUse: 0,
+      frame: 1,
+      index: 13,
+      legacyOrder: 45,
+      objectKey: "auth-key",
+      order: 34,
+      renderable: true,
+      sourceArea: 0x1a,
+      sourceIndex: 0x124,
+      status: 0,
+      tileId: 0x301,
+      type: 0x090,
+      x: 12,
+      y: 10,
+      z: 0
+    }
+  ]).map((obj) => ({
+    key: obj.key,
+    legacy_order: obj.legacy_order,
+    object_key: obj.object_key,
+    tile_id: obj.tile_id
+  })), [
+    {
+      key: "11,10,0,33,120",
+      legacy_order: 44,
+      object_key: "11,10,0,33,120",
+      tile_id: 0x285
+    },
+    {
+      key: "auth-key",
+      legacy_order: 45,
+      object_key: "auth-key",
+      tile_id: 0x301
+    }
+  ]);
+}
+
+function testLegacyGetFailureTextFormatting() {
+  assert.equal(
+    formatLegacyGetFailureTextRuntime("out_of_range", null, 12, 13, 0),
+    "Get: target must be adjacent (12,13)."
+  );
+  assert.equal(
+    formatLegacyGetFailureTextRuntime("terrain_damage", { object_key: "lava", type: 0x055 }, 12, 13, 0),
+    "Get: 0x55 lava is hazardous."
+  );
+  assert.equal(
+    formatLegacyGetFailureTextRuntime("not_portable", { object_key: "table", type: 0x117 }, 12, 13, 0),
+    "Get: 0x117 table is not portable."
+  );
+  assert.equal(
+    formatLegacyGetFailureTextRuntime("no_object", null, 12, 13, 0),
+    "Get: nothing selectable at 12,13,0."
+  );
+  assert.equal(
+    formatLegacyGetTakingTextRuntime({ type: 0x123 }, 12, 13, 0),
+    "Get: taking 0x123 at 12,13,0..."
+  );
+  assert.equal(
+    formatLegacyGetPickedTextRuntime({ type: 0x123 }, 12, 13, 0, "0x123:0x00", 2),
+    "Get: picked 0x123 at 12,13,0 (inv 0x123:0x00=2)."
+  );
+  assert.deepEqual(
+    legacyGetFailurePresentationRuntime("not_portable", { object_key: "table", type: 0x117 }, 12, 13, 0),
+    {
+      diagClass: "warn",
+      diagText: "Get: 0x117 table is not portable."
+    }
+  );
+  assert.deepEqual(legacyGetTakingPresentationRuntime({ type: 0x123 }, 12, 13, 0), {
+    diagClass: "ok",
+    diagText: "Get: taking 0x123 at 12,13,0..."
+  });
+  assert.deepEqual(legacyGetPickedPresentationRuntime({ type: 0x123 }, 12, 13, 0, "0x123:0x00", 2), {
+    diagClass: "ok",
+    diagText: "Get: picked 0x123 at 12,13,0 (inv 0x123:0x00=2)."
+  });
+  assert.deepEqual(legacyGetCheckingPresentationRuntime(12.9, 13.2, 0.8), {
+    diagClass: "ok",
+    diagText: "Get: checking 12,13,0..."
+  });
+  assert.deepEqual(legacyGetAsyncFailurePresentationRuntime("offline"), {
+    diagClass: "warn",
+    diagText: "Get failed: offline"
+  });
+  assert.deepEqual(legacyDropPlacedPresentationRuntime(12.9, 13.2, 0.8), {
+    diagClass: "ok",
+    diagText: "Drop: item placed at 12,13,0."
+  });
+  assert.deepEqual(legacyDropAsyncFailurePresentationRuntime("offline"), {
+    diagClass: "warn",
+    diagText: "Drop failed: offline"
+  });
+}
+
+function testLegacyLookTalkTextFormatting() {
+  assert.equal(formatLegacyLookOutOfRangeTextRuntime(12.9, 13.2), "Look: 12,13 is out of range.");
+  assert.equal(
+    formatLegacyLookResultTextRuntime("Thou dost see a cup.", 12, 13, 0),
+    "Look: Thou dost see a cup. @ 12,13,0"
+  );
+  assert.deepEqual(legacyLookPresentationRuntime({
+    ok: false,
+    reason: "out_of_range",
+    x: 12,
+    y: 13,
+    z: 0
+  }, ""), {
+    diagClass: "warn",
+    diagText: "Look: 12,13 is out of range.",
+    ledgerLines: ["Thou dost see nothing."],
+    ok: false
+  });
+  assert.deepEqual(legacyLookPresentationRuntime({
+    ok: true,
+    source: "object",
+    tileId: 0x120,
+    x: 12,
+    y: 13,
+    z: 0
+  }, "Thou dost see a cup."), {
+    diagClass: "ok",
+    diagText: "Look: Thou dost see a cup. @ 12,13,0",
+    ledgerLines: ["Thou dost see a cup."],
+    ok: true
+  });
+  assert.equal(
+    formatLegacyTalkFailureTextRuntime("out_of_range", 12, 13, 0),
+    "Talk: target must be adjacent (12,13)."
+  );
+  assert.equal(
+    formatLegacyTalkFailureTextRuntime("no_actor", 12, 13, 0),
+    "Talk: nobody there at 12,13,0."
+  );
+  assert.deepEqual(legacyTalkFailurePresentationRuntime({
+    actor: null,
+    ok: false,
+    reason: "no_actor",
+    x: 12,
+    y: 13,
+    z: 0
+  }), {
+    diagClass: "warn",
+    diagText: "Talk: nobody there at 12,13,0.",
+    ledgerLines: ["No one responds."],
+    ok: false
+  });
+  assert.equal(
+    formatLegacyTalkAuthoritativeStartTextRuntime(42),
+    "Talk: contacting authoritative conversation service for actor 42..."
+  );
+  assert.deepEqual(legacyTalkAuthoritativeStartPresentationRuntime(42), {
+    diagClass: "ok",
+    diagText: "Talk: contacting authoritative conversation service for actor 42..."
+  });
+  assert.deepEqual(legacyTalkAsyncFailurePresentationRuntime("offline"), {
+    diagClass: "warn",
+    diagText: "Talk failed: offline"
+  });
+  assert.deepEqual(legacyTalkAuthoritativeStartedPresentationRuntime({
+    targetName: "Dupre",
+    tx: 12.9,
+    ty: 13.2,
+    tz: 0.8
+  }), {
+    diagClass: "ok",
+    diagText: "Talk: Dupre (authoritative) at 12,13,0."
+  });
+  assert.deepEqual(legacyTalkFallbackPresentationRuntime("missing script"), {
+    diagClass: "warn",
+    diagText: "Talk fallback: missing script"
+  });
+  assert.equal(
+    formatLegacyTalkStartedTextRuntime({
+      actorId: 42,
+      converseLoaded: true,
+      rulesCount: 9,
+      showInventory: false,
+      speaker: "Dupre",
+      targetObjNum: 7,
+      targetType: 0x15f,
+      tx: 12,
+      ty: 13,
+      tz: 0,
+      valid: true
+    }),
+    "Talk: Dupre (actor id 42, conv id 7, type 0x15f) at 12,13,0; valid=1; rules=9; showInven=0; converse=loaded."
+  );
+  assert.deepEqual(legacyTalkStartedPresentationRuntime({
+    actorId: 42,
+    converseLoaded: true,
+    rulesCount: 9,
+    showInventory: false,
+    speaker: "Dupre",
+    targetObjNum: 7,
+    targetType: 0x15f,
+    tx: 12,
+    ty: 13,
+    tz: 0,
+    valid: true
+  }), {
+    diagClass: "ok",
+    diagText: "Talk: Dupre (actor id 42, conv id 7, type 0x15f) at 12,13,0; valid=1; rules=9; showInven=0; converse=loaded."
+  });
+  assert.deepEqual(legacyTalkStartedPresentationRuntime({
+    actorId: 42,
+    converseLoaded: false,
+    rulesCount: 0,
+    showInventory: true,
+    speaker: "Dupre",
+    targetObjNum: 7,
+    targetType: 0x15f,
+    tx: 12,
+    ty: 13,
+    tz: 0,
+    valid: false
+  }), {
+    diagClass: "warn",
+    diagText: "Talk: Dupre (actor id 42, conv id 7, type 0x15f) at 12,13,0; valid=0; rules=0; showInven=1; converse=missing."
+  });
+}
+
 function testAttackTargetResolution() {
   const result = resolveAttackTargetAtCellRuntime({
     world: { map_x: 10, map_y: 10, map_z: 1 },
@@ -245,6 +538,10 @@ testLookTargetResolution();
 testTalkTargetResolution();
 testPickupTargetResolution();
 testLegacyGetSelectionResolution();
+testLegacyGetTileFlagPredicates();
+testObjectLayerTargetProjection();
+testLegacyGetFailureTextFormatting();
+testLegacyLookTalkTextFormatting();
 testAttackTargetResolution();
 
 console.log("ui_target_runtime_test: ok");

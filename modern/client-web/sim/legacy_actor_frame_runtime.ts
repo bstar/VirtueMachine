@@ -2,6 +2,9 @@ export const NPC_FLAG_DIRECTION_MASK_RUNTIME = 0x07;
 
 export type LegacyActorFrameEntityRuntime = {
   authoritativeDirection?: number;
+  authoritativeMovedAtMs?: number;
+  authoritativePathStatus?: string;
+  authoritativePose?: string;
   baseTile: number;
   direction?: number;
   frame: number;
@@ -78,6 +81,24 @@ export function legacyActorStandingTileIdRuntime(
     return ((entity.baseTile | 0) + (entity.frame | 0)) & 0xffff;
   }
   return ((entity.baseTile | 0) + frame) & 0xffff;
+}
+
+export function timedWalkAnimationActiveRuntime(untilMs: unknown, nowMs: unknown): boolean {
+  return Number(untilMs) >= Number(nowMs);
+}
+
+export function authoritativeActorWalkingRuntime(
+  entity: Partial<LegacyActorFrameEntityRuntime> | null | undefined,
+  nowMs: unknown,
+  activeWindowMs = 2500
+): boolean {
+  const pose = String(entity?.authoritativePose || "").trim().toLowerCase();
+  const status = String(entity?.authoritativePathStatus || "").trim().toLowerCase();
+  const movedAtMs = Number(entity?.authoritativeMovedAtMs);
+  return pose === "walk"
+    && status === "walking"
+    && Number.isFinite(movedAtMs)
+    && (Number(nowMs) - movedAtMs) <= activeWindowMs;
 }
 
 export function directionGroupFromDxDyRuntime(dx: number, dy: number): number {

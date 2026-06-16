@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "mode": "sample",
   "tick": 4242,
   "runtime_profile": "canonical_strict",
@@ -451,6 +451,18 @@
         "world_overlap_cases": 2,
         "talk_overlap_cases": 2
       }
+    },
+    "movement": {
+      "mode": "avatar",
+      "facing_dx": 0,
+      "facing_dy": 1,
+      "queue_depth": 1,
+      "queued_move_count": 1,
+      "session_started": true,
+      "last_move_tick": 4241,
+      "walk_anim_until_ms": 4522,
+      "walk_anim_active": true,
+      "probe_now_ms": 4242
     },
     "mechanics_capability": {
       "summary": {

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import {
+  DEFAULT_CORS_PREFLIGHT_HEADERS,
   DEFAULT_JSON_RESPONSE_HEADERS,
   jsonResponseBodyRuntime,
+  readJsonBodyOrErrorRuntime,
   readJsonBodyRuntime,
+  sendCorsPreflightRuntime,
   sendErrorRuntime,
   sendJsonRuntime,
   type JsonRequestLike,
@@ -52,6 +55,18 @@ assert.equal(jsonResponseBodyRuntime({ ok: true }), "{\"ok\":true}\n");
 }
 
 {
+  const { calls, res } = makeResponseRecorder();
+  sendCorsPreflightRuntime(res);
+  assert.equal(calls.status, 204);
+  assert.deepEqual(calls.headers, DEFAULT_CORS_PREFLIGHT_HEADERS);
+  assert.equal(calls.body, undefined);
+  assert.equal(
+    DEFAULT_CORS_PREFLIGHT_HEADERS["access-control-allow-headers"],
+    DEFAULT_JSON_RESPONSE_HEADERS["access-control-allow-headers"]
+  );
+}
+
+{
   const stream = new PassThrough();
   const parsed = readJsonBodyRuntime(stream as unknown as JsonRequestLike, 100);
   stream.end("{\"x\":42}");
@@ -77,6 +92,36 @@ assert.equal(jsonResponseBodyRuntime({ ok: true }), "{\"ok\":true}\n");
   const parsed = readJsonBodyRuntime(stream as unknown as JsonRequestLike, 3);
   stream.end("{\"x\":42}");
   await assert.rejects(parsed, /body too large/);
+}
+
+{
+  const stream = new PassThrough();
+  const { calls, res } = makeResponseRecorder();
+  const parsed = readJsonBodyOrErrorRuntime({
+    req: stream as unknown as JsonRequestLike,
+    res,
+    maxBodyBytes: 100,
+    coerce: (raw) => raw && typeof raw === "object" ? raw as { x?: unknown } : {}
+  });
+  stream.end("{\"x\":42}");
+  assert.deepEqual(await parsed, { ok: true, body: { x: 42 } });
+  assert.equal(calls.status, 0);
+}
+
+{
+  const stream = new PassThrough();
+  const { calls, res } = makeResponseRecorder();
+  const parsed = readJsonBodyOrErrorRuntime({
+    req: stream as unknown as JsonRequestLike,
+    res,
+    maxBodyBytes: 100,
+    coerce: (raw) => raw,
+    errorMessage: () => "custom bad json"
+  });
+  stream.end("{");
+  assert.deepEqual(await parsed, { ok: false });
+  assert.equal(calls.status, 400);
+  assert.equal(calls.body, "{\"error\":{\"code\":\"bad_json\",\"message\":\"custom bad json\"}}\n");
 }
 
 console.log("server_http_runtime_test: ok");

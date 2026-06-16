@@ -29,9 +29,35 @@ import {
 } from "./audio/audio_runtime.ts";
 import { U6_SFX } from "./audio/sfx_ids_runtime.ts";
 import {
+  buildAmbientSfxCandidatesRuntime,
+  nextAmbientSfxPlaybackPlanRuntime
+} from "./audio/ambient_sfx_runtime.ts";
+import {
+  audioMuteTogglePlanRuntime,
+  bindAudioMuteButtonRuntime,
+  audioSoundTogglePlanRuntime,
+  audioWorldFlagPlanRuntime,
+  bootIntroMusicAwaitingGestureRuntime,
+  bootIntroMusicPhaseRuntime,
+  canonicalMusicPhasePlanRuntime,
+  renderAudioMuteButtonRuntime,
+  startupMenuMusicPhaseRuntime
+} from "./audio/audio_ui_runtime.ts";
+import {
   decodeLegacyPixmapRuntime,
   decodeLookLzdEntriesRuntime
 } from "./assets/legacy_pixmap_runtime.ts";
+import {
+  REQUIRED_RUNTIME_ASSET_NAMES,
+  RUNTIME_ASSET_FETCH_MANIFEST,
+  missingRequiredRuntimeAssetsRuntime
+} from "./assets/runtime_asset_manifest.ts";
+import {
+  conversationArchiveDiagRuntime,
+  runtimeAssetFallbackDiagRuntime,
+  runtimeAssetStatusTextRuntime
+} from "./assets/runtime_asset_status.ts";
+import { decodeRuntimeTileflagSlicesRuntime } from "./assets/runtime_asset_tileflags.ts";
 import {
   decodePortraitFromArchiveRuntime,
   decodeU6CursorPtrRuntime,
@@ -85,6 +111,11 @@ import {
   buildDebugChatLedgerText as buildDebugChatLedgerTextImported,
   endLegacyConversation as endLegacyConversationImported,
   handleLegacyConversationKeydown as handleLegacyConversationKeydownImported,
+  legacyConversationEndedDiagRuntime,
+  legacyLedgerPaginationOptionsRuntime,
+  legacyLedgerPushOptionsRuntime,
+  legacyConversationOkDiagRuntime,
+  legacyConversationReplyFailedDiagRuntime,
   paginateLedgerMessages as paginateLedgerMessagesImported,
   pushLedgerMessage as pushLedgerMessageImported,
   showLegacyLedgerPrompt as showLegacyLedgerPromptImported,
@@ -113,14 +144,9 @@ import {
   validateConversationArchiveARuntime as validateConversationArchiveA
 } from "./conversation/archive_loader_runtime.ts";
 import {
-  DEFAULT_RUNTIME_EXTENSIONS,
   RUNTIME_PROFILE_CANONICAL_STRICT,
-  RUNTIME_PROFILE_CANONICAL_PLUS,
-  RUNTIME_PROFILES,
   createDefaultRuntimeExtensions,
-  normalizeRuntimeProfile,
-  runtimeExtensionsSummary,
-  sanitizeRuntimeExtensions
+  runtimeExtensionsSummary
 } from "../common/runtime_contract.ts";
 import {
   OBJ_COORD_USE_EQUIP,
@@ -128,15 +154,24 @@ import {
   coordUseOfStatus
 } from "../common/u6_object_constants.ts";
 import {
+  managedNetRequestOptionsRuntime,
   performManagedNetRequest,
   type NetJsonBody
 } from "./net/request_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 import {
+  bindRemoteSnapshotButtonRuntime,
+  performNetAutosaveSnapshotRuntime,
   performNetLoadSnapshot,
   performNetSaveSnapshot,
+  remoteSnapshotLoadedDiagRuntime,
+  remoteSnapshotLoadFailureRuntime,
+  remoteSnapshotSavedDiagRuntime,
+  remoteSnapshotSaveFailureRuntime,
   shouldAutosaveSnapshotRuntime,
+  snapshotRouteForCharacterRuntime,
   snapshotSavedTickRuntime,
+  type SnapshotSaveDeps,
   type SnapshotRuntimePayload
 } from "./net/snapshot_runtime.ts";
 import {
@@ -149,41 +184,64 @@ import {
 import {
   applyAuthoritativeNpcStatesRuntime,
   applyAuthoritativeWorldClockToSim,
+  authoritativeWorldClockExtrasRuntime,
   authoritativeNpcStateRowsFromJsonRuntime,
+  createPresenceSessionIdRuntime,
   performPresenceHeartbeat,
   performPresenceLeave,
   performPresencePoll,
   performWorldClockPoll,
+  presenceHeartbeatPayloadRuntime,
   type RemotePresencePlayer,
   type WorldClockPayload
 } from "./net/presence_runtime.ts";
 import {
+  applyHiddenWorldObjectsMetaToClientRuntime,
+  applyInventoryProjectionFromServerObjectsRuntime,
+  applyTakeProjectionToInventoryRuntime,
+  bindCriticalMaintenanceButtonRuntime,
+  bindIntroPhaseButtonRuntime,
+  clearObjectTransientStateRuntime,
   collectWorldItemsForMaintenanceFromLayer,
-  hiddenWorldObjectKeysFromMetaRuntime,
+  criticalMaintenanceDiagRuntime,
+  criticalMaintenanceFailureRuntime,
+  dropThrowPlanRuntime,
+  hiddenWorldObjectVisibilityForClientRuntime,
   inventoryDisplayEntriesFromObjectsRuntime,
-  inventoryItemFromTakeResponseRuntime,
-  inventoryObjectsFromServerObjectsRuntime,
-  inventoryProjectionFromServerObjectsRuntime,
-  inventoryTileProjectionFromServerObjectsRuntime,
+  inventoryCountMapForDropValidationRuntime,
+  inventoryObjectForDropSelectionRuntime,
+  inventorySyncFailureDiagRuntime,
+  markHiddenWorldObjectClientStateRuntime,
   requestIntroPhaseRuntime,
   requestDropWorldObjectRuntime,
   requestTakeWorldObjectRuntime,
   requestWorldObjectsAroundRuntime,
+  removeHiddenWorldObjectsFromLayerRuntime,
   runCriticalMaintenanceRuntime,
   requestWorldObjectsAtCell,
+  serverObjectKeyForWorldObjectRuntime,
   setIntroPhaseRuntime,
   shouldHideServerWorldObjectFromLayerRuntime,
-  sourceObjectKeyFromTakeResponseRuntime,
-  worldInventorySourcesFromJsonRuntime,
+  takeProjectionFromResponseRuntime,
   type CriticalMaintenanceEvent,
   type CriticalMaintenanceWorldItem,
   type WorldRuntimeJson,
+  type WorldRuntimeDropThrowEffect,
   type WorldRuntimeInventoryObject,
   type WorldRuntimeServerObject
 } from "./net/world_runtime.ts";
+import {
+  objectLayerProjectionActionsFromServerObjectsRuntime,
+  targetObjectsFromServerObjectsRuntime
+} from "./net/world_object_projection_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
-import { performNetLoginFlow } from "./net/auth_runtime.ts";
+import {
+  bindNetLoginButtonRuntime,
+  netAutoLoginFailureRuntime,
+  netAutoLoginSuccessDiagRuntime,
+  performNetLoginFlow
+} from "./net/auth_runtime.ts";
 import {
   recordBackgroundFailureRuntime,
   resetBackgroundFailureState
@@ -202,30 +260,51 @@ import {
   encodeSimSnapshotBase64Runtime,
   type SimSnapshotRuntime
 } from "./net/snapshot_codec_runtime.ts";
-import { loadNetPanelPrefs, persistNetLoginSettings, setModalOpenRuntime } from "./net/panel_runtime.ts";
+import {
+  applyNetPanelInitialStateRuntime,
+  bindNetPanelModalButtonsRuntime,
+  loadNetPanelPrefs,
+  persistNetLoginSettings,
+  setModalOpenRuntime
+} from "./net/panel_runtime.ts";
 import {
   applySelectedAccountProfileRuntime,
   applyNetPanelPrefsToControlsRuntime,
   bindAccountProfileSelectionRuntime,
   bindNetPanelPrefPersistenceRuntime
 } from "./net/panel_bindings_runtime.ts";
-import { runNetPanelActionRuntime } from "./net/panel_actions_runtime.ts";
 import {
+  bindNetPanelActionButtonRuntime,
+  netPanelActionDiagRuntime,
+} from "./net/panel_actions_runtime.ts";
+import {
+  applyNetStatusPresentationRuntime,
   applyNetStatusRuntime,
+  netStatusAutoLoginRuntime,
+  netStatusChooseAccountRuntime,
+  netStatusNotLoggedInRuntime,
+  netStatusSessionExpiredRuntime,
+  netLogoutDiagRuntime,
   pulseNetIndicatorRuntime,
+  renderCriticalRecoveryStatRuntime,
+  renderIntroPhaseUiRuntime,
+  renderNetSessionUiRuntime,
   renderNetStatusViewRuntime,
-  type NetStatusElementsRuntime
+  shouldShowInGameServerBrokenRuntime,
+  type NetSessionUiElementsRuntime
 } from "./net/status_runtime.ts";
 import {
-  persistRuntimeProfileConfigRuntime,
-  resolveRuntimeProfileConfigRuntime
+  initRuntimeProfileConfigRuntime
 } from "./net/runtime_profile_config_runtime.ts";
 import {
   legacyAttackVerbRuntime,
   legacyCastVerbRuntime,
   legacyDropVerbRuntime,
-  legacyMoveVerbRuntime
+  legacyDropVerbValidationRuntime,
+  legacyMoveVerbRuntime,
+  legacyVerbSfxIdRuntime
 } from "./gameplay/legacy_verb_runtime.ts";
+import { specialUseSfxAtCellRuntime } from "./gameplay/special_interaction_runtime.ts";
 import {
   advanceWorldMinuteRuntime,
   clampI32Runtime,
@@ -241,19 +320,43 @@ import {
 import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 import {
   filterFutureCommandsOfTypeRuntime,
+  moveDeltaFromKeyRuntime,
   partitionCommandsForTickRuntime,
   queueAvatarMoveCommandRuntime,
   queueCellCommandRuntime,
   queueFacingUseCommandRuntime,
   queueLegacyTargetVerbCommandRuntime,
+  resetMoveInputThrottleRuntime,
+  simCommandActionRuntime,
+  type MoveDeltaRuntime,
   type SimCommandRuntime
 } from "./sim/queue_runtime.ts";
 import {
+  animationTickPatchRuntime,
+  applyPauseLoopStateRuntime,
+  bindBrowserLifecycleRuntime,
+  bindPauseLoopButtonRuntime,
   createInitialAppSimState,
-  toAppSimStateRuntime,
-  type AppSimState
+  frameLoopRecoveryRuntime,
+  loadedSimSnapshotPatchRuntime,
+  loopFrameTimingPatchRuntime,
+  loopVisibilityResetPatchRuntime,
+  pauseLoopReasonDiagRuntime,
+  renderPauseLoopUiRuntime,
+  resetRunPatchRuntime,
+  returnToTitlePatchRuntime,
+  returnToTitleSaveFailureRuntime,
+  runtimeAssetFallbackPatchRuntime,
+  startSessionPatchRuntime,
+  type AppSimState,
+  type LoopHealthRuntime
 } from "./sim/app_state_runtime.ts";
-import { applyAvatarMoveCommandRuntime } from "./sim/avatar_move_runtime.ts";
+import {
+  applyAvatarMoveCommandRuntime,
+  avatarMoveAnimationPatchRuntime,
+  avatarWalkPresentationActiveRuntime,
+  countQueuedAvatarMoveCommandsRuntime
+} from "./sim/avatar_move_runtime.ts";
 import { U6AnimDataRuntime } from "./sim/anim_data_runtime.ts";
 import {
   U6EntityLayerRuntime,
@@ -262,6 +365,8 @@ import {
 import {
   fetchObjectBaselineVersionRuntime,
   loadPristineObjectBaselineRuntime,
+  pristineBaselineReloadedDiagRuntime,
+  pristineBaselineReloadFailedDiagRuntime,
   type ObjectBaselineLoadResultRuntime
 } from "./sim/object_baseline_runtime.ts";
 import { U6MapRuntime } from "./sim/map_runtime.ts";
@@ -269,6 +374,9 @@ import {
   LEGACY_COMMAND_TYPE_RUNTIME,
   LEGACY_TARGET_VERB_LABEL_RUNTIME,
   LEGACY_TARGET_VERB_RUNTIME,
+  legacyKeyboardCommandActionRuntime,
+  legacyNonTargetCommandPatchRuntime,
+  legacyTargetStartPlanRuntime,
   legacyVerbMouseCursorIndexRuntime,
   legacyVerbWorldCursorTileRuntime
 } from "./sim/legacy_command_runtime.ts";
@@ -278,6 +386,7 @@ import {
   objectLayerAnchorKeyRuntime
 } from "./sim/object_layer_runtime.ts";
 import {
+  authoritativeActorWalkingRuntime,
   directionGroupFromDxDyRuntime,
   legacyActorDirectionGroupRuntime,
   legacyActorStandingTileIdRuntime,
@@ -302,16 +411,16 @@ import {
 } from "./sim/object_footprint_runtime.ts";
 import { isBlockedAtRuntime } from "./sim/collision_runtime.ts";
 import {
+  facingDoorCellRuntime,
   isDoorFrameOpenRuntime,
   resolveDoorTileIdRuntime,
   resolvedDoorFrameRuntime,
   toggleDoorAtCellRuntime
 } from "./sim/door_runtime.ts";
 import {
-  addObjectToInventoryRuntime,
   inventoryKeyForObjectRuntime,
   isObjectRemovedRuntime,
-  markObjectRemovedRuntime,
+  pickObjectIntoInventoryRuntime,
   resolveObjectByInventoryAnchorRuntime,
   type InventoryObjectRuntime
 } from "./sim/inventory_runtime.ts";
@@ -323,18 +432,38 @@ import {
   isSolidEnvObjectRuntime
 } from "./sim/object_types_runtime.ts";
 import {
+  legacyDropAsyncFailurePresentationRuntime,
+  legacyDropPlacedPresentationRuntime,
+  legacyGetAsyncFailurePresentationRuntime,
+  legacyGetCheckingPresentationRuntime,
+  legacyGetFailurePresentationRuntime,
+  legacyGetPickedPresentationRuntime,
+  legacyGetTakingPresentationRuntime,
+  legacyLookPresentationRuntime,
+  legacyTalkAsyncFailurePresentationRuntime,
+  legacyTalkAuthoritativeStartedPresentationRuntime,
+  legacyTalkAuthoritativeStartPresentationRuntime,
+  legacyTalkFallbackPresentationRuntime,
+  legacyTalkFailurePresentationRuntime,
+  legacyTalkStartedPresentationRuntime,
+  legacyGetTerrainDamageTileRuntime,
+  legacyGetTileIgnoredRuntime,
   resolveAttackTargetAtCellRuntime,
   resolveLegacyGetSelectionRuntime,
   resolveLookTargetAtCellRuntime,
   resolveTalkTargetAtCellRuntime,
-  type TargetObjectLayerRuntime,
-  type TargetWorldObjectRuntime
+  targetObjectsFromObjectLayerEntriesRuntime,
+  type TargetObjectLayerRuntime
 } from "./sim/target_runtime.ts";
 import {
+  activeTargetCursorKeyActionRuntime,
+  applyTargetCursorMouseCommitRuntime,
   beginTargetCursorRuntime,
   cancelTargetCursorRuntime,
   clampTargetCursorToViewRuntime,
-  moveTargetCursorRuntime
+  commitTargetCursorRuntime,
+  moveTargetCursorRuntime,
+  targetCursorCancelledDiagRuntime
 } from "./sim/target_cursor_runtime.ts";
 import {
   BOOT_INTRO_SCENES,
@@ -352,6 +481,7 @@ import {
   bootIntroTvStateAtRuntime,
   bootIntroTvStaticCellsRuntime,
   buildBootIntroTextCardRenderPlanRuntime,
+  bootIntroInputPlanRuntime,
   bootIntroWouCharWidthRuntime,
   decodeBootIntroWouFontRuntime,
   drawBootIntroWouTextRuntime,
@@ -369,20 +499,38 @@ import {
   wrapBootIntroTextPixelsRuntime
 } from "./ui/boot_intro_runtime.ts";
 import {
-  normalizeStartupMenuIndexRuntime,
+  applyStartupMenuIndexRuntime,
+  journeyOnwardStartedDiagRuntime,
   startupMenuItemEnabledRuntime,
-  startupMenuIndexAtSurfacePointRuntime
+  startupMenuKeyPatchRuntime,
+  startupAssetsReadyDiagRuntime,
+  startupMenuIndexAtSurfacePointRuntime,
+  startupMenuSelectionActionRuntime,
+  startupMenuSelectionPresentationRuntime,
+  startupSessionGuardDiagRuntime
 } from "./ui/startup_runtime.ts";
 import {
   areaIdForWorldXYRuntime,
   canonicalLookSentenceForTileRuntime,
   canonicalTalkSpeakerForTileRuntime,
+  legacyDropTargetPromptLinesRuntime,
   legacyArticleForTileRuntime,
   legacyLookupTileStringRuntime,
   type LegacyLookStringEntryRuntime,
   sanitizeLegacyHudLabelTextRuntime
 } from "./ui/legacy_text_runtime.ts";
 import {
+  applyDebugPanelTabRuntime,
+  bindDebugPanelButtonsRuntime,
+  clearDebugChatLedgerRuntime,
+  debugChatLedgerClearDiagRuntime,
+  debugChatLedgerCopyDiagRuntime,
+  debugPanelTabModelRuntime,
+  renderDebugChatLedgerCountRuntime,
+  renderDebugChatLedgerModelRuntime
+} from "./ui/debug_panel_runtime.ts";
+import {
+  cursorCycleRuntime,
   cursorDrawRectRuntime,
   cursorLogicalWidthRuntime
 } from "./ui/cursor_runtime.ts";
@@ -394,7 +542,22 @@ import {
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
 } from "./ui/legacy_view_tile_runtime.ts";
-import { isTypingContextRuntime } from "./ui/input_runtime.ts";
+import {
+  activeGameKeydownPlanRuntime,
+  applyCanvasMouseEventRuntime,
+  clearCanvasMouseStateRuntime,
+  isHoverReportCopyKeyRuntime,
+  isTypingContextRuntime,
+  isShiftRightClickCopyGestureRuntime,
+  logicalPointAtSurfaceRuntime,
+  logicalPointInBoundsRuntime,
+  shouldLetBrowserHandleShortcutRuntime,
+  shouldSuppressShiftContextMenuRuntime
+} from "./ui/input_runtime.ts";
+import {
+  canvas2dContextRuntime,
+  requiredElementRuntime
+} from "./ui/dom_runtime.ts";
 import {
   buildLegacyInventoryPaperdollLayoutRuntime,
   legacyInventoryPaperdollHitTestRuntime,
@@ -403,6 +566,7 @@ import {
 import { projectLegacyEquipmentSlotsRuntime } from "./ui/paperdoll_equipment_runtime.ts";
 import {
   normalizePartyMemberIdsRuntime,
+  partySwitchDigitDiagRuntime,
   resolvePartySwitchDigitRuntime
 } from "./ui/party_message_runtime.ts";
 import {
@@ -411,20 +575,100 @@ import {
   type CharacterPanelEntityRuntime
 } from "./ui/character_panel_runtime.ts";
 import {
-  onOffPreferenceRuntime,
-  readStoredChoicePreferenceRuntime,
-  writeStoredStringPreferenceRuntime
+  applyBooleanTogglePreferenceRuntime,
+  applyAnimationModePreferenceRuntime,
+  applyFontPreferenceRuntime,
+  applyMovementModePreferenceStateRuntime,
+  applyNamedPreferenceRuntime,
+  applyThemePreferenceRuntime,
+  initChoicePreferenceRuntime,
+  initPreferenceControlsRuntime,
+  nextLegacyScaleModeRuntime,
 } from "./ui/preference_runtime.ts";
 import {
-  formatAvatarStateRuntime,
-  formatClockRuntime,
-  formatDateRuntime,
-  formatInputModeRuntime,
-  formatLayerCountRuntime,
+  DEFAULT_PANEL_COPY_VALUE_IDS_RUNTIME,
+  copyTextToClipboardRuntime,
+  copyTextToClipboardSyncRuntime,
+  installPanelCopyButtonsRuntime,
+  makeCopyButtonRuntime,
+  setCopyPendingStatusRuntime,
+  setCopyStatusRuntime
+} from "./ui/clipboard_runtime.ts";
+import {
+  buildParitySnapshotCellsRuntime,
+  buildParitySnapshotRuntime,
+  clampParityRadiusRuntime,
+  paritySnapshotCopyResultRuntime,
+  paritySnapshotUnavailableDiagRuntime,
+  paritySnapshotWindowRuntime
+} from "./ui/parity_snapshot_runtime.ts";
+import {
+  downloadCanvasPngRuntime,
+  downloadJsonFileRuntime
+} from "./ui/download_runtime.ts";
+import { dropThrowRenderPlanRuntime } from "./ui/drop_throw_runtime.ts";
+import {
+  CAPTURE_PRESETS_RUNTIME,
+  activeCapturePresetFromSelectRuntime,
+  bindCaptureControlButtonsRuntime,
+  cameraPresetPatchRuntime,
+  captureFilePlanRuntime,
+  capturePresetByIdRuntime,
+  captureSuccessDiagRuntime,
+  captureViewportStatusRowsRuntime,
+  composeViewportCaptureCanvasRuntime,
+  composeWorldHudCaptureCanvasRuntime,
+  populateCapturePresetSelectRuntime,
+  type CapturePresetRuntime
+} from "./ui/capture_runtime.ts";
+import {
+  applyReplayDownloadDisabledRuntime,
+  releaseReplayUrlRuntime,
+  replayCommandTicksRuntime,
+  replayTotalTicksRuntime,
+  replayVerificationResultRuntime,
+  runReplayCheckpointsRuntime,
+  setReplayCsvRuntime,
+  type ReplayCheckpointRuntime
+} from "./ui/replay_runtime.ts";
+import {
+  nextUiProbeModeRuntime,
+  normalizeUiProbeModeRuntime,
+  buildUiProbeRuntimePayloadRuntime,
+  installUiProbeDebugHooksRuntime,
+  uiProbeCapturePresentationRuntime,
+  uiProbeFilenameRuntime,
+  uiProbeModePresentationRuntime
+} from "./ui/probe_runtime.ts";
+import {
+  debugHotkeyActionRuntime,
+  legacyHudHitDiagRuntime,
+  legacyHudLayerDiagRuntime,
+  netLoginHotkeyFailedDiagRuntime,
+  netLoginHotkeyOkDiagRuntime,
+  runDebugHotkeyActionRuntime,
+  toggleHelpPanelRuntime,
+  versionStringHotkeyDiagRuntime,
+  worldSnapshotLoadFailedHotkeyDiagRuntime,
+  worldSnapshotLoadedHotkeyDiagRuntime,
+  worldSnapshotSaveFailedHotkeyDiagRuntime,
+  worldSnapshotSavedHotkeyDiagRuntime
+} from "./ui/hotkey_runtime.ts";
+import {
+  buildHoverReportTextRuntime,
+  applyHoverReportCopyResultRuntime,
+  hexRuntime,
+  hoverReportCopyResultRuntime,
+  hoverReportUnavailableResultRuntime,
+  hoveredOrFallbackWorldCellRuntime,
+  hoveredWorldCellRuntime,
+  serverWorldObjectsHoverTextRuntime
+} from "./ui/hover_report_runtime.ts";
+import {
+  applyDiagPresentationRuntime,
+  buildStatusPanelTextRuntime,
   formatLedgerEntryCountRuntime,
-  formatLoopHealthRuntime,
-  formatPositionRuntime,
-  formatRenderParityRuntime
+  normalizeDiagKindPresentationRuntime
 } from "./ui/status_text_runtime.ts";
 
 const TICK_MS = 100;
@@ -457,16 +701,6 @@ const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 28;
 const MONTHS_PER_YEAR = 13;
 const REPLAY_CHECKPOINT_INTERVAL = 32;
-const OBJ_U6_CLOCK = 0x09f;
-const OBJ_U6_FIREPLACE = 0x0a4;
-const OBJ_U6_RUBBER_DUCKY = 169;
-const OBJ_U6_COOK_FIRE = 0x0c9;
-const OBJ_U6_FOUNTAIN = 0x0ea;
-const OBJ_U6_BELL = 236;
-const OBJ_U6_WATER_WHEEL = 0x11f;
-const OBJ_U6_FIRE_FIELD = 0x130;
-const OBJ_U6_FIRE = 0x13d;
-const OBJ_U6_PROTECTION_FIELD = 0x13f;
 const ENTITY_TYPE_ACTOR_MIN = 0x153;
 const ENTITY_TYPE_ACTOR_MAX = 0x1af;
 const AVATAR_ENTITY_ID = 1;
@@ -502,8 +736,11 @@ type UiProbeContractRuntime = UiProbeContract & {
   };
 };
 type VmDebugWindow = Window & typeof globalThis & {
+  __vmCaptureUiProbe?: () => { digest: string; probe: UiProbeContractRuntime };
+  __vmGetUiProbe?: () => UiProbeContractRuntime;
   __vmLastUiProbe?: UiProbeContractRuntime;
   __vmLastUiProbeDigest?: string;
+  __vmStartSessionFromTitle?: () => void;
 };
 type U6TextCanvasApp = LegacyTextCanvasRuntime | {
   fillStyle?: unknown;
@@ -699,13 +936,7 @@ type LegacyCompositionStateView = {
   sessionStarted: boolean;
   tileSet: U6TileSetRuntime | null;
 };
-type AppLoopHealthState = {
-  backlogDrops: number;
-  frameErrors: number;
-  lastDtMs: number;
-  maxDtMs: number;
-  visibilityResets: number;
-};
+type AppLoopHealthState = LoopHealthRuntime;
 type AppNetState = {
   apiBase: string;
   backgroundFailCount: number;
@@ -841,6 +1072,10 @@ type AppState = {
   queue: SimCommandRuntime[];
   renderParityMismatches: number;
   replayUrl: string | null;
+  reconnectedMessageClearOnCommand: boolean;
+  reconnectedMessageUntilMs: number;
+  reconnectProbeInFlight: boolean;
+  reconnectProbeLastMs: number;
   runtimeExtensions: ReturnType<typeof createDefaultRuntimeExtensions>;
   runtimeProfile: string;
   runtimeReady: boolean;
@@ -866,37 +1101,14 @@ type AppState = {
   useCursorY: number;
 };
 
-type DropThrowEffectRuntime = {
-  endMs: number;
-  fromX: number;
-  fromY: number;
-  landObject: WorldRuntimeJson["target"] | null;
-  objectKey: string;
-  startMs: number;
-  tileId: number;
-  toX: number;
-  toY: number;
-  z: number;
-};
+type DropThrowEffectRuntime = WorldRuntimeDropThrowEffect;
 
 function byId<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
-  if (!element) {
-    throw new Error(`Missing required element #${id}`);
-  }
-  return element as T;
-}
-
-function canvas2dContext(canvasElement: HTMLCanvasElement, label: string): CanvasRenderingContext2D {
-  const context = canvasElement.getContext("2d");
-  if (!context) {
-    throw new Error(`${label} 2D context is unavailable`);
-  }
-  return context;
+  return requiredElementRuntime<T>(document, id);
 }
 
 const canvas = byId<HTMLCanvasElement>("viewport");
-const ctx = canvas2dContext(canvas, "viewport");
+const ctx = canvas2dContextRuntime(canvas, "viewport");
 const legacyBackdropCanvas = byId<HTMLCanvasElement>("legacyBackdrop");
 const legacyViewportCanvas = byId<HTMLCanvasElement>("legacyViewport");
 const legacyWorldSurface = byId<HTMLCanvasElement>("legacyWorldSurface");
@@ -968,6 +1180,7 @@ const netEmailInput = byId<HTMLInputElement>("netEmailInput");
 const netEmailCodeInput = byId<HTMLInputElement>("netEmailCodeInput");
 const netLoginButton = byId<HTMLButtonElement>("netLoginButton");
 const netAutoLoginCheckbox = byId<HTMLInputElement>("netAutoLoginCheckbox");
+const skipIntroCheckbox = byId<HTMLInputElement>("skipIntroCheckbox");
 const netRecoverButton = byId<HTMLButtonElement>("netRecoverButton");
 const netSetEmailButton = byId<HTMLButtonElement>("netSetEmailButton");
 const netSendVerifyButton = byId<HTMLButtonElement>("netSendVerifyButton");
@@ -978,6 +1191,15 @@ const netMaintenanceToggle = byId<HTMLSelectElement>("netMaintenanceToggle");
 const netIntroPhaseSelect = byId<HTMLSelectElement>("netIntroPhaseSelect");
 const netIntroPhaseButton = byId<HTMLButtonElement>("netIntroPhaseButton");
 const netMaintenanceButton = byId<HTMLButtonElement>("netMaintenanceButton");
+const netStatusElements: NetSessionUiElementsRuntime = {
+  statNetSession,
+  topNetStatus,
+  topNetIndicator,
+  netQuickStatus,
+  netLoginButton,
+  statIntroPhase,
+  netIntroPhaseSelect
+};
 const debugTabRuntime = byId<HTMLButtonElement>("debugTabRuntime");
 const debugTabChat = byId<HTMLButtonElement>("debugTabChat");
 const debugPanelRuntime = byId("debugPanelRuntime");
@@ -1004,6 +1226,7 @@ const NET_CHARACTER_NAME_KEY = "vm_net_character_name";
 const NET_EMAIL_KEY = "vm_net_email";
 const NET_MAINTENANCE_KEY = "vm_net_maintenance";
 const NET_AUTO_LOGIN_KEY = "vm_net_auto_login";
+const SKIP_INTRO_KEY = "vm_skip_intro_menu";
 const NET_PROFILES_KEY = "vm_net_profiles";
 const NET_PROFILE_SELECTED_KEY = "vm_net_profile_selected";
 const NET_PROFILE_STORAGE = {
@@ -1013,6 +1236,8 @@ const NET_PROFILE_STORAGE = {
 const RUNTIME_PROFILE_KEY = "vm_runtime_profile";
 const RUNTIME_EXTENSIONS_KEY = "vm_runtime_extensions";
 const NET_ACTIVITY_PULSE_MS = 280;
+const NET_RECONNECT_PROBE_INTERVAL_MS = 1000;
+const NET_RECONNECTED_MESSAGE_MS = 3200;
 const LEGACY_UI_MAP_RECT = Object.freeze({ x: 8, y: 8, w: 160, h: 160 });
 const LEGACY_FRAME_TILES = Object.freeze({
   cornerTL: 0x1b0,
@@ -1062,7 +1287,6 @@ const STARTUP_MENU: readonly StartupMenuItem[] = Object.freeze([
   { id: "ack", label: "Acknowledgements", enabled: false },
   { id: "journey", label: "Journey Onward", enabled: true }
 ]);
-const LEGACY_TARGET_VERB = LEGACY_TARGET_VERB_RUNTIME;
 const LEGACY_TARGET_VERB_LABEL = LEGACY_TARGET_VERB_LABEL_RUNTIME;
 const LEGACY_STATUS_DISPLAY = Object.freeze({
   CMD_90: 0x90, /* character status */
@@ -1128,23 +1352,6 @@ const THEMES = [
   "ash"
 ];
 const FONTS = ["sans", "silkscreen", "kaijuz", "orangekid", "blockblueprint"];
-type CapturePreset = {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  z: number;
-};
-const CAPTURE_PRESETS: readonly CapturePreset[] = Object.freeze([
-  { id: "avatar_start", label: "Avatar Start (307,352,0)", x: 307, y: 352, z: 0 },
-  { id: "lb_throne", label: "Lord British Throne (307,347,0)", x: 307, y: 347, z: 0 },
-  { id: "wood_corner_a", label: "Wood Corner A (355,411,0)", x: 355, y: 411, z: 0 },
-  { id: "wood_corner_b", label: "Wood Corner B (356,411,0)", x: 356, y: 411, z: 0 },
-  { id: "britain_core", label: "Britain Core (337,365,0)", x: 337, y: 365, z: 0 },
-  { id: "farmland", label: "Farmland Props (292,431,0)", x: 292, y: 431, z: 0 },
-  { id: "anim_fire", label: "Animation Test Fire (360,397,0)", x: 360, y: 397, z: 0 },
-  { id: "anim_wheels", label: "Animation Test Wheels (307,384,0)", x: 307, y: 384, z: 0 }
-]);
 const INITIAL_WORLD = Object.freeze({
   is_on_quest: 0,
   next_sleep: 0,
@@ -1163,6 +1370,7 @@ const INITIAL_WORLD = Object.freeze({
 });
 
 const INITIAL_SEED = 0x12345678;
+const INITIAL_NET_STATUS = netStatusNotLoggedInRuntime();
 
 const state: AppState = {
   sim: createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED),
@@ -1255,6 +1463,10 @@ const state: AppState = {
   },
   simPaused: false,
   replayUrl: null,
+  reconnectedMessageClearOnCommand: false,
+  reconnectedMessageUntilMs: 0,
+  reconnectProbeInFlight: false,
+  reconnectProbeLastMs: 0,
   legacyPaperPixmap: null,
   lookStringEntries: null,
   converseArchiveA: null,
@@ -1303,7 +1515,11 @@ const state: AppState = {
     username: "",
     email: "",
     emailVerified: false,
-    sessionId: (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Math.random().toString(16).slice(2)}_${Date.now()}`,
+    sessionId: createPresenceSessionIdRuntime({
+      getRandomValues: globalThis.crypto?.getRandomValues?.bind(globalThis.crypto),
+      nowMs: () => Date.now(),
+      randomUUID: globalThis.crypto?.randomUUID?.bind(globalThis.crypto)
+    }),
     characterId: "",
     characterName: "",
     remotePlayers: [],
@@ -1324,8 +1540,8 @@ const state: AppState = {
     recoveryEventCount: 0,
     resumeFromSnapshot: false,
     introPhase: "post_intro",
-    statusLevel: "idle",
-    statusText: "Not logged in."
+    statusLevel: INITIAL_NET_STATUS.level,
+    statusText: INITIAL_NET_STATUS.text
   }
 };
 
@@ -1334,48 +1550,36 @@ function wrapLegacyLedgerLines(text: unknown): string[] {
 }
 
 function pushLedgerMessage(text: unknown): void {
-  pushLedgerMessageImported(state as LegacyConversationState, text, {
+  pushLedgerMessageImported(state as LegacyConversationState, text, legacyLedgerPushOptionsRuntime({
     maxChars: LEGACY_LEDGER_MAX_CHARS,
     maxLines: LEGACY_LEDGER_MAX_LINES,
     tick: Number(state.sim?.tick) >>> 0,
     nowMs: Date.now()
-  });
-}
-
-function buildDebugChatLedgerText(): string {
-  return buildDebugChatLedgerTextImported(state.debugChatLedger);
+  }));
 }
 
 function renderDebugChatLedgerPanel(): void {
-  if (debugChatCount) {
-    const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
-    debugChatCount.textContent = formatLedgerEntryCountRuntime(count);
-  }
-  if (debugChatLedgerBody) {
-    debugChatLedgerBody.textContent = buildDebugChatLedgerText();
-    debugChatLedgerBody.scrollTop = debugChatLedgerBody.scrollHeight;
-  }
+  renderDebugChatLedgerModelRuntime({
+    ledger: state.debugChatLedger,
+    countFormatter: formatLedgerEntryCountRuntime,
+    buildLedgerText: buildDebugChatLedgerTextImported,
+    elements: {
+      count: debugChatCount,
+      ledgerBody: debugChatLedgerBody
+    }
+  });
 }
 
 function setDebugPanelTab(tab: unknown): void {
-  const next = (tab === "chat") ? "chat" : "runtime";
-  state.debugPanelTab = next;
-  const runtimeActive = next === "runtime";
-  if (debugPanelRuntime) {
-    debugPanelRuntime.classList.toggle("hidden", !runtimeActive);
-  }
-  if (debugPanelChat) {
-    debugPanelChat.classList.toggle("hidden", runtimeActive);
-  }
-  if (debugTabRuntime) {
-    debugTabRuntime.classList.toggle("is-active", runtimeActive);
-    debugTabRuntime.setAttribute("aria-selected", runtimeActive ? "true" : "false");
-  }
-  if (debugTabChat) {
-    debugTabChat.classList.toggle("is-active", !runtimeActive);
-    debugTabChat.setAttribute("aria-selected", runtimeActive ? "false" : "true");
-  }
-  if (!runtimeActive) {
+  const model = debugPanelTabModelRuntime(tab);
+  state.debugPanelTab = model.tab;
+  applyDebugPanelTabRuntime(model, {
+    chatPanel: debugPanelChat,
+    chatTab: debugTabChat,
+    runtimePanel: debugPanelRuntime,
+    runtimeTab: debugTabRuntime
+  });
+  if (model.refreshChatLedger) {
     renderDebugChatLedgerPanel();
   }
 }
@@ -1385,12 +1589,12 @@ function paginateLedgerMessages(lines: unknown, maxLines = LEGACY_LEDGER_MAX_LIN
 }
 
 function startLegacyConversationPagination(lines: unknown): boolean {
-  return startLegacyConversationPaginationImported(state as LegacyConversationState, lines, {
-    pageMaxLines: LEGACY_LEDGER_MAX_LINES - 1,
+  return startLegacyConversationPaginationImported(state as LegacyConversationState, lines, legacyLedgerPaginationOptionsRuntime({
     maxChars: LEGACY_LEDGER_MAX_CHARS,
+    maxLines: LEGACY_LEDGER_MAX_LINES,
     tick: Number(state.sim?.tick) >>> 0,
     nowMs: Date.now()
-  });
+  }));
 }
 
 function advanceLegacyConversationPagination(): boolean {
@@ -1399,10 +1603,6 @@ function advanceLegacyConversationPagination(): boolean {
 
 function showLegacyLedgerPrompt(): void {
   showLegacyLedgerPromptImported(state as LegacyConversationState);
-}
-
-function isLegacyScaleMode(mode: unknown): boolean {
-  return mode === "fit" || mode === "1" || mode === "2" || mode === "3" || mode === "4";
 }
 
 function isLegacyFramePreviewOn(): boolean {
@@ -1414,14 +1614,13 @@ const CURSOR_ASPECT_X = 1.0;
 const CURSOR_ASPECT_Y = 1.2;
 
 function animationTick(): number {
-  const animationState = state as AnimationPaletteState;
-  if (state.animationFrozen) {
-    if (animationState.frozenAnimationTick === null) {
-      animationState.frozenAnimationTick = state.sim.tick >>> 0;
-    }
-    return animationState.frozenAnimationTick;
-  }
-  return state.sim.tick >>> 0;
+  const patch = animationTickPatchRuntime({
+    animationFrozen: state.animationFrozen,
+    currentTick: state.sim.tick,
+    frozenAnimationTick: (state as AnimationPaletteState).frozenAnimationTick
+  });
+  (state as AnimationPaletteState).frozenAnimationTick = patch.frozenAnimationTick;
+  return patch.tick;
 }
 
 function resolveAnimatedTileAtTick(tileId: number, counter: number): number {
@@ -2026,9 +2225,9 @@ function submitLegacyConversationInput(): void {
     reply: (typed) => legacyConversationReply(state.legacyConversationTargetName, typed),
     startPagination: startLegacyConversationPagination
   });
-  if (out && out.diagText) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = out.diagText;
+  const diag = legacyConversationOkDiagRuntime(out?.diagText);
+  if (diag) {
+    applyDiag(diag);
   }
 }
 
@@ -2050,8 +2249,8 @@ async function submitAuthoritativeConversationInput() {
       pushLedgerMessage(line);
     }
     endLegacyConversation();
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Conversation ended.";
+    const diag = legacyConversationEndedDiagRuntime();
+    applyDiag(diag);
     return;
   }
   if (typeof out?.next_pc === "number") {
@@ -2074,8 +2273,8 @@ async function submitAuthoritativeConversationInput() {
 function handleLegacyConversationKeydown(ev: KeyboardEvent): boolean {
   if (state.legacyConversationAuthoritative && !state.legacyConversationPaging && String(ev?.key || "") === "Enter") {
     submitAuthoritativeConversationInput().catch((err) => {
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Conversation reply failed: ${errorMessageRuntime(err)}`;
+      const diag = legacyConversationReplyFailedDiagRuntime(errorMessageRuntime(err));
+      applyDiag(diag);
       pushLedgerMessage("No response.");
       pushLegacyConversationPrompt();
     });
@@ -2087,9 +2286,9 @@ function handleLegacyConversationKeydown(ev: KeyboardEvent): boolean {
     submitInput: submitLegacyConversationInput,
     maxChars: LEGACY_LEDGER_MAX_CHARS
   });
-  if (out && out.diagText) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = out.diagText;
+  const diag = legacyConversationOkDiagRuntime(out?.diagText);
+  if (diag) {
+    applyDiag(diag);
   }
   return !!out?.handled;
 }
@@ -2767,6 +2966,64 @@ function renderLegacyHudStubOnBackdrop(): void {
     drawTile(LEGACY_UI_TILE.BUTTON_ATTACK_BASE + i, 8 + (i * 16), 176);
   }
   drawTile(LEGACY_UI_TILE.BUTTON_RIGHT, 152, 176);
+}
+
+function drawCenteredServerStatusOnSurface(
+  g: LegacyTextCanvasRuntime,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+  text: string,
+  color: string
+): void {
+  const warningText = String(text || "");
+  const textW = warningText.length * 8;
+  const logicalX = Math.floor((320 - textW) / 2);
+  const logicalY = 16;
+  const sx = (logicalX - offsetX) * scale;
+  const sy = (logicalY - offsetY) * scale;
+  g.fillStyle = "#1f0f0a";
+  g.fillRect(sx - (4 * scale), sy - (2 * scale), (textW + 8) * scale, 12 * scale);
+  drawU6MainText(g, warningText, sx, sy, Math.max(1, scale), color);
+}
+
+function currentInGameServerStatusOverlay(nowMs: number): { color: string; text: string } | null {
+  if (isServerConnectionBroken()) {
+    return { color: "#b00000", text: "SERVER LOST" };
+  }
+  if (Number(state.reconnectedMessageUntilMs) > nowMs) {
+    return { color: "#138000", text: "RECONNECTED" };
+  }
+  return null;
+}
+
+function drawInGameServerStatusOverlay(): void {
+  const overlay = currentInGameServerStatusOverlay(performance.now());
+  if (!overlay) {
+    return;
+  }
+  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+  if (enabled && legacyBackdropCanvas) {
+    const bg = legacyBackdropCanvas.getContext("2d");
+    if (bg) {
+      bg.imageSmoothingEnabled = false;
+      const scale = Math.max(1, Math.floor((legacyBackdropCanvas.width | 0) / 320));
+      drawCenteredServerStatusOnSurface(bg, scale, 0, 0, overlay.text, overlay.color);
+    }
+    if (legacyViewportCanvas) {
+      const vg = legacyViewportCanvas.getContext("2d");
+      if (vg) {
+        vg.imageSmoothingEnabled = false;
+        drawCenteredServerStatusOnSurface(vg, 1, LEGACY_UI_MAP_RECT.x, LEGACY_UI_MAP_RECT.y, overlay.text, overlay.color);
+      }
+    }
+    return;
+  }
+  if (ctx && canvas) {
+    ctx.imageSmoothingEnabled = false;
+    const scale = Math.max(1, Math.floor((canvas.width | 0) / 320));
+    drawCenteredServerStatusOnSurface(ctx, scale, 0, 0, overlay.text, overlay.color);
+  }
 }
 
 function drawLegacyTileScaled(
@@ -3552,268 +3809,110 @@ function composeLegacyViewportFromModernGrid(): void {
   lv.drawImage(compose, 8, 8, 160, 160, 0, 0, 160, 160);
 }
 
-function applyRuntimeProfileState(profile: unknown, extensions: unknown): void {
-  state.runtimeProfile = normalizeRuntimeProfile(profile);
-  state.runtimeExtensions = sanitizeRuntimeExtensions(extensions);
-  document.documentElement.setAttribute("data-runtime-profile", state.runtimeProfile);
-}
-
 function initRuntimeProfileConfig(): void {
-  const { profile, extensions } = resolveRuntimeProfileConfigRuntime({
+  initRuntimeProfileConfigRuntime({
+    documentElement: document.documentElement,
     keys: {
       profileKey: RUNTIME_PROFILE_KEY,
       extensionsKey: RUNTIME_EXTENSIONS_KEY
     },
     locationSearch: window.location.search,
+    state,
     storage: localStorage
-  });
-  applyRuntimeProfileState(profile, extensions);
-  persistRuntimeProfileConfigRuntime(localStorage, {
-    profileKey: RUNTIME_PROFILE_KEY,
-    extensionsKey: RUNTIME_EXTENSIONS_KEY
-  }, {
-    profile: state.runtimeProfile,
-    extensions: state.runtimeExtensions
   });
 }
 
 function setTheme(themeName: string): void {
-  const theme = THEMES.includes(themeName) ? themeName : "obsidian";
-  document.documentElement.setAttribute("data-theme", theme);
-  if (themeSelect) {
-    themeSelect.value = theme;
-  }
-  if (wikiLink) {
-    wikiLink.href = `/docs/wiki/?theme=${encodeURIComponent(theme)}`;
-  }
-  writeStoredStringPreferenceRuntime(localStorage, THEME_KEY, theme);
+  applyThemePreferenceRuntime({ theme: themeName, allowedThemes: THEMES, fallback: "obsidian", key: THEME_KEY, documentElement: document.documentElement, select: themeSelect, wikiLink, storage: localStorage });
 }
 
 function initTheme(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, THEME_KEY, "obsidian", THEMES);
-  setTheme(saved);
-  if (themeSelect) {
-    themeSelect.addEventListener("change", () => {
-      setTheme(themeSelect.value);
-    });
-  }
+  initChoicePreferenceRuntime({ storage: localStorage, key: THEME_KEY, fallback: "obsidian", allowed: THEMES, select: themeSelect, onApply: setTheme });
 }
 
 function setFont(fontName: string): void {
-  const font = FONTS.includes(fontName) ? fontName : "silkscreen";
-  document.documentElement.setAttribute("data-font", font);
-  if (fontSelect) {
-    fontSelect.value = font;
-  }
-  writeStoredStringPreferenceRuntime(localStorage, FONT_KEY, font);
+  applyFontPreferenceRuntime({
+    font: fontName,
+    allowedFonts: FONTS,
+    fallback: "silkscreen",
+    key: FONT_KEY,
+    documentElement: document.documentElement,
+    select: fontSelect,
+    storage: localStorage
+  });
 }
 
 function initFont(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, FONT_KEY, "silkscreen", FONTS);
-  setFont(saved);
-  if (fontSelect) {
-    fontSelect.addEventListener("change", () => {
-      setFont(fontSelect.value);
-    });
-  }
-}
-
-async function copyTextToClipboard(text: unknown): Promise<boolean> {
-  const v = String(text ?? "");
-  let lastErr = "";
-  try {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      await navigator.clipboard.writeText(v);
-      return true;
-    }
-  } catch (err) {
-    lastErr = errorMessageRuntime(err);
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = v;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.top = "0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    ta.setSelectionRange(0, ta.value.length);
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    if (ok) {
-      return true;
-    }
-    if (!lastErr) {
-      lastErr = "execCommand(copy) returned false";
-    }
-    if (diagBox) {
-      diagBox.dataset.copyError = lastErr || "copy blocked";
-    }
-    return false;
-  } catch (err) {
-    if (!lastErr) {
-      lastErr = errorMessageRuntime(err);
-    }
-    if (diagBox) {
-      diagBox.dataset.copyError = lastErr || "copy blocked";
-    }
-    return false;
-  }
-}
-
-function setCopyStatus(ok: boolean, detail = ""): void {
-  if (topCopyStatus) {
-    topCopyStatus.textContent = ok ? "ok" : (detail ? `failed (${detail})` : "failed");
-  }
-}
-
-function copyTextToClipboardSync(text: unknown): { ok: boolean; reason: string } {
-  const v = String(text ?? "");
-  let lastErr = "";
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = v;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.top = "0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    ta.setSelectionRange(0, ta.value.length);
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    if (ok) {
-      return { ok: true, reason: "" };
-    }
-    lastErr = "execCommand(copy) returned false";
-  } catch (err) {
-    lastErr = errorMessageRuntime(err);
-  }
-  if (diagBox) {
-    diagBox.dataset.copyError = lastErr || "copy blocked";
-  }
-  return { ok: false, reason: lastErr || "copy blocked" };
+  initChoicePreferenceRuntime({ storage: localStorage, key: FONT_KEY, fallback: "silkscreen", allowed: FONTS, select: fontSelect, onApply: setFont });
 }
 
 function makeCopyButton(getText: () => string): HTMLButtonElement {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "copy-icon-btn";
-  btn.title = "Copy to clipboard";
-  btn.textContent = "⧉";
-  btn.addEventListener("click", async () => {
-    const text = getText();
-    const ok = await copyTextToClipboard(text);
-    const prev = btn.textContent;
-    btn.textContent = ok ? "✓" : "!";
-    setTimeout(() => {
-      btn.textContent = prev;
-    }, 900);
+  return makeCopyButtonRuntime({
+    document,
+    getText,
+    copyText: (text: unknown) => copyTextToClipboardRuntime(text, { document, navigator, errorTarget: diagBox })
   });
-  return btn;
 }
 
 function initPanelCopyButtons(): void {
-  const usefulValueIds = new Set([
-    "statPos",
-    "statClock",
-    "statDate",
-    "statTile",
-    "statRenderParity",
-    "statSource",
-    "statHash",
-    "statLoopHealth",
-    "statReplay",
-    "statCenterTiles",
-    "statNetSession"
-  ]);
-  const rows = document.querySelectorAll(".stat-row");
-  rows.forEach((row) => {
-    const label = row.querySelector("span");
-    const value = row.querySelector("strong");
-    if (!label || !value) {
-      return;
-    }
-    const valueId = value.id || "";
-    const existingBtn = row.querySelector(".copy-icon-btn");
-    if (!usefulValueIds.has(valueId)) {
-      if (existingBtn) {
-        existingBtn.remove();
-      }
-      return;
-    }
-    if (existingBtn) {
-      return;
-    }
-    const btn = makeCopyButton(() => `${label.textContent || ""}: ${value.textContent || ""}`);
-    row.appendChild(btn);
+  installPanelCopyButtonsRuntime({
+    diagBox,
+    document,
+    makeCopyButton,
+    usefulValueIds: DEFAULT_PANEL_COPY_VALUE_IDS_RUNTIME
   });
-
-  if (diagBox && diagBox.parentElement && !diagBox.parentElement.querySelector(".diag-copy")) {
-    const wrap = document.createElement("div");
-    wrap.className = "mt-1 flex justify-end diag-copy";
-    const btn = makeCopyButton(() => diagBox.textContent || "");
-    wrap.appendChild(btn);
-    diagBox.parentElement.insertBefore(wrap, diagBox.nextSibling);
-  }
 }
 
-function currentNetStatusElements(): NetStatusElementsRuntime {
-  return {
-    statNetSession,
-    topNetStatus,
-    topNetIndicator,
-    netQuickStatus,
-    netLoginButton
-  };
+function applyDiag(presentation: { diagClass?: unknown; diagText?: unknown } | null | undefined): void {
+  applyDiagPresentationRuntime(diagBox, presentation);
+}
+
+function applyDiagKind(presentation: {
+  diagClass?: unknown;
+  diagText?: unknown;
+  message?: unknown;
+  text?: unknown;
+} | null | undefined): void {
+  applyDiag(normalizeDiagKindPresentationRuntime(presentation));
 }
 
 function renderCurrentNetStatusView(): void {
   renderNetStatusViewRuntime({
     stateNet: state.net,
     isAuthenticated: isNetAuthenticated(),
-    elements: currentNetStatusElements()
+    elements: netStatusElements
   });
 }
 
 function updateNetSessionStat(): void {
-  renderCurrentNetStatusView();
-  updateIntroPhaseUi();
+  renderNetSessionUiRuntime({
+    stateNet: state.net,
+    isAuthenticated: isNetAuthenticated(),
+    elements: netStatusElements
+  });
 }
 
 function updatePauseLoopUi(): void {
-  const paused = !!state.simPaused;
-  if (pauseLoopButton) {
-    pauseLoopButton.textContent = paused ? "Resume Loop" : "Pause Loop";
-  }
-  if (statSimLoop) {
-    statSimLoop.textContent = paused ? "paused" : "running";
-  }
+  renderPauseLoopUiRuntime({ paused: state.simPaused, pauseLoopButton, statSimLoop });
 }
 
 function setSimPaused(paused: boolean, reason = ""): void {
-  state.simPaused = !!paused;
-  state.net.backgroundSyncPaused = !!paused;
-  state.accMs = 0;
-  state.lastTs = performance.now();
+  applyPauseLoopStateRuntime({
+    backgroundSyncTarget: state.net,
+    nowMs: () => performance.now(),
+    paused,
+    state
+  });
   updatePauseLoopUi();
-  if (reason) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = reason;
+  const diag = pauseLoopReasonDiagRuntime(reason);
+  if (diag) {
+    applyDiag(diag);
   }
 }
 
 function updateIntroPhaseUi(): void {
-  const phase = String(state.net.introPhase || "post_intro").trim().toLowerCase();
-  const normalized = phase === "pre_intro" ? "pre_intro" : "post_intro";
-  state.net.introPhase = normalized;
-  if (statIntroPhase) {
-    statIntroPhase.textContent = normalized;
-  }
-  if (netIntroPhaseSelect) {
-    netIntroPhaseSelect.value = normalized;
-  }
+  const model = renderIntroPhaseUiRuntime(state.net.introPhase, { statIntroPhase, netIntroPhaseSelect });
+  state.net.introPhase = model.normalized;
 }
 
 function updateNetAuthButton(): void {
@@ -3826,7 +3925,57 @@ function setNetStatus(level: string, text: string): void {
     level,
     text,
     isAuthenticated: isNetAuthenticated(),
-    elements: currentNetStatusElements()
+    elements: netStatusElements
+  });
+}
+
+function netOnlineStatusText(): string {
+  const username = String(state.net.username || "").trim();
+  const characterName = String(state.net.characterName || "").trim();
+  return username || characterName
+    ? `${username || "account"}/${characterName || "(no-char)"}`
+    : "Connected.";
+}
+
+function isServerConnectionBroken(): boolean {
+  return shouldShowInGameServerBrokenRuntime({
+    isAuthenticated: isNetAuthenticated(),
+    statusLevel: state.net.statusLevel
+  });
+}
+
+function markServerReconnected(): void {
+  state.reconnectedMessageUntilMs = performance.now() + NET_RECONNECTED_MESSAGE_MS;
+  state.reconnectedMessageClearOnCommand = true;
+  state.net.backgroundSyncPaused = false;
+  setNetStatus("online", netOnlineStatusText());
+}
+
+function clearTransientReconnectMessageOnCommand(): void {
+  if (!state.reconnectedMessageClearOnCommand) {
+    return;
+  }
+  state.reconnectedMessageClearOnCommand = false;
+  state.reconnectedMessageUntilMs = 0;
+}
+
+function blockGameplayForBrokenServer(): boolean {
+  if (!state.sessionStarted || !isServerConnectionBroken()) {
+    return false;
+  }
+  applyDiag({
+    diagClass: "diag warn",
+    diagText: "Server connection lost. Waiting to reconnect before accepting commands."
+  });
+  return true;
+}
+
+function applyNetStatusPresentation(presentation: { level: string; text: string }): void {
+  applyNetStatusPresentationRuntime({
+    stateNet: state.net,
+    presentation,
+    isAuthenticated: isNetAuthenticated(),
+    elements: netStatusElements
   });
 }
 
@@ -3907,33 +4056,35 @@ function netAccountSelectionBinding(): {
 }
 
 function resetBackgroundFailures(): void {
+  const wasBroken = isServerConnectionBroken();
   resetBackgroundFailureState(state.net);
+  if (wasBroken && isNetAuthenticated()) {
+    markServerReconnected();
+  }
 }
 
 function updateCriticalRecoveryStat(): void {
-  if (!statCriticalRecoveries) {
-    return;
-  }
-  const suffix = state.net.lastMaintenanceTick >= 0 ? ` @${state.net.lastMaintenanceTick}` : "";
-  statCriticalRecoveries.textContent = `${state.net.recoveryEventCount}${suffix}`;
+  renderCriticalRecoveryStatRuntime(statCriticalRecoveries, state.net);
 }
 
 async function netRequest(route: string, init: RequestInit = {}, auth = true): Promise<NetJsonBody> {
-  const enabledExtensions = runtimeExtensionsSummary(state.runtimeExtensions);
-  return performManagedNetRequest({
+  const requestOptions = managedNetRequestOptionsRuntime({
     apiBase: String(state.net.apiBase || ""),
     route: String(route || ""),
     init,
     auth,
     token: String(state.net.token || ""),
     runtimeProfile: String(state.runtimeProfile || RUNTIME_PROFILE_CANONICAL_STRICT),
-    runtimeExtensions: enabledExtensions,
+    runtimeExtensions: runtimeExtensionsSummary(state.runtimeExtensions)
+  });
+  return performManagedNetRequest({
+    ...requestOptions,
     onPulse: pulseNetIndicator,
     onUnauthorized: () => {
       clearNetSessionState(state.net);
       state.net.introPhase = "post_intro";
       updateNetSessionStat();
-      setNetStatus("idle", "Session expired. Please log in.");
+      applyNetStatusPresentation(netStatusSessionExpiredRuntime());
     }
   });
 }
@@ -3954,30 +4105,39 @@ async function netSetIntroPhase(phase: unknown): Promise<WorldRuntimeJson | null
 
 async function netEnsureCharacter(): Promise<void> {
   const out = await performNetEnsureCharacter(
-    String(netCharacterNameInput?.value || "Avatar"),
+    String(netCharacterNameInput?.value || state.net.characterName || "Avatar"),
     netRequest
   );
   state.net.characterId = out.characterId;
   state.net.characterName = out.characterName;
 }
 
+async function netWorldObjectActorId(): Promise<string> {
+  if (!String(state.net.characterId || "").trim()) {
+    await netEnsureCharacter();
+  }
+  const actorId = String(state.net.characterId || "").trim();
+  if (!actorId) {
+    throw new Error("No character is selected for world inventory.");
+  }
+  return actorId;
+}
+
 function netSnapshotRoute(): string {
-  const characterId = String(state.net.characterId || "").trim();
-  return characterId ? `/api/characters/${characterId}/snapshot` : "/api/world/snapshot";
+  return snapshotRouteForCharacterRuntime(state.net.characterId);
 }
 
 function applyLoadedSimSnapshot(loaded: SimSnapshotRuntime): void {
   const fallbackPartySize = Array.isArray(state.sim.partyMembers) ? state.sim.partyMembers.length : 1;
-  state.sim = toAppSimStateRuntime(loaded, fallbackPartySize);
-  state.sim.inventoryObjects = [];
-  state.sim.partyMembers = normalizePartyMemberIdsRuntime(state.sim.partyMembers, 1);
-  state.queue = [];
-  state.commandLog = [];
-  state.accMs = 0;
-  state.lastMoveQueueAtMs = -1;
-  state.avatarLastMoveTick = -1;
-  state.avatarWalkAnimUntilMs = -1;
-  state.interactionProbeTile = null;
+  const patch = loadedSimSnapshotPatchRuntime(loaded, fallbackPartySize);
+  state.sim = patch.sim;
+  state.queue = patch.queue;
+  state.commandLog = patch.commandLog;
+  state.accMs = patch.accMs;
+  resetMoveInputThrottleRuntime(state);
+  state.avatarLastMoveTick = patch.avatarLastMoveTick;
+  state.avatarWalkAnimUntilMs = patch.avatarWalkAnimUntilMs;
+  state.interactionProbeTile = patch.interactionProbeTile;
 }
 
 async function netLogin(): Promise<void> {
@@ -4048,6 +4208,7 @@ async function netLogin(): Promise<void> {
   } catch (_err) {
     // The next object query will refresh pickup respawn metadata.
   }
+  maybeStartSessionFromSkipIntro();
   return out;
 }
 
@@ -4160,26 +4321,14 @@ async function netLogoutAndPersist(): Promise<void> {
     setStartupMenuIndex(0);
   }
   updateNetSessionStat();
-  setNetStatus("idle", "Not logged in.");
-  if (saveErr || leaveErr) {
-    diagBox.className = "diag warn";
-    const parts = [];
-    if (saveErr) {
-      parts.push(`position save failed: ${errorMessageRuntime(saveErr)}`);
-    }
-    if (leaveErr) {
-      parts.push(`presence cleanup failed: ${errorMessageRuntime(leaveErr)}`);
-    }
-    diagBox.textContent = `Logged out with warnings (${parts.join("; ")}).`;
-  } else {
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Logged out. Position saved and presence cleared.";
-  }
+  applyNetStatusPresentation(netStatusNotLoggedInRuntime());
+  const logoutDiag = netLogoutDiagRuntime({ saveErr, leaveErr, errorMessage: errorMessageRuntime });
+  applyDiag(logoutDiag);
   updateNetAuthButton();
 }
 
-async function netSaveSnapshot(): Promise<SnapshotRuntimePayload> {
-  return performNetSaveSnapshot({
+function netSaveSnapshotDeps(setStatus: (level: string, text: string) => void): SnapshotSaveDeps {
+  return {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,
     request: netRequest,
@@ -4190,32 +4339,16 @@ async function netSaveSnapshot(): Promise<SnapshotRuntimePayload> {
       state.net.lastSavedTick = Number(tick) >>> 0;
     },
     resetBackgroundFailures,
-    setStatus: setNetStatus
-  });
+    setStatus
+  };
+}
+
+async function netSaveSnapshot(): Promise<SnapshotRuntimePayload> {
+  return performNetSaveSnapshot(netSaveSnapshotDeps(setNetStatus));
 }
 
 async function netAutosaveSnapshot(): Promise<void> {
-  if (state.net.snapshotSaveInFlight) {
-    return;
-  }
-  state.net.snapshotSaveInFlight = true;
-  try {
-    await performNetSaveSnapshot({
-      ensureAuth: netLogin,
-      isAuthenticated: () => !!state.net.token,
-      request: netRequest,
-      snapshotRoute: netSnapshotRoute,
-      encodeSnapshot: () => encodeSimSnapshotBase64Runtime(state.sim),
-      currentTick: () => state.sim.tick >>> 0,
-      onSavedTick: (tick) => {
-        state.net.lastSavedTick = Number(tick) >>> 0;
-      },
-      resetBackgroundFailures,
-      setStatus: () => {}
-    });
-  } finally {
-    state.net.snapshotSaveInFlight = false;
-  }
+  await performNetAutosaveSnapshotRuntime(state.net, netSaveSnapshotDeps(() => {}));
 }
 
 async function netLoadSnapshot(): Promise<SnapshotRuntimePayload> {
@@ -4250,8 +4383,7 @@ async function netRunCriticalMaintenance(opts: { silent?: boolean } = {}): Promi
     updateCriticalRecoveryStat,
     setStatus: setNetStatus,
     setDiag: (kind, text) => {
-      diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
-      diagBox.textContent = text;
+      applyDiag(criticalMaintenanceDiagRuntime(kind, text));
     }
   });
 }
@@ -4267,17 +4399,17 @@ async function netFetchWorldObjectsAtCell(x: number, y: number, z: number): Prom
 }
 
 async function netSendPresenceHeartbeat(): Promise<void> {
-  await performPresenceHeartbeat({
-    session_id: state.net.sessionId,
-    character_name: state.net.characterName || "Avatar",
-    map_x: state.sim.world.map_x | 0,
-    map_y: state.sim.world.map_y | 0,
-    map_z: state.sim.world.map_z | 0,
-    facing_dx: state.avatarFacingDx | 0,
-    facing_dy: state.avatarFacingDy | 0,
-    tick: state.sim.tick >>> 0,
-    mode: state.movementMode
-  }, {
+  await performPresenceHeartbeat(presenceHeartbeatPayloadRuntime({
+    avatarFacingDx: state.avatarFacingDx,
+    avatarFacingDy: state.avatarFacingDy,
+    characterName: state.net.characterName,
+    mapX: state.sim.world.map_x,
+    mapY: state.sim.world.map_y,
+    mapZ: state.sim.world.map_z,
+    mode: state.movementMode,
+    sessionId: state.net.sessionId,
+    tick: state.sim.tick
+  }), {
     isAuthenticated: isNetAuthenticated,
     isSessionStarted: () => state.sessionStarted,
     request: netRequest,
@@ -4331,11 +4463,7 @@ function applyAuthoritativeNpcOverrides(overrides: unknown): void {
 }
 
 function applyAuthoritativeWorldClock(clock: WorldClockPayload | null): void {
-  const clockRecord = clock && typeof clock === "object" ? clock as {
-    intro_state?: { phase?: unknown };
-    npc_overrides?: unknown;
-    npc_states?: unknown;
-  } : {};
+  const extras = authoritativeWorldClockExtrasRuntime(clock, state.net.introPhase);
   applyAuthoritativeWorldClockToSim(clock, (next) => {
     state.sim.tick = next.tick;
     const w = state.sim.world;
@@ -4343,11 +4471,11 @@ function applyAuthoritativeWorldClock(clock: WorldClockPayload | null): void {
     w.time_h = next.time_h;
     w.date_d = next.date_d;
     w.date_m = next.date_m;
-      w.date_y = next.date_y;
+    w.date_y = next.date_y;
   });
-  state.net.introPhase = String(clockRecord.intro_state?.phase || state.net.introPhase || "post_intro");
+  state.net.introPhase = extras.introPhase;
   updateIntroPhaseUi();
-  applyAuthoritativeNpcStates(Array.isArray(clockRecord.npc_states) ? clockRecord.npc_states : clockRecord.npc_overrides);
+  applyAuthoritativeNpcStates(extras.npcRows);
 }
 
 async function netPollWorldClock(): Promise<void> {
@@ -4362,6 +4490,26 @@ async function netPollWorldClock(): Promise<void> {
     },
     applyClock: applyAuthoritativeWorldClock
   });
+}
+
+async function netProbeReconnect(): Promise<void> {
+  if (state.reconnectProbeInFlight || !isNetAuthenticated() || !isServerConnectionBroken()) {
+    return;
+  }
+  state.reconnectProbeInFlight = true;
+  try {
+    await netRequest("/health", { method: "GET" }, false);
+    state.net.backgroundSyncPaused = false;
+    state.net.lastClockPollTick = -1;
+    state.net.lastPresencePollTick = -1;
+    await netPollWorldClock();
+    await netPollPresence();
+    markServerReconnected();
+  } catch (_err) {
+    // Stay in SERVER LOST state; the next probe will retry.
+  } finally {
+    state.reconnectProbeInFlight = false;
+  }
 }
 
 function startAuthoritativeConversationFromPayload(
@@ -4421,8 +4569,13 @@ async function netStartConversation(actor: LegacyTalkActor, tx: number, ty: numb
   }, true);
   const payload = out as AuthoritativeConversationPayload;
   startAuthoritativeConversationFromPayload(payload.conversation_session || {}, actor, tileId);
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Talk: ${String(payload.conversation_session?.target_name || "NPC")} (authoritative) at ${tx},${ty},${tz}.`;
+  const diag = legacyTalkAuthoritativeStartedPresentationRuntime({
+    targetName: payload.conversation_session?.target_name,
+    tx,
+    ty,
+    tz
+  });
+  applyDiagKind(diag);
 }
 
 async function netReplyConversation(typed: unknown) {
@@ -4439,6 +4592,10 @@ async function netReplyConversation(typed: unknown) {
 
 function setAccountModalOpen(open: boolean): void {
   setModalOpenRuntime(netAccountModal, !!open);
+}
+
+function setNetPanelActionDiag(kind: "ok" | "warn", text: string): void {
+  applyDiag(netPanelActionDiagRuntime(kind, text));
 }
 
 function initNetPanel(): void {
@@ -4473,17 +4630,14 @@ function initNetPanel(): void {
   const accountBinding = netAccountSelectionBinding();
   refreshNetAccountSelect();
   applySelectedAccountProfileRuntime(accountBinding);
-  state.net.apiBase = prefs.apiBase;
-  state.net.username = prefs.username;
-  state.net.email = prefs.email;
-  state.net.characterName = prefs.characterName;
-  setNetStatus("idle", "Not logged in.");
+  applyNetPanelInitialStateRuntime({
+    maintenanceToggle: netMaintenanceToggle,
+    prefs,
+    stateNet: state.net
+  });
+  applyNetStatusPresentation(netStatusNotLoggedInRuntime());
 
   bindAccountProfileSelectionRuntime(accountBinding);
-  state.net.maintenanceAuto = prefs.maintenance === "on";
-  if (netMaintenanceToggle) {
-    netMaintenanceToggle.value = state.net.maintenanceAuto ? "on" : "off";
-  }
   bindNetPanelPrefPersistenceRuntime({
     controls: {
       apiBaseInput: netApiBaseInput,
@@ -4517,363 +4671,198 @@ function initNetPanel(): void {
   updateIntroPhaseUi();
   updatePauseLoopUi();
   updateAudioMuteUi();
-  if (netAccountOpenButton) {
-    netAccountOpenButton.addEventListener("click", () => {
-      refreshNetAccountSelect();
-      setAccountModalOpen(true);
-    });
-  }
-  if (netAccountCloseButton) {
-    netAccountCloseButton.addEventListener("click", () => setAccountModalOpen(false));
-  }
-  if (netAccountModalBackdrop) {
-    netAccountModalBackdrop.addEventListener("click", () => setAccountModalOpen(false));
-  }
+  bindNetPanelModalButtonsRuntime({
+    backdrop: netAccountModalBackdrop,
+    closeButton: netAccountCloseButton,
+    onBeforeOpen: refreshNetAccountSelect,
+    openButton: netAccountOpenButton,
+    setOpen: setAccountModalOpen
+  });
 
-  if (netLoginButton) {
-    netLoginButton.addEventListener("click", async () => {
-      if (isNetAuthenticated()) {
-        netLogout();
-        return;
-      }
-      try {
-        await netLogin();
-        setAccountModalOpen(false);
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
-      } catch (err) {
-        setNetStatus("error", `Login failed: ${errorMessageRuntime(err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Net login failed: ${errorMessageRuntime(err)}`;
-      }
-    });
-  }
+  bindNetLoginButtonRuntime({
+    button: netLoginButton,
+    characterName: () => state.net.characterName,
+    errorMessage: errorMessageRuntime,
+    isAuthenticated: isNetAuthenticated,
+    login: netLogin,
+    logout: netLogout,
+    setAccountModalOpen,
+    setStatus: setNetStatus,
+    username: () => state.net.username,
+    setDiag: (diag) => {
+      applyDiag(diag);
+    }
+  });
   if (prefs.autoLogin === "on" && !isNetAuthenticated()) {
     (async () => {
       try {
-        setNetStatus("connecting", "Auto-login...");
+        applyNetStatusPresentation(netStatusAutoLoginRuntime());
         await netLogin();
         setAccountModalOpen(false);
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Auto-login ok: ${state.net.username}/${state.net.characterName}`;
+        applyDiag(netAutoLoginSuccessDiagRuntime(state.net.username, state.net.characterName));
       } catch (err) {
-        setNetStatus("error", `Auto-login failed: ${errorMessageRuntime(err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Auto-login failed: ${errorMessageRuntime(err)}`;
+        const failure = netAutoLoginFailureRuntime(errorMessageRuntime(err));
+        setNetStatus(failure.statusLevel, failure.statusText);
+        applyDiag(failure);
       }
     })();
   }
-  if (netRecoverButton) {
-    netRecoverButton.addEventListener("click", async () => {
-      await runNetPanelActionRuntime({
-        run: netRecoverPassword,
-        setStatus: setNetStatus,
-        setDiag: (kind, text) => {
-          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
-          diagBox.textContent = text;
-        },
-        okText: (out) => `Recovery email sent for ${out?.user?.username || "user"}.`,
-        errorStatusPrefix: "Recovery failed",
-        errorDiagPrefix: "Password recovery failed"
-      });
-    });
-  }
-  if (netSetEmailButton) {
-    netSetEmailButton.addEventListener("click", async () => {
-      await runNetPanelActionRuntime({
-        run: netSetEmail,
-        setStatus: setNetStatus,
-        setDiag: (kind, text) => {
-          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
-          diagBox.textContent = text;
-        },
-        okText: (out) => {
-          const verified = !!out?.user?.email_verified;
-          return verified
-            ? `Recovery email set and verified (${out?.user?.email || ""}).`
-            : `Recovery email set (${out?.user?.email || ""}). Verification required.`;
-        },
-        errorStatusPrefix: "Set email failed",
-        errorDiagPrefix: "Set email failed"
-      });
-    });
-  }
-  if (netSendVerifyButton) {
-    netSendVerifyButton.addEventListener("click", async () => {
-      await runNetPanelActionRuntime({
-        run: netSendEmailVerification,
-        setStatus: setNetStatus,
-        setDiag: (kind, text) => {
-          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
-          diagBox.textContent = text;
-        },
-        okText: "Verification code sent to recovery email.",
-        errorStatusPrefix: "Send code failed",
-        errorDiagPrefix: "Send code failed"
-      });
-    });
-  }
-  if (netVerifyEmailButton) {
-    netVerifyEmailButton.addEventListener("click", async () => {
-      await runNetPanelActionRuntime({
-        run: netVerifyEmail,
-        setStatus: setNetStatus,
-        setDiag: (kind, text) => {
-          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
-          diagBox.textContent = text;
-        },
-        okText: "Recovery email verified.",
-        errorStatusPrefix: "Verify email failed",
-        errorDiagPrefix: "Verify email failed"
-      });
-    });
-  }
-  if (netChangePasswordButton) {
-    netChangePasswordButton.addEventListener("click", async () => {
-      await runNetPanelActionRuntime({
-        run: netChangePassword,
-        setStatus: setNetStatus,
-        setDiag: (kind, text) => {
-          diagBox.className = kind === "ok" ? "diag ok" : "diag warn";
-          diagBox.textContent = text;
-        },
-        okText: "Account password updated.",
-        errorStatusPrefix: "Change password failed",
-        errorDiagPrefix: "Change password failed"
-      });
-    });
-  }
-  if (netSaveButton) {
-    netSaveButton.addEventListener("click", async () => {
-      try {
-        await netSaveSnapshot();
-        updateNetSessionStat();
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Remote snapshot saved at tick ${state.sim.tick >>> 0}.`;
-      } catch (err) {
-        setNetStatus("error", `Save failed: ${errorMessageRuntime(err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Remote save failed: ${errorMessageRuntime(err)}`;
-      }
-    });
-  }
-  if (netLoadButton) {
-    netLoadButton.addEventListener("click", async () => {
-      try {
-        const out = await netLoadSnapshot();
-        updateNetSessionStat();
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Remote snapshot loaded at tick ${snapshotSavedTickRuntime(out)}.`;
-      } catch (err) {
-        setNetStatus("error", `Load failed: ${errorMessageRuntime(err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Remote load failed: ${errorMessageRuntime(err)}`;
-      }
-    });
-  }
-  if (netMaintenanceButton) {
-    netMaintenanceButton.addEventListener("click", async () => {
-      try {
-        await netRunCriticalMaintenance({ silent: false });
-      } catch (err) {
-        setNetStatus("error", `Maintenance failed: ${errorMessageRuntime(err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Critical maintenance failed: ${errorMessageRuntime(err)}`;
-      }
-    });
-  }
-  if (pauseLoopButton) {
-    pauseLoopButton.addEventListener("click", () => {
-      const next = !state.simPaused;
-      setSimPaused(
-        next,
-        next
-          ? "Simulation loop paused. Background polling disabled."
-          : "Simulation loop resumed. Background polling enabled."
-      );
-    });
-  }
-  if (audioMuteButton) {
-    audioMuteButton.addEventListener("click", () => {
+  bindNetPanelActionButtonRuntime({
+    button: netRecoverButton,
+    run: netRecoverPassword,
+    setStatus: setNetStatus,
+    setDiag: setNetPanelActionDiag,
+    okText: (out) => `Recovery email sent for ${out?.user?.username || "user"}.`,
+    errorStatusPrefix: "Recovery failed",
+    errorDiagPrefix: "Password recovery failed"
+  });
+  bindNetPanelActionButtonRuntime({
+    button: netSetEmailButton,
+    run: netSetEmail,
+    setStatus: setNetStatus,
+    setDiag: setNetPanelActionDiag,
+    okText: (out) => {
+      const verified = !!out?.user?.email_verified;
+      return verified
+        ? `Recovery email set and verified (${out?.user?.email || ""}).`
+        : `Recovery email set (${out?.user?.email || ""}). Verification required.`;
+    },
+    errorStatusPrefix: "Set email failed",
+    errorDiagPrefix: "Set email failed"
+  });
+  bindNetPanelActionButtonRuntime({
+    button: netSendVerifyButton,
+    run: netSendEmailVerification,
+    setStatus: setNetStatus,
+    setDiag: setNetPanelActionDiag,
+    okText: "Verification code sent to recovery email.",
+    errorStatusPrefix: "Send code failed",
+    errorDiagPrefix: "Send code failed"
+  });
+  bindNetPanelActionButtonRuntime({
+    button: netVerifyEmailButton,
+    run: netVerifyEmail,
+    setStatus: setNetStatus,
+    setDiag: setNetPanelActionDiag,
+    okText: "Recovery email verified.",
+    errorStatusPrefix: "Verify email failed",
+    errorDiagPrefix: "Verify email failed"
+  });
+  bindNetPanelActionButtonRuntime({
+    button: netChangePasswordButton,
+    run: netChangePassword,
+    setStatus: setNetStatus,
+    setDiag: setNetPanelActionDiag,
+    okText: "Account password updated.",
+    errorStatusPrefix: "Change password failed",
+    errorDiagPrefix: "Change password failed"
+  });
+  bindRemoteSnapshotButtonRuntime({
+    button: netSaveButton,
+    run: netSaveSnapshot,
+    updateSessionStat: updateNetSessionStat,
+    success: () => remoteSnapshotSavedDiagRuntime(state.sim.tick),
+    failure: (err) => remoteSnapshotSaveFailureRuntime(errorMessageRuntime(err)),
+    setStatus: setNetStatus,
+    setDiag: (diag) => {
+      applyDiag(diag);
+    }
+  });
+  bindRemoteSnapshotButtonRuntime({
+    button: netLoadButton,
+    run: netLoadSnapshot,
+    updateSessionStat: updateNetSessionStat,
+    success: (out) => remoteSnapshotLoadedDiagRuntime(snapshotSavedTickRuntime(out)),
+    failure: (err) => remoteSnapshotLoadFailureRuntime(errorMessageRuntime(err)),
+    setStatus: setNetStatus,
+    setDiag: (diag) => {
+      applyDiag(diag);
+    }
+  });
+  bindCriticalMaintenanceButtonRuntime({
+    button: netMaintenanceButton,
+    errorMessage: errorMessageRuntime,
+    run: () => netRunCriticalMaintenance({ silent: false }),
+    setStatus: setNetStatus,
+    setDiag: (diag) => {
+      applyDiag(diag);
+    }
+  });
+  bindPauseLoopButtonRuntime({
+    button: pauseLoopButton,
+    isPaused: () => state.simPaused,
+    setPaused: setSimPaused
+  });
+  bindAudioMuteButtonRuntime({
+    button: audioMuteButton,
+    toggle: () => {
       toggleAudioMute();
-    });
-  }
-  if (netIntroPhaseButton) {
-    netIntroPhaseButton.addEventListener("click", async () => {
-      try {
-        if (!isNetAuthenticated()) {
-          throw new Error("Login required");
-        }
-        const requested = String(netIntroPhaseSelect?.value || state.net.introPhase || "post_intro");
-        await netSetIntroPhase(requested);
-        diagBox.className = "diag ok";
-        diagBox.textContent = `Intro phase set to ${String(state.net.introPhase)}.`;
-        setNetStatus("online", `Intro phase: ${String(state.net.introPhase)}`);
-      } catch (err) {
-        setNetStatus("error", `Intro phase update failed: ${errorMessageRuntime(err)}`);
-        diagBox.className = "diag warn";
-        diagBox.textContent = `Intro phase update failed: ${errorMessageRuntime(err)}`;
-      }
-    });
-  }
+    }
+  });
+  bindIntroPhaseButtonRuntime({
+    button: netIntroPhaseButton,
+    currentPhase: () => state.net.introPhase,
+    errorMessage: errorMessageRuntime,
+    isAuthenticated: isNetAuthenticated,
+    requestedPhase: () => netIntroPhaseSelect?.value,
+    setIntroPhase: netSetIntroPhase,
+    setStatus: setNetStatus,
+    setDiag: (diag) => {
+      applyDiag(diag);
+    }
+  });
 }
 
 function setGrid(enabled: boolean): void {
-  state.showGrid = !!enabled;
-  if (gridToggle) {
-    gridToggle.value = state.showGrid ? "on" : "off";
-  }
-  writeStoredStringPreferenceRuntime(localStorage, GRID_KEY, onOffPreferenceRuntime(state.showGrid));
-}
-
-function initGrid(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, GRID_KEY, "off", ["on", "off"]);
-  setGrid(saved === "on");
-  if (gridToggle) {
-    gridToggle.addEventListener("change", () => {
-      setGrid(gridToggle.value === "on");
-    });
-  }
+  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: GRID_KEY, select: gridToggle, storage: localStorage });
+  state.showGrid = model.enabled;
 }
 
 function setOverlayDebug(enabled: boolean): void {
-  state.showOverlayDebug = !!enabled;
-  if (debugOverlayToggle) {
-    debugOverlayToggle.value = state.showOverlayDebug ? "on" : "off";
-  }
-  writeStoredStringPreferenceRuntime(localStorage, DEBUG_OVERLAY_KEY, onOffPreferenceRuntime(state.showOverlayDebug));
-}
-
-function initOverlayDebug(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, DEBUG_OVERLAY_KEY, "off", ["on", "off"]);
-  setOverlayDebug(saved === "on");
-  if (debugOverlayToggle) {
-    debugOverlayToggle.addEventListener("change", () => {
-      setOverlayDebug(debugOverlayToggle.value === "on");
-    });
-  }
+  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: DEBUG_OVERLAY_KEY, select: debugOverlayToggle, storage: localStorage });
+  state.showOverlayDebug = model.enabled;
 }
 
 function setAnimationMode(mode: string): void {
   const animationState = state as AnimationPaletteState;
-  const nextMode = mode === "freeze" ? "freeze" : "live";
-  state.animationFrozen = nextMode === "freeze";
-  if (state.animationFrozen) {
-    animationState.frozenAnimationTick = state.sim.tick >>> 0;
-  } else {
-    animationState.frozenAnimationTick = null;
-  }
-  if (animationToggle) {
-    animationToggle.value = nextMode;
-  }
-  writeStoredStringPreferenceRuntime(localStorage, ANIMATION_KEY, nextMode);
-}
-
-function initAnimationMode(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, ANIMATION_KEY, "live", ["live", "freeze"]);
-  setAnimationMode(saved);
-  if (animationToggle) {
-    animationToggle.addEventListener("change", () => {
-      setAnimationMode(animationToggle.value);
-    });
-  }
+  const model = applyAnimationModePreferenceRuntime({ mode, currentTick: state.sim.tick, key: ANIMATION_KEY, select: animationToggle, storage: localStorage });
+  state.animationFrozen = model.animationFrozen;
+  animationState.frozenAnimationTick = model.frozenAnimationTick;
 }
 
 function setPaletteFxMode(enabled: boolean): void {
   const paletteState = state as AnimationPaletteState;
-  state.enablePaletteFx = !!enabled;
+  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: PALETTE_FX_KEY, select: paletteFxToggle, storage: localStorage });
+  state.enablePaletteFx = model.enabled;
   paletteState.paletteFrameTick = -1;
   paletteState.paletteFrame = null;
-  if (paletteFxToggle) {
-    paletteFxToggle.value = state.enablePaletteFx ? "on" : "off";
-  }
-  writeStoredStringPreferenceRuntime(localStorage, PALETTE_FX_KEY, onOffPreferenceRuntime(state.enablePaletteFx));
-}
-
-function initPaletteFxMode(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, PALETTE_FX_KEY, "on", ["on", "off"]);
-  setPaletteFxMode(saved === "on");
-  if (paletteFxToggle) {
-    paletteFxToggle.addEventListener("change", () => {
-      setPaletteFxMode(paletteFxToggle.value === "on");
-    });
-  }
 }
 
 function setMovementMode(mode: string): void {
-  const next = mode === "avatar" ? "avatar" : "ghost";
-  state.movementMode = next;
-  if (next !== "avatar") {
-    state.useCursorActive = false;
-    state.targetVerb = "";
-  }
-  if (movementModeToggle) {
-    movementModeToggle.value = next;
-  }
-  if (statAvatarState) {
-    statAvatarState.textContent = next === "avatar" ? "avatar" : "ghost";
-  }
-  writeStoredStringPreferenceRuntime(localStorage, MOVEMENT_MODE_KEY, next);
-}
-
-function initMovementMode(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, MOVEMENT_MODE_KEY, "avatar", ["avatar", "ghost"]);
-  setMovementMode(saved);
-  if (movementModeToggle) {
-    movementModeToggle.addEventListener("change", () => {
-      setMovementMode(movementModeToggle.value);
-    });
-  }
+  applyMovementModePreferenceStateRuntime({
+    mode,
+    key: MOVEMENT_MODE_KEY,
+    select: movementModeToggle,
+    statAvatarState,
+    state,
+    storage: localStorage
+  });
 }
 
 function setLegacyFramePreview(enabled: boolean): void {
-  const on = !!enabled;
-  document.documentElement.setAttribute("data-legacy-frame-preview", on ? "on" : "off");
-  if (capturePreviewToggle) {
-    capturePreviewToggle.value = on ? "on" : "off";
-  }
+  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: LEGACY_FRAME_PREVIEW_KEY, select: capturePreviewToggle, storage: localStorage });
+  document.documentElement.setAttribute("data-legacy-frame-preview", model.value);
   applyLegacyFrameLayout();
-  writeStoredStringPreferenceRuntime(localStorage, LEGACY_FRAME_PREVIEW_KEY, onOffPreferenceRuntime(on));
 }
 
 function setLegacyScaleMode(mode: string): void {
-  const next = isLegacyScaleMode(mode) ? mode : "fit";
-  state.legacyScaleMode = next;
-  if (legacyScaleModeToggle) {
-    legacyScaleModeToggle.value = next;
-  }
-  writeStoredStringPreferenceRuntime(localStorage, LEGACY_SCALE_MODE_KEY, next);
+  const model = applyNamedPreferenceRuntime({ value: mode, allowed: LEGACY_SCALE_MODES, fallback: "fit", key: LEGACY_SCALE_MODE_KEY, select: legacyScaleModeToggle, storage: localStorage });
+  state.legacyScaleMode = model.value;
   applyLegacyFrameLayout();
 }
 
 function cycleLegacyScaleMode(step: number): void {
-  const current = isLegacyScaleMode(state.legacyScaleMode) ? state.legacyScaleMode : "fit";
-  const idx = LEGACY_SCALE_MODES.indexOf(current);
-  const base = idx >= 0 ? idx : 0;
-  const nextIdx = (base + step + LEGACY_SCALE_MODES.length) % LEGACY_SCALE_MODES.length;
-  setLegacyScaleMode(LEGACY_SCALE_MODES[nextIdx]);
-}
-
-function initLegacyScaleMode(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, LEGACY_SCALE_MODE_KEY, "4", LEGACY_SCALE_MODES, {
-    native: "4"
-  });
-  setLegacyScaleMode(saved);
-  if (legacyScaleModeToggle) {
-    legacyScaleModeToggle.addEventListener("change", () => {
-      setLegacyScaleMode(legacyScaleModeToggle.value);
-    });
-  }
-}
-
-function initLegacyFramePreview(): void {
-  const saved = readStoredChoicePreferenceRuntime(localStorage, LEGACY_FRAME_PREVIEW_KEY, "on", ["on", "off"]);
-  setLegacyFramePreview(saved === "on");
-  if (capturePreviewToggle) {
-    capturePreviewToggle.addEventListener("change", () => {
-      setLegacyFramePreview(capturePreviewToggle.value === "on");
-    });
-  }
+  setLegacyScaleMode(nextLegacyScaleModeRuntime(state.legacyScaleMode, step, LEGACY_SCALE_MODES, "fit"));
 }
 
 function tryLookAtCell(sim: AppSimState, tx: number, ty: number): boolean {
@@ -4893,18 +4882,14 @@ function tryLookAtCell(sim: AppSimState, tx: number, ty: number): boolean {
     avatarEntityId: AVATAR_ENTITY_ID,
     deps: WORLD_OBJECT_LOOKUP_DEPS
   });
-  if (!result.ok) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Look: ${tx},${ty} is out of range.`;
-    pushLedgerMessage("Thou dost see nothing.");
-    showLegacyLedgerPrompt();
-    return false;
+  const sentence = result.ok ? canonicalLookSentenceForTile(result.tileId) : "";
+  const presentation = legacyLookPresentationRuntime(result, sentence);
+  applyDiagKind(presentation);
+  for (const line of presentation.ledgerLines) {
+    pushLedgerMessage(line);
   }
-  pushLedgerMessage(canonicalLookSentenceForTile(result.tileId));
   showLegacyLedgerPrompt();
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Look: ${canonicalLookSentenceForTile(result.tileId)} @ ${result.x},${result.y},${result.z}`;
-  return true;
+  return presentation.ok;
 }
 
 function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
@@ -4917,27 +4902,22 @@ function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
     avatarEntityId: AVATAR_ENTITY_ID
   });
   const tz = target.z;
-  if (target.ok === false && target.reason === "out_of_range") {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Talk: target must be adjacent (${tx},${ty}).`;
-    pushLedgerMessage("No one responds.");
-    showLegacyLedgerPrompt();
-    return false;
-  }
   if (target.ok === false) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Talk: nobody there at ${tx},${ty},${tz}.`;
-    pushLedgerMessage("No one responds.");
+    const presentation = legacyTalkFailurePresentationRuntime(target);
+    applyDiagKind(presentation);
+    for (const line of presentation.ledgerLines) {
+      pushLedgerMessage(line);
+    }
     showLegacyLedgerPrompt();
-    return false;
+    return presentation.ok;
   }
   const actor = target.actor;
   if (isNetAuthenticated()) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Talk: contacting authoritative conversation service for actor ${Number(actor.id) | 0}...`;
+    const diag = legacyTalkAuthoritativeStartPresentationRuntime(actor.id);
+    applyDiagKind(diag);
     netStartConversation(actor, tx, ty, tz).catch((err: unknown) => {
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Talk failed: ${errorMessageRuntime(err)}`;
+      const failure = legacyTalkAsyncFailurePresentationRuntime(errorMessageRuntime(err));
+      applyDiagKind(failure);
       pushLedgerMessage("No one responds.");
       showLegacyLedgerPrompt();
     });
@@ -4976,8 +4956,8 @@ function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const openingLines = canonicalizeOpeningLines(talkObjNum, openingLinesRaw);
   if (!scriptAvailable) {
     const summary = debugConversationResolutionSummary(actor, tileId);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Talk fallback: ${summary}`;
+    const diag = legacyTalkFallbackPresentationRuntime(summary);
+    applyDiagKind(diag);
   }
   const equipSlots = legacyEquipmentSlotsForTalkActor(actor as LegacyTalkActor);
   const renderedOpeningLines: string[] = [];
@@ -5034,31 +5014,33 @@ function tryTalkAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   if (!pagedOpening) {
     pushLegacyConversationPrompt();
   }
-  diagBox.className = haveConverse ? "diag ok" : "diag warn";
-  diagBox.textContent = `Talk: ${speaker} (actor id ${Number(actor.id) | 0}, conv id ${Number(resolvedConversation.objNum) | 0}, type 0x${(Number(actor.type) & 0x3ff).toString(16)}) at ${tx},${ty},${tz}; valid=${resolvedConversation.valid ? 1 : 0}; rules=${rules.length}; showInven=${state.legacyConversationShowInventory ? 1 : 0}; converse=${haveConverse ? "loaded" : "missing"}.`;
+  const diag = legacyTalkStartedPresentationRuntime({
+    actorId: actor.id,
+    converseLoaded: haveConverse,
+    rulesCount: rules.length,
+    showInventory: state.legacyConversationShowInventory,
+    speaker,
+    targetObjNum: resolvedConversation.objNum,
+    targetType: actor.type,
+    tx,
+    ty,
+    tz,
+    valid: resolvedConversation.valid
+  });
+  applyDiagKind(diag);
   return true;
-}
-
-function applyInventoryProjectionFromServerObjects(sim: AppSimState | null | undefined, objects: unknown): void {
-  if (!sim) {
-    return;
-  }
-  const sources = worldInventorySourcesFromJsonRuntime(objects);
-  sim.inventoryObjects = inventoryObjectsFromServerObjectsRuntime(sources);
-  sim.inventory = inventoryProjectionFromServerObjectsRuntime(sources);
-  sim.inventoryTiles = inventoryTileProjectionFromServerObjectsRuntime(sources);
 }
 
 async function netSyncInventoryProjection() {
   if (!isNetAuthenticated() || !state.sim) {
     return null;
   }
-  const actorId = String(state.net.characterId || state.net.userId || "Avatar");
+  const actorId = await netWorldObjectActorId();
   const out = await netRequest(`/api/world/inventory?actor_id=${encodeURIComponent(actorId)}`, {
     method: "GET"
   }, true);
   applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
-  applyInventoryProjectionFromServerObjects(state.sim, out?.objects || []);
+  applyInventoryProjectionFromServerObjectsRuntime(state.sim, out?.objects || []);
   return out;
 }
 
@@ -5083,177 +5065,50 @@ async function netTakeWorldObject(
   ty: number,
   tz: number
 ) {
+  const actorId = await netWorldObjectActorId();
   const out = await requestTakeWorldObjectRuntime({
-    actorId: state.net.characterId || state.net.userId || "Avatar",
+    actorId,
     actorX: state.sim.world.map_x,
     actorY: state.sim.world.map_y,
     actorZ: state.sim.world.map_z,
     target: obj
   }, netRequest);
   applyAuthoritativeHiddenWorldObjectsFromMeta(out?.meta);
-  const item = inventoryItemFromTakeResponseRuntime(out, obj);
-  const sourceObj = obj as InventoryObjectRuntime & { key?: unknown; object_key?: unknown };
-  const takenObjectKey = String(sourceObj.object_key || sourceObj.key || "").trim();
-  if (takenObjectKey.startsWith("inv:") && state.objectLayer) {
-    state.objectLayer.removeRuntimeEntryByAuthoritativeKey(takenObjectKey);
+  const projection = takeProjectionFromResponseRuntime(out, obj);
+  const item = projection.inventory_item;
+  if (projection.remove_taken_object_key && state.objectLayer) {
+    state.objectLayer.removeRuntimeEntryByAuthoritativeKey(projection.remove_taken_object_key);
   }
-  const sourceObjectKey = sourceObjectKeyFromTakeResponseRuntime(out, item, sourceObj);
-  if (out?.respawn?.source_object_key || out?.respawn?.due_at_ms) {
+  if (projection.hide_source) {
     if (state.objectLayer) {
-      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(sourceObjectKey);
+      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(projection.remove_source_object_key);
     }
     markAuthoritativeWorldObjectHidden(
-      sourceObjectKey,
-      out?.respawn?.due_at_ms
+      projection.source_object_key,
+      projection.source_respawn_due_at_ms
     );
   }
-  const inventoryObjects = inventoryObjectsFromServerObjectsRuntime([item]);
-  if (!state.sim.inventoryObjects) {
-    state.sim.inventoryObjects = [];
-  }
-  if (inventoryObjects[0]) {
-    state.sim.inventoryObjects = [
-      ...state.sim.inventoryObjects.filter((entry) => String(entry.object_key || "") !== String(inventoryObjects[0].object_key || "")),
-      inventoryObjects[0]
-    ];
-  }
-  addObjectToInventoryRuntime(state.sim, item);
-  const tileId = Number(item.tile_id);
-  if (Number.isFinite(tileId)) {
-    if (!state.sim.inventoryTiles) {
-      state.sim.inventoryTiles = {};
-    }
-    state.sim.inventoryTiles[inventoryKeyForObjectRuntime(item)] = tileId & 0xffff;
-  }
-  markObjectRemovedRuntime(state.sim, obj);
-  const invKey = inventoryKeyForObjectRuntime(item);
-  const count = Number(state.sim.inventory[invKey]) >>> 0;
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Get: picked 0x${(Number(item.type) & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${invKey}=${count}).`;
+  const pickup = applyTakeProjectionToInventoryRuntime(state.sim, projection, obj);
+  const diag = legacyGetPickedPresentationRuntime(item, tx, ty, tz, pickup.inventoryKey, pickup.count);
+  applyDiagKind(diag);
   return out;
-}
-
-function targetObjectsFromServerObjects(objects: readonly WorldRuntimeServerObject[] | null | undefined): TargetWorldObjectRuntime[] {
-  const out: TargetWorldObjectRuntime[] = [];
-  for (const row of objects || []) {
-    const objectKey = String(row.object_key || "").trim();
-    const type = Number(row.type);
-    const frame = Number(row.frame);
-    const sourceIndex = Number(row.source_index) >>> 0;
-    if (!objectKey || !Number.isFinite(type) || !Number.isFinite(frame)) {
-      continue;
-    }
-    out.push({
-      object_key: objectKey,
-      key: objectKey,
-      type: Number(type) & 0x3ff,
-      frame: Number(frame) & 0x3f,
-      footprint: Array.isArray(row.footprint) ? row.footprint : undefined,
-      tile_id: Number(row.tile_id) & 0xffff,
-      status: Number(row.status) & 0xff,
-      x: Number(row.x) | 0,
-      y: Number(row.y) | 0,
-      z: Number(row.z) | 0,
-      index: sourceIndex,
-      order: sourceIndex,
-      source_index: sourceIndex,
-      legacy_order: runtimeObjectLegacyOrder(objectKey, row.legacy_order, sourceIndex),
-      renderable: true
-    });
-  }
-  return out;
-}
-
-function runtimeObjectStableIndex(objectKey: string): number {
-  let hash = 0;
-  for (let i = 0; i < objectKey.length; i += 1) {
-    hash = (((hash << 5) - hash) + objectKey.charCodeAt(i)) | 0;
-  }
-  return hash & 0xffff;
-}
-
-function runtimeObjectLegacyOrder(objectKey: string, legacyOrder: unknown, sourceIndex: number): number {
-  const order = Number(legacyOrder);
-  if (Number.isFinite(order)) {
-    return Number(order) | 0;
-  }
-  return 0x7000 + (sourceIndex & 0x0fff) + (objectKey.startsWith("inv:") ? 0x1000 : 0);
-}
-
-function objectLayerEntryFromServerObject(row: unknown): U6ObjectEntryRuntime | null {
-  if (!row || typeof row !== "object" || !state.objectLayer?.baseTiles) {
-    return null;
-  }
-  const src = row as {
-    frame?: unknown;
-    legacy_order?: unknown;
-    object_key?: unknown;
-    source_area?: unknown;
-    source_index?: unknown;
-    status?: unknown;
-    tile_id?: unknown;
-    type?: unknown;
-    x?: unknown;
-    y?: unknown;
-    z?: unknown;
-  };
-  const objectKey = String(src.object_key || "").trim();
-  const type = Number(src.type);
-  const frame = Number(src.frame);
-  const status = Number(src.status) & 0xff;
-  if (!objectKey || !Number.isFinite(type) || !Number.isFinite(frame) || coordUseOfStatus(status) !== OBJ_COORD_USE_LOCXYZ) {
-    return null;
-  }
-  const normalizedType = Number(type) & 0x3ff;
-  const normalizedFrame = Number(frame) & 0x3f;
-  const baseTile = Number(state.objectLayer.baseTiles[normalizedType] || 0) & 0xffff;
-  const tileId = Number.isFinite(Number(src.tile_id))
-    ? Number(src.tile_id) & 0xffff
-    : (baseTile + normalizedFrame) & 0xffff;
-  const fallbackIndex = runtimeObjectStableIndex(objectKey);
-  const sourceIndex = Number.isFinite(Number(src.source_index))
-    ? Number(src.source_index) & 0xffff
-    : fallbackIndex;
-  return {
-    assocIndex: 0,
-    baseTile,
-    coordUse: OBJ_COORD_USE_LOCXYZ,
-    frame: normalizedFrame,
-    index: sourceIndex,
-    legacyOrder: runtimeObjectLegacyOrder(objectKey, src.legacy_order, sourceIndex),
-    objectKey,
-    order: sourceIndex,
-    renderable: true,
-    sourceArea: Number.isFinite(Number(src.source_area)) ? Number(src.source_area) & 0x3f : 0x3f,
-    sourceIndex,
-    status,
-    tileId,
-    type: normalizedType,
-    x: Number(src.x) & 0x3ff,
-    y: Number(src.y) & 0x3ff,
-    z: Number(src.z) & 0x0f
-  };
 }
 
 function applyAuthoritativeWorldObjectsToLayer(objects: readonly unknown[] | null | undefined): void {
-  if (!state.objectLayer || !Array.isArray(objects)) {
+  if (!state.objectLayer) {
     return;
   }
-  for (const row of objects) {
-    const record = row && typeof row === "object" ? row as {
-      object_key?: unknown;
-      source_kind?: unknown;
-      source_object_key?: unknown;
-    } : null;
-    const objectKey = String(record?.object_key || "").trim();
-    if (shouldHideServerWorldObjectFromLayerRuntime(record, isAuthoritativeWorldObjectHidden)) {
-      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(objectKey);
+  const actions = objectLayerProjectionActionsFromServerObjectsRuntime(
+    objects,
+    state.objectLayer.baseTiles,
+    isAuthoritativeWorldObjectHidden
+  );
+  for (const action of actions) {
+    if (action.kind === "remove") {
+      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(action.object_key);
       continue;
     }
-    const entry = objectLayerEntryFromServerObject(row);
-    if (entry) {
-      state.objectLayer.upsertRuntimeEntry(entry);
-    }
+    state.objectLayer.upsertRuntimeEntry(action.entry);
   }
 }
 
@@ -5265,68 +5120,31 @@ function queueDropThrowEffect(args: {
   toY: number;
   z: number;
 }): void {
-  const landObject = args.landObject || null;
-  const objectKey = String(landObject?.object_key || "").trim();
-  const tileId = Number(landObject?.tile_id);
-  if (!objectKey || !Number.isFinite(tileId)) {
-    applyAuthoritativeWorldObjectsToLayer([landObject]);
-    return;
-  }
-  if ((args.fromX | 0) === (args.toX | 0) && (args.fromY | 0) === (args.toY | 0)) {
-    applyAuthoritativeWorldObjectsToLayer([landObject]);
-    return;
-  }
-  const nowMs = performance.now();
-  state.dropThrowEffects = state.dropThrowEffects.filter((effect) => effect.objectKey !== objectKey);
-  state.dropThrowEffects.push({
-    endMs: nowMs + DROP_THROW_EFFECT_MS,
-    fromX: args.fromX | 0,
-    fromY: args.fromY | 0,
-    landObject,
-    objectKey,
-    startMs: nowMs,
-    tileId: Number(tileId) & 0xffff,
-    toX: args.toX | 0,
-    toY: args.toY | 0,
-    z: args.z | 0
+  const plan = dropThrowPlanRuntime({
+    ...args,
+    durationMs: DROP_THROW_EFFECT_MS,
+    nowMs: performance.now()
   });
+  if (plan.kind === "apply_now") {
+    applyAuthoritativeWorldObjectsToLayer([plan.landObject]);
+    return;
+  }
+  state.dropThrowEffects = state.dropThrowEffects.filter((effect) => effect.objectKey !== plan.effect.objectKey);
+  state.dropThrowEffects.push(plan.effect);
 }
 
 function isTileIgnoredForGet(tileId: number): boolean {
-  return !!state.tileFlags2 && ((state.tileFlags2[tileId & 0x07ff] ?? 0) & 0x10) !== 0;
+  return legacyGetTileIgnoredRuntime(tileId, state.tileFlags2);
 }
 
 function isTerrainDamageTileForGet(tileId: number): boolean {
-  return !!state.terrainType && ((state.terrainType[tileId & 0x07ff] ?? 0) & 0x08) !== 0;
-}
-
-function getFailureText(
-  reason: string,
-  selected: { type?: number; object_key?: string; key?: string } | null | undefined,
-  tx: number,
-  ty: number,
-  tz: number
-): string {
-  const selectedKey = String(selected?.object_key || selected?.key || "").trim();
-  const label = selected
-    ? `0x${(Number(selected.type) & 0x3ff).toString(16)}${selectedKey ? ` ${selectedKey}` : ""}`
-    : `cell ${tx},${ty},${tz}`;
-  if (reason === "out_of_range") {
-    return `Get: target must be adjacent (${tx},${ty}).`;
-  }
-  if (reason === "terrain_damage") {
-    return `Get: ${label} is hazardous.`;
-  }
-  if (reason === "not_portable") {
-    return `Get: ${label} is not portable.`;
-  }
-  return `Get: nothing selectable at ${tx},${ty},${tz}.`;
+  return legacyGetTerrainDamageTileRuntime(tileId, state.terrainType);
 }
 
 async function netGetAtCell(sim: AppSimState, tx: number, ty: number): Promise<boolean> {
   const tz = sim.world.map_z | 0;
   const out = await netFetchWorldObjectsAtCell(tx, ty, tz);
-  const objects = targetObjectsFromServerObjects(out?.objects || []);
+  const objects = targetObjectsFromServerObjectsRuntime(out?.objects || []);
   const result = resolveLegacyGetSelectionRuntime({
     world: sim.world,
     objects,
@@ -5340,62 +5158,41 @@ async function netGetAtCell(sim: AppSimState, tx: number, ty: number): Promise<b
     }
   });
   if (result.ok === false) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = getFailureText(result.reason, result.selected, tx, ty, tz);
+    const diag = legacyGetFailurePresentationRuntime(result.reason, result.selected, tx, ty, tz);
+    applyDiagKind(diag);
     return false;
   }
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Get: taking 0x${(result.object.type & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
+  const diag = legacyGetTakingPresentationRuntime(result.object, tx, ty, tz);
+  applyDiagKind(diag);
   await netTakeWorldObject(result.object as InventoryObjectRuntime & { frame: number }, tx, ty, tz);
   return true;
 }
 
-function firstInventoryObjectForDrop(sim: AppSimState): NonNullable<AppSimState["inventoryObjects"]>[number] | null {
-  const selected = state.legacyHudSelection;
-  const objects = Array.isArray(sim.inventoryObjects) ? sim.inventoryObjects : [];
-  if (selected && selected.kind === "inventory") {
-    const entries = inventoryDisplayEntriesFromObjectsRuntime(objects, 12);
-    const entry = entries[Number(selected.index) | 0] || null;
-    const objectKey = String(entry?.object_key || "").trim();
-    if (objectKey) {
-      return objects.find((obj) => String(obj.object_key || "") === objectKey) || null;
-    }
-    const inventoryKey = String(entry?.inventory_key || entry?.key || "").trim();
-    if (inventoryKey) {
-      return objects.find((obj) => String(obj.inventory_key || inventoryKeyForObjectRuntime(obj)) === inventoryKey) || null;
-    }
-    return objects[Number(selected.index) | 0] || null;
-  }
-  return objects[0] || null;
-}
-
-function legacyDropObjectLabel(item: WorldRuntimeInventoryObject | null | undefined): string {
-  if (!item) {
-    return "nothing";
-  }
-  const tileId = Number(item.tile_id) & 0xffff;
-  const name = sanitizeLegacyHudLabelText(legacyLookupTileString(tileId));
-  if (name && name.toLowerCase() !== "nothing") {
-    const article = legacyArticleForTile(tileId);
-    return `${article}${name}`.trim();
-  }
-  const invKey = sanitizeLegacyHudLabelText(item.inventory_key || inventoryKeyForObjectRuntime(item));
-  return invKey || `0x${(Number(item.type) & 0x03ff).toString(16)}`;
-}
-
 function pushLegacyDropTargetPrompt(item: WorldRuntimeInventoryObject | null | undefined): void {
-  pushLedgerMessage(`>Drop-${legacyDropObjectLabel(item)}`);
-  pushLedgerMessage("Location:");
+  const lines = legacyDropTargetPromptLinesRuntime(
+    item,
+    state.lookStringEntries as LegacyLookStringEntryRuntime[] | null,
+    state.tileFlags2,
+    item ? inventoryKeyForObjectRuntime(item) : ""
+  );
+  for (const line of lines) {
+    pushLedgerMessage(line);
+  }
   showLegacyLedgerPrompt();
 }
 
 async function netDropInventoryObject(sim: AppSimState, tx: number, ty: number) {
-  const item = firstInventoryObjectForDrop(sim);
+  const actorId = await netWorldObjectActorId();
+  let item = inventoryObjectForDropSelectionRuntime(sim.inventoryObjects, state.legacyHudSelection);
+  if (!item) {
+    await netSyncInventoryProjection();
+    item = inventoryObjectForDropSelectionRuntime(sim.inventoryObjects, state.legacyHudSelection);
+  }
   if (!item) {
     throw new Error("inventory is empty");
   }
   const out = await requestDropWorldObjectRuntime({
-    actorId: state.net.characterId || state.net.userId || "Avatar",
+    actorId,
     actorX: sim.world.map_x | 0,
     actorY: sim.world.map_y | 0,
     actorZ: sim.world.map_z | 0,
@@ -5413,30 +5210,25 @@ async function netDropInventoryObject(sim: AppSimState, tx: number, ty: number) 
     landObject: out?.target || null
   });
   await netSyncInventoryProjection();
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Drop: item placed at ${tx},${ty},${sim.world.map_z | 0}.`;
+  const diag = legacyDropPlacedPresentationRuntime(tx, ty, sim.world.map_z | 0);
+  applyDiagKind(diag);
   return out;
 }
 
 function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   if (isNetAuthenticated()) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Get: checking ${tx},${ty},${sim.world.map_z | 0}...`;
+    const diag = legacyGetCheckingPresentationRuntime(tx, ty, sim.world.map_z | 0);
+    applyDiagKind(diag);
     void netGetAtCell(sim, tx, ty).catch((err: unknown) => {
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Get failed: ${errorMessageRuntime(err)}`;
+      const failure = legacyGetAsyncFailurePresentationRuntime(errorMessageRuntime(err));
+      applyDiagKind(failure);
     });
     return true;
   }
   const interactionState = state as GameplayInteractionStateView;
   const tz = sim.world.map_z | 0;
   const objects = interactionState.objectLayer
-    ? interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz).map((obj) => ({
-      ...obj,
-      object_key: objectLayerAnchorKeyRuntime(obj),
-      tile_id: obj.tileId,
-      legacy_order: obj.legacyOrder
-    }))
+    ? targetObjectsFromObjectLayerEntriesRuntime(interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz))
     : [];
   const target = resolveLegacyGetSelectionRuntime({
     world: sim.world,
@@ -5451,22 +5243,19 @@ function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
     }
   });
   if (target.ok === false && target.reason === "out_of_range") {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Get: target must be adjacent (${tx},${ty}).`;
+    const diag = legacyGetFailurePresentationRuntime(target.reason, target.selected, tx, ty, tz);
+    applyDiagKind(diag);
     return false;
   }
   if (target.ok === false) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = getFailureText(target.reason, target.selected, tx, ty, tz);
+    const diag = legacyGetFailurePresentationRuntime(target.reason, target.selected, tx, ty, tz);
+    applyDiagKind(diag);
     return false;
   }
   const obj = target.object;
-  addObjectToInventoryRuntime(sim, obj);
-  markObjectRemovedRuntime(sim, obj);
-  const invKey = inventoryKeyForObjectRuntime(obj);
-  const count = Number(sim.inventory[invKey]) >>> 0;
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Get: picked 0x${(obj.type & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${invKey}=${count}).`;
+  const pickup = pickObjectIntoInventoryRuntime(sim, obj, obj);
+  const diag = legacyGetPickedPresentationRuntime(obj, tx, ty, tz, pickup.inventoryKey, pickup.count);
+  applyDiagKind(diag);
   return true;
 }
 
@@ -5480,55 +5269,50 @@ function tryAttackAtCell(sim: AppSimState, tx: number, ty: number): boolean {
     avatarEntityId: AVATAR_ENTITY_ID
   });
   const result = legacyAttackVerbRuntime(target.actor, target.x, target.y, target.z);
-  if (result.playSfx === "attack_swing") {
-    playSfx(U6_SFX.ATTACK_SWING);
+  const sfxId = legacyVerbSfxIdRuntime(result.playSfx);
+  if (sfxId !== null) {
+    playSfx(sfxId);
   }
-  diagBox.className = `diag ${result.diagClass}`;
-  diagBox.textContent = result.text;
+  applyDiagKind(result);
   return result.ok;
 }
 
 function tryCastAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const tz = sim.world.map_z | 0;
   const result = legacyCastVerbRuntime(tx, ty, tz);
-  if (result.playSfx === "casting_magic_p1") {
-    playSfx(U6_SFX.CASTING_MAGIC_P1);
+  const sfxId = legacyVerbSfxIdRuntime(result.playSfx);
+  if (sfxId !== null) {
+    playSfx(sfxId);
   }
-  diagBox.className = `diag ${result.diagClass}`;
-  diagBox.textContent = result.text;
+  applyDiagKind(result);
   return result.ok;
 }
 
 function tryDropAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   if (isNetAuthenticated()) {
-    const validation = legacyDropVerbRuntime({
-      inventory: Object.keys(sim.inventory || {}).length
-        ? { ...sim.inventory }
-        : Object.fromEntries((sim.inventoryObjects || []).map((item) => [String(item.inventory_key || inventoryKeyForObjectRuntime(item)), 1])),
+    const validation = legacyDropVerbValidationRuntime({
+      inventory: inventoryCountMapForDropValidationRuntime(sim.inventory, sim.inventoryObjects),
       world: sim.world
     }, tx, ty);
     if (!validation.ok) {
-      diagBox.className = `diag ${validation.diagClass}`;
-      diagBox.textContent = validation.text;
+      applyDiagKind(validation);
       return false;
     }
     void netDropInventoryObject(sim, tx, ty).catch((err: unknown) => {
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Drop failed: ${errorMessageRuntime(err)}`;
+      const failure = legacyDropAsyncFailurePresentationRuntime(errorMessageRuntime(err));
+      applyDiagKind(failure);
     });
     return true;
   }
   const result = legacyDropVerbRuntime(sim, tx, ty);
-  diagBox.className = `diag ${result.diagClass}`;
-  diagBox.textContent = result.text;
+  applyDiagKind(result);
   return result.ok;
 }
 
 function tryMoveVerbAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const tz = sim.world.map_z | 0;
   const result = legacyMoveVerbRuntime(tx, ty, tz);
-  diagBox.className = `diag ${result.diagClass}`;
-  diagBox.textContent = result.text;
+  applyDiagKind(result);
   return result.ok;
 }
 
@@ -5589,19 +5373,16 @@ function tryToggleDoorInFacingDirection(sim: AppSimState, dx: number, dy: number
   if (!interactionState.objectLayer) {
     return false;
   }
-  const tx = (sim.world.map_x + dx) | 0;
-  const ty = (sim.world.map_y + dy) | 0;
-  const tz = sim.world.map_z | 0;
+  const cell = facingDoorCellRuntime({ world: sim.world, facingDx: dx, facingDy: dy });
   const result = toggleDoorAtCellRuntime({
     sim,
     objectsAt: (x, y, z) => interactionState.objectLayer?.objectsAt(x, y, z) ?? [],
-    x: tx,
-    y: ty,
-    z: tz
+    x: cell.x,
+    y: cell.y,
+    z: cell.z
   });
   if (result.toggled) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = result.message;
+    applyDiagKind(result);
     return true;
   }
   return false;
@@ -5669,8 +5450,7 @@ function tryInteractFurnitureObject(sim: AppSimState, o: FurniturePoseObjectRunt
     /* Prevent stale buffered movement from instantly cancelling a fresh sit/sleep pose. */
     clearPendingAvatarMoveCommands(sim);
   }
-  diagBox.className = `diag ${result.diagClass}`;
-  diagBox.textContent = result.text;
+  applyDiagKind(result);
   return true;
 }
 
@@ -5693,8 +5473,7 @@ function tryToggleDoorAtCell(sim: AppSimState, tx: number, ty: number, tz: numbe
     z: tz
   });
   if (result.toggled) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = result.message;
+    applyDiagKind(result);
     return true;
   }
   return false;
@@ -5705,13 +5484,9 @@ function tryInteractAtCell(sim: AppSimState, tx: number, ty: number): boolean {
   const tz = sim.world.map_z | 0;
   if (interactionState.objectLayer) {
     const overlays = interactionState.objectLayer.objectsAt(tx | 0, ty | 0, tz | 0);
-    const obj = overlays.find((o) => {
-      const type = (Number(o?.type) | 0) & 0x3ff;
-      return type === OBJ_U6_BELL || type === OBJ_U6_RUBBER_DUCKY;
-    });
-    if (obj) {
-      const type = (Number(obj.type) | 0) & 0x3ff;
-      playSfx(type === OBJ_U6_BELL ? U6_SFX.BELL : U6_SFX.RUBBER_DUCK);
+    const sfxId = specialUseSfxAtCellRuntime(overlays);
+    if (sfxId !== null) {
+      playSfx(sfxId);
     }
   }
   if (tryToggleDoorAtCell(sim, tx, ty, tz)) {
@@ -5730,67 +5505,81 @@ function tryInteractFacing(sim: AppSimState, dx: number, dy: number): boolean {
 }
 
 function initCapturePresets(): void {
-  if (!locationSelect) {
-    return;
-  }
-  locationSelect.innerHTML = "";
-  for (const p of CAPTURE_PRESETS) {
-    const opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = p.label;
-    locationSelect.appendChild(opt);
-  }
+  populateCapturePresetSelectRuntime({ document, select: locationSelect, presets: CAPTURE_PRESETS_RUNTIME });
 }
 
-function activeCapturePreset(): CapturePreset | undefined {
-  const id = locationSelect ? locationSelect.value : "";
-  return CAPTURE_PRESETS.find((p) => p.id === id) ?? CAPTURE_PRESETS[0];
+function activeCapturePreset(): CapturePresetRuntime | undefined {
+  return activeCapturePresetFromSelectRuntime(CAPTURE_PRESETS_RUNTIME, locationSelect);
 }
 
 function setStartupMenuIndex(nextIndex: number): void {
-  const idx = normalizeStartupMenuIndexRuntime(nextIndex, STARTUP_MENU.length);
-  if (state.startupMenuIndex !== idx) {
-    state.startupCanvasCache.clear();
-  }
-  state.startupMenuIndex = idx;
+  applyStartupMenuIndexRuntime(state, nextIndex, STARTUP_MENU.length);
 }
 
 function isNetAuthenticated(): boolean {
   return !!(state.net && state.net.token && state.net.userId);
 }
 
-function activateStartupMenuSelection(): void {
-  if (!STARTUP_MENU.length) {
-    return;
+function isSkipIntroEnabled(): boolean {
+  return !!skipIntroCheckbox.checked;
+}
+
+function setSkipIntroEnabled(enabled: boolean): void {
+  skipIntroCheckbox.checked = !!enabled;
+  try {
+    localStorage.setItem(SKIP_INTRO_KEY, enabled ? "on" : "off");
+  } catch (_err) {
+    // ignore storage failures
   }
-  const selected = STARTUP_MENU[state.startupMenuIndex] || STARTUP_MENU[0];
-  if (!selected || !startupMenuItemEnabledRuntime(selected, isNetAuthenticated())) {
-    if (selected && selected.id === "journey" && !isNetAuthenticated()) {
-      setNetStatus("idle", "Login required before Journey Onward.");
-      diagBox.className = "diag warn";
-      diagBox.textContent = "Login required before Journey Onward.";
-      return;
+}
+
+function initSkipIntroPreference(): void {
+  skipIntroCheckbox.checked = true;
+  setSkipIntroEnabled(true);
+  skipIntroCheckbox.addEventListener("change", () => {
+    setSkipIntroEnabled(skipIntroCheckbox.checked);
+    if (skipIntroCheckbox.checked) {
+      maybeStartSessionFromSkipIntro();
     }
-    diagBox.className = "diag warn";
-    diagBox.textContent = `"${selected ? selected.label : "This option"}" is not available in this build.`;
+  });
+}
+
+function maybeStartSessionFromSkipIntro(): void {
+  if (!isSkipIntroEnabled() || state.sessionStarted || !state.runtimeReady || !isNetAuthenticated()) {
     return;
   }
-  if (selected.id === "journey") {
+  if (state.bootIntro?.active) {
+    abortBootIntroRuntime(state.bootIntro);
+  }
+  startSessionFromTitle();
+}
+
+function activateStartupMenuSelection(): void {
+  const action = startupMenuSelectionActionRuntime(STARTUP_MENU, state.startupMenuIndex, isNetAuthenticated());
+  const presentation = startupMenuSelectionPresentationRuntime(action);
+  if (presentation.kind === "message") {
+    if (presentation.netStatus) {
+      setNetStatus(presentation.netStatus, presentation.diagText);
+    }
+    applyDiag(presentation);
+    return;
+  }
+  if (presentation.kind === "start_session") {
     startSessionFromTitle();
   }
 }
 
 function placeCameraAtPresetId(presetId: string): void {
-  const p = CAPTURE_PRESETS.find((v) => v.id === presetId) ?? CAPTURE_PRESETS[0];
-  if (!p) {
+  const patch = cameraPresetPatchRuntime(capturePresetByIdRuntime(CAPTURE_PRESETS_RUNTIME, presetId));
+  if (!patch) {
     return;
   }
-  state.queue.length = 0;
-  state.sim.world.map_x = p.x | 0;
-  state.sim.world.map_y = p.y | 0;
-  state.sim.world.map_z = p.z | 0;
+  state.queue = patch.queue;
+  state.sim.world.map_x = patch.map_x;
+  state.sim.world.map_y = patch.map_y;
+  state.sim.world.map_z = patch.map_z;
   if (locationSelect) {
-    locationSelect.value = p.id;
+    locationSelect.value = patch.selectValue;
   }
 }
 
@@ -5799,325 +5588,163 @@ function startSessionFromTitle(): void {
     return;
   }
   if (!isNetAuthenticated()) {
-    setNetStatus("idle", "Login required before Journey Onward.");
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Login required before Journey Onward.";
+    const diag = startupSessionGuardDiagRuntime("login_required");
+    setNetStatus(diag.netStatus || "idle", diag.diagText);
+    applyDiag(diag);
     return;
   }
   if (!state.runtimeReady) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Runtime assets are still loading.";
+    applyDiag(startupSessionGuardDiagRuntime("runtime_loading"));
     return;
   }
   if (!state.net.resumeFromSnapshot) {
     placeCameraAtPresetId("avatar_start");
   }
-  state.accMs = 0;
-  state.lastTs = performance.now();
-  state.loopHealth.lastDtMs = 0;
-  state.loopHealth.maxDtMs = 0;
-  state.queue.length = 0;
-  state.sessionStarted = true;
+  const patch = startSessionPatchRuntime({
+    loopHealth: state.loopHealth,
+    nowMs: performance.now()
+  });
+  state.accMs = patch.accMs;
+  state.lastTs = patch.lastTs;
+  state.loopHealth = patch.loopHealth;
+  state.queue = patch.queue;
+  state.sessionStarted = patch.sessionStarted;
   if (state.audio) {
     state.audio.stopMusic();
-    state.musicPhase = "";
-    state.musicSong = "";
+    state.musicPhase = patch.musicPhase;
+    state.musicSong = patch.musicSong;
   }
   endLegacyConversation();
-  state.legacyLedgerLines.length = 0;
+  state.legacyLedgerLines = patch.legacyLedgerLines;
   pushLedgerMessage(`${String(state.net.characterName || "Avatar")}:`);
   showLegacyLedgerPrompt();
   const resumed = !!state.net.resumeFromSnapshot;
-  state.net.resumeFromSnapshot = false;
-  diagBox.className = "diag ok";
-  diagBox.textContent = resumed
-    ? "Journey Onward: resumed at last saved position."
-    : "Journey Onward: loaded at the legacy avatar start position.";
+  state.net.resumeFromSnapshot = patch.resumeFromSnapshot;
+  applyDiag(journeyOnwardStartedDiagRuntime(resumed));
   void netSyncInventoryProjection().catch((err) => {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Inventory sync failed: ${errorMessageRuntime(err)}`;
+    const failure = inventorySyncFailureDiagRuntime(errorMessageRuntime(err));
+    applyDiag(failure);
   });
 }
+
+(window as VmDebugWindow).__vmStartSessionFromTitle = startSessionFromTitle;
 
 function returnToTitleMenu(opts: { saveRemote?: boolean } = {}) {
   if (!state.sessionStarted) {
     return;
   }
   const saveRemote = opts.saveRemote !== false;
-  state.net.resumeFromSnapshot = true;
   if (saveRemote && isNetAuthenticated()) {
     netSaveSnapshot().catch((err) => {
-      setNetStatus("error", `Save failed: ${errorMessageRuntime(err)}`);
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Return-to-title save failed: ${errorMessageRuntime(err)}`;
+      const failure = returnToTitleSaveFailureRuntime(errorMessageRuntime(err));
+      setNetStatus(failure.statusLevel, failure.statusText);
+      applyDiag(failure);
     });
   }
-  state.queue.length = 0;
-  state.useCursorActive = false;
-  state.targetVerb = "";
+  const patch = returnToTitlePatchRuntime();
+  state.queue = patch.queue;
+  state.useCursorActive = patch.useCursorActive;
+  state.targetVerb = patch.targetVerb;
   endLegacyConversation();
-  state.legacyLedgerLines.length = 0;
-  state.legacyLedgerPrompt = false;
-  state.sessionStarted = false;
-  setStartupMenuIndex(0);
+  state.legacyLedgerLines = patch.legacyLedgerLines;
+  state.legacyLedgerPrompt = patch.legacyLedgerPrompt;
+  state.sessionStarted = patch.sessionStarted;
+  state.net.resumeFromSnapshot = patch.resumeFromSnapshot;
+  setStartupMenuIndex(patch.startupMenuIndex);
   startStartupMenuMusic();
-  diagBox.className = "diag ok";
-  diagBox.textContent = "Returned to title menu.";
+  applyDiag(patch);
 }
 
 function cycleCursor(delta: number): void {
-  if (!state.cursorPixmaps || !state.cursorPixmaps.length) {
+  const cycle = cursorCycleRuntime({
+    count: state.cursorPixmaps?.length || 0,
+    currentIndex: state.cursorIndex,
+    delta
+  });
+  if (!cycle) {
     return;
   }
-  const n = state.cursorPixmaps.length;
-  let idx = (state.cursorIndex + (delta | 0)) % n;
-  if (idx < 0) {
-    idx += n;
-  }
-  state.cursorIndex = idx;
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Cursor ${idx + 1}/${n}`;
+  state.cursorIndex = cycle.index;
+  applyDiag(cycle);
 }
 
 function jumpToPreset(): void {
-  const p = activeCapturePreset();
-  if (!p) {
+  const patch = cameraPresetPatchRuntime(activeCapturePreset());
+  if (!patch) {
     return;
   }
-  state.queue.length = 0;
-  state.sim.world.map_x = p.x | 0;
-  state.sim.world.map_y = p.y | 0;
-  state.sim.world.map_z = p.z | 0;
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Moved camera focus to preset ${p.label}.`;
+  state.queue = patch.queue;
+  state.sim.world.map_x = patch.map_x;
+  state.sim.world.map_y = patch.map_y;
+  state.sim.world.map_z = patch.map_z;
+  applyDiag(patch);
 }
 
 function captureViewportPng(): void {
-  const composeCapture = (): HTMLCanvasElement => {
-    const margin = 14;
-    const gap = 12;
-    const frameBorder = 14;
-    const panelW = 352;
-    const worldW = canvas.width;
-    const worldH = canvas.height;
-    const frameW = worldW + (frameBorder * 2);
-    const frameH = worldH + (frameBorder * 2);
-    const outW = (margin * 2) + frameW + gap + panelW + 8;
-    const outH = (margin * 2) + Math.max(frameH, 742);
-
-    const out = document.createElement("canvas");
-    out.width = outW;
-    out.height = outH;
-    const g = out.getContext("2d");
-    if (!g) {
-      return out;
-    }
-    g.imageSmoothingEnabled = false;
-
-    const frameX = margin;
-    const frameY = margin;
-    const panelX = frameX + frameW + gap;
-    const panelY = margin;
-
-    g.fillStyle = "#070707";
-    g.fillRect(0, 0, outW, outH);
-
-    /* World frame: old-school beveled panel */
-    g.fillStyle = "#c7b17f";
-    g.fillRect(frameX - 4, frameY - 4, frameW + 8, frameH + 8);
-    g.fillStyle = "#7a6946";
-    g.fillRect(frameX - 2, frameY - 2, frameW + 4, frameH + 4);
-    g.fillStyle = "#3f3522";
-    g.fillRect(frameX, frameY, frameW, frameH);
-    g.fillStyle = "#101010";
-    g.fillRect(frameX + frameBorder, frameY + frameBorder, worldW, worldH);
-    g.drawImage(canvas, frameX + frameBorder, frameY + frameBorder, worldW, worldH);
-
-    /* Right-side info panel with U6-like dark blue ledger look */
-    const panelH = outH - (margin * 2);
-    g.fillStyle = "#c7b17f";
-    g.fillRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8);
-    g.fillStyle = "#7a6946";
-    g.fillRect(panelX - 2, panelY - 2, panelW + 4, panelH + 4);
-    g.fillStyle = "#111a2a";
-    g.fillRect(panelX, panelY, panelW, panelH);
-
-    const headerH = 54;
-    g.fillStyle = "#1a2740";
-    g.fillRect(panelX + 2, panelY + 2, panelW - 4, headerH);
-    g.fillStyle = "#2e4469";
-    g.fillRect(panelX + 2, panelY + headerH + 4, panelW - 4, 1);
-
-    const textX = panelX + 14;
-    let y = panelY + 22;
-    g.fillStyle = "#f0d69d";
-    g.font = "700 13px Silkscreen, monospace";
-    g.fillText("VIRTUE MACHINE", textX, y);
-    y += 16;
-    g.fillStyle = "#bed0ee";
-    g.font = "11px Inter, sans-serif";
-    g.fillText("Ultima VI parity capture", textX, y);
-    y += 15;
-    g.fillStyle = "#8ea8cf";
-    g.fillText("mode: legacy", textX, y);
-    y = panelY + headerH + 24;
-
-    const drawRow = (label: string, value: unknown): void => {
-      g.fillStyle = "#7f99bd";
-      g.font = "11px Inter, sans-serif";
-      g.fillText(label, textX, y);
-      y += 13;
-      g.fillStyle = "#e8f1ff";
-      g.font = "700 11px Inter, sans-serif";
-      g.fillText(String(value ?? "-"), textX, y);
-      y += 15;
-    };
-
-    drawRow("Map Position", statPos ? statPos.textContent : "-");
-    drawRow("Clock", statClock ? statClock.textContent : "-");
-    drawRow("Date", statDate ? statDate.textContent : "-");
-    drawRow("Tile", statTile ? statTile.textContent : "-");
-    drawRow("Render Parity", statRenderParity ? statRenderParity.textContent : "-");
-    drawRow("Object Overlay", statObjects ? statObjects.textContent : "-");
-    drawRow("Entity Overlay", statEntities ? statEntities.textContent : "-");
-    drawRow("Data Source", statSource ? statSource.textContent : "-");
-    drawRow("State Hash", statHash ? statHash.textContent : "-");
-
-    if (diagBox && diagBox.textContent) {
-      y += 6;
-      g.fillStyle = "#2e4469";
-      g.fillRect(panelX + 10, y - 3, panelW - 20, 1);
-      y += 12;
-      g.fillStyle = "#7f99bd";
-      g.font = "11px Inter, sans-serif";
-      g.fillText("Diagnostic", textX, y);
-      y += 13;
-      g.fillStyle = "#d8e4f5";
-      g.font = "11px Inter, sans-serif";
-      const raw = diagBox.textContent.trim();
-      const line = raw.length > 72 ? `${raw.slice(0, 69)}...` : raw;
-      g.fillText(line, textX, y);
-    }
-
-    return out;
-  };
-
-  const p = activeCapturePreset();
-  const tag = p ? p.id : "custom";
-  const filename = `virtuemachine-${tag}-${state.sim.world.map_x}-${state.sim.world.map_y}-${state.sim.world.map_z}.png`;
-  const link = document.createElement("a");
-  const composed = composeCapture();
-  link.href = composed.toDataURL("image/png");
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Captured ${filename}`;
+  const plan = captureFilePlanRuntime({
+    kind: "viewport",
+    presets: CAPTURE_PRESETS_RUNTIME,
+    select: locationSelect,
+    world: state.sim.world
+  });
+  const composed = composeViewportCaptureCanvasRuntime({
+    canvas,
+    document,
+    rows: captureViewportStatusRowsRuntime({
+      clock: statClock?.textContent,
+      dataSource: statSource?.textContent,
+      date: statDate?.textContent,
+      diagnostic: diagBox?.textContent,
+      entityOverlay: statEntities?.textContent,
+      mapPosition: statPos?.textContent,
+      objectOverlay: statObjects?.textContent,
+      renderParity: statRenderParity?.textContent,
+      stateHash: statHash?.textContent,
+      tile: statTile?.textContent
+    })
+  });
+  downloadCanvasPngRuntime({ canvas: composed, document, filename: plan.filename });
+  applyDiag(captureSuccessDiagRuntime(plan.filename));
 }
 
 function captureWorldHudPng(): void {
   drawTileGrid();
   composeLegacyViewportFromModernGrid();
   renderLegacyHudStubOnBackdrop();
+  drawInGameServerStatusOverlay();
 
-  const p = activeCapturePreset();
-  const tag = p ? p.id : "custom";
-  const filename = `virtuemachine-worldhud-${tag}-${state.sim.world.map_x}-${state.sim.world.map_y}-${state.sim.world.map_z}.png`;
-  const out = document.createElement("canvas");
+  const plan = captureFilePlanRuntime({
+    kind: "worldhud",
+    presets: CAPTURE_PRESETS_RUNTIME,
+    select: locationSelect,
+    world: state.sim.world
+  });
+  const out = composeWorldHudCaptureCanvasRuntime({
+    document,
+    fallbackCanvas: canvas,
+    legacyBackdropCanvas,
+    legacyMapRect: LEGACY_UI_MAP_RECT,
+    legacyViewportCanvas
+  });
 
-  if (legacyBackdropCanvas && legacyBackdropCanvas.width > 0 && legacyBackdropCanvas.height > 0) {
-    out.width = 320;
-    out.height = 200;
-    const g = out.getContext("2d");
-    if (!g) {
-      return;
-    }
-    g.imageSmoothingEnabled = false;
-    g.drawImage(
-      legacyBackdropCanvas,
-      0,
-      0,
-      legacyBackdropCanvas.width,
-      legacyBackdropCanvas.height,
-      0,
-      0,
-      320,
-      200
-    );
-
-    const dx = LEGACY_UI_MAP_RECT.x;
-    const dy = LEGACY_UI_MAP_RECT.y;
-    const dw = LEGACY_UI_MAP_RECT.w;
-    const dh = LEGACY_UI_MAP_RECT.h;
-    if (legacyViewportCanvas && legacyViewportCanvas.width > 0 && legacyViewportCanvas.height > 0) {
-      g.drawImage(
-        legacyViewportCanvas,
-        0,
-        0,
-        legacyViewportCanvas.width,
-        legacyViewportCanvas.height,
-        dx,
-        dy,
-        dw,
-        dh
-      );
-    }
-  } else {
-    out.width = 320;
-    out.height = 200;
-    const g = out.getContext("2d");
-    if (!g) {
-      return;
-    }
-    g.imageSmoothingEnabled = false;
-    g.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 320, 200);
-  }
-
-  const link = document.createElement("a");
-  link.href = out.toDataURL("image/png");
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Captured ${filename}`;
-}
-
-function clampParityRadius(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) {
-    return 12;
-  }
-  return Math.max(1, Math.min(32, Math.floor(n)));
-}
-
-function downloadJsonFile(filename: string, data: unknown): void {
-  const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadCanvasPngRuntime({ canvas: out, document, filename: plan.filename });
+  applyDiag(captureSuccessDiagRuntime(plan.filename));
 }
 
 async function captureParitySnapshotJson(): Promise<void> {
   if (!state.sessionStarted || !state.mapCtx) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Parity snapshot unavailable: session not started.";
+    applyDiag(paritySnapshotUnavailableDiagRuntime());
     return;
   }
-  const radius = clampParityRadius(parityRadiusInput ? parityRadiusInput.value : 12);
+  const radius = clampParityRadiusRuntime(parityRadiusInput ? parityRadiusInput.value : 12);
   const cx = state.sim.world.map_x | 0;
   const cy = state.sim.world.map_y | 0;
   const cz = state.sim.world.map_z | 0;
-  const viewW = (radius * 2) + 1;
-  const viewH = (radius * 2) + 1;
-  const startX = cx - radius;
-  const startY = cy - radius;
+  const { startX, startY, viewW, viewH } = paritySnapshotWindowRuntime({
+    centerX: cx,
+    centerY: cy,
+    radius
+  });
   const viewCtx = buildLegacyViewContext(startX, startY, cz);
   const overlayBuild = buildOverlayCellsModel({
     viewW,
@@ -6134,113 +5761,68 @@ async function captureParitySnapshotJson(): Promise<void> {
     injectLegacyOverlays: null,
     isBackgroundObjectTile: (tileId) => isTileBackground(tileId)
   });
-  const overlayCells = overlayBuild.overlayCells || [];
-  const cells = [];
-  for (let gy = 0; gy < viewH; gy += 1) {
-    for (let gx = 0; gx < viewW; gx += 1) {
-      const wx = startX + gx;
-      const wy = startY + gy;
-      const rawTile = state.mapCtx.tileAt(wx, wy, cz) & 0xffff;
-      const animTile = resolveAnimatedTile(rawTile) & 0xffff;
-      const tileFlag = state.tileFlags ? (state.tileFlags[rawTile & 0x07ff] ?? 0) : 0;
-      const terrain = state.terrainType ? (state.terrainType[rawTile & 0x07ff] ?? 0) : 0;
-      const overlays = (overlayCells[(gy * viewW) + gx] || []).map((o, idx) => ({
-        idx,
-        tileHex: hex(o.tileId),
-        floor: o.floor ? 1 : 0,
-        occluder: o.occluder ? 1 : 0,
-        sourceX: o.sourceX | 0,
-        sourceY: o.sourceY | 0,
-        sourceType: String(o.sourceType || "main"),
-        sourceObjTypeHex: hex(o.sourceObjType ?? 0)
-      }));
-      const objects = state.objectLayer
-        ? state.objectLayer.objectsAt(wx, wy, cz).map((o, idx) => {
-          const tileId = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
-          const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
-          return {
-            idx,
-            typeHex: hex(o.type),
-            frame: o.frame | 0,
-            tileHex: hex(tileId),
-            tileFlagsHex: hex(tf),
-            order: o.order | 0
-          };
-        })
-        : [];
-      cells.push({
-        x: wx,
-        y: wy,
-        z: cz,
-        map: {
-          rawHex: hex(rawTile),
-          animHex: hex(animTile),
-          tileFlagsHex: hex(tileFlag),
-          terrainHex: hex(terrain)
-        },
-        visibility: {
-          visible: viewCtx ? (viewCtx.visibleAtWorld(wx, wy) ? 1 : 0) : 1,
-          open: viewCtx ? (viewCtx.openAtWorld(wx, wy) ? 1 : 0) : 0
-        },
-        overlay: overlays,
-        objects
-      });
-    }
-  }
-  const payload = {
-    kind: "VirtueMachineRoomParitySnapshot",
+  const cells = buildParitySnapshotCellsRuntime({
+    startX,
+    startY,
+    viewW,
+    viewH,
+    z: cz,
+    viewCtx,
+    overlayCells: overlayBuild.overlayCells,
+    tileFlags: state.tileFlags,
+    terrainType: state.terrainType,
+    tileAt: (x, y, z) => state.mapCtx?.tileAt(x, y, z) ?? 0,
+    animatedTileAt: (rawTile) => resolveAnimatedTile(rawTile),
+    objectsAt: state.objectLayer ? (x, y, z) => state.objectLayer?.objectsAt(x, y, z) ?? [] : null,
+    resolveObjectTile: (obj) => resolveDoorTileIdRuntime(state.sim, obj)
+  });
+  const payload = buildParitySnapshotRuntime({
     capturedAt: new Date().toISOString(),
     tick: state.sim.tick >>> 0,
-    center: { x: cx, y: cy, z: cz },
+    centerX: cx,
+    centerY: cy,
+    centerZ: cz,
     radius,
-    bounds: {
-      x0: startX,
-      y0: startY,
-      x1: startX + viewW - 1,
-      y1: startY + viewH - 1,
-      z: cz
-    },
-    parity: {
-      overlayCount: overlayBuild.overlayCount | 0,
-      hiddenSuppressedCount: overlayBuild.parity?.hiddenSuppressedCount | 0,
-      spillOutOfBoundsCount: overlayBuild.parity?.spillOutOfBoundsCount | 0,
-      unsortedSourceCount: overlayBuild.parity?.unsortedSourceCount | 0
-    },
+    overlayCount: overlayBuild.overlayCount,
+    hiddenSuppressedCount: overlayBuild.parity?.hiddenSuppressedCount,
+    spillOutOfBoundsCount: overlayBuild.parity?.spillOutOfBoundsCount,
+    unsortedSourceCount: overlayBuild.parity?.unsortedSourceCount,
     cells
-  };
-  const copied = await copyTextToClipboard(JSON.stringify(payload, null, 2));
-  if (copied) {
-    setCopyStatus(true);
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Copied parity snapshot to clipboard (center=${cx},${cy},${cz} radius=${radius}).`;
-  } else {
-    setCopyStatus(false, "parity snapshot copy failed");
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Failed to copy parity snapshot to clipboard.";
-  }
+  });
+  const copied = await copyTextToClipboardRuntime(JSON.stringify(payload, null, 2), { document, navigator, errorTarget: diagBox });
+  const result = paritySnapshotCopyResultRuntime({ copied, x: cx, y: cy, z: cz, radius });
+  setCopyStatusRuntime(topCopyStatus, result.copyStatusOk, result.copyStatusDetail);
+  applyDiag(result);
 }
 
-type AmbientSfxCandidate = {
-  dist: number;
-  obj: U6ObjectEntryRuntime;
-  priority: number;
-  sfxId: number;
-};
-
 function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
-  const arg0 = Number(cmd.arg0) | 0;
-  const arg1 = Number(cmd.arg1) | 0;
-  if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AVATAR) {
-    const moveResult = applyAvatarMoveCommandRuntime(sim, arg0, arg1, {
+  const plan = simCommandActionRuntime({
+    command: cmd,
+    movementMode: state.movementMode,
+    avatarX: sim.world.map_x,
+    avatarY: sim.world.map_y
+  });
+  if (plan.action === "move_avatar") {
+    const moveResult = applyAvatarMoveCommandRuntime(sim, plan.arg0, plan.arg1, {
       isBlockedAt: (x, y, z) => isBlockedAt(sim, x, y, z),
       movementMode: state.movementMode
     });
     if (moveResult.kind === "pose-set-this-tick") {
       return;
     }
+    const patch = avatarMoveAnimationPatchRuntime({
+      result: moveResult,
+      simTick: sim.tick,
+      nowMs: performance.now(),
+      walkAnimWindowMs: AVATAR_WALK_ANIM_WINDOW_MS
+    });
+    if (patch.avatarLastMoveTick != null) {
+      state.avatarLastMoveTick = patch.avatarLastMoveTick;
+    }
+    if (patch.avatarWalkAnimUntilMs != null) {
+      state.avatarWalkAnimUntilMs = patch.avatarWalkAnimUntilMs;
+    }
     if (moveResult.kind === "avatar-move") {
-      state.avatarLastMoveTick = sim.tick >>> 0;
-      state.avatarWalkAnimUntilMs = performance.now() + AVATAR_WALK_ANIM_WINDOW_MS;
       /*
         Canonical-facing behavior: actor pose follows occupied furniture cell.
         NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
@@ -6255,54 +5837,30 @@ function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
         playSfx(U6_SFX.BLOCKED);
       }
     }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_FACING) {
-    if (state.movementMode === "avatar") {
-      tryInteractFacing(sim, arg0, arg1);
+  } else if (plan.action === "use_facing") {
+    tryInteractFacing(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "use_at_cell") {
+    if (plan.shouldUpdateFacing) {
+      state.avatarFacingDx = plan.facingDx;
+      state.avatarFacingDy = plan.facingDy;
     }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      const tx = arg0;
-      const ty = arg1;
-      const dx = Math.sign(tx - (sim.world.map_x | 0));
-      const dy = Math.sign(ty - (sim.world.map_y | 0));
-      if (dx !== 0 || dy !== 0) {
-        state.avatarFacingDx = dx;
-        state.avatarFacingDy = dy;
-      }
-      tryInteractAtCell(sim, tx, ty);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.LOOK_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryLookAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.TALK_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryTalkAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.GET_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryGetAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.ATTACK_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryAttackAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.CAST_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryCastAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.DROP_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryDropAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.MOVE_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryMoveVerbAtCell(sim, arg0, arg1);
-    }
-  } else if (cmd.type === LEGACY_COMMAND_TYPE.USE_VERB_AT_CELL) {
-    if (state.movementMode === "avatar") {
-      tryInteractAtCell(sim, arg0, arg1);
-    }
+    tryInteractAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "look_at_cell") {
+    tryLookAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "talk_at_cell") {
+    tryTalkAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "get_at_cell") {
+    tryGetAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "attack_at_cell") {
+    tryAttackAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "cast_at_cell") {
+    tryCastAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "drop_at_cell") {
+    tryDropAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "move_at_cell") {
+    tryMoveVerbAtCell(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "use_verb_at_cell") {
+    tryInteractAtCell(sim, plan.arg0, plan.arg1);
   }
   sim.commandsApplied += 1;
 }
@@ -6370,64 +5928,64 @@ function setAudioEnabledFromWorldFlag(): void {
   if (!state.audio) {
     return;
   }
-  const enabled = !!state.sim.world.sound_enabled;
-  state.audio.setEnabled(enabled);
-  if (!enabled) {
+  const plan = audioWorldFlagPlanRuntime({
+    bootIntroActive: state.bootIntro?.active,
+    sessionStarted: state.sessionStarted,
+    soundEnabled: state.sim.world.sound_enabled
+  });
+  state.audio.setEnabled(plan.enabled);
+  if (plan.clearMusicPhase) {
     state.musicPhase = "";
     state.musicSong = "";
-  } else if (!state.sessionStarted) {
-    if (state.bootIntro?.active) {
-      syncBootIntroMusicPhase();
-    } else {
-      startStartupMenuMusic();
-    }
+  } else if (plan.startBootIntroMusic) {
+    syncBootIntroMusicPhase();
+  } else if (plan.startStartupMenuMusic) {
+    startStartupMenuMusic();
   }
   updateAudioMuteUi();
 }
 
 function updateAudioMuteUi(): void {
-  if (!audioMuteButton) {
-    return;
-  }
-  const muted = !!state.audio?.status?.().muted;
-  audioMuteButton.textContent = muted ? "Unmute Audio" : "Mute Audio";
-  audioMuteButton.setAttribute("aria-pressed", muted ? "true" : "false");
-  audioMuteButton.classList.toggle("is-active", muted);
+  renderAudioMuteButtonRuntime(audioMuteButton, state.audio?.status?.().muted);
 }
 
 function toggleAudioMute(reason = ""): void {
   if (!state.audio) {
     return;
   }
-  const nextMuted = !state.audio.status().muted;
-  state.audio.setMuted(nextMuted);
+  const plan = audioMuteTogglePlanRuntime({ muted: state.audio.status().muted, reason });
+  state.audio.setMuted(plan.nextMuted);
   updateAudioMuteUi();
-  if (!nextMuted) {
+  if (plan.shouldPrime) {
     primeAudioFromUserGesture();
   }
-  diagBox.className = "diag ok";
-  diagBox.textContent = reason || (nextMuted ? "Audio muted." : "Audio unmuted.");
+  applyDiag(plan);
 }
 
 function playCanonicalMusicPhase(phase: unknown, songId: unknown): boolean {
   try {
-    if (!state.audio || !state.sim?.world?.sound_enabled) {
+    if (!state.audio) {
       return false;
     }
-    const nextPhase = String(phase || "");
-    const nextSong = String(songId || "");
-    if (!nextSong) {
+    const plan = canonicalMusicPhasePlanRuntime({
+      currentPhase: state.musicPhase,
+      currentSong: state.musicSong,
+      phase,
+      songId,
+      soundEnabled: state.sim?.world?.sound_enabled
+    });
+    if (!plan) {
       return false;
     }
-    if (state.musicPhase === nextPhase && state.musicSong === nextSong) {
+    if (plan.alreadyPlaying) {
       return true;
     }
     state.audio.setBackendMode("adlib");
     state.audio.setMusicEnabled(true);
-    const ok = state.audio.playMusic(nextSong);
+    const ok = state.audio.playMusic(plan.songId);
     if (ok) {
-      state.musicPhase = nextPhase;
-      state.musicSong = nextSong;
+      state.musicPhase = plan.phase;
+      state.musicSong = plan.songId;
     }
     return ok;
   } catch (err) {
@@ -6442,45 +6000,26 @@ function startBootIntroMusic(): boolean {
 
 function syncBootIntroMusicPhase(): void {
   const scene = currentBootIntroSceneRuntime(state.bootIntro);
-  if (!scene) {
+  const phase = bootIntroMusicPhaseRuntime(scene);
+  if (!phase) {
     return;
   }
-  if (scene.kind === "splash") {
-    playCanonicalMusicPhase("boot_origin", "bootup.m");
-  } else {
-    playCanonicalMusicPhase("boot_intro", "stones.m");
-  }
+  playCanonicalMusicPhase(phase.phase, phase.songId);
 }
 
 function startStartupMenuMusic(): boolean {
-  return playCanonicalMusicPhase("startup_menu", "ultima.m");
+  const phase = startupMenuMusicPhaseRuntime();
+  return playCanonicalMusicPhase(phase.phase, phase.songId);
 }
 
 function bootIntroMusicAwaitingGesture(): boolean {
   try {
-    return !!(state.bootIntro?.active && state.audio?.status?.().musicAwaitingGesture);
+    return bootIntroMusicAwaitingGestureRuntime({
+      bootIntroActive: state.bootIntro?.active,
+      musicAwaitingGesture: state.audio?.status?.().musicAwaitingGesture
+    });
   } catch (_err) {
     return false;
-  }
-}
-
-function ambientSfxForObjectType(type: unknown): number | null {
-  switch ((Number(type) | 0) & 0x3ff) {
-    case OBJ_U6_CLOCK:
-      return U6_SFX.CLOCK;
-    case OBJ_U6_FOUNTAIN:
-      return U6_SFX.FOUNTAIN;
-    case OBJ_U6_FIREPLACE:
-    case OBJ_U6_COOK_FIRE:
-    case OBJ_U6_FIRE_FIELD:
-    case OBJ_U6_FIRE:
-      return U6_SFX.FIRE;
-    case OBJ_U6_PROTECTION_FIELD:
-      return U6_SFX.PROTECTION_FIELD;
-    case OBJ_U6_WATER_WHEEL:
-      return U6_SFX.WATER_WHEEL;
-    default:
-      return null;
   }
 }
 
@@ -6494,43 +6033,28 @@ function updateVisibleAmbientSfx(): void {
   const startX = (w.map_x | 0) - (VIEW_W >> 1);
   const startY = (w.map_y | 0) - (VIEW_H >> 1);
   const visible = state.objectLayer.objectsInWindowLegacyOrder(startX, startY, VIEW_W, VIEW_H, w.map_z | 0);
-  const candidates: AmbientSfxCandidate[] = [];
-  for (const obj of visible) {
-    const sfxId = ambientSfxForObjectType(obj?.type);
-    if (sfxId == null) {
-      continue;
-    }
-    const dist = Math.max(Math.abs((obj.x | 0) - (w.map_x | 0)), Math.abs((obj.y | 0) - (w.map_y | 0)));
-    candidates.push({
-      obj,
-      sfxId,
-      dist,
-      priority: sfxId === U6_SFX.FOUNTAIN ? 0 : 1
-    });
-  }
-  candidates.sort((a, b) => {
-    if (a.dist !== b.dist) return a.dist - b.dist;
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    return (((Number(a.obj?.type) | 0) & 0x3ff) - ((Number(b.obj?.type) | 0) & 0x3ff));
+  const candidates = buildAmbientSfxCandidatesRuntime({
+    avatarX: w.map_x,
+    avatarY: w.map_y,
+    objects: visible
   });
-  for (const candidate of candidates) {
-    const { obj, sfxId, dist } = candidate;
-    const lastTick = Number(state.audioAmbientLastTickBySfx[String(sfxId)] || 0) >>> 0;
-    const cooldown =
-      sfxId === U6_SFX.CLOCK ? 8 :
-      (sfxId === U6_SFX.FOUNTAIN || sfxId === U6_SFX.WATER_WHEEL) ? 2 :
-      4;
-    if (tick - lastTick < cooldown) {
-      continue;
-    }
-    const volume = Math.max(0.35, Math.min(1, (9 - dist) / 8));
-    const seed = ((((tick | 0) * 1103515245) ^ (((obj.x | 0) & 0xff) << 16) ^ (((obj.y | 0) & 0xff) << 8) ^ ((Number(obj.type) | 0) & 0x3ff)) >>> 0);
-    if (playAmbientSfx(sfxId, { volume, distance: Math.min(7, dist), tickPhase, seed })) {
-      state.audioAmbientLastTickBySfx[String(sfxId)] = tick;
-      state.audioAmbientLastSfx = `0x${(((Number(obj.type) | 0) & 0x3ff)).toString(16)}:${sfxId}`;
-      state.audioAmbientTriggerCount = (Number(state.audioAmbientTriggerCount) + 1) >>> 0;
-      return;
-    }
+  const plan = nextAmbientSfxPlaybackPlanRuntime({
+    candidates,
+    lastTickBySfx: state.audioAmbientLastTickBySfx,
+    tick
+  });
+  if (!plan) {
+    return;
+  }
+  if (playAmbientSfx(plan.candidate.sfxId, {
+    volume: plan.volume,
+    distance: plan.distance,
+    tickPhase: plan.tickPhase,
+    seed: plan.seed
+  })) {
+    state.audioAmbientLastTickBySfx[String(plan.candidate.sfxId)] = plan.tick;
+    state.audioAmbientLastSfx = plan.label;
+    state.audioAmbientTriggerCount = (Number(state.audioAmbientTriggerCount) + 1) >>> 0;
   }
 }
 
@@ -6538,6 +6062,10 @@ function queueMove(dx: number, dy: number): void {
   if (state.legacyConversationActive) {
     return;
   }
+  if (blockGameplayForBrokenServer()) {
+    return;
+  }
+  clearTransientReconnectMessageOnCommand();
   queueAvatarMoveCommandRuntime({
     state,
     dx,
@@ -6553,6 +6081,10 @@ function queueInteractDoor(): void {
   if (state.movementMode !== "avatar") {
     return;
   }
+  if (blockGameplayForBrokenServer()) {
+    return;
+  }
+  clearTransientReconnectMessageOnCommand();
   queueFacingUseCommandRuntime({
     queue: state.queue,
     commandLog: state.commandLog,
@@ -6567,6 +6099,10 @@ function queueInteractAtCell(wx: number, wy: number): void {
   if (state.movementMode !== "avatar") {
     return;
   }
+  if (blockGameplayForBrokenServer()) {
+    return;
+  }
+  clearTransientReconnectMessageOnCommand();
   const tx = wx | 0;
   const ty = wy | 0;
   queueCellCommandRuntime({
@@ -6584,6 +6120,10 @@ function queueLegacyTargetVerb(verb: unknown, wx: number, wy: number): void {
   if (state.movementMode !== "avatar") {
     return;
   }
+  if (blockGameplayForBrokenServer()) {
+    return;
+  }
+  clearTransientReconnectMessageOnCommand();
   const tx = wx | 0;
   const ty = wy | 0;
   queueLegacyTargetVerbCommandRuntime({
@@ -6842,7 +6382,11 @@ function avatarRenderTileId(): number | null {
     }
     return (sleepBase + 0) & 0xffff;
   }
-  const walkMoving = Number(state.avatarWalkAnimUntilMs) >= performance.now();
+  const walkMoving = avatarWalkPresentationActiveRuntime({
+    queuedMoveCount: countQueuedAvatarMoveCommandsRuntime(state.queue),
+    nowMs: performance.now(),
+    walkAnimUntilMs: state.avatarWalkAnimUntilMs
+  });
   const dirGroup = avatarFacingFrameOffset();
   if (state.sim.avatarPose === "sit") {
     let chair: FurniturePoseObjectRuntime | null = findObjectByAnchor(state.sim.avatarPoseAnchor);
@@ -6926,9 +6470,7 @@ function entityRenderTileId(e: U6EntityEntryRuntime): number {
   }
   if (e.authoritative && (pose === "walk" || Number.isInteger(e.authoritativeDirection))) {
     const dirGroup = ((Number(e.authoritativeDirection) & NPC_FLAG_DIRECTION_MASK) >> 1) & 0x03;
-    const recentAuthoritativeMove = Number.isFinite(e.authoritativeMovedAtMs)
-      && (performance.now() - Number(e.authoritativeMovedAtMs)) <= 2500;
-    const walking = pose === "walk" && e.authoritativePathStatus === "walking" && recentAuthoritativeMove;
+    const walking = authoritativeActorWalkingRuntime(e, performance.now());
     return legacyActorStandingTileId(e, dirGroup, walking);
   }
   if ((e.type | 0) >= ENTITY_TYPE_ACTOR_MIN && (e.type | 0) <= ENTITY_TYPE_ACTOR_MAX) {
@@ -7122,31 +6664,23 @@ function drawDropThrowEffects(startX: number, startY: number, z: number): void {
   if (!state.tileSet || state.dropThrowEffects.length === 0) {
     return;
   }
-  const nowMs = performance.now();
-  const remaining: DropThrowEffectRuntime[] = [];
-  for (const effect of state.dropThrowEffects) {
-    if ((effect.z | 0) !== (z | 0)) {
-      remaining.push(effect);
-      continue;
-    }
-    const duration = Math.max(1, effect.endMs - effect.startMs);
-    const rawT = Math.max(0, Math.min(1, (nowMs - effect.startMs) / duration));
-    if (rawT >= 1) {
-      applyAuthoritativeWorldObjectsToLayer([effect.landObject]);
-      continue;
-    }
-    remaining.push(effect);
-    const eased = rawT * rawT * (3 - (2 * rawT));
-    const wx = effect.fromX + ((effect.toX - effect.fromX) * eased);
-    const wy = effect.fromY + ((effect.toY - effect.fromY) * eased);
-    const gx = wx - startX;
-    const gy = wy - startY;
-    if (gx < -1 || gy < -1 || gx >= VIEW_W || gy >= VIEW_H) {
-      continue;
-    }
-    const px = Math.round(gx * TILE_SIZE);
-    const py = Math.round((gy * TILE_SIZE) - (Math.sin(rawT * Math.PI) * 10));
-    const tile = resolveAnimatedTile(effect.tileId);
+  const plan = dropThrowRenderPlanRuntime({
+    arcPx: 10,
+    effects: state.dropThrowEffects,
+    nowMs: performance.now(),
+    resolveAnimatedTile,
+    startX,
+    startY,
+    tileSize: TILE_SIZE,
+    viewH: VIEW_H,
+    viewW: VIEW_W,
+    z
+  });
+  for (const landedObject of plan.landedObjects) {
+    applyAuthoritativeWorldObjectsToLayer([landedObject]);
+  }
+  for (const sprite of plan.sprites) {
+    const tile = sprite.tileId;
     const pal = paletteForTile(tile);
     const key = paletteKeyForTile(tile);
     const tc = state.tileSet.tileCanvas(tile, pal, key);
@@ -7155,11 +6689,11 @@ function drawDropThrowEffects(startX: number, startY: number, z: number): void {
     }
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = 0.98;
-    ctx.drawImage(tc, px, py, TILE_SIZE, TILE_SIZE);
+    ctx.globalAlpha = sprite.alpha;
+    ctx.drawImage(tc, sprite.px, sprite.py, TILE_SIZE, TILE_SIZE);
     ctx.restore();
   }
-  state.dropThrowEffects = remaining;
+  state.dropThrowEffects = plan.remaining;
 }
 
 function drawLegacySelectCellMarker(g: CanvasRenderingContext2D, px: number, py: number, size: number): void {
@@ -7462,117 +6996,113 @@ function drawTileGrid(): void {
 
 function updateStats(): void {
   const w = state.sim.world;
-  statTick.textContent = String(state.sim.tick);
-  statPos.textContent = formatPositionRuntime(w);
-  const clock = formatClockRuntime(w);
-  statClock.textContent = clock.text;
-  statDate.textContent = formatDateRuntime(w);
+  const audioStatus = state.audio ? state.audio.status() : null;
+  const statusText = buildStatusPanelTextRuntime({
+    audioAmbientLastSfx: state.audioAmbientLastSfx,
+    audioAmbientTriggerCount: state.audioAmbientTriggerCount,
+    audioStatus,
+    avatarFacingDx: state.avatarFacingDx,
+    avatarFacingDy: state.avatarFacingDy,
+    avatarPose: state.sim.avatarPose,
+    centerAnimatedTile: state.centerAnimatedTile,
+    centerPaletteBand: state.centerPaletteBand,
+    centerRawTile: state.centerRawTile,
+    enablePaletteFx: state.enablePaletteFx,
+    entityLayerLoaded: !!state.entityLayer,
+    entityLayerTotalLoaded: state.entityLayer?.totalLoaded,
+    entityOverlayCount: state.entityOverlayCount,
+    hashText: hashHexRuntime(simStateHashRuntime(state.sim, HASH_CFG)),
+    interactionProbeTile: state.interactionProbeTile,
+    loopHealth: state.loopHealth,
+    movementMode: state.movementMode,
+    netRemotePlayers: state.net.remotePlayers,
+    npcOcclusionBlockedMoves: state.npcOcclusionBlockedMoves,
+    objectLayerLoaded: !!state.objectLayer,
+    objectLayerTotalLoaded: state.objectLayer?.totalLoaded,
+    objectOverlayCount: state.objectOverlayCount,
+    palettePhase: renderPaletteTick(),
+    queueLength: state.queue.length,
+    renderParityMismatches: state.renderParityMismatches,
+    sessionStarted: state.sessionStarted,
+    simPaused: state.simPaused,
+    soundEnabled: state.sim.world.sound_enabled,
+    targetVerb: state.targetVerb,
+    targetVerbLabels: LEGACY_TARGET_VERB_LABEL,
+    tick: state.sim.tick,
+    tileId: state.centerRawTile,
+    timeOfDayLabel: timeOfDayLabelRuntime(w.time_h),
+    useCursorActive: state.useCursorActive,
+    world: w
+  });
+  statTick.textContent = statusText.tick;
+  statPos.textContent = statusText.position;
+  statClock.textContent = statusText.clock;
+  statDate.textContent = statusText.date;
   if (topTimeOfDay) {
-    topTimeOfDay.textContent = `${timeOfDayLabelRuntime(w.time_h)} (${clock.text})`;
+    topTimeOfDay.textContent = statusText.topTimeOfDay;
   }
   if (topInputMode) {
-    topInputMode.textContent = formatInputModeRuntime({
-      movementMode: state.movementMode,
-      sessionStarted: state.sessionStarted,
-      targetVerb: state.targetVerb,
-      targetVerbLabels: LEGACY_TARGET_VERB_LABEL,
-      useCursorActive: state.useCursorActive
-    });
+    topInputMode.textContent = statusText.inputMode;
   }
-  statQueued.textContent = String(state.queue.length);
-  statObjects.textContent = formatLayerCountRuntime(state.objectOverlayCount, state.objectLayer?.totalLoaded, !!state.objectLayer);
+  statQueued.textContent = statusText.queued;
+  statObjects.textContent = statusText.objects;
   if (statEntities) {
-    statEntities.textContent = formatLayerCountRuntime(state.entityOverlayCount, state.entityLayer?.totalLoaded, !!state.entityLayer);
+    statEntities.textContent = statusText.entities;
   }
   if (statRenderParity) {
-    statRenderParity.textContent = formatRenderParityRuntime({
-      interactionProbeTile: state.interactionProbeTile,
-      mismatchCount: state.renderParityMismatches
-    });
+    statRenderParity.textContent = statusText.renderParity;
   }
   if (statAvatarState) {
-    statAvatarState.textContent = formatAvatarStateRuntime({
-      facingDx: state.avatarFacingDx,
-      facingDy: state.avatarFacingDy,
-      movementMode: state.movementMode,
-      pose: state.sim.avatarPose
-    });
+    statAvatarState.textContent = statusText.avatarState;
   }
   if (statNpcOcclusionBlocks) {
-    statNpcOcclusionBlocks.textContent = String(state.npcOcclusionBlockedMoves);
+    statNpcOcclusionBlocks.textContent = statusText.npcOcclusionBlocks;
   }
-  statHash.textContent = hashHexRuntime(simStateHashRuntime(state.sim, HASH_CFG));
+  statHash.textContent = statusText.hash;
   if (statSimLoop) {
-    statSimLoop.textContent = state.simPaused ? "paused" : "running";
+    statSimLoop.textContent = statusText.simLoop;
   }
   if (statLoopHealth) {
-    const lh = state.loopHealth;
-    statLoopHealth.textContent = formatLoopHealthRuntime({
-      backlogDrops: lh.backlogDrops,
-      frameErrors: lh.frameErrors,
-      lastDtMs: lh.lastDtMs,
-      maxDtMs: lh.maxDtMs,
-      paused: state.simPaused,
-      visibilityResets: lh.visibilityResets
-    });
+    statLoopHealth.textContent = statusText.loopHealth;
   }
   if (statAudio && state.audio) {
-    const audio = state.audio.status();
-    const muted = state.sim.world.sound_enabled ? "" : " sound-off";
-    const outputMuted = audio.muted ? " output-muted" : "";
-    const err = audio.lastError ? ` err:${audio.lastError}` : "";
-    const music = audio.musicAwaitingGesture ? ` gesture:${audio.musicSong}` : audio.musicLoading ? ` load:${audio.musicSong}` : audio.musicPlaying ? ` music:${audio.musicSong}` : "";
-    statAudio.textContent = `${audio.backendMode}${muted}${outputMuted}${music} ambient:${state.audioAmbientTriggerCount | 0} ${state.audioAmbientLastSfx || "-"}${err}`;
+    statAudio.textContent = statusText.audio;
     updateAudioMuteUi();
   }
   if (statPalettePhase) {
-    statPalettePhase.textContent = state.enablePaletteFx ? String(renderPaletteTick() & 0xff) : "off";
+    statPalettePhase.textContent = statusText.palettePhase;
   }
   if (statCenterTiles) {
-    statCenterTiles.textContent = `0x${state.centerRawTile.toString(16)} -> 0x${state.centerAnimatedTile.toString(16)}`;
+    statCenterTiles.textContent = statusText.centerTiles;
   }
   if (statCenterBand) {
-    statCenterBand.textContent = state.centerPaletteBand;
+    statCenterBand.textContent = statusText.centerBand;
   }
   if (statNetPlayers) {
-    const remote = Array.isArray(state.net.remotePlayers) ? state.net.remotePlayers.length : 0;
-    statNetPlayers.textContent = String(1 + remote);
+    statNetPlayers.textContent = statusText.netPlayers;
   }
   if (state.debugPanelTab === "chat") {
     renderDebugChatLedgerPanel();
   } else if (debugChatCount) {
-    const count = Array.isArray(state.debugChatLedger) ? state.debugChatLedger.length : 0;
-    debugChatCount.textContent = formatLedgerEntryCountRuntime(count);
+    renderDebugChatLedgerCountRuntime({
+      ledger: state.debugChatLedger,
+      countFormatter: formatLedgerEntryCountRuntime,
+      countTarget: debugChatCount
+    });
   }
 }
 
-type ReplayCheckpointRuntime = {
-  hash: string;
-  tick: number;
-};
-
 function releaseReplayUrl(): void {
-  if (state.replayUrl) {
-    URL.revokeObjectURL(state.replayUrl);
-    state.replayUrl = null;
-  }
+  releaseReplayUrlRuntime(state, URL);
 }
 
 function setReplayCsv(csvText: string): void {
-  releaseReplayUrl();
-  const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
-  state.replayUrl = URL.createObjectURL(blob);
-  replayDownload.href = state.replayUrl;
-  replayDownload.download = "virtuemachine-replay-checkpoints.csv";
-  replayDownload.classList.remove("disabled");
-}
-
-function replayCheckpointsCsv(checkpoints: readonly ReplayCheckpointRuntime[]): string {
-  const lines = ["tick,hash"];
-  for (const cp of checkpoints) {
-    lines.push(`${cp.tick},${cp.hash}`);
-  }
-  return `${lines.join("\n")}\n`;
+  setReplayCsvRuntime({
+    csvText,
+    link: replayDownload,
+    state,
+    url: URL
+  });
 }
 
 function runReplayCheckpoints(
@@ -7580,24 +7110,14 @@ function runReplayCheckpoints(
   totalTicks: number,
   interval: number
 ): ReplayCheckpointRuntime[] {
-  const sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
-  const queue = commands.map((cmd) => ({ ...cmd }));
-  const checkpoints: ReplayCheckpointRuntime[] = [];
-
-  for (let i = 0; i < totalTicks; i += 1) {
-    const pending = stepSimTick(sim, queue);
-    queue.length = 0;
-    queue.push(...pending);
-
-    if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
-      checkpoints.push({
-        tick: sim.tick,
-        hash: hashHexRuntime(simStateHashRuntime(sim, HASH_CFG))
-      });
-    }
-  }
-
-  return checkpoints;
+  return runReplayCheckpointsRuntime({
+    commands,
+    totalTicks,
+    interval,
+    createSim: () => createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED),
+    stepSim: stepSimTick,
+    hashSim: (sim) => hashHexRuntime(simStateHashRuntime(sim, HASH_CFG))
+  });
 }
 
 function animationViewportHash(sim: AppSimState): string | null {
@@ -7646,99 +7166,88 @@ function runAnimationCheckpoints(
   if (!state.mapCtx) {
     return [];
   }
-  const sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
-  const queue = commands.map((cmd) => ({ ...cmd }));
-  const checkpoints: ReplayCheckpointRuntime[] = [];
-
-  for (let i = 0; i < totalTicks; i += 1) {
-    const pending = stepSimTick(sim, queue);
-    queue.length = 0;
-    queue.push(...pending);
-
-    if ((sim.tick % interval) === 0 || sim.tick === totalTicks) {
-      checkpoints.push({
-        tick: sim.tick,
-        hash: animationViewportHash(sim) ?? ""
-      });
-    }
-  }
-
-  return checkpoints;
+  return runReplayCheckpointsRuntime({
+    commands,
+    totalTicks,
+    interval,
+    createSim: () => createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED),
+    stepSim: stepSimTick,
+    hashSim: (sim) => animationViewportHash(sim) ?? ""
+  });
 }
 
 function verifyReplayStability(): void {
-  const maxCommandTick = state.commandLog.reduce((maxTick, cmd) => Math.max(maxTick, cmd.tick), 0);
-  const totalTicks = Math.max(state.sim.tick, maxCommandTick, 1);
+  const totalTicks = replayTotalTicksRuntime({
+    currentTick: state.sim.tick,
+    commandTicks: replayCommandTicksRuntime(state.commandLog)
+  });
   const a = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
   const b = runReplayCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
   const aa = runAnimationCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
   const ab = runAnimationCheckpoints(state.commandLog, totalTicks, REPLAY_CHECKPOINT_INTERVAL);
 
-  const sameLength = a.length === b.length;
-  const allMatch = sameLength && a.every((cp, idx) => cp.tick === b[idx].tick && cp.hash === b[idx].hash);
-  const animSameLength = aa.length === ab.length;
-  const animAllMatch = animSameLength && aa.every((cp, idx) => cp.tick === ab[idx].tick && cp.hash === ab[idx].hash);
+  const result = replayVerificationResultRuntime({
+    animationA: aa,
+    animationB: ab,
+    replayA: a,
+    replayB: b,
+    totalTicks
+  });
 
-  if (allMatch && animAllMatch) {
-    const csv = replayCheckpointsCsv(a);
-    setReplayCsv(csv);
-    statReplay.textContent = `stable (${a.length} checkpoints)`;
-    diagBox.className = "diag ok";
-    if (aa.length) {
-      diagBox.textContent = `Replay + animation verified stable over ${totalTicks} ticks. Download checkpoints.csv for baseline tracking.`;
-    } else {
-      diagBox.textContent = `Replay verified stable over ${totalTicks} ticks. Download checkpoints.csv for baseline tracking.`;
-    }
-    return;
-  }
+  statReplay.textContent = result.statText;
+  applyDiagKind(result);
 
-  statReplay.textContent = "mismatch";
-  diagBox.className = "diag warn";
-  if (!allMatch) {
-    diagBox.textContent = "Replay mismatch detected. Determinism drift likely in command/tick path.";
-    return;
+  if (result.csvText !== null) {
+    setReplayCsv(result.csvText);
   }
-  diagBox.textContent = "Animation mismatch detected. Animated tile phase is not deterministic.";
 }
 
 function resetRun(): void {
-  state.sim = createInitialAppSimState(INITIAL_WORLD, INITIAL_SEED);
-  state.queue = [];
-  state.commandLog = [];
-  state.paletteFrameTick = -1;
-  state.paletteFrame = null;
-  state.centerRawTile = 0;
-  state.centerAnimatedTile = 0;
-  state.centerPaletteBand = "none";
-  state.renderParityMismatches = 0;
-  state.interactionProbeTile = null;
-  state.useCursorActive = false;
-  state.targetVerb = "";
+  const patch = resetRunPatchRuntime({
+    animationFrozen: state.animationFrozen,
+    initialSeed: INITIAL_SEED,
+    initialWorld: INITIAL_WORLD
+  });
+  state.sim = patch.sim;
+  state.queue = patch.queue;
+  state.commandLog = patch.commandLog;
+  state.paletteFrameTick = patch.paletteFrameTick;
+  state.paletteFrame = patch.paletteFrame;
+  state.centerRawTile = patch.centerRawTile;
+  state.centerAnimatedTile = patch.centerAnimatedTile;
+  state.centerPaletteBand = patch.centerPaletteBand;
+  state.renderParityMismatches = patch.renderParityMismatches;
+  state.interactionProbeTile = patch.interactionProbeTile;
+  state.useCursorActive = patch.useCursorActive;
+  state.targetVerb = patch.targetVerb;
   endLegacyConversation();
-  state.avatarLastMoveTick = -1;
-  state.avatarWalkAnimUntilMs = -1;
-  state.lastMoveQueueAtMs = -1;
-  state.lastMoveInputDx = 0;
-  state.lastMoveInputDy = 1;
-  state.npcOcclusionBlockedMoves = 0;
-  if (state.animationFrozen) {
-    state.frozenAnimationTick = state.sim.tick >>> 0;
+  state.legacyLedgerLines = patch.legacyLedgerLines;
+  state.legacyLedgerPrompt = patch.legacyLedgerPrompt;
+  state.avatarLastMoveTick = patch.avatarLastMoveTick;
+  state.avatarWalkAnimUntilMs = patch.avatarWalkAnimUntilMs;
+  resetMoveInputThrottleRuntime(state);
+  state.npcOcclusionBlockedMoves = patch.npcOcclusionBlockedMoves;
+  if (patch.frozenAnimationTick !== null) {
+    state.frozenAnimationTick = patch.frozenAnimationTick;
   }
   statReplay.textContent = "not run";
   releaseReplayUrl();
-  replayDownload.classList.add("disabled");
-  replayDownload.removeAttribute("href");
+  applyReplayDownloadDisabledRuntime(replayDownload);
 }
 
 function tickLoop(ts: number): void {
   try {
-    const dtMs = Math.max(0, ts - state.lastTs);
-    state.loopHealth.lastDtMs = dtMs;
-    if (dtMs > state.loopHealth.maxDtMs) {
-      state.loopHealth.maxDtMs = dtMs;
-    }
-    state.accMs = Math.min(state.accMs + dtMs, LOOP_MAX_ACC_MS);
-    state.lastTs = ts;
+    const timingPatch = loopFrameTimingPatchRuntime({
+      accMs: state.accMs,
+      lastTs: state.lastTs,
+      loopHealth: state.loopHealth,
+      maxAccMs: LOOP_MAX_ACC_MS,
+      timestampMs: ts
+    });
+    const dtMs = timingPatch.loopHealth.lastDtMs;
+    state.accMs = timingPatch.accMs;
+    state.lastTs = timingPatch.lastTs;
+    state.loopHealth = timingPatch.loopHealth;
     if (state.legacyLedgerPrompt || (state.legacyConversationActive && state.legacyConversationPaging)) {
       state.legacyPromptAnimMs += dtMs;
       while (state.legacyPromptAnimMs >= LEGACY_PROMPT_FRAME_MS) {
@@ -7798,6 +7307,16 @@ function tickLoop(ts: number): void {
       }
       if (
         isNetAuthenticated()
+        && isServerConnectionBroken()
+        && state.sessionStarted
+        && !state.reconnectProbeInFlight
+        && (performance.now() - state.reconnectProbeLastMs) >= NET_RECONNECT_PROBE_INTERVAL_MS
+      ) {
+        state.reconnectProbeLastMs = performance.now();
+        netProbeReconnect().catch((_err) => {});
+      }
+      if (
+        isNetAuthenticated()
         && !state.net.backgroundSyncPaused
         && state.sessionStarted
         && (state.sim.tick - state.net.lastPresenceHeartbeatTick) >= NET_PRESENCE_HEARTBEAT_TICKS
@@ -7849,9 +7368,9 @@ function tickLoop(ts: number): void {
         && state.sim.tick !== state.net.lastMaintenanceTick
       ) {
         netRunCriticalMaintenance({ silent: true }).catch((err) => {
+          const failure = criticalMaintenanceFailureRuntime(err, errorMessageRuntime);
           recordBackgroundNetFailure(err, "Maintenance");
-          diagBox.className = "diag warn";
-          diagBox.textContent = `Critical maintenance failed: ${errorMessageRuntime(err)}`;
+          applyDiag(failure);
         });
       }
       if (
@@ -7868,85 +7387,56 @@ function tickLoop(ts: number): void {
     if (state.sessionStarted) {
       composeLegacyViewportFromModernGrid();
       renderLegacyHudStubOnBackdrop();
+      drawInGameServerStatusOverlay();
     }
     drawCustomCursorLayer();
     updateStats();
   } catch (err) {
-    state.loopHealth.frameErrors += 1;
-    state.accMs = 0;
-    state.lastTs = performance.now();
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Frame loop recovered from error: ${errorMessageRuntime(err)}`;
+    const recovery = frameLoopRecoveryRuntime({
+      errorMessage: errorMessageRuntime(err),
+      loopHealth: state.loopHealth,
+      nowMs: performance.now()
+    });
+    state.loopHealth = recovery.loopHealth;
+    state.accMs = recovery.accMs;
+    state.lastTs = recovery.lastTs;
+    applyDiag(recovery);
     console.error("tickLoop error", err);
   }
   requestAnimationFrame(tickLoop);
 }
 
 function clearObjectTransientState(): void {
-  if (!state.sim) {
-    return;
-  }
-  state.sim.doorOpenStates = {};
-  state.sim.removedObjectKeys = {};
-  state.sim.removedObjectAtTick = {};
-  state.sim.removedObjectCount = 0;
-}
-
-function serverObjectKeyForObjectLayer(obj: U6ObjectEntryRuntime): string {
-  const areaHex = (Number(obj.sourceArea) >>> 0).toString(16).padStart(2, "0");
-  const indexHex = (Number(obj.sourceIndex) >>> 0).toString(16).padStart(3, "0");
-  return `a${areaHex}i${indexHex}`;
+  clearObjectTransientStateRuntime(state.sim);
 }
 
 function markAuthoritativeWorldObjectHidden(sourceKey: unknown, dueAtMs: unknown): void {
-  const key = String(sourceKey || "").trim();
-  if (!key) {
-    return;
-  }
-  const due = Number(dueAtMs);
-  state.net.hiddenWorldObjectKeys[key] = Number.isFinite(due) && due > Date.now()
-    ? due
-    : Date.now() + DEFAULT_PICKUP_RESPAWN_MS_RUNTIME;
-}
-
-function purgeAuthoritativeHiddenWorldObjectsFromLayer(): void {
-  if (!state.objectLayer) {
-    return;
-  }
-  for (const key of Object.keys(state.net.hiddenWorldObjectKeys || {})) {
-    state.objectLayer.removeRuntimeEntryByAuthoritativeKey(key);
-  }
-}
-
-function applyAuthoritativeHiddenWorldObjectsFromMeta(meta: unknown): void {
-  const metaRecord = meta && typeof meta === "object" ? meta as WorldRuntimeJson["meta"] : null;
-  const expiredObjects = Array.isArray(metaRecord?.expired_objects) ? metaRecord.expired_objects : [];
-  if (state.objectLayer) {
-    for (const key of expiredObjects) {
-      state.objectLayer.removeRuntimeEntryByAuthoritativeKey(key);
-    }
-  }
-  const next = hiddenWorldObjectKeysFromMetaRuntime(
-    metaRecord,
+  markHiddenWorldObjectClientStateRuntime(
+    state.net,
+    sourceKey,
+    dueAtMs,
     Date.now(),
     DEFAULT_PICKUP_RESPAWN_MS_RUNTIME
   );
-  if (next) {
-    state.net.hiddenWorldObjectKeys = next;
-    purgeAuthoritativeHiddenWorldObjectsFromLayer();
-  }
+}
+
+function purgeAuthoritativeHiddenWorldObjectsFromLayer(): void {
+  removeHiddenWorldObjectsFromLayerRuntime(state.objectLayer, state.net.hiddenWorldObjectKeys);
+}
+
+function applyAuthoritativeHiddenWorldObjectsFromMeta(meta: unknown): void {
+  applyHiddenWorldObjectsMetaToClientRuntime({
+    fallbackRespawnMs: DEFAULT_PICKUP_RESPAWN_MS_RUNTIME,
+    layer: state.objectLayer,
+    meta,
+    nowMs: Date.now(),
+    state: state.net
+  });
 }
 
 function isAuthoritativeWorldObjectHidden(sourceKey: string): boolean {
-  const due = Number(state.net.hiddenWorldObjectKeys[sourceKey] || 0);
-  if (!due) {
-    return false;
-  }
-  if (due <= Date.now()) {
-    delete state.net.hiddenWorldObjectKeys[sourceKey];
-    return false;
-  }
-  return true;
+  const visibility = hiddenWorldObjectVisibilityForClientRuntime(state.net, sourceKey, Date.now());
+  return visibility.hidden;
 }
 
 async function fetchPristineBaselineVersion() {
@@ -7956,10 +7446,41 @@ async function fetchPristineBaselineVersion() {
 function isObjectRemovedForObjectLayer(obj: U6ObjectEntryRuntime): boolean {
   const removed = state?.sim?.removedObjectKeys;
   if (!removed || typeof removed !== "object") {
-    return isAuthoritativeWorldObjectHidden(serverObjectKeyForObjectLayer(obj));
+    return isAuthoritativeWorldObjectHidden(serverObjectKeyForWorldObjectRuntime(obj));
   }
   return !!removed[objectLayerAnchorKeyRuntime(obj)]
-    || isAuthoritativeWorldObjectHidden(serverObjectKeyForObjectLayer(obj));
+    || isAuthoritativeWorldObjectHidden(serverObjectKeyForWorldObjectRuntime(obj));
+}
+
+function applyRuntimeAssetFallbackPatch(): void {
+  const patch = runtimeAssetFallbackPatchRuntime();
+  state.mapCtx = patch.mapCtx;
+  state.tileSet = patch.tileSet;
+  state.objectLayer = patch.objectLayer;
+  state.entityLayer = patch.entityLayer;
+  state.animData = patch.animData;
+  state.palette = patch.palette;
+  state.basePalette = patch.basePalette;
+  state.avatarPortraitCanvas = patch.avatarPortraitCanvas;
+  state.portraitArchiveA = patch.portraitArchiveA;
+  state.portraitArchiveB = patch.portraitArchiveB;
+  state.startupTitlePixmaps = patch.startupTitlePixmaps;
+  state.startupMenuPixmap = patch.startupMenuPixmap;
+  state.bootIntroBanks = patch.bootIntroBanks;
+  state.bootIntroBlocks = patch.bootIntroBlocks;
+  state.bootIntroPalettes = patch.bootIntroPalettes;
+  state.bootIntroFont = patch.bootIntroFont;
+  state.bootIntro.active = patch.bootIntroActive;
+  state.cursorPixmaps = patch.cursorPixmaps;
+  state.u6MainFont = patch.u6MainFont;
+  state.legacyPaperPixmap = patch.legacyPaperPixmap;
+  state.lookStringEntries = patch.lookStringEntries;
+  state.tileFlags = patch.tileFlags;
+  state.tileFlags2 = patch.tileFlags2;
+  state.typeWeights = patch.typeWeights;
+  state.terrainType = patch.terrainType;
+  state.pristineBaselineVersion = patch.pristineBaselineVersion;
+  state.pristineBaselineLastPollTick = patch.pristineBaselineLastPollTick;
 }
 
 async function loadPristineObjectBaseline(baseTiles: ArrayLike<number>): Promise<ObjectBaselineLoadResultRuntime> {
@@ -7989,12 +7510,12 @@ async function refreshPristineBaseline(force = false): Promise<boolean> {
     purgeAuthoritativeHiddenWorldObjectsFromLayer();
     state.pristineBaselineVersion = version;
     clearObjectTransientState();
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Pristine baseline reloaded (version ${version || "unknown"}).`;
+    const diag = pristineBaselineReloadedDiagRuntime(version);
+    applyDiag(diag);
     return true;
   } catch (err) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Pristine baseline reload failed: ${errorMessageRuntime(err)}`;
+    const diag = pristineBaselineReloadFailedDiagRuntime(errorMessageRuntime(err));
+    applyDiag(diag);
     return false;
   } finally {
     state.pristineBaselinePollInFlight = false;
@@ -8002,51 +7523,22 @@ async function refreshPristineBaseline(force = false): Promise<boolean> {
 }
 
 async function loadRuntimeAssets() {
-  const required = ["map", "chunks"];
-  const missing = [];
-
   try {
     if (!state.sessionStarted && !state.bootIntro?.played) {
       startBootIntroMusic();
     }
     state.cornerVariantCache.clear();
-    for (const name of required) {
-      const res = await fetch(`../assets/runtime/${name}`);
-      if (!res.ok) {
-        missing.push(name);
-      }
-    }
+    const requiredResponses = new Map<string, Response>();
+    await Promise.all(REQUIRED_RUNTIME_ASSET_NAMES.map(async (name) => {
+      requiredResponses.set(name, await fetch(`../assets/runtime/${name}`));
+    }));
+    const missing = missingRequiredRuntimeAssetsRuntime(requiredResponses);
     if (missing.length) {
       throw new Error(`missing ${missing.join(", ")}`);
     }
 
     const [mapRes, chunksRes, palRes, flagRes, idxRes, maskRes, mapTileRes, objTileRes, baseTileRes, animRes, paperRes, fontRes, portraitBRes, portraitARes, titlesRes, mainmenuRes, intro1Res, intro2Res, intro3Res, introPaletteRes, introBlocksRes, introFontRes, cursorRes, lookRes, converseARes, converseBRes] = await Promise.all([
-      fetch("../assets/runtime/map"),
-      fetch("../assets/runtime/chunks"),
-      fetch("../assets/runtime/u6pal"),
-      fetch("../assets/runtime/tileflag"),
-      fetch("../assets/runtime/tileindx.vga"),
-      fetch("../assets/runtime/masktype.vga"),
-      fetch("../assets/runtime/maptiles.vga"),
-      fetch("../assets/runtime/objtiles.vga"),
-      fetch("../assets/runtime/basetile"),
-      fetch("../assets/runtime/animdata"),
-      fetch("../assets/runtime/paper.bmp"),
-      fetch("../assets/runtime/u6.ch"),
-      fetch("../assets/runtime/portrait.b"),
-      fetch("../assets/runtime/portrait.a"),
-      fetch("../assets/runtime/titles.shp"),
-      fetch("../assets/runtime/mainmenu.shp"),
-      fetch("../assets/runtime/intro_1.shp"),
-      fetch("../assets/runtime/intro_2.shp"),
-      fetch("../assets/runtime/intro_3.shp"),
-      fetch("../assets/runtime/palettes.int"),
-      fetch("../assets/runtime/blocks.shp"),
-      fetch("../assets/runtime/u6.set"),
-      fetch("../assets/runtime/u6mcga.ptr"),
-      fetch("../assets/runtime/look.lzd"),
-      fetch("../assets/runtime/converse.a"),
-      fetch("../assets/runtime/converse.b")
+      ...RUNTIME_ASSET_FETCH_MANIFEST.map((asset) => fetch(asset.path))
     ]);
     const [mapBuf, chunkBuf, palBuf, flagBuf, idxBuf, maskBuf, mapTileBuf, objTileBuf, baseTileBuf, animBuf, paperBuf, fontBuf, portraitBBuf, portraitABuf, titlesBuf, mainmenuBuf, intro1Buf, intro2Buf, intro3Buf, introPaletteBuf, introBlocksBuf, introFontBuf, cursorBuf, lookBuf, converseABuf, converseBBuf] = await Promise.all([
       mapRes.arrayBuffer(),
@@ -8158,7 +7650,7 @@ async function loadRuntimeAssets() {
       state.bootIntroFont = null;
     }
     state.bootIntroCanvasCache.clear();
-    if (state.bootIntroBanks && state.bootIntroPalettes && !state.bootIntro.played && !state.sessionStarted) {
+    if (state.bootIntroBanks && state.bootIntroPalettes && !isSkipIntroEnabled() && !state.bootIntro.played && !state.sessionStarted) {
       startBootIntroRuntime(state.bootIntro);
       syncBootIntroMusicPhase();
     }
@@ -8218,40 +7710,18 @@ async function loadRuntimeAssets() {
       `bLoad=${(converseB instanceof Uint8Array) ? converseB.byteLength : 0}`,
       `aValid=${converseAValidated ? 1 : 0}`
     ].join(",");
-    if (!(state.converseArchiveA instanceof Uint8Array)) {
-      diagBox.className = "diag warn";
-      diagBox.textContent = "Conversation archive converse.a not loaded; talk falls back to tile strings.";
-    } else if (!converseAValidated) {
-      diagBox.className = "diag warn";
-      diagBox.textContent = "Conversation archive loaded but failed canonical validation; scripts are disabled for safety.";
+    const conversationArchiveDiag = conversationArchiveDiagRuntime({
+      converseALoaded: state.converseArchiveA instanceof Uint8Array,
+      converseAValidated
+    });
+    if (conversationArchiveDiag) {
+      applyDiag(conversationArchiveDiag);
     }
-    if (flagRes.ok && flagBuf.byteLength >= 0x1c00) {
-      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
-      state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
-      /* Legacy tileflag layout: terrain(0x800), flag1(0x800), typeWeight(0x400), flag2/D_B3EF(0x800). */
-      state.typeWeights = new Uint8Array(flagBuf.slice(0x1000, 0x1400));
-      state.tileFlags2 = new Uint8Array(flagBuf.slice(0x1400, 0x1c00));
-    } else if (flagRes.ok && flagBuf.byteLength >= 0x1800) {
-      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
-      state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
-      state.typeWeights = null;
-      state.tileFlags2 = new Uint8Array(flagBuf.slice(0x1000, 0x1800));
-    } else if (flagRes.ok && flagBuf.byteLength >= 0x1000) {
-      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
-      state.tileFlags = new Uint8Array(flagBuf.slice(0x800, 0x1000));
-      state.typeWeights = null;
-      state.tileFlags2 = null;
-    } else if (flagRes.ok && flagBuf.byteLength >= 0x800) {
-      state.terrainType = new Uint8Array(flagBuf.slice(0, 0x800));
-      state.tileFlags = new Uint8Array(flagBuf.slice(0, 0x800));
-      state.typeWeights = null;
-      state.tileFlags2 = null;
-    } else {
-      state.tileFlags = null;
-      state.tileFlags2 = null;
-      state.typeWeights = null;
-      state.terrainType = null;
-    }
+    const tileflagSlices = decodeRuntimeTileflagSlicesRuntime(flagRes.ok, flagBuf);
+    state.terrainType = tileflagSlices.terrainType;
+    state.tileFlags = tileflagSlices.tileFlags;
+    state.typeWeights = tileflagSlices.typeWeights;
+    state.tileFlags2 = tileflagSlices.tileFlags2;
 
     if (
       state.palette
@@ -8295,72 +7765,29 @@ async function loadRuntimeAssets() {
       state.pristineBaselineLastPollTick = -1;
     }
 
-    if (state.tileSet) {
-      statSource.textContent = "runtime assets + tile art";
-    } else if (state.palette) {
-      statSource.textContent = "runtime assets + palette";
-    } else {
-      statSource.textContent = "runtime assets";
-    }
     applyLegacyFrameLayout();
-    diagBox.className = "diag ok";
-    if (state.tileSet) {
-      if (state.objectLayer && state.objectLayer.filesLoaded > 0) {
-        if (state.animData) {
-          const entityMsg = state.entityLayer ? ` Entity layer active (${state.entityLayer.totalLoaded} objlist actors).` : "";
-          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files). Animated tile remaps active (${state.animData.entries.length} entries).${entityMsg}`;
-        } else {
-          const entityMsg = state.entityLayer ? ` Entity layer active (${state.entityLayer.totalLoaded} objlist actors).` : "";
-          diagBox.textContent = `Runtime assets loaded with tile decoder path. Object overlay active (${state.objectLayer.totalLoaded} objects from ${state.objectLayer.filesLoaded} objblk files).${entityMsg}`;
-        }
-      } else {
-        diagBox.textContent = "Runtime assets loaded with tile decoder path (tileindx/masktype/maptiles/objtiles). Rendering bitmap tiles.";
-      }
-    } else if (state.palette) {
-      diagBox.textContent = "Runtime assets loaded with u6pal/tileflag decoding. Terrain tint now uses original palette data.";
-    } else {
-      diagBox.textContent = "Runtime assets loaded. Rendering map/chunk data from local runtime directory.";
-    }
+    const assetStatus = runtimeAssetStatusTextRuntime({
+      animEntryCount: state.animData?.entries.length,
+      entityTotalLoaded: state.entityLayer?.totalLoaded,
+      objectFilesLoaded: state.objectLayer?.filesLoaded,
+      objectTotalLoaded: state.objectLayer?.totalLoaded,
+      paletteLoaded: state.palette,
+      tileSetLoaded: state.tileSet
+    });
+    statSource.textContent = assetStatus.sourceText;
+    applyDiag(assetStatus);
   } catch (err) {
+    applyRuntimeAssetFallbackPatch();
     state.cornerVariantCache.clear();
-    state.mapCtx = null;
-    state.tileSet = null;
-    state.objectLayer = null;
-    state.entityLayer = null;
-    state.animData = null;
-    state.palette = null;
-    state.basePalette = null;
-    state.avatarPortraitCanvas = null;
-    state.portraitArchiveA = null;
-    state.portraitArchiveB = null;
     state.portraitCanvasCache.clear();
-    state.startupTitlePixmaps = null;
-    state.startupMenuPixmap = null;
     state.startupCanvasCache.clear();
-    state.bootIntroBanks = null;
-    state.bootIntroBlocks = null;
-    state.bootIntroPalettes = null;
-    state.bootIntroFont = null;
     state.bootIntroCanvasCache.clear();
-    state.bootIntro.active = false;
-    state.cursorPixmaps = null;
-    state.u6MainFont = null;
-    state.legacyPaperPixmap = null;
-    state.lookStringEntries = null;
-    state.tileFlags = null;
-    state.tileFlags2 = null;
-    state.typeWeights = null;
-    state.terrainType = null;
-    state.pristineBaselineVersion = "";
-    state.pristineBaselineLastPollTick = -1;
     applyLegacyFrameLayout();
     statSource.textContent = "synthetic fallback";
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Fallback active: ${errorMessageRuntime(err)}. Run ./modern/tools/validate_assets.sh and ./modern/tools/sync_assets.sh.`;
+    applyDiag(runtimeAssetFallbackDiagRuntime(errorMessageRuntime(err)));
   }
 }
 
-type MoveDeltaRuntime = readonly [number, number];
 type HoveredWorldCellRuntime = {
   gx: number;
   gy: number;
@@ -8394,8 +7821,7 @@ function beginTargetCursor(verb: unknown): void {
   if (!result.ok) {
     return;
   }
-  diagBox.className = "diag ok";
-  diagBox.textContent = result.diagText;
+  applyDiag(result);
 }
 
 function moveUseCursor(dx: number, dy: number): void {
@@ -8416,19 +7842,14 @@ function moveUseCursor(dx: number, dy: number): void {
 }
 
 function commitUseCursorInteract(): void {
-  if (!state.useCursorActive) {
+  const commit = commitTargetCursorRuntime(state);
+  if (commit.kind === "legacy_verb") {
+    queueLegacyTargetVerb(commit.verb, commit.x, commit.y);
     return;
   }
-  const tx = state.useCursorX | 0;
-  const ty = state.useCursorY | 0;
-  const verb = String(state.targetVerb || "");
-  if (verb) {
-    queueLegacyTargetVerb(verb, tx, ty);
-  } else {
-    queueInteractAtCell(tx, ty);
+  if (commit.kind === "interact") {
+    queueInteractAtCell(commit.x, commit.y);
   }
-  state.useCursorActive = false;
-  state.targetVerb = "";
 }
 
 function pickupOverlaySourceFromMouseCell(cell: HoveredWorldCellRuntime): { x: number; y: number } | null {
@@ -8450,19 +7871,14 @@ function pickupOverlaySourceFromMouseCell(cell: HoveredWorldCellRuntime): { x: n
 }
 
 function commitActiveTargetCursorFromMouse(ev: MouseEvent): boolean {
-  if (!state.useCursorActive) {
-    return false;
-  }
   const cell = hoveredWorldCellFromMouse();
-  if (!cell) {
-    return false;
-  }
-  const verb = String(state.targetVerb || "");
-  const source = verb === LEGACY_TARGET_VERB_RUNTIME.GET
+  const source = cell && state.targetVerb === LEGACY_TARGET_VERB_RUNTIME.GET
     ? pickupOverlaySourceFromMouseCell(cell)
     : null;
-  state.useCursorX = source ? source.x : (cell.x | 0);
-  state.useCursorY = source ? source.y : (cell.y | 0);
+  const commit = applyTargetCursorMouseCommitRuntime(state, cell, source);
+  if (commit.kind === "none") {
+    return false;
+  }
   commitUseCursorInteract();
   ev.preventDefault();
   return true;
@@ -8472,45 +7888,41 @@ function cancelTargetCursor(): void {
   if (!cancelTargetCursorRuntime(state)) {
     return;
   }
-  diagBox.className = "diag ok";
-  diagBox.textContent = "Targeting cancelled.";
+  applyDiag(targetCursorCancelledDiagRuntime());
 }
 
 function moveDeltaFromKey(ev: KeyboardEvent, allowDiagonal: boolean): MoveDeltaRuntime | null {
-  const k = String(ev.key || "").toLowerCase();
-  const code = String(ev.code || "");
-  /* Canonical keyboard verbs use A/C/T/L/G/D/M/U; movement stays on arrows/numpad only. */
-  if (k === "arrowup" || code === "Numpad8") return [0, -1];
-  if (k === "arrowdown" || code === "Numpad2") return [0, 1];
-  if (k === "arrowleft" || code === "Numpad4") return [-1, 0];
-  if (k === "arrowright" || code === "Numpad6") return [1, 0];
-  if (!allowDiagonal) {
-    return null;
-  }
-  if (code === "Numpad7") return [-1, -1];
-  if (code === "Numpad9") return [1, -1];
-  if (code === "Numpad1") return [-1, 1];
-  if (code === "Numpad3") return [1, 1];
-  return null;
+  return moveDeltaFromKeyRuntime(ev, allowDiagonal);
 }
 
 function beginLegacyVerbTarget(verb: unknown): boolean {
-  if (state.movementMode !== "avatar") {
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Legacy targeting requires Avatar mode.";
+  if (blockGameplayForBrokenServer()) {
     return false;
   }
-  if (verb === LEGACY_TARGET_VERB_RUNTIME.DROP) {
-    state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_92;
-    const item = firstInventoryObjectForDrop(state.sim);
-    if (!item) {
-      pushLedgerMessage(">Drop-nothing");
-      pushLedgerMessage("Not possible");
-      showLegacyLedgerPrompt();
-      diagBox.className = "diag warn";
-      diagBox.textContent = "Drop: inventory is empty.";
-      return false;
+  clearTransientReconnectMessageOnCommand();
+  const item = verb === LEGACY_TARGET_VERB_RUNTIME.DROP
+    ? inventoryObjectForDropSelectionRuntime(state.sim.inventoryObjects, state.legacyHudSelection)
+    : null;
+  const plan = legacyTargetStartPlanRuntime({
+    dropStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_92,
+    hasDropItem: !!item,
+    movementMode: state.movementMode,
+    verb
+  });
+  if (plan.action === "blocked") {
+    for (const line of plan.ledgerLines) {
+      pushLedgerMessage(line);
     }
+    if (plan.ledgerLines.length) {
+      showLegacyLedgerPrompt();
+    }
+    applyDiag(plan);
+    return false;
+  }
+  if (plan.legacyStatusDisplay !== undefined) {
+    state.legacyStatusDisplay = plan.legacyStatusDisplay;
+  }
+  if (verb === LEGACY_TARGET_VERB_RUNTIME.DROP) {
     pushLegacyDropTargetPrompt(item);
   }
   beginTargetCursor(verb);
@@ -8525,40 +7937,40 @@ function promptNetLoginLogout(): void {
   if (countSavedProfilesRuntime(NET_PROFILE_STORAGE.storageKey) > 1) {
     refreshNetAccountSelect();
     setAccountModalOpen(true);
-    setNetStatus("idle", "Choose an account in Account Setup, then login.");
+    applyNetStatusPresentation(netStatusChooseAccountRuntime());
     return;
   }
   netLogin().then(() => {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Net login ok: ${state.net.username}/${state.net.characterName}`;
+    applyDiag(netLoginHotkeyOkDiagRuntime(state.net.username, state.net.characterName));
   }).catch((err) => {
-    setNetStatus("error", `Login failed: ${errorMessageRuntime(err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Net login failed: ${errorMessageRuntime(err)}`;
+    const reason = errorMessageRuntime(err);
+    const diag = netLoginHotkeyFailedDiagRuntime(reason);
+    setNetStatus(diag.statusLevel, diag.statusText);
+    applyDiag(diag);
   });
 }
 
 function saveWorldSnapshotHotkey(): void {
   netSaveSnapshot().then(() => {
     updateNetSessionStat();
-    diagBox.className = "diag ok";
-    diagBox.textContent = `World snapshot saved at tick ${state.sim.tick >>> 0}.`;
+    applyDiag(worldSnapshotSavedHotkeyDiagRuntime(state.sim.tick));
   }).catch((err) => {
-    setNetStatus("error", `Save failed: ${errorMessageRuntime(err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `World save failed: ${errorMessageRuntime(err)}`;
+    const reason = errorMessageRuntime(err);
+    const diag = worldSnapshotSaveFailedHotkeyDiagRuntime(reason);
+    setNetStatus(diag.statusLevel, diag.statusText);
+    applyDiag(diag);
   });
 }
 
 function loadWorldSnapshotHotkey(): void {
   netLoadSnapshot().then((out) => {
     updateNetSessionStat();
-    diagBox.className = "diag ok";
-    diagBox.textContent = `World snapshot loaded at tick ${snapshotSavedTickRuntime(out)}.`;
+    applyDiag(worldSnapshotLoadedHotkeyDiagRuntime(snapshotSavedTickRuntime(out)));
   }).catch((err) => {
-    setNetStatus("error", `Load failed: ${errorMessageRuntime(err)}`);
-    diagBox.className = "diag warn";
-    diagBox.textContent = `World load failed: ${errorMessageRuntime(err)}`;
+    const reason = errorMessageRuntime(err);
+    const diag = worldSnapshotLoadFailedHotkeyDiagRuntime(reason);
+    setNetStatus(diag.statusLevel, diag.statusText);
+    applyDiag(diag);
   });
 }
 
@@ -8572,90 +7984,85 @@ function runtimePartyMembersForUiProbe(): number[] {
   return members;
 }
 
-function captureUiProbeHotkey(): void {
-  const partyMembers = runtimePartyMembersForUiProbe();
-  const probe = buildUiProbeContract({
-    mode: state.uiProbeMode === "sample" ? "sample" : "live",
-    runtime: {
-      sim: state.sim,
-      commandLog: state.commandLog,
-      runtimeProfile: state.runtimeProfile,
-      runtimeExtensions: { ...state.runtimeExtensions },
-      conversation: {
-        active: !!state.legacyConversationActive,
-        target_name: String(state.legacyConversationTargetName || ""),
-        target_obj_num: Number(state.legacyConversationTargetObjNum) | 0,
-        target_obj_type: Number(state.legacyConversationTargetObjType) | 0,
-        portrait_tile_hex: state.legacyConversationPortraitTile == null
-          ? null
-          : `0x${(Number(state.legacyConversationPortraitTile) & 0xffff).toString(16)}`,
-        show_inventory: !!state.legacyConversationShowInventory,
-        equipment: Array.isArray(state.legacyConversationEquipmentSlots)
-          ? state.legacyConversationEquipmentSlots
-          : []
-      },
-      partyMembers,
-      partyNameById: { ...(state.partyNameById || {}) }
-    }
+function buildRuntimePayloadForUiProbe(partyMembers: readonly number[]) {
+  return buildUiProbeRuntimePayloadRuntime({
+    sim: state.sim,
+    commandLog: state.commandLog,
+    runtimeProfile: state.runtimeProfile,
+    runtimeExtensions: state.runtimeExtensions,
+    conversation: {
+      active: state.legacyConversationActive,
+      targetName: state.legacyConversationTargetName,
+      targetObjNum: state.legacyConversationTargetObjNum,
+      targetObjType: state.legacyConversationTargetObjType,
+      portraitTile: state.legacyConversationPortraitTile,
+      showInventory: state.legacyConversationShowInventory,
+      equipmentSlots: state.legacyConversationEquipmentSlots
+    },
+    movement: {
+      mode: state.movementMode,
+      facingDx: state.avatarFacingDx,
+      facingDy: state.avatarFacingDy,
+      lastMoveTick: state.avatarLastMoveTick,
+      queue: state.queue,
+      sessionStarted: state.sessionStarted,
+      nowMs: performance.now(),
+      walkAnimUntilMs: state.avatarWalkAnimUntilMs
+    },
+    partyMembers,
+    partyNameById: state.partyNameById
   });
-  const digest = uiProbeDigest(probe);
-  const filename = `virtuemachine-ui-probe-${state.sim.tick >>> 0}.json`;
+}
+
+function captureUiProbeHotkey(): void {
   const debugWindow = window as VmDebugWindow;
-  debugWindow.__vmLastUiProbe = probe;
-  debugWindow.__vmLastUiProbeDigest = digest;
-  downloadJsonFile(filename, probe);
+  const fallbackCapture = (): { digest: string; probe: UiProbeContractRuntime } => {
+    const probe = getUiProbeForRender();
+    return { probe, digest: uiProbeDigest(probe) };
+  };
+  const captured = debugWindow.__vmCaptureUiProbe?.() || fallbackCapture();
+  const probe = captured.probe;
+  const digest = captured.digest;
+  const filename = uiProbeFilenameRuntime(state.sim.tick);
+  downloadJsonFileRuntime({ data: probe, document, filename, url: URL });
+  const presentation = uiProbeCapturePresentationRuntime({ digest, filename });
   if (topCopyStatus) {
-    topCopyStatus.textContent = `probe ${digest}`;
+    topCopyStatus.textContent = presentation.copyStatusText;
   }
-  diagBox.className = "diag ok";
-  diagBox.textContent = `UI probe captured (${digest}) and downloaded as ${filename}.`;
+  applyDiag(presentation);
 }
 
 function cycleUiProbeMode(): void {
-  state.uiProbeMode = state.uiProbeMode === "live" ? "sample" : "live";
-  diagBox.className = "diag ok";
-  diagBox.textContent = `Canonical UI probe mode: ${state.uiProbeMode}.`;
+  state.uiProbeMode = nextUiProbeModeRuntime(state.uiProbeMode);
+  applyDiag(uiProbeModePresentationRuntime(state.uiProbeMode));
 }
 
 function toggleLegacyHudLayer(): void {
   state.legacyHudLayerHidden = !state.legacyHudLayerHidden;
-  diagBox.className = "diag ok";
-  diagBox.textContent = state.legacyHudLayerHidden
-    ? "Legacy HUD layer hidden (deviation mode)."
-    : "Legacy HUD layer visible.";
+  applyDiag(legacyHudLayerDiagRuntime(state.legacyHudLayerHidden));
 }
 
 function getUiProbeForRender(): ReturnType<typeof buildUiProbeContract> {
   const partyMembers = runtimePartyMembersForUiProbe();
   return buildUiProbeContract({
-    mode: state.uiProbeMode === "sample" ? "sample" : "live",
-    runtime: {
-      sim: state.sim,
-      commandLog: state.commandLog,
-      runtimeProfile: state.runtimeProfile,
-      runtimeExtensions: { ...state.runtimeExtensions },
-      conversation: {
-        active: !!state.legacyConversationActive,
-        target_name: String(state.legacyConversationTargetName || ""),
-        target_obj_num: Number(state.legacyConversationTargetObjNum) | 0,
-        target_obj_type: Number(state.legacyConversationTargetObjType) | 0,
-        portrait_tile_hex: state.legacyConversationPortraitTile == null
-          ? null
-          : `0x${(Number(state.legacyConversationPortraitTile) & 0xffff).toString(16)}`,
-        show_inventory: !!state.legacyConversationShowInventory,
-        equipment: Array.isArray(state.legacyConversationEquipmentSlots)
-          ? state.legacyConversationEquipmentSlots
-          : []
-      },
-      partyMembers,
-      partyNameById: { ...(state.partyNameById || {}) }
-    }
+    mode: normalizeUiProbeModeRuntime(state.uiProbeMode),
+    runtime: buildRuntimePayloadForUiProbe(partyMembers)
   });
 }
+
+installUiProbeDebugHooksRuntime({
+  target: window as VmDebugWindow,
+  buildProbe: getUiProbeForRender,
+  digestProbe: uiProbeDigest
+});
 
 function handleLegacyHudClick(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): boolean {
   if (!state.sessionStarted) {
     return false;
+  }
+  if (blockGameplayForBrokenServer()) {
+    ev.preventDefault();
+    return true;
   }
   if (document.documentElement.getAttribute("data-legacy-frame-preview") !== "on") {
     return false;
@@ -8665,201 +8072,138 @@ function handleLegacyHudClick(ev: MouseEvent, surface: HTMLCanvasElement | null 
   }
   const s = surface || canvas;
   const rect = s.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return false;
-  }
-  const sx = ((ev.clientX - rect.left) * (s.width || 0)) / rect.width;
-  const sy = ((ev.clientY - rect.top) * (s.height || 0)) / rect.height;
   const logicalW = 320;
   const logicalH = 200;
-  const lx = Math.floor((sx / Math.max(1, s.width)) * logicalW);
-  const ly = Math.floor((sy / Math.max(1, s.height)) * logicalH);
-  if (lx < 0 || ly < 0 || lx >= logicalW || ly >= logicalH) {
+  const point = logicalPointAtSurfaceRuntime({
+    clientX: ev.clientX,
+    clientY: ev.clientY,
+    bounds: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+    surfaceSize: { width: s.width || 0, height: s.height || 0 },
+    logicalSize: { width: logicalW, height: logicalH }
+  });
+  if (!logicalPointInBoundsRuntime(point, { width: logicalW, height: logicalH })) {
     return false;
   }
-  const hit = uiProbeHitTest(lx, ly);
+  const hit = uiProbeHitTest(point.x, point.y);
   if (!hit) {
     return false;
   }
+  clearTransientReconnectMessageOnCommand();
   state.legacyHudSelection = hit;
-  diagBox.className = "diag ok";
-  if (hit.kind === "inventory") {
-    diagBox.textContent = `Legacy HUD: inventory cell ${hit.index} (C_155D_1267).`;
-  } else if (hit.kind === "portrait") {
-    diagBox.textContent = "Legacy HUD: portrait cell (C_155D_1267).";
-  } else {
-    diagBox.textContent = `Legacy HUD: equipment slot ${hit.slot} (C_155D_130E).`;
-  }
+  applyDiag(legacyHudHitDiagRuntime(hit));
   ev.preventDefault();
   return true;
 }
 
 function runLegacyNonTargetAction(k: string): boolean {
-  if (k === "i") {
-    /* Canonical keyboard-first panel selection: inventory/equipment (CMD_92). */
-    state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_92;
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Status: inventory/equipment.";
-    return true;
+  const patch = legacyNonTargetCommandPatchRuntime({
+    currentInCombat: state.sim.world.in_combat,
+    inventoryStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_92,
+    key: k,
+    partyStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_91
+  });
+  if (!patch.handled) {
+    return false;
   }
-  if (k === "p") {
-    /* Canonical keyboard-first panel selection: party/command list (CMD_91). */
-    state.legacyStatusDisplay = LEGACY_STATUS_DISPLAY.CMD_91;
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Status: party/command.";
-    return true;
+  clearTransientReconnectMessageOnCommand();
+  if (patch.legacyStatusDisplay !== undefined) {
+    state.legacyStatusDisplay = patch.legacyStatusDisplay;
   }
-  if (k === "r") {
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Rest: legacy key mapped; rest system integration pending.";
-    return true;
+  if (patch.inCombat !== undefined) {
+    state.sim.world.in_combat = patch.inCombat;
   }
-  if (k === "b") {
-    state.sim.world.in_combat = state.sim.world.in_combat ? 0 : 1;
-    diagBox.className = "diag ok";
-    diagBox.textContent = state.sim.world.in_combat ? "Combat mode: ON" : "Combat mode: OFF";
-    return true;
-  }
-  return false;
+  applyDiag(patch);
+  return true;
 }
 
 function runLegacyCommandKey(k: string): boolean {
   if (state.legacyConversationActive) {
     return false;
   }
-  if (k === "a") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.ATTACK);
-  if (k === "c") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.CAST);
-  if (k === "t") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.TALK);
-  if (k === "l") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.LOOK);
-  if (k === "g") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.GET);
-  if (k === "d") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.DROP);
-  if (k === "m") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.MOVE);
-  if (k === "u") return beginLegacyVerbTarget(LEGACY_TARGET_VERB.USE);
+  const action = legacyKeyboardCommandActionRuntime(k);
+  if (action.kind === "target") {
+    return beginLegacyVerbTarget(action.verb);
+  }
   return runLegacyNonTargetAction(k);
 }
 
 function runDebugHotkeys(ev: KeyboardEvent): boolean {
-  const k = String(ev.key || "").toLowerCase();
-  if (ev.ctrlKey && k === "s") {
-    saveWorldSnapshotHotkey();
-    return true;
-  }
-  if (ev.ctrlKey && k === "r") {
-    loadWorldSnapshotHotkey();
-    return true;
-  }
-  if (ev.ctrlKey && k === "z") {
-    state.sim.world.sound_enabled = state.sim.world.sound_enabled ? 0 : 1;
-    setAudioEnabledFromWorldFlag();
-    if (state.sim.world.sound_enabled) {
-      primeAudioFromUserGesture();
-    }
-    diagBox.className = "diag ok";
-    diagBox.textContent = state.sim.world.sound_enabled ? "Sound enabled." : "Sound disabled.";
-    return true;
-  }
-  if (ev.ctrlKey && k === "h") {
-    const helpPanel = document.querySelector(".vm-help");
-    if (helpPanel) {
-      helpPanel.classList.toggle("hidden");
-      diagBox.className = "diag ok";
-      diagBox.textContent = helpPanel.classList.contains("hidden") ? "Help hidden." : "Help visible.";
-    }
-    return true;
-  }
-  if (ev.ctrlKey && k === "v") {
-    diagBox.className = "diag ok";
-    diagBox.textContent = "VirtueMachine: legacy Ctrl+V key mapped (version string TBD).";
-    return true;
-  }
-  if (!ev.shiftKey) {
+  const action = debugHotkeyActionRuntime(ev);
+  return runDebugHotkeyActionRuntime(action, {
+    save_snapshot: saveWorldSnapshotHotkey,
+    load_snapshot: loadWorldSnapshotHotkey,
+    toggle_sound: () => {
+      const plan = audioSoundTogglePlanRuntime(state.sim.world.sound_enabled);
+      state.sim.world.sound_enabled = plan.nextSoundEnabled;
+      setAudioEnabledFromWorldFlag();
+      if (plan.shouldPrime) {
+        primeAudioFromUserGesture();
+      }
+      applyDiag(plan);
+    },
+    toggle_help: () => {
+      const diag = toggleHelpPanelRuntime(document.querySelector(".vm-help"));
+      if (diag) {
+        applyDiag(diag);
+      }
+    },
+    version_string: () => {
+      applyDiag(versionStringHotkeyDiagRuntime());
+    },
+    login_logout: promptNetLoginLogout,
+    capture_probe: captureUiProbeHotkey,
+    toggle_legacy_hud: toggleLegacyHudLayer,
+    cycle_probe_mode: cycleUiProbeMode,
+    critical_maintenance: () => {
+      netRunCriticalMaintenance({ silent: false }).catch((err) => {
+        const failure = criticalMaintenanceFailureRuntime(err, errorMessageRuntime);
+        setNetStatus(failure.statusLevel, failure.statusText);
+        applyDiag(failure);
+      });
+    },
+    capture_worldhud: captureWorldHudPng,
+    capture_viewport: captureViewportPng,
+    toggle_overlay: () => setOverlayDebug(!state.showOverlayDebug),
+    toggle_animation: () => setAnimationMode(state.animationFrozen ? "live" : "freeze"),
+    toggle_palette_fx: () => setPaletteFxMode(!state.enablePaletteFx),
+    toggle_movement: () => setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar"),
+    jump_preset: jumpToPreset,
+    reset_run: resetRun,
+    verify_replay: verifyReplayStability,
+    cursor_prev: () => cycleCursor(-1),
+    cursor_next: () => cycleCursor(1),
+    legacy_scale_prev: () => cycleLegacyScaleMode(-1),
+    legacy_scale_next: () => cycleLegacyScaleMode(1)
+  });
+}
+
+function handleBootIntroInput(ev: Event, key?: string): boolean {
+  if (!state.bootIntro?.active) {
     return false;
   }
-  if (k === "i") {
-    promptNetLoginLogout();
+  const plan = bootIntroInputPlanRuntime({
+    active: state.bootIntro.active,
+    awaitingGesture: bootIntroMusicAwaitingGesture(),
+    key
+  });
+  if (plan.preventDefault) {
+    ev.preventDefault();
+  }
+  if (plan.action === "abort") {
+    abortBootIntroRuntime(state.bootIntro);
+    ev.preventDefault();
     return true;
   }
-  if (k === "y") {
-    saveWorldSnapshotHotkey();
-    return true;
-  }
-  if (k === "u") {
-    loadWorldSnapshotHotkey();
-    return true;
-  }
-  if (k === "j") {
-    captureUiProbeHotkey();
-    return true;
-  }
-  if (k === "k") {
-    toggleLegacyHudLayer();
-    return true;
-  }
-  if (k === "l") {
-    cycleUiProbeMode();
-    return true;
-  }
-  if (k === "n") {
-    netRunCriticalMaintenance({ silent: false }).catch((err) => {
-      setNetStatus("error", `Maintenance failed: ${errorMessageRuntime(err)}`);
-      diagBox.className = "diag warn";
-      diagBox.textContent = `Critical maintenance failed: ${errorMessageRuntime(err)}`;
-    });
-    return true;
-  }
-  if (k === "p") {
-    if (ev.altKey) {
-      captureWorldHudPng();
+  if (plan.action === "advance" && advanceBootIntroInputRuntime(state.bootIntro)) {
+    if (state.bootIntro.active) {
+      syncBootIntroMusicPhase();
     } else {
-      captureViewportPng();
+      startStartupMenuMusic();
     }
+    ev.preventDefault();
     return true;
   }
-  if (k === "o") {
-    setOverlayDebug(!state.showOverlayDebug);
-    return true;
-  }
-  if (k === "f") {
-    setAnimationMode(state.animationFrozen ? "live" : "freeze");
-    return true;
-  }
-  if (k === "b") {
-    setPaletteFxMode(!state.enablePaletteFx);
-    return true;
-  }
-  if (k === "m") {
-    setMovementMode(state.movementMode === "avatar" ? "ghost" : "avatar");
-    return true;
-  }
-  if (k === "g") {
-    jumpToPreset();
-    return true;
-  }
-  if (k === "r") {
-    resetRun();
-    return true;
-  }
-  if (k === "v") {
-    verifyReplayStability();
-    return true;
-  }
-  if (ev.code === "Comma") {
-    cycleCursor(-1);
-    return true;
-  }
-  if (ev.code === "Period") {
-    cycleCursor(1);
-    return true;
-  }
-  if (ev.code === "BracketLeft") {
-    cycleLegacyScaleMode(-1);
-    return true;
-  }
-  if (ev.code === "BracketRight") {
-    cycleLegacyScaleMode(1);
-    return true;
-  }
-  return false;
+  return true;
 }
 
 window.addEventListener("keydown", (ev) => {
@@ -8876,81 +8220,63 @@ window.addEventListener("keydown", (ev) => {
   }
 
   const k = String(ev.key || "").toLowerCase();
-  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
-    const isHoverCopyCombo = k === "c" && ev.shiftKey;
-    if (!isHoverCopyCombo) {
-      // Let browser/system shortcuts work (copy/paste/select-all/find/etc).
-      return;
-    }
+  if (shouldLetBrowserHandleShortcutRuntime(ev)) {
+    // Let browser/system shortcuts work (copy/paste/select-all/find/etc).
+    return;
   }
   if (!state.sessionStarted) {
-    if (state.bootIntro && state.bootIntro.active) {
-      if (bootIntroMusicAwaitingGesture()) {
-        ev.preventDefault();
-        return;
-      }
-      if (k === "escape") {
-        abortBootIntroRuntime(state.bootIntro);
-        ev.preventDefault();
-        return;
-      }
-      if (advanceBootIntroInputRuntime(state.bootIntro)) {
-        if (state.bootIntro.active) {
-          syncBootIntroMusicPhase();
-        } else {
-          startStartupMenuMusic();
-        }
-        ev.preventDefault();
-        return;
-      }
+    if (handleBootIntroInput(ev, k)) {
       return;
     }
-    if (k === "arrowup") {
-      setStartupMenuIndex(state.startupMenuIndex - 1);
-    } else if (k === "arrowdown") {
-      setStartupMenuIndex(state.startupMenuIndex + 1);
-    } else if (k === "i") {
-      setStartupMenuIndex(0);
-      activateStartupMenuSelection();
-    } else if (k === "c") {
-      setStartupMenuIndex(1);
-      activateStartupMenuSelection();
-    } else if (k === "t") {
-      setStartupMenuIndex(2);
-      activateStartupMenuSelection();
-    } else if (k === "a") {
-      setStartupMenuIndex(3);
-      activateStartupMenuSelection();
-    } else if (k === "j") {
-      setStartupMenuIndex(4);
-      activateStartupMenuSelection();
-    } else if (k === "enter" || k === " ") {
-      activateStartupMenuSelection();
-    } else {
+    const startupPatch = startupMenuKeyPatchRuntime({
+      currentIndex: state.startupMenuIndex,
+      key: k,
+      menuCount: STARTUP_MENU.length
+    });
+    if (!startupPatch.handled) {
       return;
+    }
+    if (startupPatch.nextIndex !== null) {
+      setStartupMenuIndex(startupPatch.nextIndex);
+    }
+    if (startupPatch.activateSelection) {
+      activateStartupMenuSelection();
     }
     ev.preventDefault();
     return;
   }
 
-  if (k === "q") {
+  const delta = moveDeltaFromKey(ev, false);
+  const activePlan = activeGameKeydownPlanRuntime({
+    code: ev.code,
+    hoverReportCopy: isHoverReportCopyKeyRuntime(ev),
+    key: k,
+    legacyConversationActive: state.legacyConversationActive,
+    moveDelta: delta,
+    useCursorActive: state.useCursorActive
+  });
+  if (activePlan.action === "return_to_title") {
     returnToTitleMenu();
     ev.preventDefault();
     return;
   }
-  if (
-    ((k === "c" && ev.shiftKey && ev.ctrlKey && !ev.altKey && !ev.metaKey)
-      || (ev.code === "Backquote" && ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey))
-  ) {
-    if (topCopyStatus) {
-      topCopyStatus.textContent = "copying...";
-    }
+  if (activePlan.action === "hover_report_copy") {
+    setCopyPendingStatusRuntime(topCopyStatus);
     void copyHoverReportToClipboard();
     ev.preventDefault();
     return;
   }
-
-  if (state.legacyConversationActive) {
+  if (activePlan.action === "legacy_conversation") {
+    if (isServerConnectionBroken()) {
+      if (runDebugHotkeys(ev)) {
+        ev.preventDefault();
+        return;
+      }
+      blockGameplayForBrokenServer();
+      ev.preventDefault();
+      return;
+    }
+    clearTransientReconnectMessageOnCommand();
     if (handleLegacyConversationKeydown(ev)) {
       ev.preventDefault();
       return;
@@ -8961,19 +8287,29 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
 
-  if (state.useCursorActive) {
-    const delta = moveDeltaFromKey(ev, true);
-    if (delta) {
-      moveUseCursor(delta[0], delta[1]);
+  if (isServerConnectionBroken()) {
+    if (runDebugHotkeys(ev)) {
       ev.preventDefault();
       return;
     }
-    if (k === "u" || k === "enter" || k === " ") {
+    blockGameplayForBrokenServer();
+    ev.preventDefault();
+    return;
+  }
+
+  if (activePlan.action === "target_cursor") {
+    const cursorAction = activeTargetCursorKeyActionRuntime(ev, moveDeltaFromKeyRuntime);
+    if (cursorAction.kind === "move") {
+      moveUseCursor(cursorAction.dx, cursorAction.dy);
+      ev.preventDefault();
+      return;
+    }
+    if (cursorAction.kind === "commit") {
       commitUseCursorInteract();
       ev.preventDefault();
       return;
     }
-    if (k === "escape") {
+    if (cursorAction.kind === "cancel") {
       cancelTargetCursor();
       ev.preventDefault();
       return;
@@ -8989,41 +8325,31 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
 
-  const delta = moveDeltaFromKey(ev, false);
-  if (delta) {
-    queueMove(delta[0], delta[1]);
+  if (activePlan.action === "move") {
+    queueMove(activePlan.dx, activePlan.dy);
     ev.preventDefault();
     return;
   }
 
-  if (k === " " || k === "escape") {
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Pass turn.";
+  if (activePlan.action === "pass_turn") {
+    clearTransientReconnectMessageOnCommand();
+    applyDiag(activePlan.diag);
     ev.preventDefault();
     return;
   }
-  if ((ev.code.startsWith("Digit") || ev.code.startsWith("Numpad")) && k >= "0" && k <= "9") {
+  if (activePlan.action === "party_digit") {
+    clearTransientReconnectMessageOnCommand();
     const partyMembers = runtimePartyMembersForUiProbe();
     const resolution = resolvePartySwitchDigitRuntime({
-      digitKey: k,
+      digitKey: activePlan.digitKey,
       partyMembers,
       activeIndex: state.sim.world.active
     });
     if (resolution.changed) {
       state.sim.world.active = resolution.next_active_index | 0;
-      diagBox.className = "diag ok";
-      diagBox.textContent = `Party switch ${k}: active index ${resolution.next_active_index}.`;
-      ev.preventDefault();
-      return;
     }
-    diagBox.className = "diag ok";
-    if (resolution.reason === "same_index") {
-      diagBox.textContent = `Party switch ${k}: already active.`;
-    } else if (resolution.reason === "out_of_range") {
-      diagBox.textContent = `Party switch ${k}: no party member at that slot.`;
-    } else {
-      diagBox.textContent = `Party switch ${k}: ignored.`;
-    }
+    const diag = partySwitchDigitDiagRuntime(activePlan.digitKey, resolution);
+    applyDiag(diag);
     ev.preventDefault();
     return;
   }
@@ -9049,71 +8375,41 @@ function startupMenuIndexAtEvent(ev: MouseEvent, surface: HTMLCanvasElement | nu
 }
 
 function hoveredWorldCellFromMouse(): HoveredWorldCellRuntime | null {
-  if (!state.sessionStarted || !state.mouseInCanvas || !state.mapCtx) {
-    return null;
-  }
-  const wz = state.sim.world.map_z | 0;
-  const startX = (state.sim.world.map_x | 0) - (VIEW_W >> 1);
-  const startY = (state.sim.world.map_y | 0) - (VIEW_H >> 1);
-  if (isLegacyFramePreviewOn() && legacyBackdropCanvas) {
-    const bw = legacyBackdropCanvas.width | 0;
-    const bh = legacyBackdropCanvas.height | 0;
-    if (bw <= 0 || bh <= 0) {
-      return null;
-    }
-    const mx = Math.floor(state.mouseNormX * bw);
-    const my = Math.floor(state.mouseNormY * bh);
-    const scale = Math.max(1, Math.floor(bw / 320));
-    const mapX = LEGACY_UI_MAP_RECT.x * scale;
-    const mapY = LEGACY_UI_MAP_RECT.y * scale;
-    const mapW = LEGACY_UI_MAP_RECT.w * scale;
-    const mapH = LEGACY_UI_MAP_RECT.h * scale;
-    if (mx < mapX || mx >= (mapX + mapW) || my < mapY || my >= (mapY + mapH)) {
-      return null;
-    }
-    const lx = (mx - mapX) / scale;
-    const ly = (my - mapY) / scale;
-    const gx = clampI32Runtime(Math.floor((lx / 160) * VIEW_W), 0, VIEW_W - 1);
-    const gy = clampI32Runtime(Math.floor((ly / 160) * VIEW_H), 0, VIEW_H - 1);
-    return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
-  }
-
-  const w = canvas.width | 0;
-  const h = canvas.height | 0;
-  if (w <= 0 || h <= 0) {
-    return null;
-  }
-  const mx = Math.floor(state.mouseNormX * w);
-  const my = Math.floor(state.mouseNormY * h);
-  const gx = clampI32Runtime(Math.floor((mx / w) * VIEW_W), 0, VIEW_W - 1);
-  const gy = clampI32Runtime(Math.floor((my / h) * VIEW_H), 0, VIEW_H - 1);
-  return { x: startX + gx, y: startY + gy, z: wz, gx, gy, startX, startY };
+  return hoveredWorldCellRuntime({
+    sessionStarted: state.sessionStarted,
+    mouseInCanvas: state.mouseInCanvas,
+    mapReady: !!state.mapCtx,
+    mouseNormX: state.mouseNormX,
+    mouseNormY: state.mouseNormY,
+    worldX: state.sim.world.map_x,
+    worldY: state.sim.world.map_y,
+    worldZ: state.sim.world.map_z,
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+    legacyFramePreview: isLegacyFramePreviewOn() && !!legacyBackdropCanvas,
+    legacyMapRect: LEGACY_UI_MAP_RECT,
+    legacySurfaceWidth: legacyBackdropCanvas?.width,
+    legacySurfaceHeight: legacyBackdropCanvas?.height
+  });
 }
 
 function hex(value: unknown, width = 0): string {
-  const n = Number(value) >>> 0;
-  const s = n.toString(16);
-  return `0x${width > 0 ? s.padStart(width, "0") : s}`;
+  return hexRuntime(value, width);
 }
 
 function buildHoverReportText(): string | null {
-  let cell = hoveredWorldCellFromMouse();
-  if (!cell && state.sessionStarted && state.mapCtx && state.sim && state.sim.world) {
-    const wz = state.sim.world.map_z | 0;
-    const startX = (state.sim.world.map_x | 0) - (VIEW_W >> 1);
-    const startY = (state.sim.world.map_y | 0) - (VIEW_H >> 1);
-    const gx = VIEW_W >> 1;
-    const gy = VIEW_H >> 1;
-    cell = {
-      x: state.sim.world.map_x | 0,
-      y: state.sim.world.map_y | 0,
-      z: wz,
-      gx,
-      gy,
-      startX,
-      startY
-    };
-  }
+  const hoverCell = hoveredWorldCellFromMouse();
+  const cell = hoverCell ?? hoveredOrFallbackWorldCellRuntime({
+    sessionStarted: state.sessionStarted,
+    mapReady: !!state.mapCtx,
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    worldX: state.sim.world.map_x,
+    worldY: state.sim.world.map_y,
+    worldZ: state.sim.world.map_z
+  });
   if (!cell || !state.mapCtx) {
     return null;
   }
@@ -9133,42 +8429,37 @@ function buildHoverReportText(): string | null {
   const list = overlayBuild.overlayCells
     ? (overlayBuild.overlayCells[(cell.gy * VIEW_W) + cell.gx] || [])
     : [];
-  const overlays = list.map((o, idx) => (
-    `overlay[${idx}]: tile=${hex(o.tileId)} floor=${o.floor ? 1 : 0} occ=${o.occluder ? 1 : 0} src=${o.sourceX},${o.sourceY} ${o.sourceType}`
-  ));
-
   const objects = state.objectLayer ? state.objectLayer.objectsAt(wx, wy, wz) : [];
-  const objLines = objects.map((o, idx) => {
-    const tileId = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
-    const tf = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
-    return `obj[${idx}]: type=${hex(o.type)} frame=${o.frame | 0} tile=${hex(tileId)} tf=${hex(tf)} order=${o.order | 0} lord=${Number(o.legacyOrder || 0) | 0} achild=${Number(o.assocChildCount || 0) | 0} a0010=${Number(o.assocChild0010Count || 0) | 0}`;
+  return buildHoverReportTextRuntime({
+    wx,
+    wy,
+    wz,
+    rawTile,
+    animTile,
+    tileFlag,
+    terrain,
+    visible,
+    open,
+    overlays: list,
+    objects: objects.map((o) => {
+      const tileId = resolveDoorTileIdRuntime(state.sim, o) & 0xffff;
+      const tileFlags = state.tileFlags ? (state.tileFlags[tileId & 0x07ff] ?? 0) : 0;
+      return {
+        ...o,
+        tileFlags,
+        tileId
+      };
+    })
   });
-
-  const lines = [
-    "VirtueMachine Hover Report",
-    `cell: ${wx},${wy},${wz}`,
-    `map: raw=${hex(rawTile)} anim=${hex(animTile)} tf=${hex(tileFlag)} terrain=${hex(terrain)}`,
-    `visibility: visible=${visible} open=${open}`
-  ];
-  if (overlays.length) {
-    lines.push(...overlays);
-  } else {
-    lines.push("overlay: none");
-  }
-  if (objLines.length) {
-    lines.push(...objLines);
-  } else {
-    lines.push("objects@cell: none");
-  }
-  return lines.join("\n");
 }
 
 async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}): Promise<void> {
   const enrich = options.enrich !== false;
   const report = buildHoverReportText();
   if (!report) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Hover report unavailable. Move cursor over the world view.";
+    const result = hoverReportUnavailableResultRuntime();
+    applyHoverReportCopyResultRuntime(result, diagBox);
+    setCopyStatusRuntime(topCopyStatus, result.copyStatusOk, result.copyStatusDetail);
     return;
   }
   let enrichedReport = report;
@@ -9178,81 +8469,53 @@ async function copyHoverReportToClipboard(options: { enrich?: boolean } = {}): P
       if (cell && isNetAuthenticated()) {
         const out = await netFetchWorldObjectsAtCell(cell.x | 0, cell.y | 0, cell.z | 0);
         if (out && Array.isArray(out.objects)) {
-          const rows = [];
-          rows.push("server_objects:");
-          if (!out.objects.length) {
-            rows.push("server_obj: none");
-          } else {
-            for (let i = 0; i < out.objects.length; i += 1) {
-              const o = out.objects[i];
-              const fp = Array.isArray(o.footprint)
-                ? o.footprint.map((c: { x?: unknown; y?: unknown; z?: unknown }) => `${Number(c.x) | 0},${Number(c.y) | 0},${Number(c.z) | 0}`).join(" ")
-                : "";
-              rows.push(
-                `server_obj[${i}]: key=${String(o.object_key || "")} type=${hex(o.type)} frame=${Number(o.frame) | 0} tile=${hex(o.tile_id)} xyz=${Number(o.x) | 0},${Number(o.y) | 0},${Number(o.z) | 0} src=${String(o.source_kind || "baseline")} status=${hex(Number(o.status) | 0)} cu=${hex((Number(o.status) | 0) & 0x18)} hk=${String(o.holder_kind || "none")} hid=${String(o.holder_id || "")} hkey=${String(o.holder_key || "")} root=${String(o.root_anchor_key || "")} blocked=${String(o.blocked_by || "")} chain=${Array.isArray(o.assoc_chain) ? o.assoc_chain.join(">") : ""} area=${Number(o.source_area) | 0} idx=${Number(o.source_index) | 0} lord=${Number(o.legacy_order || 0) | 0} achild=${Number(o.assoc_child_count || 0) | 0} a0010=${Number(o.assoc_child_0010_count || 0) | 0}${fp ? ` fp=${fp}` : ""}`
-              );
-            }
-          }
-          enrichedReport = `${report}\n${rows.join("\n")}`;
+          enrichedReport = `${report}\n${serverWorldObjectsHoverTextRuntime(out.objects)}`;
         }
       }
     } catch (_err) {
       // Keep base local hover report available if net authority fetch fails.
     }
   }
-  const ok = await copyTextToClipboard(enrichedReport);
-  if (ok) {
-    const line = enrichedReport.split("\n")[1] || "";
-    diagBox.className = "diag ok";
-    if (diagBox && diagBox.dataset) {
-      delete diagBox.dataset.copyError;
-    }
-    diagBox.textContent = `Copied hover report (${line.replace(/^cell:\\s*/, "")}).`;
-    setCopyStatus(true);
-  } else {
-    diagBox.className = "diag warn";
-    const why = diagBox && diagBox.dataset && diagBox.dataset.copyError
-      ? ` (${diagBox.dataset.copyError})`
-      : "";
-    diagBox.textContent = `Failed to copy hover report to clipboard${why}.`;
-    setCopyStatus(false, why.replace(/^\s*\(|\)\s*$/g, ""));
-  }
+  const ok = await copyTextToClipboardRuntime(enrichedReport, { document, navigator, errorTarget: diagBox });
+  const result = hoverReportCopyResultRuntime({
+    ok,
+    report: enrichedReport,
+    reason: diagBox?.dataset?.copyError || ""
+  });
+  applyHoverReportCopyResultRuntime(result, diagBox);
+  setCopyStatusRuntime(topCopyStatus, result.copyStatusOk, result.copyStatusDetail);
 }
 
 function handleShiftContextMenu(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {
-  if (!ev.shiftKey) {
+  if (!shouldSuppressShiftContextMenuRuntime(ev)) {
     return;
   }
   ev.preventDefault();
 }
 
 function handleShiftRightMouseDownCopy(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {
-  if (!ev.shiftKey || ev.button !== 2) {
+  if (!isShiftRightClickCopyGestureRuntime(ev)) {
     return;
   }
   ev.preventDefault();
   ev.stopPropagation();
   updateCanvasMouseFromEvent(ev, surface);
-  setCopyStatus(false, "copying...");
+  setCopyPendingStatusRuntime(topCopyStatus);
   const report = buildHoverReportText();
   if (!report) {
-    diagBox.className = "diag warn";
-    diagBox.textContent = "Hover report unavailable. Move cursor over the world view.";
-    setCopyStatus(false, "no hover cell");
+    const result = hoverReportUnavailableResultRuntime();
+    applyHoverReportCopyResultRuntime(result, diagBox);
+    setCopyStatusRuntime(topCopyStatus, result.copyStatusOk, result.copyStatusDetail);
     return;
   }
-  const sync = copyTextToClipboardSync(report);
-  if (sync.ok) {
-    if (diagBox && diagBox.dataset) {
-      delete diagBox.dataset.copyError;
-    }
-    diagBox.className = "diag ok";
-    const line = report.split("\n")[1] || "";
-    diagBox.textContent = `Copied hover report (${line.replace(/^cell:\\s*/, "")}).`;
-    setCopyStatus(true);
-    return;
-  }
-  setCopyStatus(false, sync.reason || "copy blocked");
+  const sync = copyTextToClipboardSyncRuntime(report, { document, errorTarget: diagBox });
+  const result = hoverReportCopyResultRuntime({
+    ok: sync.ok,
+    report,
+    reason: sync.reason || "copy blocked"
+  });
+  applyHoverReportCopyResultRuntime(result, diagBox);
+  setCopyStatusRuntime(topCopyStatus, result.copyStatusOk, result.copyStatusDetail);
 }
 
 function activeCursorSurface(): HTMLCanvasElement {
@@ -9266,15 +8529,7 @@ function activeCursorSurface(): HTMLCanvasElement {
 
 function updateCanvasMouseFromEvent(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {
   const s = activeCursorSurface() || surface || canvas;
-  const rect = s.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return;
-  }
-  const nx = (ev.clientX - rect.left) / rect.width;
-  const ny = (ev.clientY - rect.top) / rect.height;
-  state.mouseNormX = Math.max(0, Math.min(1, nx));
-  state.mouseNormY = Math.max(0, Math.min(1, ny));
-  state.mouseInCanvas = true;
+  applyCanvasMouseEventRuntime({ event: ev, state, surface: s });
 }
 
 canvas.addEventListener("mousemove", (ev) => {
@@ -9302,19 +8557,7 @@ canvas.addEventListener("click", (ev) => {
   if (state.sessionStarted) {
     return;
   }
-  if (state.bootIntro && state.bootIntro.active) {
-    if (bootIntroMusicAwaitingGesture()) {
-      ev.preventDefault();
-      return;
-    }
-    if (advanceBootIntroInputRuntime(state.bootIntro)) {
-      if (state.bootIntro.active) {
-        syncBootIntroMusicPhase();
-      } else {
-        startStartupMenuMusic();
-      }
-      return;
-    }
+  if (handleBootIntroInput(ev)) {
     return;
   }
   const idx = startupMenuIndexAtEvent(ev, canvas);
@@ -9330,7 +8573,7 @@ canvas.addEventListener("mouseenter", (ev) => {
 });
 
 canvas.addEventListener("mouseleave", () => {
-  state.mouseInCanvas = false;
+  clearCanvasMouseStateRuntime(state);
 });
 
 if (legacyBackdropCanvas) {
@@ -9357,19 +8600,7 @@ if (legacyBackdropCanvas) {
       }
       return;
     }
-    if (state.bootIntro && state.bootIntro.active) {
-      if (bootIntroMusicAwaitingGesture()) {
-        ev.preventDefault();
-        return;
-      }
-      if (advanceBootIntroInputRuntime(state.bootIntro)) {
-        if (state.bootIntro.active) {
-          syncBootIntroMusicPhase();
-        } else {
-          startStartupMenuMusic();
-        }
-        return;
-      }
+    if (handleBootIntroInput(ev)) {
       return;
     }
     const idx = startupMenuIndexAtEvent(ev, legacyBackdropCanvas);
@@ -9393,7 +8624,7 @@ if (legacyBackdropCanvas) {
   });
 
   legacyBackdropCanvas.addEventListener("mouseleave", () => {
-    state.mouseInCanvas = false;
+    clearCanvasMouseStateRuntime(state);
   });
 }
 
@@ -9423,34 +8654,35 @@ if (legacyViewportCanvas) {
   });
 
   legacyViewportCanvas.addEventListener("mouseleave", () => {
-    state.mouseInCanvas = false;
+    clearCanvasMouseStateRuntime(state);
   });
 }
 
-window.addEventListener("resize", () => {
-  applyLegacyFrameLayout();
+bindBrowserLifecycleRuntime({
+  window,
+  document,
+  onResize: applyLegacyFrameLayout,
+  onVisibilityChange: () => {
+    const patch = loopVisibilityResetPatchRuntime({
+      loopHealth: state.loopHealth,
+      nowMs: performance.now()
+    });
+    state.loopHealth = patch.loopHealth;
+    state.lastTs = patch.lastTs;
+    state.accMs = patch.accMs;
+  }
 });
 
-document.addEventListener("visibilitychange", () => {
-  state.loopHealth.visibilityResets += 1;
-  state.loopHealth.lastDtMs = 0;
-  state.lastTs = performance.now();
-  state.accMs = 0;
-});
+initSkipIntroPreference();
 
 loadRuntimeAssets().finally(() => {
   state.runtimeReady = true;
-  const extSummary = runtimeExtensionsSummary(state.runtimeExtensions);
-  const runtimeModeText = extSummary.length
-    ? `${state.runtimeProfile} + ${extSummary.join(",")}`
-    : state.runtimeProfile;
-  if (state.mapCtx) {
-    diagBox.className = "diag ok";
-    diagBox.textContent = `Startup menu ready (${runtimeModeText}): select Journey Onward to enter the throne room.`;
-  } else {
-    diagBox.className = "diag warn";
-    diagBox.textContent = `Assets missing (${runtimeModeText}): startup menu running in fallback mode.`;
-  }
+  applyDiag(startupAssetsReadyDiagRuntime({
+    hasMapContext: state.mapCtx,
+    profile: state.runtimeProfile,
+    runtimeExtensions: runtimeExtensionsSummary(state.runtimeExtensions)
+  }));
+  maybeStartSessionFromSkipIntro();
   requestAnimationFrame((ts) => {
     state.lastTs = ts;
     requestAnimationFrame(tickLoop);
@@ -9460,52 +8692,48 @@ loadRuntimeAssets().finally(() => {
 initRuntimeProfileConfig();
 initTheme();
 initFont();
-initGrid();
-initOverlayDebug();
-initAnimationMode();
-initPaletteFxMode();
-initMovementMode();
-initLegacyScaleMode();
-initLegacyFramePreview();
+initPreferenceControlsRuntime({
+  storage: localStorage,
+  booleans: [
+    { key: GRID_KEY, fallback: "off", select: gridToggle, onApply: setGrid },
+    { key: DEBUG_OVERLAY_KEY, fallback: "off", select: debugOverlayToggle, onApply: setOverlayDebug },
+    { key: PALETTE_FX_KEY, fallback: "on", select: paletteFxToggle, onApply: setPaletteFxMode },
+    { key: LEGACY_FRAME_PREVIEW_KEY, fallback: "on", select: capturePreviewToggle, onApply: setLegacyFramePreview }
+  ],
+  choices: [
+    { key: ANIMATION_KEY, fallback: "live", allowed: ["live", "freeze"], select: animationToggle, onApply: setAnimationMode },
+    { key: MOVEMENT_MODE_KEY, fallback: "avatar", allowed: ["avatar", "ghost"], select: movementModeToggle, onApply: setMovementMode },
+    { key: LEGACY_SCALE_MODE_KEY, fallback: "4", allowed: LEGACY_SCALE_MODES, aliases: { native: "4" }, select: legacyScaleModeToggle, onApply: setLegacyScaleMode }
+  ]
+});
 initCapturePresets();
 initNetPanel();
 initPanelCopyButtons();
 setStartupMenuIndex(0);
-if (jumpButton) {
-  jumpButton.addEventListener("click", jumpToPreset);
-}
-if (captureButton) {
-  captureButton.addEventListener("click", captureViewportPng);
-}
-if (captureWorldHudButton) {
-  captureWorldHudButton.addEventListener("click", captureWorldHudPng);
-}
-if (paritySnapshotButton) {
-  paritySnapshotButton.addEventListener("click", () => {
-    void captureParitySnapshotJson();
-  });
-}
-if (debugTabRuntime) {
-  debugTabRuntime.addEventListener("click", () => setDebugPanelTab("runtime"));
-}
-if (debugTabChat) {
-  debugTabChat.addEventListener("click", () => setDebugPanelTab("chat"));
-}
-if (debugChatCopyButton) {
-  debugChatCopyButton.addEventListener("click", async () => {
-    const ok = await copyTextToClipboard(buildDebugChatLedgerText());
-    diagBox.className = ok ? "diag ok" : "diag warn";
-    diagBox.textContent = ok
-      ? "Copied chat ledger to clipboard."
-      : "Failed to copy chat ledger to clipboard.";
-  });
-}
-if (debugChatClearButton) {
-  debugChatClearButton.addEventListener("click", () => {
-    state.debugChatLedger.length = 0;
+bindCaptureControlButtonsRuntime({
+  jumpButton,
+  captureViewportButton: captureButton,
+  captureWorldHudButton,
+  paritySnapshotButton,
+  onJump: jumpToPreset,
+  onCaptureViewport: captureViewportPng,
+  onCaptureWorldHud: captureWorldHudPng,
+  onParitySnapshot: captureParitySnapshotJson
+});
+bindDebugPanelButtonsRuntime({
+  runtimeTab: debugTabRuntime,
+  chatTab: debugTabChat,
+  copyChatButton: debugChatCopyButton,
+  clearChatButton: debugChatClearButton,
+  onSelectTab: setDebugPanelTab,
+  onCopyChat: async () => {
+    const ok = await copyTextToClipboardRuntime(buildDebugChatLedgerTextImported(state.debugChatLedger), { document, navigator, errorTarget: diagBox });
+    applyDiag(debugChatLedgerCopyDiagRuntime(ok));
+  },
+  onClearChat: () => {
+    clearDebugChatLedgerRuntime(state.debugChatLedger);
     renderDebugChatLedgerPanel();
-    diagBox.className = "diag ok";
-    diagBox.textContent = "Cleared chat ledger history.";
-  });
-}
+    applyDiag(debugChatLedgerClearDiagRuntime());
+  }
+});
 setDebugPanelTab("runtime");

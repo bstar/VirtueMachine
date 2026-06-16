@@ -40,7 +40,9 @@ assert.equal(isImplicitSolidObjectTileRuntime(0x10f, 0x400, flags(0xe0)), false)
 assert.equal(isImplicitSolidObjectTileRuntime(0x12a, 0x400, flags(0xe0)), false);
 assert.equal(isImplicitSolidObjectTileRuntime(0x05f, 0x400, flags(0x80)), false);
 assert.equal(isImplicitSolidObjectTileRuntime(0x100, 0x400, flags(0x90)), false);
-assert.equal(isSolidEnvTypeRuntime(0x097), true, "table type must be a solid environment object");
+assert.equal(isSolidEnvTypeRuntime(0x097), false, "legacy book type must not be classified as solid environment");
+assert.equal(isLikelyPickupObjectTypeRuntime(0x097), true, "legacy book type should remain pickable");
+assert.equal(isSolidEnvTypeRuntime(0x0fa), true, "square table type must be a solid environment object");
 assert.equal(isLikelyPickupObjectTypeRuntime(0x104), false, "shadow objects must not be picked up");
 assert.equal(isLikelyPickupObjectTypeRuntime(0x103), false, "table-leg objects must not be picked up");
 assert.equal(isLikelyPickupObjectTypeRuntime(0x14c), false, "sign objects must not be picked up");

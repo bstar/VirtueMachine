@@ -36,6 +36,10 @@ export type SnapshotLoadDeps = {
   setStatus: (level: string, text: string) => void;
 };
 
+export type SnapshotAutosaveStateRuntime = {
+  snapshotSaveInFlight: boolean;
+};
+
 export function shouldAutosaveSnapshotRuntime(args: {
   currentTick: unknown;
   intervalTicks: unknown;
@@ -63,6 +67,90 @@ export function snapshotSavedTickRuntime(payload: SnapshotRuntimePayload | null 
 
 export function snapshotBase64Runtime(payload: SnapshotRuntimePayload | null | undefined): string {
   return String(payload?.snapshot_base64 || "").trim();
+}
+
+export function snapshotRouteForCharacterRuntime(characterId: unknown): string {
+  const id = String(characterId || "").trim();
+  return id ? `/api/characters/${id}/snapshot` : "/api/world/snapshot";
+}
+
+export interface SnapshotDiagRuntime {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+}
+
+export interface SnapshotFailurePresentationRuntime extends SnapshotDiagRuntime {
+  diagClass: "diag warn";
+  statusLevel: "error";
+  statusText: string;
+}
+
+export type SnapshotButtonRuntime = {
+  addEventListener(type: "click", listener: () => void): void;
+};
+
+export function remoteSnapshotSavedDiagRuntime(tick: unknown): SnapshotDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: `Remote snapshot saved at tick ${Number(tick) >>> 0}.`
+  };
+}
+
+export function remoteSnapshotLoadedDiagRuntime(tick: unknown): SnapshotDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: `Remote snapshot loaded at tick ${Number(tick) >>> 0}.`
+  };
+}
+
+export function remoteSnapshotSaveFailureRuntime(reason: unknown): SnapshotFailurePresentationRuntime {
+  const text = String(reason || "unknown error");
+  return {
+    diagClass: "diag warn",
+    diagText: `Remote save failed: ${text}`,
+    statusLevel: "error",
+    statusText: `Save failed: ${text}`
+  };
+}
+
+export function remoteSnapshotLoadFailureRuntime(reason: unknown): SnapshotFailurePresentationRuntime {
+  const text = String(reason || "unknown error");
+  return {
+    diagClass: "diag warn",
+    diagText: `Remote load failed: ${text}`,
+    statusLevel: "error",
+    statusText: `Load failed: ${text}`
+  };
+}
+
+export function bindRemoteSnapshotButtonRuntime<TOutput = SnapshotRuntimePayload>(args: {
+  button?: SnapshotButtonRuntime | null;
+  failure: (reason: unknown) => SnapshotFailurePresentationRuntime;
+  onSuccess?: (out: TOutput) => void;
+  run: () => Promise<TOutput>;
+  setDiag: (diag: SnapshotDiagRuntime) => void;
+  setStatus: (level: string, text: string) => void;
+  success: (out: TOutput) => SnapshotDiagRuntime;
+  updateSessionStat: () => void;
+}): boolean {
+  if (!args.button) {
+    return false;
+  }
+  args.button.addEventListener("click", () => {
+    void (async () => {
+      try {
+        const out = await args.run();
+        args.updateSessionStat();
+        args.onSuccess?.(out);
+        args.setDiag(args.success(out));
+      } catch (err) {
+        const failure = args.failure(err);
+        args.setStatus(failure.statusLevel, failure.statusText);
+        args.setDiag(failure);
+      }
+    })();
+  });
+  return true;
 }
 
 export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<SnapshotRuntimePayload> {
@@ -108,4 +196,19 @@ export async function performNetLoadSnapshot(deps: SnapshotLoadDeps): Promise<Sn
   deps.resetBackgroundFailures();
   deps.setStatus("online", `Loaded tick ${snapshotSavedTickRuntime(out)}`);
   return out || {};
+}
+
+export async function performNetAutosaveSnapshotRuntime(
+  state: SnapshotAutosaveStateRuntime,
+  deps: SnapshotSaveDeps
+): Promise<SnapshotRuntimePayload | null> {
+  if (state.snapshotSaveInFlight) {
+    return null;
+  }
+  state.snapshotSaveInFlight = true;
+  try {
+    return await performNetSaveSnapshot(deps);
+  } finally {
+    state.snapshotSaveInFlight = false;
+  }
 }

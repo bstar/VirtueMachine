@@ -168,4 +168,17 @@ Logs:
 Press Ctrl+C to stop both services.
 EOF
 
-wait -n "$WEB_PID" "$NET_PID"
+NET_STOPPED=0
+while true; do
+  if ! kill -0 "$WEB_PID" 2>/dev/null; then
+    echo "Web server stopped. Shutting down dev stack." >&2
+    exit 1
+  fi
+  if [[ "$NET_STOPPED" -eq 0 ]] && ! kill -0 "$NET_PID" 2>/dev/null; then
+    NET_STOPPED=1
+    NET_PID=""
+    echo "Net server stopped. Web client is still running for reconnect testing." >&2
+    echo "Restart the dev stack or start modern/net/server.ts to restore the API." >&2
+  fi
+  sleep 1
+done

@@ -3,6 +3,8 @@ import {
   areaIdForWorldXYRuntime,
   canonicalLookSentenceForTileRuntime,
   canonicalTalkSpeakerForTileRuntime,
+  legacyDropObjectLabelRuntime,
+  legacyDropTargetPromptLinesRuntime,
   legacyArticleForTileRuntime,
   legacyLookupTileStringRuntime,
   sanitizeLegacyHudLabelTextRuntime
@@ -47,6 +49,24 @@ assert.equal(
 
 assert.equal(sanitizeLegacyHudLabelTextRuntime("  Lord\tBritish***\n"), "Lord British");
 assert.equal(sanitizeLegacyHudLabelTextRuntime("Dupre's sword, +1"), "Dupre's sword, 1");
+
+assert.equal(legacyDropObjectLabelRuntime(null, entries, flags2), "nothing");
+assert.equal(
+  legacyDropObjectLabelRuntime({ tile_id: 0x020, type: 0x120 }, entries, flags2),
+  "a a chair"
+);
+assert.equal(
+  legacyDropObjectLabelRuntime({ inventory_key: "0x113:0x00", tile_id: 0x000, type: 0x113 }, null, flags2, "0x113:0x00"),
+  "0x113 0x00"
+);
+assert.equal(
+  legacyDropObjectLabelRuntime({ tile_id: 0x000, type: 0x113 }, null, flags2, "0x113:0x00"),
+  "0x113 0x00"
+);
+assert.deepEqual(
+  legacyDropTargetPromptLinesRuntime({ tile_id: 0x020, type: 0x120 }, entries, flags2),
+  [">Drop-a a chair", "Location:"]
+);
 
 assert.equal(areaIdForWorldXYRuntime(0, 0), 0);
 assert.equal(areaIdForWorldXYRuntime(127, 0), 0);

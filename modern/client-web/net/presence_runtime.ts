@@ -17,12 +17,21 @@ export interface WorldClockPayload {
   date_d?: unknown;
   date_m?: unknown;
   date_y?: unknown;
+  intro_state?: { phase?: unknown };
+  npc_overrides?: unknown;
+  npc_states?: unknown;
 }
 
 export interface PresenceRuntimeJson extends WorldClockPayload {
   ok?: unknown;
   players?: unknown;
 }
+
+export type PresenceSessionIdDepsRuntime = {
+  getRandomValues?: (<T extends Uint8Array>(array: T) => T) | null;
+  nowMs?: (() => number) | null;
+  randomUUID?: (() => string) | null;
+};
 
 export type AuthoritativeNpcStateRow = object & {
   action?: unknown;
@@ -64,6 +73,69 @@ export type PresenceCommonDeps = {
   request: (route: string, init?: RequestInit, auth?: boolean) => Promise<PresenceRuntimeJson | null>;
   resetBackgroundFailures: () => void;
 };
+
+export type PresenceHeartbeatSourceRuntime = {
+  avatarFacingDx?: unknown;
+  avatarFacingDy?: unknown;
+  characterName?: unknown;
+  mapX?: unknown;
+  mapY?: unknown;
+  mapZ?: unknown;
+  mode?: unknown;
+  sessionId?: unknown;
+  tick?: unknown;
+};
+
+let fallbackPresenceSessionCounterRuntime = 0;
+
+function bytesToHexRuntime(bytes: Uint8Array): string {
+  let out = "";
+  for (const b of bytes) {
+    out += (b & 0xff).toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+export function createPresenceSessionIdRuntime(deps: PresenceSessionIdDepsRuntime = {}): string {
+  const uuid = deps.randomUUID ? String(deps.randomUUID() || "").trim() : "";
+  if (uuid.length >= 8) {
+    return uuid;
+  }
+  if (deps.getRandomValues) {
+    const bytes = deps.getRandomValues(new Uint8Array(16));
+    const hex = bytesToHexRuntime(bytes);
+    if (hex.length >= 32 && /[1-9a-f]/i.test(hex)) {
+      return `sess_${hex}`;
+    }
+  }
+  const now = deps.nowMs ? Number(deps.nowMs()) : Date.now();
+  fallbackPresenceSessionCounterRuntime = (fallbackPresenceSessionCounterRuntime + 1) >>> 0;
+  return `sess_${Math.max(0, Math.floor(Number.isFinite(now) ? now : 0)).toString(36)}_${fallbackPresenceSessionCounterRuntime.toString(36)}`;
+}
+
+export function presenceHeartbeatPayloadRuntime(source: PresenceHeartbeatSourceRuntime): {
+  session_id: string;
+  character_name: string;
+  map_x: number;
+  map_y: number;
+  map_z: number;
+  facing_dx: number;
+  facing_dy: number;
+  tick: number;
+  mode: string;
+} {
+  return {
+    session_id: String(source.sessionId || ""),
+    character_name: String(source.characterName || "Avatar"),
+    map_x: Number(source.mapX) | 0,
+    map_y: Number(source.mapY) | 0,
+    map_z: Number(source.mapZ) | 0,
+    facing_dx: Number(source.avatarFacingDx) | 0,
+    facing_dy: Number(source.avatarFacingDy) | 0,
+    tick: Number(source.tick) >>> 0,
+    mode: String(source.mode || "")
+  };
+}
 
 export async function performPresenceHeartbeat(
   payload: {
@@ -182,6 +254,20 @@ export function applyAuthoritativeWorldClockToSim(
     date_m: Number(clock.date_m) >>> 0,
     date_y: Number(clock.date_y) >>> 0
   });
+}
+
+export function authoritativeWorldClockExtrasRuntime(
+  clock: WorldClockPayload | null | undefined,
+  currentIntroPhase: unknown
+): {
+  introPhase: string;
+  npcRows: unknown;
+} {
+  const record = clock && typeof clock === "object" ? clock : {};
+  return {
+    introPhase: String(record.intro_state?.phase || currentIntroPhase || "post_intro"),
+    npcRows: Array.isArray(record.npc_states) ? record.npc_states : record.npc_overrides
+  };
 }
 
 export function authoritativeNpcStateRowsFromJsonRuntime(rows: unknown): AuthoritativeNpcStateRow[] {

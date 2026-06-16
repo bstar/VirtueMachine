@@ -48,6 +48,13 @@ assert.equal(
 
 assert.equal(
   isBlockedAtRuntime(10, 20, 0, deps({
+    objectsAt: () => [{ solid: true, type: 0x100 }]
+  })),
+  true
+);
+
+assert.equal(
+  isBlockedAtRuntime(10, 20, 0, deps({
     objectsAt: () => [{ renderable: false, solid: true, type: 0x100 }]
   })),
   false

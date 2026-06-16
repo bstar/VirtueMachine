@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import {
   beginLegacyConversationSession,
   buildDebugChatLedgerText,
+  legacyLedgerPaginationOptionsRuntime,
+  legacyLedgerPushOptionsRuntime,
+  legacyConversationEndedDiagRuntime,
+  legacyConversationOkDiagRuntime,
+  legacyConversationReplyFailedDiagRuntime,
   pushLedgerMessage,
   submitLegacyConversationInput,
   type LegacyConversationState
@@ -123,5 +128,50 @@ function testBeginConversationSessionDefaultsEmptyEquipmentAndTarget() {
 
 testBeginConversationSessionAppliesStateAndOpeningBlock();
 testBeginConversationSessionDefaultsEmptyEquipmentAndTarget();
+
+assert.deepEqual(legacyLedgerPushOptionsRuntime({
+  maxChars: 17.9,
+  maxLines: 10.1,
+  tick: -1,
+  nowMs: 1234
+}), {
+  maxChars: 17,
+  maxLines: 10,
+  tick: 0xffffffff,
+  nowMs: 1234
+});
+
+assert.deepEqual(legacyLedgerPaginationOptionsRuntime({
+  maxChars: 17,
+  maxLines: 10,
+  tick: 42,
+  nowMs: 1234
+}), {
+  pageMaxLines: 9,
+  maxChars: 17,
+  tick: 42,
+  nowMs: 1234
+});
+
+assert.deepEqual(legacyLedgerPaginationOptionsRuntime({
+  maxChars: 0,
+  maxLines: 0,
+  tick: "bad",
+  nowMs: 0
+}).pageMaxLines, 1);
+
+assert.deepEqual(legacyConversationOkDiagRuntime("Conversation cancelled."), {
+  diagClass: "diag ok",
+  diagText: "Conversation cancelled."
+});
+assert.equal(legacyConversationOkDiagRuntime(""), null);
+assert.deepEqual(legacyConversationEndedDiagRuntime(), {
+  diagClass: "diag ok",
+  diagText: "Conversation ended."
+});
+assert.deepEqual(legacyConversationReplyFailedDiagRuntime("offline"), {
+  diagClass: "diag warn",
+  diagText: "Conversation reply failed: offline"
+});
 
 console.log("conversation_session_runtime_test: ok");

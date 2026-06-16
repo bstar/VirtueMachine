@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  partySwitchDigitDiagRuntime,
+  partySwitchDigitDiagTextRuntime,
   buildPartyMessageRegressionProbesRuntime,
   normalizePartyMemberIdsRuntime,
   projectPartyPanelMembersRuntime,
@@ -48,6 +50,11 @@ function testPartySwitchDigit() {
   });
   assert.equal(applied.changed, true, "digit 2 should apply switch");
   assert.equal(applied.next_active_index, 1, "digit 2 should map to party index 1");
+  assert.equal(partySwitchDigitDiagTextRuntime("2", applied), "Party switch 2: active index 1.");
+  assert.deepEqual(partySwitchDigitDiagRuntime("2", applied), {
+    diagClass: "diag ok",
+    diagText: "Party switch 2: active index 1."
+  });
 
   const same = resolvePartySwitchDigitRuntime({
     digitKey: "1",
@@ -56,6 +63,7 @@ function testPartySwitchDigit() {
   });
   assert.equal(same.changed, false, "selecting current party member should not change");
   assert.equal(same.reason, "same_index", "same-index reason mismatch");
+  assert.equal(partySwitchDigitDiagTextRuntime("1", same), "Party switch 1: already active.");
 
   const outOfRange = resolvePartySwitchDigitRuntime({
     digitKey: "9",
@@ -64,6 +72,14 @@ function testPartySwitchDigit() {
   });
   assert.equal(outOfRange.changed, false, "out-of-range digit should not change");
   assert.equal(outOfRange.reason, "out_of_range", "out-of-range reason mismatch");
+  assert.equal(partySwitchDigitDiagTextRuntime("9", outOfRange), "Party switch 9: no party member at that slot.");
+
+  const invalid = resolvePartySwitchDigitRuntime({
+    digitKey: "x",
+    partyMembers: [1, 12, 23],
+    activeIndex: 1
+  });
+  assert.equal(partySwitchDigitDiagTextRuntime("x", invalid), "Party switch x: ignored.");
 }
 
 function testRegressionProbeMatrix() {

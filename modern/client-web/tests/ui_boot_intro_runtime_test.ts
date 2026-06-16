@@ -6,6 +6,7 @@ import {
   advanceBootIntroRuntime,
   activeBootIntroPaletteRuntime,
   bootIntroPaletteCacheKeyRuntime,
+  bootIntroInputPlanRuntime,
   bootIntroScenePaletteIndexRuntime,
   bootIntroStonesPaletteShiftRuntime,
   bootIntroWindowRandRuntime,
@@ -66,6 +67,39 @@ function advancePastScene(state: ReturnType<typeof createBootIntroRuntimeState>)
 }
 
 function testInputAdvance() {
+  assert.deepEqual(bootIntroInputPlanRuntime({
+    active: false,
+    awaitingGesture: true,
+    key: "Escape"
+  }), {
+    action: "none",
+    preventDefault: false
+  });
+  assert.deepEqual(bootIntroInputPlanRuntime({
+    active: true,
+    awaitingGesture: true,
+    key: "Escape"
+  }), {
+    action: "abort",
+    preventDefault: true
+  });
+  assert.deepEqual(bootIntroInputPlanRuntime({
+    active: true,
+    awaitingGesture: false,
+    key: "Enter"
+  }), {
+    action: "advance",
+    preventDefault: false
+  });
+  assert.deepEqual(bootIntroInputPlanRuntime({
+    active: true,
+    awaitingGesture: true,
+    key: "Enter"
+  }), {
+    action: "advance",
+    preventDefault: true
+  });
+
   const state = createBootIntroRuntimeState();
   startBootIntroRuntime(state);
   advancePastScene(state);

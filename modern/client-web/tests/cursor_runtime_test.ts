@@ -1,8 +1,26 @@
 import assert from "node:assert/strict";
 import {
+  cursorCycleRuntime,
   cursorDrawRectRuntime,
   cursorLogicalWidthRuntime
 } from "../ui/cursor_runtime.ts";
+
+assert.deepEqual(cursorCycleRuntime({ count: 4, currentIndex: 0, delta: 1 }), {
+  diagClass: "diag ok",
+  diagText: "Cursor 2/4",
+  index: 1
+});
+assert.deepEqual(cursorCycleRuntime({ count: 4, currentIndex: 0, delta: -1 }), {
+  diagClass: "diag ok",
+  diagText: "Cursor 4/4",
+  index: 3
+});
+assert.deepEqual(cursorCycleRuntime({ count: 4, currentIndex: 3, delta: 2 }), {
+  diagClass: "diag ok",
+  diagText: "Cursor 2/4",
+  index: 1
+});
+assert.equal(cursorCycleRuntime({ count: 0, currentIndex: 0, delta: 1 }), null);
 
 assert.equal(cursorLogicalWidthRuntime({
   isLegacyFramePreview: false,

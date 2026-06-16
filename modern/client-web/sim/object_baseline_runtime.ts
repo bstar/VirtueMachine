@@ -22,6 +22,11 @@ export type ObjectBaselineLoadResultRuntime = {
   objectPath: string;
 };
 
+export type ObjectBaselineDiagRuntime = {
+  diagClass: "diag ok" | "diag warn";
+  diagText: string;
+};
+
 function browserFetchRuntime(): ObjectBaselineFetchRuntime | null {
   return typeof fetch === "function" ? fetch : null;
 }
@@ -99,4 +104,18 @@ export async function loadPristineObjectBaselineRuntime(
     }
   }
   throw (lastErr || new Error("no valid object baseline path"));
+}
+
+export function pristineBaselineReloadedDiagRuntime(version: unknown): ObjectBaselineDiagRuntime {
+  return {
+    diagClass: "diag ok",
+    diagText: `Pristine baseline reloaded (version ${String(version || "unknown")}).`
+  };
+}
+
+export function pristineBaselineReloadFailedDiagRuntime(reason: unknown): ObjectBaselineDiagRuntime {
+  return {
+    diagClass: "diag warn",
+    diagText: `Pristine baseline reload failed: ${String(reason || "unknown error")}`
+  };
 }

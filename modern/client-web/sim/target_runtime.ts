@@ -1,5 +1,9 @@
 import { isWithinChebyshevRangeRuntime } from "./range_runtime.ts";
 import {
+  objectLayerAnchorKeyRuntime,
+  type U6ObjectEntryRuntime
+} from "./object_layer_runtime.ts";
+import {
   OBJ_COORD_USE_LOCXYZ,
   coordUseOfStatus
 } from "../../common/u6_object_constants.ts";
@@ -26,6 +30,22 @@ export interface TargetWorldObjectRuntime {
 
 export interface TargetObjectLayerRuntime {
   objectsAt: (x: number, y: number, z: number) => TargetWorldObjectRuntime[];
+}
+
+export function targetObjectsFromObjectLayerEntriesRuntime(
+  objects: readonly U6ObjectEntryRuntime[] | null | undefined
+): TargetWorldObjectRuntime[] {
+  return (objects || []).map((obj) => {
+    const serverKey = String((obj as { object_key?: unknown }).object_key || "").trim();
+    const key = String(obj.objectKey || serverKey || objectLayerAnchorKeyRuntime(obj));
+    return {
+      ...obj,
+      key,
+      object_key: key,
+      legacy_order: obj.legacyOrder,
+      tile_id: obj.tileId
+    };
+  });
 }
 
 export interface TargetEntityRuntime {
@@ -202,6 +222,280 @@ export type LegacyGetSelectionRuntime = {
   y: number;
   z: number;
 };
+
+export function formatLegacyGetFailureTextRuntime(
+  reason: LegacyGetSelectionFailureReasonRuntime,
+  selected: { type?: number; object_key?: string; key?: string } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number
+): string {
+  const selectedKey = String(selected?.object_key || selected?.key || "").trim();
+  const label = selected
+    ? `0x${(Number(selected.type) & 0x3ff).toString(16)}${selectedKey ? ` ${selectedKey}` : ""}`
+    : `cell ${tx},${ty},${tz}`;
+  if (reason === "out_of_range") {
+    return `Get: target must be adjacent (${tx},${ty}).`;
+  }
+  if (reason === "terrain_damage") {
+    return `Get: ${label} is hazardous.`;
+  }
+  if (reason === "not_portable") {
+    return `Get: ${label} is not portable.`;
+  }
+  return `Get: nothing selectable at ${tx},${ty},${tz}.`;
+}
+
+export function formatLegacyGetTakingTextRuntime(
+  obj: { type?: number } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number
+): string {
+  return `Get: taking 0x${(Number(obj?.type) & 0x3ff).toString(16)} at ${tx},${ty},${tz}...`;
+}
+
+export function formatLegacyGetPickedTextRuntime(
+  obj: { type?: number } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number,
+  inventoryKey: unknown,
+  count: unknown
+): string {
+  return `Get: picked 0x${(Number(obj?.type) & 0x3ff).toString(16)} at ${tx},${ty},${tz} (inv ${String(inventoryKey)}=${Number(count) >>> 0}).`;
+}
+
+export type LegacyTargetDiagPresentationRuntime = {
+  diagClass: "ok" | "warn";
+  diagText: string;
+};
+
+export function legacyGetFailurePresentationRuntime(
+  reason: LegacyGetSelectionFailureReasonRuntime,
+  selected: { type?: number; object_key?: string; key?: string } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number
+): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "warn",
+    diagText: formatLegacyGetFailureTextRuntime(reason, selected, tx, ty, tz)
+  };
+}
+
+export function legacyGetTakingPresentationRuntime(
+  obj: { type?: number } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number
+): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "ok",
+    diagText: formatLegacyGetTakingTextRuntime(obj, tx, ty, tz)
+  };
+}
+
+export function legacyGetPickedPresentationRuntime(
+  obj: { type?: number } | null | undefined,
+  tx: number,
+  ty: number,
+  tz: number,
+  inventoryKey: unknown,
+  count: unknown
+): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "ok",
+    diagText: formatLegacyGetPickedTextRuntime(obj, tx, ty, tz, inventoryKey, count)
+  };
+}
+
+export function legacyGetCheckingPresentationRuntime(
+  tx: number,
+  ty: number,
+  tz: number
+): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "ok",
+    diagText: `Get: checking ${Number(tx) | 0},${Number(ty) | 0},${Number(tz) | 0}...`
+  };
+}
+
+export function legacyGetAsyncFailurePresentationRuntime(message: unknown): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "warn",
+    diagText: `Get failed: ${String(message || "unknown error")}`
+  };
+}
+
+export function legacyDropPlacedPresentationRuntime(
+  tx: number,
+  ty: number,
+  tz: number
+): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "ok",
+    diagText: `Drop: item placed at ${Number(tx) | 0},${Number(ty) | 0},${Number(tz) | 0}.`
+  };
+}
+
+export function legacyDropAsyncFailurePresentationRuntime(message: unknown): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "warn",
+    diagText: `Drop failed: ${String(message || "unknown error")}`
+  };
+}
+
+export function formatLegacyLookOutOfRangeTextRuntime(tx: number, ty: number): string {
+  return `Look: ${Number(tx) | 0},${Number(ty) | 0} is out of range.`;
+}
+
+export function formatLegacyLookResultTextRuntime(
+  sentence: unknown,
+  x: number,
+  y: number,
+  z: number
+): string {
+  return `Look: ${String(sentence || "")} @ ${Number(x) | 0},${Number(y) | 0},${Number(z) | 0}`;
+}
+
+export type LegacyLookPresentationRuntime = {
+  diagClass: "ok" | "warn";
+  diagText: string;
+  ledgerLines: string[];
+  ok: boolean;
+};
+
+export function legacyLookPresentationRuntime(
+  result: LookTargetResolutionRuntime,
+  sentence: unknown
+): LegacyLookPresentationRuntime {
+  if (!result.ok) {
+    return {
+      diagClass: "warn",
+      diagText: formatLegacyLookOutOfRangeTextRuntime(result.x, result.y),
+      ledgerLines: ["Thou dost see nothing."],
+      ok: false
+    };
+  }
+  const text = String(sentence || "Thou dost see nothing.");
+  return {
+    diagClass: "ok",
+    diagText: formatLegacyLookResultTextRuntime(text, result.x, result.y, result.z),
+    ledgerLines: [text],
+    ok: true
+  };
+}
+
+export function formatLegacyTalkFailureTextRuntime(
+  reason: "out_of_range" | "no_actor",
+  tx: number,
+  ty: number,
+  tz: number
+): string {
+  if (reason === "out_of_range") {
+    return `Talk: target must be adjacent (${Number(tx) | 0},${Number(ty) | 0}).`;
+  }
+  return `Talk: nobody there at ${Number(tx) | 0},${Number(ty) | 0},${Number(tz) | 0}.`;
+}
+
+export type LegacyTalkFailurePresentationRuntime = {
+  diagClass: "warn";
+  diagText: string;
+  ledgerLines: string[];
+  ok: false;
+};
+
+export function legacyTalkFailurePresentationRuntime(
+  result: Extract<TalkTargetResolutionRuntime, { ok: false }>
+): LegacyTalkFailurePresentationRuntime {
+  return {
+    diagClass: "warn",
+    diagText: formatLegacyTalkFailureTextRuntime(result.reason, result.x, result.y, result.z),
+    ledgerLines: ["No one responds."],
+    ok: false
+  };
+}
+
+export function formatLegacyTalkAuthoritativeStartTextRuntime(actorId: unknown): string {
+  return `Talk: contacting authoritative conversation service for actor ${Number(actorId) | 0}...`;
+}
+
+export function legacyTalkAuthoritativeStartPresentationRuntime(actorId: unknown): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "ok",
+    diagText: formatLegacyTalkAuthoritativeStartTextRuntime(actorId)
+  };
+}
+
+export function legacyTalkAsyncFailurePresentationRuntime(message: unknown): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "warn",
+    diagText: `Talk failed: ${String(message || "unknown error")}`
+  };
+}
+
+export function legacyTalkAuthoritativeStartedPresentationRuntime(args: {
+  targetName: unknown;
+  tx: number;
+  ty: number;
+  tz: number;
+}): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "ok",
+    diagText: `Talk: ${String(args.targetName || "NPC")} (authoritative) at ${Number(args.tx) | 0},${Number(args.ty) | 0},${Number(args.tz) | 0}.`
+  };
+}
+
+export function legacyTalkFallbackPresentationRuntime(summary: unknown): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: "warn",
+    diagText: `Talk fallback: ${String(summary || "")}`
+  };
+}
+
+export function formatLegacyTalkStartedTextRuntime(args: {
+  actorId: unknown;
+  converseLoaded: boolean;
+  rulesCount: unknown;
+  showInventory: boolean;
+  targetObjNum: unknown;
+  targetType: unknown;
+  tx: number;
+  ty: number;
+  tz: number;
+  valid: boolean;
+  speaker: unknown;
+}): string {
+  return `Talk: ${String(args.speaker || "")} (actor id ${Number(args.actorId) | 0}, conv id ${Number(args.targetObjNum) | 0}, type 0x${(Number(args.targetType) & 0x3ff).toString(16)}) at ${Number(args.tx) | 0},${Number(args.ty) | 0},${Number(args.tz) | 0}; valid=${args.valid ? 1 : 0}; rules=${Number(args.rulesCount) | 0}; showInven=${args.showInventory ? 1 : 0}; converse=${args.converseLoaded ? "loaded" : "missing"}.`;
+}
+
+export function legacyTalkStartedPresentationRuntime(args: {
+  actorId: unknown;
+  converseLoaded: boolean;
+  rulesCount: unknown;
+  showInventory: boolean;
+  targetObjNum: unknown;
+  targetType: unknown;
+  tx: number;
+  ty: number;
+  tz: number;
+  valid: boolean;
+  speaker: unknown;
+}): LegacyTargetDiagPresentationRuntime {
+  return {
+    diagClass: args.converseLoaded ? "ok" : "warn",
+    diagText: formatLegacyTalkStartedTextRuntime(args)
+  };
+}
+
+export function legacyGetTileIgnoredRuntime(tileId: unknown, tileFlags2: ArrayLike<number> | null | undefined): boolean {
+  return !!tileFlags2 && ((tileFlags2[Number(tileId) & 0x07ff] ?? 0) & 0x10) !== 0;
+}
+
+export function legacyGetTerrainDamageTileRuntime(tileId: unknown, terrainType: ArrayLike<number> | null | undefined): boolean {
+  return !!terrainType && ((terrainType[Number(tileId) & 0x07ff] ?? 0) & 0x08) !== 0;
+}
 
 export function resolveLegacyGetSelectionRuntime(args: {
   world: TargetWorldRuntime;

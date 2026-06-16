@@ -1,5 +1,18 @@
 import assert from "node:assert/strict";
-import { runNetPanelActionRuntime } from "../net/panel_actions_runtime.ts";
+import {
+  bindNetPanelActionButtonRuntime,
+  netPanelActionDiagRuntime,
+  runNetPanelActionRuntime
+} from "../net/panel_actions_runtime.ts";
+
+assert.deepEqual(netPanelActionDiagRuntime("ok", "Saved."), {
+  diagClass: "diag ok",
+  diagText: "Saved."
+});
+assert.deepEqual(netPanelActionDiagRuntime("warn", "Failed."), {
+  diagClass: "diag warn",
+  diagText: "Failed."
+});
 
 {
   const statuses: string[] = [];
@@ -40,5 +53,40 @@ import { runNetPanelActionRuntime } from "../net/panel_actions_runtime.ts";
   assert.deepEqual(statuses, ["error:Verify email failed: invalid code"]);
   assert.deepEqual(diagnostics, ["warn:Verify email failed: invalid code"]);
 }
+
+{
+  let listener: (() => void) | null = null;
+  const statuses: string[] = [];
+  const diagnostics: string[] = [];
+  const bound = bindNetPanelActionButtonRuntime({
+    button: {
+      addEventListener(type: "click", fn: () => void) {
+        assert.equal(type, "click");
+        listener = fn;
+      }
+    },
+    run: async () => ({ ok: true }),
+    setStatus: (level, text) => statuses.push(`${level}:${text}`),
+    setDiag: (kind, text) => diagnostics.push(`${kind}:${text}`),
+    okText: "Saved.",
+    errorStatusPrefix: "Save failed",
+    errorDiagPrefix: "Save failed"
+  });
+  assert.equal(bound, true);
+  listener?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(statuses, []);
+  assert.deepEqual(diagnostics, ["ok:Saved."]);
+}
+
+assert.equal(bindNetPanelActionButtonRuntime({
+  button: null,
+  run: async () => ({}),
+  setStatus: () => {},
+  setDiag: () => {},
+  okText: "ok",
+  errorStatusPrefix: "failed",
+  errorDiagPrefix: "failed"
+}), false);
 
 console.log("net_panel_actions_runtime_test: ok");

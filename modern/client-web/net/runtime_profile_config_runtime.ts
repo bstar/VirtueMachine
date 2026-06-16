@@ -17,6 +17,15 @@ export type RuntimeProfileConfigKeysRuntime = {
   profileKey: string;
 };
 
+export type RuntimeProfileConfigStateRuntime = {
+  runtimeExtensions: RuntimeExtensions;
+  runtimeProfile: string;
+};
+
+export type RuntimeProfileDocumentElementRuntime = {
+  setAttribute(name: string, value: string): void;
+};
+
 function parseStoredExtensionsRuntime(raw: string | null): RuntimeExtensions {
   if (!raw) {
     return createDefaultRuntimeExtensions();
@@ -92,4 +101,42 @@ export function persistRuntimeProfileConfigRuntime(
   } catch (_err) {
     return false;
   }
+}
+
+export function applyRuntimeProfileConfigRuntime(args: {
+  config: RuntimeProfileConfigRuntime;
+  documentElement?: RuntimeProfileDocumentElementRuntime | null;
+  state: RuntimeProfileConfigStateRuntime;
+}): RuntimeProfileConfigRuntime {
+  const config = {
+    extensions: sanitizeRuntimeExtensions(args.config.extensions),
+    profile: normalizeRuntimeProfile(args.config.profile)
+  };
+  args.state.runtimeProfile = config.profile;
+  args.state.runtimeExtensions = config.extensions;
+  if (args.documentElement) {
+    args.documentElement.setAttribute("data-runtime-profile", config.profile);
+  }
+  return config;
+}
+
+export function initRuntimeProfileConfigRuntime(args: {
+  documentElement?: RuntimeProfileDocumentElementRuntime | null;
+  keys: RuntimeProfileConfigKeysRuntime;
+  locationSearch?: string | null;
+  state: RuntimeProfileConfigStateRuntime;
+  storage?: PreferenceStorageRuntime | null;
+}): RuntimeProfileConfigRuntime {
+  const resolved = resolveRuntimeProfileConfigRuntime({
+    keys: args.keys,
+    locationSearch: args.locationSearch,
+    storage: args.storage
+  });
+  const applied = applyRuntimeProfileConfigRuntime({
+    config: resolved,
+    documentElement: args.documentElement,
+    state: args.state
+  });
+  persistRuntimeProfileConfigRuntime(args.storage, args.keys, applied);
+  return applied;
 }

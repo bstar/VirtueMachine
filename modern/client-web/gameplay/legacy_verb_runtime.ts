@@ -1,5 +1,6 @@
 import { firstInventoryKeyRuntime, decrementInventoryKeyRuntime } from "../sim/inventory_runtime.ts";
 import { isWithinChebyshevRangeRuntime } from "../sim/range_runtime.ts";
+import { U6_SFX } from "../audio/sfx_ids_runtime.ts";
 
 export type LegacyVerbRuntimeResult = {
   diagClass: "ok" | "warn";
@@ -17,6 +18,11 @@ export type LegacyVerbSimRuntime = {
   };
 };
 
+export type LegacyDropValidationRuntimeResult = LegacyVerbRuntimeResult & {
+  inventoryKey?: string;
+  tz?: number;
+};
+
 export function legacyCastVerbRuntime(tx: number, ty: number, tz: number): LegacyVerbRuntimeResult {
   return {
     diagClass: "ok",
@@ -24,6 +30,17 @@ export function legacyCastVerbRuntime(tx: number, ty: number, tz: number): Legac
     playSfx: "casting_magic_p1",
     text: `Cast: target ${tx},${ty},${tz} accepted (spell system pending).`
   };
+}
+
+export function legacyVerbSfxIdRuntime(playSfx: unknown): number | null {
+  switch (String(playSfx || "")) {
+    case "attack_swing":
+      return U6_SFX.ATTACK_SWING;
+    case "casting_magic_p1":
+      return U6_SFX.CASTING_MAGIC_P1;
+    default:
+      return null;
+  }
 }
 
 export function legacyMoveVerbRuntime(tx: number, ty: number, tz: number): LegacyVerbRuntimeResult {
@@ -60,6 +77,24 @@ export function legacyDropVerbRuntime(
   tx: number,
   ty: number
 ): LegacyVerbRuntimeResult {
+  const validation = legacyDropVerbValidationRuntime(sim, tx, ty);
+  if (!validation.ok) {
+    return validation;
+  }
+  const key = String(validation.inventoryKey || "");
+  const remaining = decrementInventoryKeyRuntime(sim, key);
+  return {
+    diagClass: "ok",
+    ok: true,
+    text: `Drop: ${key} at ${tx},${ty},${Number(validation.tz) | 0} (remaining ${remaining}).`
+  };
+}
+
+export function legacyDropVerbValidationRuntime(
+  sim: LegacyVerbSimRuntime,
+  tx: number,
+  ty: number
+): LegacyDropValidationRuntimeResult {
   const sx = Number(sim?.world?.map_x) | 0;
   const sy = Number(sim?.world?.map_y) | 0;
   const tz = Number(sim?.world?.map_z) | 0;
@@ -78,10 +113,11 @@ export function legacyDropVerbRuntime(
       text: "Drop: inventory is empty."
     };
   }
-  const remaining = decrementInventoryKeyRuntime(sim, key);
   return {
     diagClass: "ok",
     ok: true,
-    text: `Drop: ${key} at ${tx},${ty},${tz} (remaining ${remaining}).`
+    inventoryKey: key,
+    text: `Drop: ${key} at ${tx},${ty},${tz}.`,
+    tz
   };
 }
