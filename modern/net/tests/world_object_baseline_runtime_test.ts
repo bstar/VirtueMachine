@@ -33,6 +33,7 @@ const state = buildWorldObjectStateFromBaselineRuntime({
   rawDeltas: null,
   runtimeDir: RUNTIME_DIR
 });
+assert.ok(state.baseline);
 assert.equal(state.baseline.files_loaded, 64);
 assert.equal(state.active.length, state.baseline.baseline_count);
 assert.ok(state.activeByAnchor instanceof Map);

@@ -64,23 +64,24 @@ const started = asOkResult(startAuthoritativeConversation(state, {
   playerName: "Avatar"
 }));
 assert.equal(started.payload.target_name, "Lord British");
-assert.equal(typeof started.payload.session_id, "string");
-assert.ok(started.payload.session_id.length > 0);
-assert.ok(state.conversationSessions?.[started.payload.session_id], "started conversation should store a session");
+const sessionId = String(started.payload.session_id || "");
+assert.equal(typeof sessionId, "string");
+assert.ok(sessionId.length > 0);
+assert.ok(state.conversationSessions?.[sessionId], "started conversation should store a session");
 
 const looked = asOkResult(replyAuthoritativeConversation(state, {
-  sessionId: started.payload.session_id,
+  sessionId,
   typed: "look"
 }));
 assert.equal(looked.payload.kind, "look");
 assert.match(String((looked.payload.lines || []).join(" ")), /Lord British|NPC 5|someone/i);
-assert.ok(state.conversationSessions?.[started.payload.session_id], "look should not end the session");
+assert.ok(state.conversationSessions?.[sessionId], "look should not end the session");
 
 const ended = asOkResult(replyAuthoritativeConversation(state, {
-  sessionId: started.payload.session_id,
+  sessionId,
   typed: "bye"
 }));
 assert.equal(ended.payload.kind, "ended");
-assert.equal(state.conversationSessions?.[started.payload.session_id], undefined);
+assert.equal(state.conversationSessions?.[sessionId], undefined);
 
 console.log("conversation_runtime_test: ok");
