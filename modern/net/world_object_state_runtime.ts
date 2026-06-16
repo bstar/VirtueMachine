@@ -259,7 +259,7 @@ function repairSpawnedCloneIdentity(
   const sourceObjectKey = String(spawned.source_object_key || sourceObjectKeyFromInventoryCloneKeyRuntime(spawned.object_key)).trim();
   const isLooseInventoryClone = String(spawned.object_key || "").startsWith("inv:")
     && coordUseOfStatus(spawned.status) === 0
-    && String(spawned.holder_kind || "none") === "none";
+    && normalizeWorldObjectHolderKindRuntime(spawned.holder_kind) === "none";
   const migratedDropTimestamps = isLooseInventoryClone && !(Number(spawned.despawn_at_ms) > 0)
     ? {
         dropped_at_ms: Math.floor(nowMs),
@@ -490,7 +490,7 @@ export function inventorySafetyIssuesForSpawnedWorldObjectsRuntime(
     }
     const objectKey = String(obj.object_key || "").trim();
     const sourceObjectKey = String(obj.source_object_key || "").trim();
-    const holderKind = String(obj.holder_kind || "").trim();
+    const holderKind = normalizeWorldObjectHolderKindRuntime(obj.holder_kind);
     const holderId = String(obj.holder_id || "").trim();
     if (!objectKey.startsWith("inv:")) {
       issues.push({ code: "held_inventory_key_not_clone", object_key: objectKey });

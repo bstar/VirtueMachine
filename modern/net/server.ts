@@ -50,6 +50,9 @@ const {
   normalizeWorldRouteInteractionVerbRuntime,
   worldObjectInteractionVerbListRuntime
 } = require("../common/world_interaction_contract.ts");
+const {
+  normalizeWorldObjectHolderKindRuntime
+} = require("../common/world_object_contract.ts");
 const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge.ts");
 const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.ts");
 const { U6MapRuntime } = require("./world_map_runtime.ts");
@@ -1172,7 +1175,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     }
     if ((verb === "drop" || verb === "put" || verb === "equip")
       && (
-        String(target.holder_kind || "") !== "npc"
+        normalizeWorldObjectHolderKindRuntime(target.holder_kind) !== "npc"
         || String(target.holder_id || "") !== actorId
         || (coordUseOfStatus(target.status) !== OBJ_COORD_USE_INVEN && coordUseOfStatus(target.status) !== OBJ_COORD_USE_EQUIP)
       )
@@ -1270,7 +1273,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       x: responseTarget.x | 0,
       y: responseTarget.y | 0,
       z: responseTarget.z | 0,
-      holder_kind: String(responseTarget.holder_kind || "none"),
+      holder_kind: normalizeWorldObjectHolderKindRuntime(responseTarget.holder_kind),
       holder_id: String(responseTarget.holder_id || ""),
       holder_key: String(responseTarget.holder_key || ""),
       runtime_profile: runtimeContract.profile,
@@ -1309,7 +1312,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     const objects = state.worldObjects.active
       .filter((obj) => (
         coordUseOfStatus(obj.status) === OBJ_COORD_USE_INVEN
-        && String(obj.holder_kind || "") === "npc"
+        && normalizeWorldObjectHolderKindRuntime(obj.holder_kind) === "npc"
         && String(obj.holder_id || "") === actorId
       ))
       .sort(compareLegacyWorldObjectOrder)
