@@ -37,7 +37,12 @@ type ClockNpcStateTestRow = {
   z?: unknown;
 };
 
-type JsonResponseBody = Record<string, any> | null;
+type ContractJsonValue = {
+  [index: number]: ContractJsonValue;
+  [key: string]: ContractJsonValue;
+};
+
+type JsonResponseBody = ContractJsonValue | null;
 
 type JsonFetchResult = {
   body: JsonResponseBody;
@@ -397,8 +402,10 @@ async function main() {
     });
     assert.equal(limitRunA.status, 200);
     assert.equal(limitRunB.status, 200);
-    const keysA = (limitRunA.body?.objects || []).map((o: ContractWorldObjectRow) => String(o.object_key || ""));
-    const keysB = (limitRunB.body?.objects || []).map((o: ContractWorldObjectRow) => String(o.object_key || ""));
+    const limitObjectsA = Array.isArray(limitRunA.body?.objects) ? limitRunA.body.objects as ContractWorldObjectRow[] : [];
+    const limitObjectsB = Array.isArray(limitRunB.body?.objects) ? limitRunB.body.objects as ContractWorldObjectRow[] : [];
+    const keysA = limitObjectsA.map((o) => String(o.object_key || ""));
+    const keysB = limitObjectsB.map((o) => String(o.object_key || ""));
     assert.deepEqual(keysA, keysB, "limited world object query must be deterministic across repeated calls");
 
     const lifecycleObjects = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
@@ -526,7 +533,8 @@ async function main() {
         "taken baseline source object must be absent from world queries until respawn"
       );
       assert.ok(
-        (afterTakeObjects.body?.meta?.hidden_objects || []).some((row: ContractWorldObjectRow) => String(row?.object_key || "") === targetKey),
+        (Array.isArray(afterTakeObjects.body?.meta?.hidden_objects) ? afterTakeObjects.body.meta.hidden_objects as ContractWorldObjectRow[] : [])
+          .some((row) => String(row?.object_key || "") === targetKey),
         "taken baseline source object must be advertised as hidden in world-object metadata"
       );
 
@@ -598,7 +606,7 @@ async function main() {
       }));
       assert.equal(talkStartIntro.status, 200);
       assert.match(
-        String((talkStartIntro.body?.conversation_session?.opening_lines || []).join(" ")),
+        String((Array.isArray(talkStartIntro.body?.conversation_session?.opening_lines) ? talkStartIntro.body.conversation_session.opening_lines as unknown[] : []).join(" ")),
         /Compendium/i,
         "pre-intro LB opening should expose the Compendium challenge"
       );
@@ -623,7 +631,7 @@ async function main() {
       assert.ok(Array.isArray(talkStart.body?.conversation_session?.opening_lines));
       assert.ok(String(talkStart.body?.conversation_session?.session_id || "").length > 0);
       assert.doesNotMatch(
-        String((talkStart.body?.conversation_session?.opening_lines || []).join(" ")),
+        String((Array.isArray(talkStart.body?.conversation_session?.opening_lines) ? talkStart.body.conversation_session.opening_lines as unknown[] : []).join(" ")),
         /\*/,
         "authoritative opening lines should not leak legacy asterisk control markers"
       );
@@ -634,14 +642,14 @@ async function main() {
       }));
       assert.equal(talkReplyName.status, 200);
       assert.ok(Array.isArray(talkReplyName.body?.lines));
-      assert.match(String((talkReplyName.body?.lines || []).join(" ")), /I am Lord British/i);
+      assert.match(String((Array.isArray(talkReplyName.body?.lines) ? talkReplyName.body.lines as unknown[] : []).join(" ")), /I am Lord British/i);
 
       const talkReplyJob = await jsonFetch(baseUrl, "/api/world/conversation/respond", jsonPost(authHeaders, {
         session_id: String(talkStart.body?.conversation_session?.session_id || ""),
         typed: "job"
       }));
       assert.equal(talkReplyJob.status, 200);
-      assert.match(String((talkReplyJob.body?.lines || []).join(" ")), /throne of Britannia/i);
+      assert.match(String((Array.isArray(talkReplyJob.body?.lines) ? talkReplyJob.body.lines as unknown[] : []).join(" ")), /throne of Britannia/i);
 
       const putCycle = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
         verb: "put",
