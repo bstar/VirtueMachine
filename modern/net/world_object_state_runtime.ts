@@ -434,10 +434,6 @@ export function buildWorldObjectStateRuntime(args: {
     }
   }
   deltas.spawned = deltas.spawned
-    .filter((spawned) => {
-      const despawnAtMs = Number(spawned.despawn_at_ms) || 0;
-      return despawnAtMs <= 0 || despawnAtMs > nowMs;
-    })
     .map((spawned) => repairSpawnedCloneIdentity(spawned, baselineByKey, nowMs));
   const active: WorldObject[] = [];
   for (const b of baselineObjects) {
@@ -466,6 +462,10 @@ export function buildWorldObjectStateRuntime(args: {
     }
   }
   for (const s of deltas.spawned) {
+    const despawnAtMs = Number(s.despawn_at_ms) || 0;
+    if (despawnAtMs > 0 && despawnAtMs <= nowMs) {
+      continue;
+    }
     active.push({ ...s, source_kind: "spawned" });
   }
   active.sort(compareLegacyWorldObjectOrder);

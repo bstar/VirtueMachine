@@ -649,7 +649,11 @@ const droppedCloneAfterDespawnState = buildWorldObjectStateRuntime({
   tileFlags: new Uint8Array()
 });
 assert.equal(droppedCloneAfterDespawnState.active.some((obj) => obj.object_key === "inv:a00i020:avatar:4"), false);
-assert.equal(droppedCloneAfterDespawnState.deltas.spawned.length, 0);
+assert.equal(
+  droppedCloneAfterDespawnState.deltas.spawned.length,
+  1,
+  "state rebuild should hide but not erase expired clones before lifecycle expiration persists cleanup"
+);
 
 const legacyLooseCloneTimerState = buildWorldObjectStateRuntime({
   baseline: { objects: [] },

@@ -827,6 +827,53 @@ async function main() {
     assert.equal(Number(cloneAfterRestart.dropped_at_ms || 0), Number(targetAfter.dropped_at_ms || 0));
     assert.equal(Number(cloneAfterRestart.despawn_at_ms || 0), Number(targetAfter.despawn_at_ms || 0));
 
+    await stopServer();
+    {
+      const deltasPath = path.join(dataDir, "world_object_deltas.json");
+      const rawDeltas = JSON.parse(fs.readFileSync(deltasPath, "utf8")) as Record<string, unknown>;
+      const respawns = rawDeltas.respawns && typeof rawDeltas.respawns === "object"
+        ? rawDeltas.respawns as Record<string, Record<string, unknown>>
+        : {};
+      assert.ok(respawns[targetKey], "persisted source respawn timer must exist before maturity regression");
+      respawns[targetKey].due_at_ms = 1;
+      rawDeltas.respawns = respawns;
+
+      const spawned = Array.isArray(rawDeltas.spawned)
+        ? rawDeltas.spawned as Array<Record<string, unknown>>
+        : [];
+      const persistedDroppedClone = spawned.find((obj) => String(obj.object_key || "") === lifecycleRun1.carriedKey);
+      assert.ok(persistedDroppedClone, "persisted dropped clone must exist before maturity regression");
+      persistedDroppedClone.despawn_at_ms = 1;
+      rawDeltas.spawned = spawned;
+      fs.writeFileSync(deltasPath, `${JSON.stringify(rawDeltas, null, 2)}\n`);
+    }
+    await startServer();
+
+    const worldObjectsAfterMaturedTimers = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    assert.equal(worldObjectsAfterMaturedTimers.status, 200);
+    const respawnedSource = findObjectByKey(worldObjectsAfterMaturedTimers.body?.objects, targetKey);
+    assert.ok(respawnedSource, "matured persisted respawn timer must restore the source object after restart");
+    assert.equal(coordUseOfStatus(respawnedSource.status), OBJ_COORD_USE_LOCXYZ);
+    assert.equal(
+      findObjectByKey(worldObjectsAfterMaturedTimers.body?.objects, lifecycleRun1.carriedKey),
+      null,
+      "matured persisted dropped-clone despawn timer must remove the clone after restart"
+    );
+    assert.equal(
+      (Array.isArray(worldObjectsAfterMaturedTimers.body?.meta?.hidden_objects) ? worldObjectsAfterMaturedTimers.body.meta.hidden_objects as ContractWorldObjectRow[] : [])
+        .some((row) => String(row?.object_key || "") === targetKey),
+      false,
+      "respawned source must no longer be reported as hidden after timer maturity"
+    );
+    assert.ok(
+      (Array.isArray(worldObjectsAfterMaturedTimers.body?.meta?.expired_objects) ? worldObjectsAfterMaturedTimers.body.meta.expired_objects as unknown[] : [])
+        .includes(lifecycleRun1.carriedKey),
+      "matured dropped-clone despawn must be exposed in world-object metadata"
+    );
+
     const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", jsonPost(authHeaders, {}));
     assert.equal(worldObjectsReset.status, 200);
     assert.equal(worldObjectsReset.body?.ok, true);
