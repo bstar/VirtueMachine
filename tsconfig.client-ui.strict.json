@@ -38,13 +38,17 @@
     "modern/client-web/ui/hotkey_runtime.ts",
     "modern/client-web/tests/ui_hotkey_runtime_test.ts",
     "modern/client-web/tests/ui_capture_runtime_test.ts",
+    "modern/client-web/tests/ui_character_panel_runtime_test.ts",
     "modern/client-web/tests/ui_clipboard_runtime_test.ts",
     "modern/client-web/tests/ui_debug_panel_runtime_test.ts",
     "modern/client-web/tests/ui_dom_runtime_test.ts",
     "modern/client-web/tests/ui_download_runtime_test.ts",
     "modern/client-web/tests/ui_hover_report_runtime_test.ts",
     "modern/client-web/tests/ui_input_runtime_test.ts",
+    "modern/client-web/tests/ui_inventory_paperdoll_layout_test.ts",
     "modern/client-web/tests/ui_message_log_runtime_test.ts",
+    "modern/client-web/tests/ui_paperdoll_equipment_runtime_test.ts",
+    "modern/client-web/tests/ui_party_message_runtime_test.ts",
     "modern/client-web/error_runtime.ts",
     "modern/common/**/*.ts"
   ]
