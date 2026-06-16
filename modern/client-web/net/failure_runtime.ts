@@ -1,3 +1,5 @@
+import type { NetStatusSetter } from "./status_runtime.ts";
+
 export function resetBackgroundFailureState(netState: {
   backgroundFailCount: number;
   firstBackgroundFailAtMs: number;
@@ -34,7 +36,7 @@ export function handleBackgroundFailure(
     nowMs: number;
     windowMs: number;
     maxFailures: number;
-    setStatus: (level: string, text: string) => void;
+    setStatus: NetStatusSetter;
   }
 ): void {
   if (!netState.firstBackgroundFailAtMs || (args.nowMs - netState.firstBackgroundFailAtMs) > args.windowMs) {
@@ -64,7 +66,7 @@ export function recordBackgroundFailureRuntime(
     nowMs: number;
     windowMs: number;
     maxFailures: number;
-    setStatus: (level: string, text: string) => void;
+    setStatus: NetStatusSetter;
   }
 ): void {
   handleBackgroundFailure(netState, args);

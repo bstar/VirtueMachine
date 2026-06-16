@@ -1,5 +1,6 @@
 import { netJsonPostInitRuntime } from "./request_runtime.ts";
 import type { SimSnapshotRuntime } from "./snapshot_codec_runtime.ts";
+import type { NetStatusLevel, NetStatusSetter } from "./status_runtime.ts";
 
 export interface NetLoginPayload {
   token?: unknown;
@@ -49,7 +50,7 @@ export interface NetLoginDiagRuntime {
 
 export interface NetLoginFailurePresentationRuntime extends NetLoginDiagRuntime {
   diagClass: "diag warn";
-  statusLevel: "error";
+  statusLevel: Extract<NetStatusLevel, "error">;
   statusText: string;
 }
 
@@ -96,7 +97,7 @@ export function bindNetLoginButtonRuntime(args: {
   logout: () => void;
   setAccountModalOpen: (open: boolean) => void;
   setDiag: (diag: NetLoginDiagRuntime) => void;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
   username: () => unknown;
 }): boolean {
   if (!args.button) {
@@ -129,7 +130,7 @@ export async function performNetLoginFlow(
     passwordInput: string;
   },
   deps: {
-    setStatus: (kind: string, text: string) => void;
+    setStatus: NetStatusSetter;
     setBackgroundSyncPaused: (paused: boolean) => void;
     setApiBase: (apiBase: string) => void;
     request: NetLoginRequest;

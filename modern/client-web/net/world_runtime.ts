@@ -7,6 +7,7 @@ import {
 } from "../sim/inventory_runtime.ts";
 import { isU6InventoryStackableObjectType } from "../../common/u6_object_constants.ts";
 import { netJsonPostInitRuntime } from "./request_runtime.ts";
+import type { NetStatusLevel, NetStatusSetter } from "./status_runtime.ts";
 
 export type WorldRuntimeRequest = (
   route: string,
@@ -1001,7 +1002,7 @@ export function normalizeIntroPhaseRuntime(phase: unknown): "pre_intro" | "post_
 export interface IntroPhasePresentationRuntime {
   diagClass: "diag ok" | "diag warn";
   diagText: string;
-  statusLevel: "online" | "error";
+  statusLevel: Extract<NetStatusLevel, "online" | "error">;
   statusText: string;
 }
 
@@ -1033,7 +1034,7 @@ export function bindIntroPhaseButtonRuntime(args: {
   requestedPhase: () => unknown;
   setDiag: (diag: IntroPhasePresentationRuntime) => void;
   setIntroPhase: (phase: string) => Promise<unknown>;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
 }): boolean {
   if (!args.button) {
     return false;
@@ -1163,14 +1164,14 @@ export interface RunCriticalMaintenanceDeps {
   request: WorldRuntimeRequest;
   resetBackgroundFailures: () => void;
   updateCriticalRecoveryStat: () => void;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
   setDiag: (kind: "ok" | "warn", text: string) => void;
 }
 
 export interface CriticalMaintenanceFailureRuntime {
   diagClass: "diag warn";
   diagText: string;
-  statusLevel: "error";
+  statusLevel: Extract<NetStatusLevel, "error">;
   statusText: string;
 }
 
@@ -1220,7 +1221,7 @@ export function bindCriticalMaintenanceButtonRuntime(args: {
   errorMessage: (err: unknown) => string;
   run: () => Promise<unknown>;
   setDiag: (diag: CriticalMaintenanceDiagRuntime) => void;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
 }): boolean {
   if (!args.button) {
     return false;

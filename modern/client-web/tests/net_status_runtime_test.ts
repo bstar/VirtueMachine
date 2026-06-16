@@ -20,6 +20,7 @@ import {
   deriveTopNetStatusText,
   markServerReconnectedStateRuntime,
   netLogoutDiagRuntime,
+  normalizeNetStatusLevelRuntime,
   netStatusAutoLoginRuntime,
   netStatusChooseAccountRuntime,
   netStatusNotLoggedInRuntime,
@@ -31,7 +32,8 @@ import {
   renderNetSessionUiRuntime,
   renderNetStatusViewRuntime,
   shouldProbeReconnectRuntime,
-  shouldShowInGameServerBrokenRuntime
+  shouldShowInGameServerBrokenRuntime,
+  type NetStatusStateRuntime
 } from "../net/status_runtime.ts";
 
 type NetStatusTestCallback = {
@@ -47,6 +49,8 @@ assert.equal(deriveNetIndicatorState("idle", false), "offline");
 assert.equal(deriveNetIndicatorState("connecting", false), "connecting");
 assert.equal(deriveNetIndicatorState("sync", true), "sync");
 assert.equal(deriveNetIndicatorState("idle", true), "online");
+assert.equal(normalizeNetStatusLevelRuntime("OFFLINE"), "offline");
+assert.equal(normalizeNetStatusLevelRuntime("invalid"), "idle");
 assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: false, statusLevel: "offline" }), false);
 assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "offline" }), true);
 assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "error" }), true);
@@ -431,7 +435,7 @@ function fakeButton(): HTMLButtonElement {
   const topNetIndicator = fakeElement();
   const netQuickStatus = fakeElement();
   const netLoginButton = fakeButton();
-  const stateNet = {
+  const stateNet: NetStatusStateRuntime = {
     token: "token",
     userId: "u1",
     username: "rhy",
@@ -464,7 +468,7 @@ function fakeButton(): HTMLButtonElement {
   const topNetIndicator = fakeElement();
   const netQuickStatus = fakeElement();
   const netLoginButton = fakeButton();
-  const stateNet = {
+  const stateNet: NetStatusStateRuntime = {
     token: "",
     userId: "",
     username: "rhy",
@@ -503,7 +507,7 @@ function fakeButton(): HTMLButtonElement {
   const netLoginButton = fakeButton();
   const statIntroPhase = fakeElement();
   const netIntroPhaseSelect = { value: "" } as HTMLSelectElement;
-  const stateNet = {
+  const stateNet: NetStatusStateRuntime & { introPhase: string } = {
     token: "token",
     userId: "u1",
     username: "rhy",

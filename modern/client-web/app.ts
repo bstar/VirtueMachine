@@ -311,6 +311,7 @@ import {
   renderNetStatusViewRuntime,
   shouldProbeReconnectRuntime,
   shouldShowInGameServerBrokenRuntime,
+  type NetStatusLevel,
   type NetSessionUiElementsRuntime
 } from "./net/status_runtime.ts";
 import {
@@ -979,7 +980,7 @@ type AppNetState = {
   resumeFromSnapshot: boolean;
   sessionId: string;
   snapshotSaveInFlight: boolean;
-  statusLevel: string;
+  statusLevel: NetStatusLevel;
   statusText: string;
   token: string;
   userId: string;
@@ -3775,7 +3776,7 @@ function updateNetAuthButton(): void {
   renderCurrentNetStatusView();
 }
 
-function setNetStatus(level: string, text: string): void {
+function setNetStatus(level: NetStatusLevel, text: string): void {
   applyNetStatusRuntime({
     stateNet: state.net,
     level,
@@ -4182,7 +4183,7 @@ async function netLogoutAndPersist(): Promise<void> {
   updateNetAuthButton();
 }
 
-function netSaveSnapshotDeps(setStatus: (level: string, text: string) => void): SnapshotSaveDeps {
+function netSaveSnapshotDeps(setStatus: (level: NetStatusLevel, text: string) => void): SnapshotSaveDeps {
   return {
     ensureAuth: netLogin,
     isAuthenticated: () => !!state.net.token,

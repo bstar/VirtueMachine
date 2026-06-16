@@ -1,5 +1,6 @@
 import { netJsonPostInitRuntime } from "./request_runtime.ts";
 import type { SimSnapshotRuntime } from "./snapshot_codec_runtime.ts";
+import type { NetStatusLevel, NetStatusSetter } from "./status_runtime.ts";
 
 export interface SnapshotRuntimePayload {
   snapshot_base64?: unknown;
@@ -23,7 +24,7 @@ export type SnapshotSaveDeps = {
   currentTick: () => number;
   onSavedTick: (tick: number) => void;
   resetBackgroundFailures: () => void;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
 };
 
 export type SnapshotLoadDeps = {
@@ -34,7 +35,7 @@ export type SnapshotLoadDeps = {
   decodeSnapshot: (snapshotBase64: string) => SimSnapshotRuntime | null;
   applyLoadedSim: (loaded: SimSnapshotRuntime) => void;
   resetBackgroundFailures: () => void;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
 };
 
 export type SnapshotAutosaveStateRuntime = {
@@ -82,7 +83,7 @@ export interface SnapshotDiagRuntime {
 
 export interface SnapshotFailurePresentationRuntime extends SnapshotDiagRuntime {
   diagClass: "diag warn";
-  statusLevel: "error";
+  statusLevel: Extract<NetStatusLevel, "error">;
   statusText: string;
 }
 
@@ -130,7 +131,7 @@ export function bindRemoteSnapshotButtonRuntime<TOutput = SnapshotRuntimePayload
   onSuccess?: (out: TOutput) => void;
   run: () => Promise<TOutput>;
   setDiag: (diag: SnapshotDiagRuntime) => void;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
   success: (out: TOutput) => SnapshotDiagRuntime;
   updateSessionStat: () => void;
 }): boolean {

@@ -1,10 +1,29 @@
 import { normalizeIntroPhaseRuntime } from "./world_runtime.ts";
 
+export type NetStatusLevel = "idle" | "error" | "offline" | "online" | "sync" | "connecting";
+
+export type NetStatusSetter = (level: NetStatusLevel, text: string) => void;
+
+export function normalizeNetStatusLevelRuntime(level: unknown): NetStatusLevel {
+  const value = String(level || "idle").trim().toLowerCase();
+  if (
+    value === "idle" ||
+    value === "error" ||
+    value === "offline" ||
+    value === "online" ||
+    value === "sync" ||
+    value === "connecting"
+  ) {
+    return value;
+  }
+  return "idle";
+}
+
 export function deriveNetIndicatorState(
   level: string,
   isAuthenticated: boolean
-): "offline" | "error" | "sync" | "connecting" | "online" {
-  const lvl = String(level || "idle");
+): Exclude<NetStatusLevel, "idle"> {
+  const lvl = normalizeNetStatusLevelRuntime(level);
   if (isAuthenticated) {
     if (lvl === "error") return "error";
     if (lvl === "sync") return "sync";
@@ -210,7 +229,7 @@ export async function performReconnectProbeRuntime<TState extends ReconnectProbe
 }
 
 export type NetStatusPresentationRuntime = {
-  level: "idle" | "error" | "offline" | "online" | "sync" | "connecting";
+  level: NetStatusLevel;
   text: string;
 };
 
@@ -307,7 +326,7 @@ export type NetStatusStateRuntime = {
   userId?: string;
   username?: string;
   characterName?: string;
-  statusLevel: string;
+  statusLevel: NetStatusLevel;
   statusText: string;
 };
 
@@ -401,12 +420,12 @@ export function renderNetStatusViewRuntime(args: {
 
 export function applyNetStatusRuntime(args: {
   stateNet: NetStatusStateRuntime;
-  level: string;
+  level: unknown;
   text: string;
   isAuthenticated: boolean;
   elements: NetStatusElementsRuntime;
 }): void {
-  const lvl = String(args.level || "idle");
+  const lvl = normalizeNetStatusLevelRuntime(args.level);
   const msg = String(args.text || "");
   args.stateNet.statusLevel = lvl;
   args.stateNet.statusText = msg;

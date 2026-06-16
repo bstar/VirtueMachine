@@ -1,5 +1,6 @@
 import { saveNetPanelPref } from "./panel_runtime.ts";
 import type { NetProfile } from "./profile_runtime.ts";
+import type { NetStatusSetter } from "./status_runtime.ts";
 
 export function applyNetPanelPrefsToControlsRuntime(
   prefs: {
@@ -69,7 +70,7 @@ export function bindNetPanelPrefPersistenceRuntime(args: {
     maintenance: string;
   };
   isAuthenticated: () => boolean;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
   setMaintenanceAuto: (enabled: boolean) => void;
 }): void {
   const c = args.controls;

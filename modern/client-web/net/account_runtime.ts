@@ -1,4 +1,5 @@
 import { netJsonPostInitRuntime } from "./request_runtime.ts";
+import type { NetStatusSetter } from "./status_runtime.ts";
 
 export interface NetAccountUserPayload {
   username?: unknown;
@@ -21,7 +22,7 @@ export type NetAccountCommonDeps = {
   ensureAuth: () => Promise<void>;
   isAuthenticated: () => boolean;
   request: NetAccountRequest;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
 };
 
 export function netAccountEmailRuntime(payload: NetAccountPayload | null | undefined, fallback = ""): string {
@@ -104,7 +105,7 @@ export async function performNetRecoverPassword(
   deps: {
     request: NetAccountRequest;
     setApiBase: (base: string) => void;
-    setStatus: (level: string, text: string) => void;
+    setStatus: NetStatusSetter;
   }
 ): Promise<NetAccountPayload> {
   const base = String(baseRaw || "").trim() || "http://127.0.0.1:8081";

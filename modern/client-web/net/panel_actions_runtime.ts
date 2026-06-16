@@ -1,3 +1,5 @@
+import type { NetStatusSetter } from "./status_runtime.ts";
+
 export type NetPanelActionDiagRuntime = {
   diagClass: "diag ok" | "diag warn";
   diagText: string;
@@ -12,7 +14,7 @@ export function netPanelActionDiagRuntime(kind: unknown, text: unknown): NetPane
 
 export async function runNetPanelActionRuntime<TOutput = unknown>(args: {
   run: () => Promise<TOutput>;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
   setDiag: (kind: "ok" | "warn", text: string) => void;
   okText: string | ((out: TOutput) => string);
   errorStatusPrefix: string;
@@ -36,7 +38,7 @@ export type NetPanelActionButtonRuntime = {
 export function bindNetPanelActionButtonRuntime<TOutput = unknown>(args: {
   button?: NetPanelActionButtonRuntime | null;
   run: () => Promise<TOutput>;
-  setStatus: (level: string, text: string) => void;
+  setStatus: NetStatusSetter;
   setDiag: (kind: "ok" | "warn", text: string) => void;
   okText: string | ((out: TOutput) => string);
   errorStatusPrefix: string;
