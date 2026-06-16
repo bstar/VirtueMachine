@@ -9,6 +9,7 @@ export type ServerCharacterRuntime = {
 };
 
 export type ServerUserRuntime = {
+  created_at?: unknown;
   email?: unknown;
   email_verified?: unknown;
   email_verification?: {
@@ -35,11 +36,11 @@ export type ServerPublicUserRuntime = {
   username: unknown;
 };
 
-export type LoginAccountResultRuntime<TUser extends ServerUserRuntime = ServerUserRuntime> =
+export type LoginAccountResultRuntime =
   | {
     ok: true;
     token: string;
-    user: TUser;
+    user: ServerUserRuntime;
   }
   | {
     code: "bad_username" | "bad_password" | "auth_invalid";
@@ -198,7 +199,7 @@ export function normalizeServerUsersRuntime(raw: unknown): ServerUserRuntime[] {
       email_verification: normalizeEmailVerificationRuntime(row.email_verification)
     };
     if (row.created_at != null) {
-      (user as ServerUserRuntime & { created_at?: unknown }).created_at = String(row.created_at || "");
+      user.created_at = String(row.created_at || "");
     }
     out.push(user);
   }
@@ -412,16 +413,16 @@ export function publicUserPayloadRuntime(
   return out;
 }
 
-export function loginAccountRuntime<TUser extends ServerUserRuntime>(
+export function loginAccountRuntime(
   args: {
     body: { password?: unknown; username?: unknown } | null | undefined;
     nowIso: string;
     nowMs: number;
     randomHex: (bytes: number) => string;
     tokens: ServerTokenRuntime[];
-    users: TUser[];
+    users: ServerUserRuntime[];
   }
-): LoginAccountResultRuntime<TUser> {
+): LoginAccountResultRuntime {
   const username = normalizeUsernameRuntime(args.body && args.body.username);
   const password = String(args.body && args.body.password || "");
   if (!username || username.length < 2) {
@@ -443,7 +444,7 @@ export function loginAccountRuntime<TUser extends ServerUserRuntime>(
 
   let user = findUserByUsernameRuntime(args.users, username);
   if (!user) {
-    user = {
+    const newUser: ServerUserRuntime = {
       user_id: newUserIdRuntime(args.users, args.randomHex),
       username,
       password_plaintext: password,
@@ -451,7 +452,8 @@ export function loginAccountRuntime<TUser extends ServerUserRuntime>(
       email_verified: false,
       email_verification: null,
       created_at: String(args.nowIso || "")
-    } as unknown as TUser;
+    };
+    user = newUser;
     args.users.push(user);
   } else if (!user.password_plaintext) {
     user.password_plaintext = password;
