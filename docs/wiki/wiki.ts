@@ -1,5 +1,22 @@
 (() => {
-  const PAGES = [
+  type Page = {
+    file: string;
+    title: string;
+  };
+
+  type Term = {
+    aliases?: string[];
+    category?: string;
+    common_failures?: string[];
+    debug_checks?: string[];
+    definition?: string;
+    gameplay_effect?: string;
+    how_it_looks?: string;
+    term: string;
+    visual_signatures?: string[];
+  };
+
+  const PAGES: readonly Page[] = [
     { file: "README.md", title: "Wiki Home" },
     { file: "01-legacy-runtime-anatomy.md", title: "Legacy Runtime Anatomy" },
     { file: "02-modern-runtime-anatomy.md", title: "Modern Runtime Anatomy" },
@@ -21,15 +38,15 @@
     { file: "18-in-game-ui-canonicalization.md", title: "In-Game UI Canonicalization" }
   ];
 
-  function byId<T = any>(id: string): T {
+  function byId<T extends HTMLElement = HTMLElement>(id: string): T {
     return document.getElementById(id) as unknown as T;
   }
 
-  const pageListEl = byId("page-list");
+  const pageListEl = byId<HTMLUListElement>("page-list");
   const docEl = byId("doc");
-  const sourceLinkEl = byId("source-link");
-  const searchEl = byId("search");
-  const referenceSearchEl = byId("reference-search");
+  const sourceLinkEl = byId<HTMLAnchorElement>("source-link");
+  const searchEl = byId<HTMLInputElement>("search");
+  const referenceSearchEl = byId<HTMLInputElement>("reference-search");
   const referenceFocusCardEl = byId("reference-focus-card");
   const referenceListEl = byId("reference-list");
   const codeOverlayEl = byId("code-overlay");
@@ -41,10 +58,10 @@
     currentPage: "README.md",
     currentTerm: "",
     termFilter: "",
-    terms: []
+    terms: [] as Term[]
   };
 
-  function escapeHtml(s) {
+  function escapeHtml(s: string): string {
     return s
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -53,13 +70,13 @@
       .replace(/'/g, "&#39;");
   }
 
-  function safePath(path) {
+  function safePath(path: string): string {
     return String(path || "")
       .replace(/^\.\//, "")
       .replace(/^\/+/, "");
   }
 
-  function isLikelyCodePath(href) {
+  function isLikelyCodePath(href: string): boolean {
     const h = safePath(href);
     if (!h) {
       return false;
@@ -73,7 +90,7 @@
     return /\.(c|h|js|mjs|ts|tsx|json|sh|py|md|txt|css|html)$/i.test(h);
   }
 
-  function codeKeywordRegex(ext) {
+  function codeKeywordRegex(ext: string): RegExp {
     const common = "\\b(return|if|else|for|while|switch|case|break|continue|function|const|let|var|class|new|try|catch|throw|import|from|export|default|async|await|true|false|null|undefined)\\b";
     const cLike = "\\b(static|struct|typedef|enum|void|char|short|int|long|float|double|unsigned|signed|sizeof|include|define)\\b";
     if (/^(c|h)$/i.test(ext)) {
@@ -82,7 +99,7 @@
     return new RegExp(common, "g");
   }
 
-  function highlightCode(raw, path) {
+  function highlightCode(raw: string, path: string): string {
     const extMatch = /\.([a-z0-9]+)$/i.exec(path || "");
     const ext = extMatch ? extMatch[1].toLowerCase() : "";
     let text = escapeHtml(String(raw || ""));
@@ -94,21 +111,25 @@
     return text;
   }
 
-  function openCodeOverlay(path, contents) {
+  function openCodeOverlay(path: string, contents: string): void {
     codeOverlayPathEl.textContent = path;
     codeOverlayCodeEl.innerHTML = highlightCode(contents, path);
     codeOverlayEl.classList.remove("hidden");
     codeOverlayEl.setAttribute("aria-hidden", "false");
   }
 
-  function closeCodeOverlay() {
+  function closeCodeOverlay(): void {
     codeOverlayEl.classList.add("hidden");
     codeOverlayEl.setAttribute("aria-hidden", "true");
     codeOverlayPathEl.textContent = "";
     codeOverlayCodeEl.textContent = "";
   }
 
-  async function showCodePath(path) {
+  function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  async function showCodePath(path: string): Promise<void> {
     const clean = `/${safePath(path)}`;
     codeOverlayPathEl.textContent = `Loading ${clean} ...`;
     codeOverlayCodeEl.textContent = "";
@@ -122,11 +143,11 @@
       const text = await res.text();
       openCodeOverlay(clean, text);
     } catch (err) {
-      openCodeOverlay(clean, `Failed to load ${clean}\n\n${String(err.message || err)}`);
+      openCodeOverlay(clean, `Failed to load ${clean}\n\n${errorMessage(err)}`);
     }
   }
 
-  function applyThemeFromDebugPanel() {
+  function applyThemeFromDebugPanel(): void {
     let theme = "obsidian";
     try {
       const params = new URLSearchParams(location.search || "");
@@ -148,9 +169,9 @@
     document.documentElement.setAttribute("data-theme", theme);
   }
 
-  function inlineMarkdown(text) {
+  function inlineMarkdown(text: string): string {
     let out = escapeHtml(text);
-    out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, rawUrl) => {
+    out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m: string, alt: string, rawUrl: string) => {
       const url = String(rawUrl || "").trim();
       if (!url) {
         return "";
@@ -159,18 +180,18 @@
       const safeAlt = escapeHtml(String(alt || "").trim());
       return `<img class="doc-image" src="${safeUrl}" alt="${safeAlt}" loading="lazy" />`;
     });
-    out = out.replace(/\[\[term:([^\]]+)\]\]/gi, (_m, rawTerm) => {
+    out = out.replace(/\[\[term:([^\]]+)\]\]/gi, (_m: string, rawTerm: string) => {
       const term = String(rawTerm).trim();
       const href = `#page=${encodeURIComponent(state.currentPage)}&term=${encodeURIComponent(term)}`;
       return `<a class="term-link" href="${href}" data-term="${escapeHtml(term)}">${escapeHtml(term)}</a>`;
     });
-    out = out.replace(/\[\[([^\]]+)\]\]/g, (_m, rawTerm) => {
+    out = out.replace(/\[\[([^\]]+)\]\]/g, (_m: string, rawTerm: string) => {
       const term = String(rawTerm).trim();
       const href = `#page=${encodeURIComponent(state.currentPage)}&term=${encodeURIComponent(term)}`;
       return `<a class="term-link" href="${href}" data-term="${escapeHtml(term)}">${escapeHtml(term)}</a>`;
     });
     out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
-    out = out.replace(/<code>([^<]+)<\/code>/g, (_m, codeText) => {
+    out = out.replace(/<code>([^<]+)<\/code>/g, (_m: string, codeText: string) => {
       const raw = String(codeText).trim();
       if (isLikelyCodePath(raw)) {
         return `<a class="code-link" href="#code=${encodeURIComponent(raw)}" data-code-path="${escapeHtml(raw)}"><code>${escapeHtml(raw)}</code></a>`;
@@ -179,7 +200,7 @@
     });
     out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => {
+    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m: string, t: string, u: string) => {
       const href = String(u).trim();
       if (href.startsWith("#term=")) {
         const term = decodeURIComponent(href.slice("#term=".length));
@@ -198,14 +219,14 @@
     return out;
   }
 
-  function renderMarkdown(md) {
+  function renderMarkdown(md: string): string {
     const lines = md.replace(/\r\n/g, "\n").split("\n");
-    const out = [];
+    const out: string[] = [];
     let i = 0;
     let inCode = false;
-    let listType = null;
+    let listType: "ul" | "ol" | null = null;
 
-    function closeList() {
+    function closeList(): void {
       if (listType) {
         out.push(`</${listType}>`);
         listType = null;
@@ -302,7 +323,7 @@
     return out.join("\n");
   }
 
-  function getCurrentPage() {
+  function getCurrentPage(): string {
     const params = new URLSearchParams((location.hash || "").replace(/^#/, ""));
     const p = params.get("page");
     if (!p) {
@@ -312,16 +333,16 @@
     return found ? found.file : "README.md";
   }
 
-  function getCurrentTerm() {
+  function getCurrentTerm(): string {
     const params = new URLSearchParams((location.hash || "").replace(/^#/, ""));
     return String(params.get("term") || "").trim();
   }
 
-  function normalizeTerm(term) {
+  function normalizeTerm(term: string): string {
     return String(term || "").trim().toLowerCase();
   }
 
-  function findTerm(term) {
+  function findTerm(term: string): Term | null {
     const key = normalizeTerm(term);
     if (!key) {
       return null;
@@ -330,11 +351,11 @@
       if (normalizeTerm(t.term) === key) {
         return true;
       }
-      return (t.aliases || []).some((a) => normalizeTerm(a) === key);
+      return (t.aliases || []).some((a: string) => normalizeTerm(a) === key);
     }) || null;
   }
 
-  function termMatchesFilter(t, q) {
+  function termMatchesFilter(t: Term, q: string): boolean {
     if (!q) {
       return true;
     }
@@ -352,11 +373,11 @@
     return blob.includes(q);
   }
 
-  function renderTermCard(term, focused = false) {
-    const aliases = (term.aliases || []).map((a) => `<span class="term-chip">${escapeHtml(a)}</span>`).join("");
-    const signatures = (term.visual_signatures || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
-    const failures = (term.common_failures || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
-    const checks = (term.debug_checks || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+  function renderTermCard(term: Term, focused = false): string {
+    const aliases = (term.aliases || []).map((a: string) => `<span class="term-chip">${escapeHtml(a)}</span>`).join("");
+    const signatures = (term.visual_signatures || []).map((s: string) => `<li>${escapeHtml(s)}</li>`).join("");
+    const failures = (term.common_failures || []).map((s: string) => `<li>${escapeHtml(s)}</li>`).join("");
+    const checks = (term.debug_checks || []).map((s: string) => `<li>${escapeHtml(s)}</li>`).join("");
     return `
       <article class="term-card${focused ? " is-focused" : ""}">
         <h4>${escapeHtml(term.term)}</h4>
@@ -372,7 +393,7 @@
     `;
   }
 
-  function renderReferencePanel() {
+  function renderReferencePanel(): void {
     const q = state.termFilter.trim().toLowerCase();
     const filtered = state.terms.filter((t) => termMatchesFilter(t, q));
     const focusedTerm = findTerm(state.currentTerm);
@@ -413,14 +434,14 @@
     }
   }
 
-  async function loadTerms() {
+  async function loadTerms(): Promise<void> {
     try {
       const res = await fetch("./terms.json", { cache: "no-store" });
       if (!res.ok) {
         throw new Error(`${res.status} ${res.statusText}`);
       }
       const payload = await res.json();
-      state.terms = Array.isArray(payload?.terms) ? payload.terms : [];
+      state.terms = Array.isArray(payload?.terms) ? payload.terms as Term[] : [];
     } catch (_err) {
       state.terms = [];
       referenceFocusCardEl.innerHTML = `<div class="reference-empty">Failed to load terms.json</div>`;
@@ -428,7 +449,7 @@
     renderReferencePanel();
   }
 
-  async function loadPage(file) {
+  async function loadPage(file: string): Promise<void> {
     try {
       state.currentPage = file;
       const res = await fetch(`./${file}`, { cache: "no-store" });
@@ -444,11 +465,11 @@
       }
       document.title = `${PAGES.find((p) => p.file === file)?.title || file} - VirtueMachine Wiki`;
     } catch (err) {
-      docEl.innerHTML = `<p class="error">Failed to load ${file}: ${escapeHtml(String(err.message || err))}</p>`;
+      docEl.innerHTML = `<p class="error">Failed to load ${file}: ${escapeHtml(errorMessage(err))}</p>`;
     }
   }
 
-  function renderNav(filter = "") {
+  function renderNav(filter = ""): void {
     const q = filter.trim().toLowerCase();
     const items = !q
       ? PAGES
@@ -458,14 +479,14 @@
       .join("\n");
   }
 
-  function onRoute() {
+  function onRoute(): void {
     state.currentTerm = getCurrentTerm();
     renderReferencePanel();
     loadPage(getCurrentPage());
   }
 
-  docEl.addEventListener("click", (evt) => {
-    const link = (evt.target as HTMLElement | null)?.closest("a.code-link");
+  docEl.addEventListener("click", (evt: MouseEvent) => {
+    const link = (evt.target as Element | null)?.closest("a.code-link");
     if (!link) {
       return;
     }

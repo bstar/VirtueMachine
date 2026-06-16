@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
+import type { Plugin, ViteDevServer } from "vite";
 
 const ROOT_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname));
 
 const RUNTIME_PREFIX = "/modern/assets/runtime/";
 const PRISTINE_PREFIX = "/modern/assets/pristine/";
 
-function contentTypeFor(filePath) {
+function contentTypeFor(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case ".html": return "text/html; charset=utf-8";
@@ -27,17 +28,17 @@ function contentTypeFor(filePath) {
   }
 }
 
-function resolveAssetPath(urlPath) {
+function resolveAssetPath(urlPath: string): string {
   if (urlPath.startsWith(RUNTIME_PREFIX) || urlPath.startsWith(PRISTINE_PREFIX)) {
     return path.join(ROOT_DIR, urlPath.slice(1));
   }
   return "";
 }
 
-function assetBypassPlugin() {
+function assetBypassPlugin(): Plugin {
   return {
     name: "vm-asset-bypass",
-    configureServer(server) {
+    configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
         const rawUrl = String(req.url || "");
         const urlPath = decodeURIComponent(rawUrl.split("?", 1)[0] || "/");
@@ -66,10 +67,10 @@ function assetBypassPlugin() {
   };
 }
 
-function rootRedirectPlugin() {
+function rootRedirectPlugin(): Plugin {
   return {
     name: "vm-root-redirect",
-    configureServer(server) {
+    configureServer(server: ViteDevServer) {
       server.middlewares.use((req, res, next) => {
         const rawUrl = String(req.url || "");
         const urlPath = decodeURIComponent(rawUrl.split("?", 1)[0] || "/");
