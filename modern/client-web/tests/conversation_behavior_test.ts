@@ -14,21 +14,46 @@ const OP_JOIN = 0xca;
 const OP_ASKTOP = 0xf7;
 const OP_GET = 0xf8;
 
-function decompressU6Lzw(bytes) {
+type ConversationHeaderTest = {
+  desc: string;
+  mainPc: number;
+  name: string;
+};
+
+type ConversationRuleTest = {
+  keys: string[];
+  responseBytes: Uint8Array;
+  responseEndPc: number;
+  responseStartPc: number;
+};
+
+type ConversationDecodeOptionsTest = {
+  followGoto?: boolean;
+  stopOnGoto?: boolean;
+};
+
+type ConversationMacroContextTest = {
+  player?: string;
+  target?: string;
+  timeWord?: string;
+  title?: string;
+};
+
+function decompressU6Lzw(bytes: Uint8Array | null | undefined): Uint8Array | null {
   if (!bytes || bytes.length < 4) return null;
   const outLen = (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0;
   const src = bytes.subarray(4);
   const out = new Uint8Array(outLen);
   const CLEAR = 256;
   const END = 257;
-  const table = new Array(4096);
+  const table: Array<Uint8Array | undefined> = new Array(4096);
   for (let i = 0; i < 256; i += 1) table[i] = Uint8Array.of(i);
   let bitPos = 0;
   let codeSize = 9;
   let nextCode = 258;
-  let prev = null;
+  let prev: Uint8Array | null = null;
   let outPos = 0;
-  function readCode(n) {
+  function readCode(n: number): number {
     let outCode = 0;
     for (let i = 0; i < n; i += 1) {
       const bi = (bitPos + i) >> 3;
@@ -50,7 +75,7 @@ function decompressU6Lzw(bytes) {
       continue;
     }
     if (code === END) break;
-    let entry = null;
+    let entry: Uint8Array | null = null;
     if (table[code]) {
       entry = table[code];
     } else if (code === nextCode && prev) {
@@ -77,7 +102,7 @@ function decompressU6Lzw(bytes) {
   return out;
 }
 
-function decodeU6LzwWithKnownLength(srcBytes, outLen) {
+function decodeU6LzwWithKnownLength(srcBytes: Uint8Array, outLen: number): Uint8Array | null {
   const wrapped = new Uint8Array(srcBytes.length + 4);
   wrapped[0] = outLen & 0xff;
   wrapped[1] = (outLen >>> 8) & 0xff;
@@ -87,7 +112,7 @@ function decodeU6LzwWithKnownLength(srcBytes, outLen) {
   return decompressU6Lzw(wrapped);
 }
 
-function loadConversationScript(npcNum) {
+function loadConversationScript(npcNum: number): Uint8Array {
   const file = (npcNum > 0x62) ? "converse.b" : "converse.a";
   const index = (npcNum > 0x62) ? (npcNum - 0x63) : npcNum;
   const archive = new Uint8Array(fs.readFileSync(path.join(ROOT, "assets/runtime", file)));
@@ -96,12 +121,14 @@ function loadConversationScript(npcNum) {
   assert.ok(offset > 0, `npc ${npcNum}: missing conversation offset`);
   const inflated = dv.getUint32(offset, true) >>> 0;
   if (inflated > 0 && inflated < 0x2800) {
-    return decodeU6LzwWithKnownLength(archive.subarray(offset + 4), inflated);
+    const decoded = decodeU6LzwWithKnownLength(archive.subarray(offset + 4), inflated);
+    assert.ok(decoded, `npc ${npcNum}: failed to decode conversation script`);
+    return decoded;
   }
   return archive.subarray(offset + 4, Math.min(archive.length, offset + 4 + 0x2800));
 }
 
-function parseHeader(scriptBytes) {
+function parseHeader(scriptBytes: Uint8Array): ConversationHeaderTest {
   let i = 0;
   if (scriptBytes[i] === OP_END) i += 1;
   i += 1;
@@ -127,7 +154,12 @@ function parseHeader(scriptBytes) {
   };
 }
 
-function parseRulesInRange(scriptBytes, startPc, endPc, out) {
+function parseRulesInRange(
+  scriptBytes: Uint8Array,
+  startPc: number,
+  endPc: number,
+  out: ConversationRuleTest[]
+): void {
   const end = Math.max(0, Math.min(Number(endPc) | 0, scriptBytes.length));
   let i = Math.max(0, Math.min(Number(startPc) | 0, end));
   while (i < end) {
@@ -136,9 +168,9 @@ function parseRulesInRange(scriptBytes, startPc, endPc, out) {
       continue;
     }
     i += 1;
-    const keys = [];
+    const keys: string[] = [];
     while (i < end) {
-      const keyBytes = [];
+      const keyBytes: number[] = [];
       while (i < end && scriptBytes[i] !== 0x2c && scriptBytes[i] !== OP_RES) {
         keyBytes.push(scriptBytes[i]);
         i += 1;
@@ -171,13 +203,13 @@ function parseRulesInRange(scriptBytes, startPc, endPc, out) {
   }
 }
 
-function parseRules(scriptBytes, mainPc) {
-  const out = [];
+function parseRules(scriptBytes: Uint8Array, mainPc: number): ConversationRuleTest[] {
+  const out: ConversationRuleTest[] = [];
   parseRulesInRange(scriptBytes, mainPc, scriptBytes.length, out);
   return out;
 }
 
-function findFirstKeyPc(scriptBytes, mainPc) {
+function findFirstKeyPc(scriptBytes: Uint8Array, mainPc: number): number {
   let pc = Math.max(0, Number(mainPc) | 0);
   while (pc < scriptBytes.length) {
     if ((scriptBytes[pc] & 0xff) === OP_KEY) {
@@ -188,7 +220,7 @@ function findFirstKeyPc(scriptBytes, mainPc) {
   return -1;
 }
 
-function splitWords(input) {
+function splitWords(input: unknown): string[] {
   return String(input || "")
     .toLowerCase()
     .replace(/[^a-z0-9?\s]+/g, " ")
@@ -196,7 +228,7 @@ function splitWords(input) {
     .filter(Boolean);
 }
 
-function keyMatchesInput(pattern, input) {
+function keyMatchesInput(pattern: unknown, input: unknown): boolean {
   const p = String(pattern || "").trim().toLowerCase();
   if (!p) return false;
   if (p === "*") return true;
@@ -219,17 +251,22 @@ assert.equal(keyMatchesInput("end", "endurance"), true, "Canonical KEY matching 
 assert.equal(keyMatchesInput("fire", "fireball"), true, "Canonical KEY should match longer token prefix");
 assert.equal(keyMatchesInput("orb", "or"), false, "Canonical KEY should reject shorter token");
 
-function decodeResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
+function decodeResponseOpcodeAware(
+  scriptBytes: Uint8Array,
+  startPc: number,
+  endPc: number,
+  opts: ConversationDecodeOptionsTest | null = null
+): string[] {
   const options = (opts && typeof opts === "object") ? opts : {};
   const stopOnGoto = options.stopOnGoto !== false;
   const followGoto = !!options.followGoto;
-  const lines = [];
+  const lines: string[] = [];
   let cur = "";
   let pc = Math.max(0, Number(startPc) | 0);
   const end = Math.max(pc, Math.min(scriptBytes.length, Number(endPc) | 0));
   const maxSteps = Math.max(1024, Math.min(65536, scriptBytes.length * 4));
   let steps = 0;
-  const seenTargets = new Set();
+  const seenTargets = new Set<string>();
   const flush = () => {
     const text = cur.replace(/\s+/g, " ").trim();
     if (text) lines.push(text);
@@ -298,12 +335,12 @@ function decodeResponseOpcodeAware(scriptBytes, startPc, endPc, opts = null) {
   return lines;
 }
 
-function decodeOpeningLines(scriptBytes, mainPc) {
+function decodeOpeningLines(scriptBytes: Uint8Array, mainPc: number): string[] {
   const start = Math.max(0, Number(mainPc) | 0);
   return decodeResponseOpcodeAware(scriptBytes, start, scriptBytes.length, { stopOnGoto: false, followGoto: true });
 }
 
-function renderConversationMacros(text, ctx) {
+function renderConversationMacros(text: unknown, ctx: ConversationMacroContextTest = {}): string {
   const player = String(ctx?.player || "avatar").trim() || "avatar";
   const target = String(ctx?.target || "").trim();
   const title = String(ctx?.title || "milady").trim() || "milady";
@@ -319,7 +356,12 @@ function renderConversationMacros(text, ctx) {
     .replace(/@([A-Za-z0-9]+)/g, "$1");
 }
 
-function runTopic(scriptBytes, header, topic, ctx = {}) {
+function runTopic(
+  scriptBytes: Uint8Array,
+  header: ConversationHeaderTest,
+  topic: unknown,
+  ctx: ConversationMacroContextTest = {}
+): string[] {
   const rules = parseRules(scriptBytes, header.mainPc);
   const query = String(topic || "").trim().toLowerCase() || "bye";
   for (const rule of rules) {
@@ -338,7 +380,12 @@ function runTopic(scriptBytes, header, topic, ctx = {}) {
   return [];
 }
 
-function runTopicFromCursor(scriptBytes, header, topic, ctx = {}) {
+function runTopicFromCursor(
+  scriptBytes: Uint8Array,
+  header: ConversationHeaderTest,
+  topic: string,
+  ctx: ConversationMacroContextTest = {}
+) {
   const startPc = findFirstKeyPc(scriptBytes, header.mainPc);
   assert.ok(startPc >= 0, "conversation cursor start pc missing");
   const out = conversationRunFromKeyCursor({
@@ -355,8 +402,8 @@ function runTopicFromCursor(scriptBytes, header, topic, ctx = {}) {
       END: OP_END
     },
     keyMatchesInput,
-    renderMacros: (line) => renderConversationMacros(line, ctx),
-    decodeResponseOpcodeAware: (bytes, start, end) => ({
+    renderMacros: (line: unknown) => renderConversationMacros(line, ctx),
+    decodeResponseOpcodeAware: (bytes: Uint8Array, start: number, end: number) => ({
       lines: decodeResponseOpcodeAware(bytes, start, end, { stopOnGoto: false, followGoto: true }),
       stopOpcode: 0,
       stopPc: end
