@@ -37,11 +37,54 @@ type ClockNpcStateTestRow = {
   z?: unknown;
 };
 
-function sleep(ms) {
+type JsonResponseBody = Record<string, any> | null;
+
+type JsonFetchResult = {
+  body: JsonResponseBody;
+  status: number;
+};
+
+type JsonHeaders = Record<string, string> | null | undefined;
+
+type ContractWorldObjectRow = {
+  dropped_at_ms?: unknown;
+  despawn_at_ms?: unknown;
+  frame?: unknown;
+  holder_kind?: unknown;
+  object_key?: unknown;
+  source_area?: unknown;
+  source_index?: unknown;
+  source_object_key?: unknown;
+  status?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type RoomHotspotFixtureRow = {
+  center?: {
+    x?: unknown;
+    y?: unknown;
+    z?: unknown;
+  };
+  frame?: unknown;
+  id?: unknown;
+  label?: unknown;
+  must_exclude?: RoomHotspotFixtureRow[];
+  must_include?: RoomHotspotFixtureRow[];
+  radius?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForHealth(baseUrl, timeoutMs = 5000) {
+async function waitForHealth(baseUrl: string, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
   while ((Date.now() - start) < timeoutMs) {
     try {
@@ -57,10 +100,10 @@ async function waitForHealth(baseUrl, timeoutMs = 5000) {
   throw new Error("net server did not become healthy in time");
 }
 
-async function jsonFetch(baseUrl, route, init = {}) {
+async function jsonFetch(baseUrl: string, route: string, init: RequestInit = {}): Promise<JsonFetchResult> {
   const res = await fetch(`${baseUrl}${route}`, init);
   const text = await res.text();
-  let body = null;
+  let body: JsonResponseBody = null;
   try {
     body = text.trim() ? JSON.parse(text) : null;
   } catch (_err) {
@@ -69,7 +112,7 @@ async function jsonFetch(baseUrl, route, init = {}) {
   return { status: res.status, body };
 }
 
-function jsonRequestInit(method, headers, body) {
+function jsonRequestInit(method: "POST" | "PUT", headers: JsonHeaders, body: unknown): RequestInit {
   return {
     method,
     headers: { "content-type": "application/json", ...(headers || {}) },
@@ -77,37 +120,40 @@ function jsonRequestInit(method, headers, body) {
   };
 }
 
-function jsonPost(headers, body) {
+function jsonPost(headers: JsonHeaders, body: unknown): RequestInit {
   return jsonRequestInit("POST", headers, body);
 }
 
-function jsonPut(headers, body) {
+function jsonPut(headers: JsonHeaders, body: unknown): RequestInit {
   return jsonRequestInit("PUT", headers, body);
 }
 
-function coordUseOfStatus(status) {
+function coordUseOfStatus(status: unknown): number {
   return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
 }
 
-function isStatus0010(status) {
+function isStatus0010(status: unknown): boolean {
   return (Number(status) & 0x10) !== 0;
 }
 
-function findObjectByKey(list, key) {
+function findObjectByKey(list: unknown, key: unknown): ContractWorldObjectRow | null {
   return (Array.isArray(list) ? list : []).find((o) => String(o?.object_key || "") === String(key || "")) || null;
 }
 
-function objectKeyList(list) {
+function objectKeyList(list: unknown): string[] {
   return (Array.isArray(list) ? list : []).map((o) => String(o?.object_key || "")).filter(Boolean);
 }
 
-function loadRoomHotspotFixtures() {
+function loadRoomHotspotFixtures(): RoomHotspotFixtureRow[] {
   const raw = fs.readFileSync(ROOM_HOTSPOT_FIXTURES, "utf8");
   const parsed = JSON.parse(raw);
   return Array.isArray(parsed?.fixtures) ? parsed.fixtures : [];
 }
 
-function objectMatchesExpectation(obj, exp) {
+function objectMatchesExpectation(
+  obj: ContractWorldObjectRow | null | undefined,
+  exp: RoomHotspotFixtureRow | null | undefined
+): boolean {
   if (!obj || !exp) {
     return false;
   }
@@ -121,22 +167,22 @@ function objectMatchesExpectation(obj, exp) {
   return true;
 }
 
-function compareLegacyWorldObjectOrder(a, b) {
+function compareLegacyWorldObjectOrder(a: ContractWorldObjectRow, b: ContractWorldObjectRow): number {
   const aUse = coordUseOfStatus(a.status);
   const bUse = coordUseOfStatus(b.status);
   if (aUse !== 0 && bUse === 0) return -1;
   if (bUse !== 0 && aUse === 0) return 1;
-  if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
-  if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
-  if ((a.z | 0) !== (b.z | 0)) return (b.z | 0) - (a.z | 0);
+  if ((Number(a.y) | 0) !== (Number(b.y) | 0)) return (Number(a.y) | 0) - (Number(b.y) | 0);
+  if ((Number(a.x) | 0) !== (Number(b.x) | 0)) return (Number(a.x) | 0) - (Number(b.x) | 0);
+  if ((Number(a.z) | 0) !== (Number(b.z) | 0)) return (Number(b.z) | 0) - (Number(a.z) | 0);
   if (isStatus0010(a.status) !== isStatus0010(b.status)) {
     return isStatus0010(a.status) ? -1 : 1;
   }
-  if ((a.source_area | 0) !== (b.source_area | 0)) {
-    return (a.source_area | 0) - (b.source_area | 0);
+  if ((Number(a.source_area) | 0) !== (Number(b.source_area) | 0)) {
+    return (Number(a.source_area) | 0) - (Number(b.source_area) | 0);
   }
-  if ((a.source_index | 0) !== (b.source_index | 0)) {
-    return (a.source_index | 0) - (b.source_index | 0);
+  if ((Number(a.source_index) | 0) !== (Number(b.source_index) | 0)) {
+    return (Number(a.source_index) | 0) - (Number(b.source_index) | 0);
   }
   return String(a.object_key || "").localeCompare(String(b.object_key || ""));
 }
