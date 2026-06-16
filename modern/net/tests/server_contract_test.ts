@@ -535,29 +535,21 @@ async function main() {
       assert.equal(introStateGet.status, 200);
       assert.equal(String(introStateGet.body?.intro_state?.phase || ""), "post_intro");
 
-      const introStatePre = await jsonFetch(baseUrl, "/api/world/intro-state", {
-        method: "PUT",
-        headers: authHeaders,
-        body: JSON.stringify({
-          phase: "pre_intro"
-        })
-      });
+      const introStatePre = await jsonFetch(baseUrl, "/api/world/intro-state", jsonPut(authHeaders, {
+        phase: "pre_intro"
+      }));
       assert.equal(introStatePre.status, 200);
       assert.equal(String(introStatePre.body?.intro_state?.phase || ""), "pre_intro");
 
-      const talkStartIntro = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "talk",
-          npc_id: 5,
-          actor_id: "contract-avatar",
-          actor_x: Number(lbNpc.x) | 0,
-          actor_y: Number(lbNpc.y) | 0,
-          actor_z: Number(lbNpc.z) | 0,
-          player_name: "Avatar"
-        })
-      });
+      const talkStartIntro = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "talk",
+        npc_id: 5,
+        actor_id: "contract-avatar",
+        actor_x: Number(lbNpc.x) | 0,
+        actor_y: Number(lbNpc.y) | 0,
+        actor_z: Number(lbNpc.z) | 0,
+        player_name: "Avatar"
+      }));
       assert.equal(talkStartIntro.status, 200);
       assert.match(
         String((talkStartIntro.body?.conversation_session?.opening_lines || []).join(" ")),
@@ -565,29 +557,21 @@ async function main() {
         "pre-intro LB opening should expose the Compendium challenge"
       );
 
-      const introStatePost = await jsonFetch(baseUrl, "/api/world/intro-state", {
-        method: "PUT",
-        headers: authHeaders,
-        body: JSON.stringify({
-          phase: "post_intro"
-        })
-      });
+      const introStatePost = await jsonFetch(baseUrl, "/api/world/intro-state", jsonPut(authHeaders, {
+        phase: "post_intro"
+      }));
       assert.equal(introStatePost.status, 200);
       assert.equal(String(introStatePost.body?.intro_state?.phase || ""), "post_intro");
 
-      const talkStart = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "talk",
-          npc_id: 5,
-          actor_id: "contract-avatar",
-          actor_x: Number(lbNpc.x) | 0,
-          actor_y: Number(lbNpc.y) | 0,
-          actor_z: Number(lbNpc.z) | 0,
-          player_name: "Avatar"
-        })
-      });
+      const talkStart = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "talk",
+        npc_id: 5,
+        actor_id: "contract-avatar",
+        actor_x: Number(lbNpc.x) | 0,
+        actor_y: Number(lbNpc.y) | 0,
+        actor_z: Number(lbNpc.z) | 0,
+        player_name: "Avatar"
+      }));
       assert.equal(talkStart.status, 200);
       assert.equal(String(talkStart.body?.conversation_session?.target_name || ""), "Lord British");
       assert.ok(Array.isArray(talkStart.body?.conversation_session?.opening_lines));
@@ -598,39 +582,27 @@ async function main() {
         "authoritative opening lines should not leak legacy asterisk control markers"
       );
 
-      const talkReplyName = await jsonFetch(baseUrl, "/api/world/conversation/respond", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          session_id: String(talkStart.body?.conversation_session?.session_id || ""),
-          typed: "name"
-        })
-      });
+      const talkReplyName = await jsonFetch(baseUrl, "/api/world/conversation/respond", jsonPost(authHeaders, {
+        session_id: String(talkStart.body?.conversation_session?.session_id || ""),
+        typed: "name"
+      }));
       assert.equal(talkReplyName.status, 200);
       assert.ok(Array.isArray(talkReplyName.body?.lines));
       assert.match(String((talkReplyName.body?.lines || []).join(" ")), /I am Lord British/i);
 
-      const talkReplyJob = await jsonFetch(baseUrl, "/api/world/conversation/respond", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          session_id: String(talkStart.body?.conversation_session?.session_id || ""),
-          typed: "job"
-        })
-      });
+      const talkReplyJob = await jsonFetch(baseUrl, "/api/world/conversation/respond", jsonPost(authHeaders, {
+        session_id: String(talkStart.body?.conversation_session?.session_id || ""),
+        typed: "job"
+      }));
       assert.equal(talkReplyJob.status, 200);
       assert.match(String((talkReplyJob.body?.lines || []).join(" ")), /throne of Britannia/i);
 
-      const putCycle = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "put",
-          target_key: carriedKey,
-          container_key: carriedKey,
-          actor_id: "contract-avatar"
-        })
-      });
+      const putCycle = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "put",
+        target_key: carriedKey,
+        container_key: carriedKey,
+        actor_id: "contract-avatar"
+      }));
       assert.equal(putCycle.status, 409);
       assert.equal(String(putCycle.body?.error?.code || ""), "interaction_container_cycle");
       assert.equal(
@@ -639,16 +611,12 @@ async function main() {
         "self-cycle rejection should not report unrelated blocker key"
       );
 
-      const put = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "put",
-          target_key: carriedKey,
-          container_key: containerKey,
-          actor_id: "contract-avatar"
-        })
-      });
+      const put = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "put",
+        target_key: carriedKey,
+        container_key: containerKey,
+        actor_id: "contract-avatar"
+      }));
       assert.equal(put.status, 200);
       assert.equal(coordUseOfStatus(put.body?.target?.status), OBJ_COORD_USE_CONTAINED);
       assert.equal(String(put.body?.target?.holder_kind || ""), "object");
@@ -656,36 +624,28 @@ async function main() {
       assert.ok(Array.isArray(put.body?.target?.assoc_chain));
       assert.ok(String(put.body?.target?.root_anchor_key || "").length > 0);
 
-      const takeContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "take",
-          target_key: containerKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const takeContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "take",
+        target_key: containerKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(takeContainer.status, 200);
       assert.equal(coordUseOfStatus(takeContainer.body?.target?.status), OBJ_COORD_USE_INVEN);
       assert.equal(String(takeContainer.body?.target?.holder_kind || ""), "npc");
       const carriedContainerKey = String(takeContainer.body?.target?.object_key || "");
       assert.ok(carriedContainerKey && carriedContainerKey !== containerKey, "taken container should be represented by a clone key");
 
-      const blockedTakeContained = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "take",
-          target_key: carriedKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const blockedTakeContained = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "take",
+        target_key: carriedKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(blockedTakeContained.status, 409);
       assert.equal(blockedTakeContained.body?.error?.code, "interaction_container_blocked");
       assert.equal(
@@ -694,33 +654,25 @@ async function main() {
         "blocked take should surface containing container clone key"
       );
 
-      const dropContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "drop",
-          target_key: carriedContainerKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const dropContainer = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "drop",
+        target_key: carriedContainerKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(dropContainer.status, 200);
       assert.equal(coordUseOfStatus(dropContainer.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
 
-      const takeAgain = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "take",
-          target_key: carriedKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const takeAgain = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "take",
+        target_key: carriedKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(takeAgain.status, 200);
       assert.equal(coordUseOfStatus(takeAgain.body?.target?.status), OBJ_COORD_USE_INVEN);
       assert.equal(String(takeAgain.body?.target?.holder_kind || ""), "npc");
@@ -737,18 +689,14 @@ async function main() {
         "re-taken dropped clone must return to actor inventory projection"
       );
 
-      const drop = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "drop",
-          target_key: carriedKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const drop = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "drop",
+        target_key: carriedKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(drop.status, 200);
       assert.equal(coordUseOfStatus(drop.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
       assert.equal(String(drop.body?.target?.holder_kind || ""), "none");
@@ -825,61 +773,41 @@ async function main() {
     assert.equal(Number(cloneAfterRestart.dropped_at_ms || 0), Number(targetAfter.dropped_at_ms || 0));
     assert.equal(Number(cloneAfterRestart.despawn_at_ms || 0), Number(targetAfter.despawn_at_ms || 0));
 
-    const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({})
-    });
+    const worldObjectsReset = await jsonFetch(baseUrl, "/api/world/objects/reset", jsonPost(authHeaders, {}));
     assert.equal(worldObjectsReset.status, 200);
     assert.equal(worldObjectsReset.body?.ok, true);
     assert.equal(Number(worldObjectsReset.body?.interaction_checkpoint?.seq), 0);
 
-    const aliasTakeReplay = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        verb: "take",
-        target_key: accountAliasTargetKey,
-        actor_id: aliasCharacterId,
-        actor_x: Number(targets[2].x) | 0,
-        actor_y: Number(targets[2].y) | 0,
-        actor_z: Number(targets[2].z) | 0
-      })
-    });
+    const aliasTakeReplay = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+      verb: "take",
+      target_key: accountAliasTargetKey,
+      actor_id: aliasCharacterId,
+      actor_x: Number(targets[2].x) | 0,
+      actor_y: Number(targets[2].y) | 0,
+      actor_z: Number(targets[2].z) | 0
+    }));
     assert.equal(aliasTakeReplay.status, 200);
     const aliasHeldReplayKey = String(aliasTakeReplay.body?.target?.object_key || "");
     assert.ok(aliasHeldReplayKey, "alias replay take should create a held clone");
-    const aliasDropReplayViaAccountId = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        verb: "drop",
-        target_key: aliasHeldReplayKey,
-        actor_id: accountUserId,
-        actor_x: Number(targets[2].x) | 0,
-        actor_y: Number(targets[2].y) | 0,
-        actor_z: Number(targets[2].z) | 0
-      })
-    });
+    const aliasDropReplayViaAccountId = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+      verb: "drop",
+      target_key: aliasHeldReplayKey,
+      actor_id: accountUserId,
+      actor_x: Number(targets[2].x) | 0,
+      actor_y: Number(targets[2].y) | 0,
+      actor_z: Number(targets[2].z) | 0
+    }));
     assert.equal(aliasDropReplayViaAccountId.status, 200);
 
     const lifecycleRun2 = await runInteractionLifecycle();
     assert.equal(lifecycleRun2.seq, lifecycleRun1.seq);
     assert.equal(lifecycleRun2.hash, lifecycleRun1.hash, "interaction checkpoint hash should be deterministic across reset+replay");
 
-    const worldObjectsResetAfterReplay = await jsonFetch(baseUrl, "/api/world/objects/reset", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({})
-    });
+    const worldObjectsResetAfterReplay = await jsonFetch(baseUrl, "/api/world/objects/reset", jsonPost(authHeaders, {}));
     assert.equal(worldObjectsResetAfterReplay.status, 200);
     assert.equal(worldObjectsResetAfterReplay.body?.ok, true);
 
-    const sendVerify = await jsonFetch(baseUrl, "/api/auth/send-email-verification", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({})
-    });
+    const sendVerify = await jsonFetch(baseUrl, "/api/auth/send-email-verification", jsonPost(authHeaders, {}));
     assert.equal(sendVerify.status, 200);
 
     const outboxPath = path.join(dataDir, "email_outbox.log");
@@ -893,37 +821,27 @@ async function main() {
     assert.ok(matchCode && matchCode[1], "verification email must contain 6-digit code");
     const verifyCode = matchCode[1];
 
-    const verifyEmail = await jsonFetch(baseUrl, "/api/auth/verify-email", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ code: verifyCode })
-    });
+    const verifyEmail = await jsonFetch(baseUrl, "/api/auth/verify-email", jsonPost(authHeaders, { code: verifyCode }));
     assert.equal(verifyEmail.status, 200);
     assert.equal(verifyEmail.body?.user?.email_verified, true);
 
-    const changePassword = await jsonFetch(baseUrl, "/api/auth/change-password", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        old_password: "quest123",
-        new_password: "quest456"
-      })
-    });
+    const changePassword = await jsonFetch(baseUrl, "/api/auth/change-password", jsonPost(authHeaders, {
+      old_password: "quest123",
+      new_password: "quest456"
+    }));
     assert.equal(changePassword.status, 200);
     assert.equal(changePassword.body?.ok, true);
 
-    const oldPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "avatar", password: "quest123" })
-    });
+    const oldPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", jsonPost(null, {
+      username: "avatar",
+      password: "quest123"
+    }));
     assert.equal(oldPasswordLogin.status, 401);
 
-    const newPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "avatar", password: "quest456" })
-    });
+    const newPasswordLogin = await jsonFetch(baseUrl, "/api/auth/login", jsonPost(null, {
+      username: "avatar",
+      password: "quest456"
+    }));
     assert.equal(newPasswordLogin.status, 200);
 
     const recovered = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
@@ -932,31 +850,23 @@ async function main() {
     assert.equal(recovered.status, 200);
     assert.equal(recovered.body?.delivered, true);
 
-    const createChar = await jsonFetch(baseUrl, "/api/characters", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ name: "Avatar" })
-    });
+    const createChar = await jsonFetch(baseUrl, "/api/characters", jsonPost(authHeaders, { name: "Avatar" }));
     assert.equal(createChar.status, 201);
     assert.ok(createChar.body?.character_id);
     const characterId = createChar.body.character_id;
 
-    const saveSnapshot = await jsonFetch(baseUrl, `/api/characters/${characterId}/snapshot`, {
-      method: "PUT",
-      headers: authHeaders,
-      body: JSON.stringify({
-        schema_version: 1,
-        sim_core_version: "test",
-        saved_tick: 42,
-        snapshot_base64: Buffer.from(JSON.stringify({
-          tick: 42,
-          inventory: {
-            "0x113:0x00": 1,
-            "0x117:0x04": 2
-          }
-        }), "utf8").toString("base64")
-      })
-    });
+    const saveSnapshot = await jsonFetch(baseUrl, `/api/characters/${characterId}/snapshot`, jsonPut(authHeaders, {
+      schema_version: 1,
+      sim_core_version: "test",
+      saved_tick: 42,
+      snapshot_base64: Buffer.from(JSON.stringify({
+        tick: 42,
+        inventory: {
+          "0x113:0x00": 1,
+          "0x117:0x04": 2
+        }
+      }), "utf8").toString("base64")
+    }));
     assert.equal(saveSnapshot.status, 200);
     assert.equal(saveSnapshot.body?.snapshot_meta?.saved_tick, 42);
     assert.ok(saveSnapshot.body?.snapshot_meta?.snapshot_hash);
@@ -972,41 +882,33 @@ async function main() {
       { "0x113:0x00": 1 }
     );
 
-    const heartbeat = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        session_id: "test-session-1",
-        character_name: "Avatar",
-        map_x: 307,
-        map_y: 347,
-        map_z: 0,
-        facing_dx: 0,
-        facing_dy: 1,
-        tick: 42,
-        mode: "avatar"
-      })
-    });
+    const heartbeat = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", jsonPost(authHeaders, {
+      session_id: "test-session-1",
+      character_name: "Avatar",
+      map_x: 307,
+      map_y: 347,
+      map_z: 0,
+      facing_dx: 0,
+      facing_dy: 1,
+      tick: 42,
+      mode: "avatar"
+    }));
     assert.equal(heartbeat.status, 200);
     assert.equal(heartbeat.body?.ok, true);
     assert.equal(heartbeat.body?.runtime_contract?.profile, "canonical_plus");
     assert.deepEqual(heartbeat.body?.runtime_contract?.extensions, ["housing", "quest_system"]);
 
-    const heartbeatSecondSession = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        session_id: "test-session-2",
-        character_name: "Avatar",
-        map_x: 309,
-        map_y: 349,
-        map_z: 0,
-        facing_dx: 1,
-        facing_dy: 0,
-        tick: 45,
-        mode: "avatar"
-      })
-    });
+    const heartbeatSecondSession = await jsonFetch(baseUrl, "/api/world/presence/heartbeat", jsonPost(authHeaders, {
+      session_id: "test-session-2",
+      character_name: "Avatar",
+      map_x: 309,
+      map_y: 349,
+      map_z: 0,
+      facing_dx: 1,
+      facing_dy: 0,
+      tick: 45,
+      mode: "avatar"
+    }));
     assert.equal(heartbeatSecondSession.status, 200);
     assert.equal(heartbeatSecondSession.body?.ok, true);
     assert.equal(heartbeatSecondSession.body?.runtime_contract?.profile, "canonical_plus");
@@ -1025,13 +927,9 @@ async function main() {
     assert.equal(presence.body.players[0]?.runtime_profile, "canonical_plus");
     assert.deepEqual(presence.body.players[0]?.runtime_extensions, ["housing", "quest_system"]);
 
-    const leave = await jsonFetch(baseUrl, "/api/world/presence/leave", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        session_id: "test-session-2"
-      })
-    });
+    const leave = await jsonFetch(baseUrl, "/api/world/presence/leave", jsonPost(authHeaders, {
+      session_id: "test-session-2"
+    }));
     assert.equal(leave.status, 200);
     assert.equal(leave.body?.ok, true);
 
@@ -1078,26 +976,18 @@ async function main() {
     assert.equal(policy.status, 200);
     assert.ok(Array.isArray(policy.body?.critical_item_policy));
 
-    const maintenance1 = await jsonFetch(baseUrl, "/api/world/critical-items/maintenance", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        tick: 1000,
-        world_items: []
-      })
-    });
+    const maintenance1 = await jsonFetch(baseUrl, "/api/world/critical-items/maintenance", jsonPost(authHeaders, {
+      tick: 1000,
+      world_items: []
+    }));
     assert.equal(maintenance1.status, 200);
     assert.ok(Array.isArray(maintenance1.body?.events));
     assert.equal(maintenance1.body.events.length, 1);
 
-    const maintenance2 = await jsonFetch(baseUrl, "/api/world/critical-items/maintenance", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        tick: 1001,
-        world_items: []
-      })
-    });
+    const maintenance2 = await jsonFetch(baseUrl, "/api/world/critical-items/maintenance", jsonPost(authHeaders, {
+      tick: 1001,
+      world_items: []
+    }));
     assert.equal(maintenance2.status, 200);
     assert.ok(Array.isArray(maintenance2.body?.events));
     assert.equal(maintenance2.body.events.length, 0);
