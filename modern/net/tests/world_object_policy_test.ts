@@ -19,6 +19,11 @@ import {
   worldObjectInventoryPayload,
   worldObjectTakeInventoryPayload
 } from "../world_object_policy.ts";
+import type {
+  WorldObject,
+  WorldObjectRuntimeState,
+  WorldObjectStateContainer
+} from "../world_object_types.ts";
 
 assert.deepEqual(
   pickupRespawnPolicyForObject({ type: 0x123 }),
@@ -115,7 +120,7 @@ assert.equal(isBaselineWorldObject({ source_kind: "baseline_moved" }), true);
 assert.equal(isBaselineWorldObject({ source_kind: "spawned" }), false);
 
 {
-  const state = {
+  const state: WorldObjectStateContainer = {
     worldObjects: {
       active: [],
       deltas: {
@@ -256,7 +261,7 @@ assert.equal(normalizeWorldObjectAmountRuntime(17.9), 17);
 assert.equal(normalizeWorldObjectAmountRuntime(0x1ffff), 0xffff);
 
 {
-  const target = {
+  const target: WorldObject = {
     object_key: "a00i020",
     source_area: 0,
     source_index: 0x20,
@@ -274,7 +279,7 @@ assert.equal(normalizeWorldObjectAmountRuntime(0x1ffff), 0xffff);
     holder_id: "",
     holder_key: ""
   };
-  const state = {
+  const state: WorldObjectRuntimeState & WorldObjectStateContainer = {
     worldInteractionLog: { seq: 41 },
     worldObjects: {
       active: [
@@ -371,7 +376,7 @@ assert.equal(normalizeWorldObjectAmountRuntime(0x1ffff), 0xffff);
   assert.equal(state.worldObjects.active[1].holder_key, "inv:a00i020:avatar:42");
 }
 
-const state = {
+const state: WorldObjectStateContainer = {
   worldObjects: {
     active: [],
     deltas: {
@@ -428,7 +433,7 @@ pushSpawnedWorldObject(state, {
 assert.equal(state.worldObjects.deltas.spawned[1].amount, 0);
 
 {
-  const state = {
+  const state: WorldObjectStateContainer = {
     worldObjects: {
       active: [],
       deltas: {
@@ -461,7 +466,7 @@ assert.equal(state.worldObjects.deltas.spawned[1].amount, 0);
   assert.equal(state.worldObjects.deltas.spawned[0].source_object_key, "a00i777");
 }
 
-const payloadObject = {
+const payloadObject: WorldObject = {
   object_key: "obj_1",
   status: 0x10,
   holder_kind: "npc",

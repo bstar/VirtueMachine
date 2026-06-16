@@ -1,4 +1,5 @@
 import { coordUseOfStatus } from "../common/u6_object_constants.ts";
+import { normalizeWorldObjectHolderKindRuntime } from "../common/world_object_contract.ts";
 import {
   DEFAULT_DROPPED_CLONE_DESPAWN_MS,
   DEFAULT_PICKUP_RESPAWN_MS,
@@ -307,7 +308,7 @@ function spawnedDeltaFromRecord(value: SpawnedWorldObjectDeltaSourceRuntime, ind
     x: Number(value.x) | 0,
     y: Number(value.y) | 0,
     z: Number(value.z) | 0,
-    holder_kind: String(value.holder_kind || "none"),
+    holder_kind: normalizeWorldObjectHolderKindRuntime(value.holder_kind),
     holder_id: String(value.holder_id || ""),
     holder_key: String(value.holder_key || "")
   };
@@ -330,7 +331,7 @@ export function spawnedWorldObjectDeltaFromObjectRuntime(obj: WorldObject): Spaw
     x: Number(obj.x) | 0,
     y: Number(obj.y) | 0,
     z: Number(obj.z) | 0,
-    holder_kind: String(obj.holder_kind || "none"),
+    holder_kind: normalizeWorldObjectHolderKindRuntime(obj.holder_kind),
     holder_id: String(obj.holder_id || ""),
     holder_key: String(obj.holder_key || "")
   };
@@ -368,7 +369,7 @@ export function normalizeWorldObjectDeltas(raw: unknown): WorldObjectDeltas {
         y: Number(entry.y) | 0,
         z: Number(entry.z) | 0,
         status: Number.isFinite(Number(entry.status)) ? (Number(entry.status) & 0xff) : null,
-        holder_kind: String(entry.holder_kind || "none"),
+        holder_kind: normalizeWorldObjectHolderKindRuntime(entry.holder_kind),
         holder_id: String(entry.holder_id || ""),
         holder_key: String(entry.holder_key || "")
       };
@@ -455,7 +456,7 @@ export function buildWorldObjectStateRuntime(args: {
         y: moved.y | 0,
         z: moved.z | 0,
         status: Number.isFinite(Number(moved.status)) ? (Number(moved.status) & 0xff) : (Number(b.status) & 0xff),
-        holder_kind: String(moved.holder_kind || b.holder_kind || "none"),
+        holder_kind: normalizeWorldObjectHolderKindRuntime(moved.holder_kind || b.holder_kind),
         holder_id: String(moved.holder_id || b.holder_id || ""),
         holder_key: String(moved.holder_key || b.holder_key || ""),
         source_kind: "baseline_moved"
@@ -612,7 +613,7 @@ export function movedWorldObjectDeltaFromObject(obj: WorldObject): MovedWorldObj
     y: Number(obj.y) | 0,
     z: Number(obj.z) | 0,
     status: Number(obj.status) & 0xff,
-    holder_kind: String(obj.holder_kind || "none"),
+    holder_kind: normalizeWorldObjectHolderKindRuntime(obj.holder_kind),
     holder_id: String(obj.holder_id || ""),
     holder_key: String(obj.holder_key || "")
   };

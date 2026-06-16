@@ -9,6 +9,10 @@ import {
   normalizeWorldRouteInteractionVerbRuntime,
   type WorldRouteInteractionVerb
 } from "../common/world_interaction_contract.ts";
+import {
+  normalizeWorldObjectHolderKindRuntime,
+  type WorldObjectHolderKind
+} from "../common/world_object_contract.ts";
 
 export type WorldClockRuntime = {
   date_d: number;
@@ -25,7 +29,7 @@ export type WorldInteractionEventRuntime = {
   container_key: string;
   holder_id: string;
   holder_key: string;
-  holder_kind: string;
+  holder_kind: WorldObjectHolderKind;
   runtime_extensions: string[];
   runtime_profile: string;
   seq: number;
@@ -808,7 +812,7 @@ export function normalizeWorldInteractionEventRuntime(raw: unknown, seq: number)
     x: Number(event.x) | 0,
     y: Number(event.y) | 0,
     z: Number(event.z) | 0,
-    holder_kind: String(event.holder_kind || "none"),
+    holder_kind: normalizeWorldObjectHolderKindRuntime(event.holder_kind),
     holder_id: String(event.holder_id || ""),
     holder_key: String(event.holder_key || ""),
     runtime_profile: normalizeRuntimeProfile(event.runtime_profile),
@@ -828,7 +832,7 @@ export function hashInteractionEventRuntime(prevHash: unknown, event: Partial<Wo
     String(Number(event.x) | 0),
     String(Number(event.y) | 0),
     String(Number(event.z) | 0),
-    String(event.holder_kind || "none"),
+    normalizeWorldObjectHolderKindRuntime(event.holder_kind),
     String(event.holder_id || ""),
     String(event.holder_key || "")
   ].join("|");

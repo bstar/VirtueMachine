@@ -1,4 +1,5 @@
 import type { U6MapRuntime } from "./world_map_runtime.ts";
+import type { WorldObjectHolderKind } from "../common/world_object_contract.ts";
 
 export interface WorldObject {
   despawn_at_ms?: number;
@@ -24,7 +25,7 @@ export interface WorldObject {
   x?: number;
   y?: number;
   z?: number;
-  holder_kind?: string;
+  holder_kind?: WorldObjectHolderKind;
   holder_id?: string;
   holder_key?: string;
 }
@@ -45,7 +46,7 @@ export interface SpawnedWorldObjectDelta {
   x: number;
   y: number;
   z: number;
-  holder_kind: string;
+  holder_kind: WorldObjectHolderKind;
   holder_id: string;
   holder_key: string;
 }
@@ -55,7 +56,7 @@ export interface MovedWorldObjectDelta {
   y: number;
   z: number;
   status: number | null;
-  holder_kind: string;
+  holder_kind: WorldObjectHolderKind;
   holder_id: string;
   holder_key: string;
 }

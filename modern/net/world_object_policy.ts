@@ -7,6 +7,10 @@ import {
   normalizeWorldObjectInteractionVerbRuntime,
   type WorldObjectInteractionVerb
 } from "../common/world_interaction_contract.ts";
+import {
+  normalizeWorldObjectHolderKindRuntime,
+  type WorldObjectHolderKind
+} from "../common/world_object_contract.ts";
 
 export const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
 export const DEFAULT_DROPPED_CLONE_DESPAWN_MS = 10 * 60 * 1000;
@@ -180,7 +184,7 @@ export function spawnedWorldObjectDeltaFromObject(obj: WorldObject): SpawnedWorl
     x: Number(obj.x) | 0,
     y: Number(obj.y) | 0,
     z: Number(obj.z) | 0,
-    holder_kind: String(obj.holder_kind || "none"),
+    holder_kind: normalizeWorldObjectHolderKindRuntime(obj.holder_kind),
     holder_id: String(obj.holder_id || ""),
     holder_key: String(obj.holder_key || "")
   };
@@ -203,7 +207,7 @@ function reparentContainedChildrenToClone(
     if (!child || childKey === sourceObjectKey) {
       continue;
     }
-    if (String(child.holder_kind || "") !== "object") {
+    if (normalizeWorldObjectHolderKindRuntime(child.holder_kind) !== "object") {
       continue;
     }
     const holderRef = String(child.holder_key || child.holder_id || "");
@@ -353,7 +357,7 @@ export type WorldObjectApiCommonPayload = {
   frame: number;
   holder_id: string;
   holder_key: string;
-  holder_kind: string;
+  holder_kind: WorldObjectHolderKind;
   object_key: string;
   status: number;
   tile_id: number;
@@ -397,7 +401,7 @@ export function worldObjectApiCommonPayload(obj: WorldObject): WorldObjectApiCom
     coord_use: coordUseOfStatus(obj.status),
     despawn_at_ms: Number(obj.despawn_at_ms) > 0 ? Math.floor(Number(obj.despawn_at_ms)) : 0,
     dropped_at_ms: Number(obj.dropped_at_ms) > 0 ? Math.floor(Number(obj.dropped_at_ms)) : 0,
-    holder_kind: String(obj.holder_kind || "none"),
+    holder_kind: normalizeWorldObjectHolderKindRuntime(obj.holder_kind),
     holder_id: String(obj.holder_id || ""),
     holder_key: String(obj.holder_key || ""),
     type: Number(obj.type) & 0x3ff,

@@ -14,9 +14,13 @@ const {
   normalizeWorldObjectInteractionVerbRuntime,
   worldObjectInteractionVerbListRuntime
 } = require("../common/world_interaction_contract.ts");
+const {
+  normalizeWorldObjectHolderKindRuntime
+} = require("../common/world_object_contract.ts");
 import type { WorldObjectInteractionVerb } from "../common/world_interaction_contract.ts";
+import type { WorldObjectHolderKind } from "../common/world_object_contract.ts";
 
-type InteractionHolderKind = "none" | "object" | "npc";
+type InteractionHolderKind = WorldObjectHolderKind;
 
 type InteractionBridgeTarget = {
   holder_id?: unknown;
@@ -69,7 +73,7 @@ type InteractionBridgeInvokeResult = InteractionBridgeFailure | {
 };
 
 function holderKindCode(name: unknown): number {
-  const v = String(name || "").toLowerCase();
+  const v = normalizeWorldObjectHolderKindRuntime(name);
   if (v === "object") return 1;
   if (v === "npc") return 2;
   return 0;
@@ -144,7 +148,7 @@ function invokeSimCoreBridge(input: InteractionBridgeInput | null | undefined): 
   }
   const target = input?.target || {};
   const actorId = String(input?.actorId || "");
-  const ownerMatches = String(target.holder_kind || "") === "npc" && String(target.holder_id || "") === actorId ? 1 : 0;
+  const ownerMatches = normalizeWorldObjectHolderKindRuntime(target.holder_kind) === "npc" && String(target.holder_id || "") === actorId ? 1 : 0;
   const hasContainer = input?.container ? 1 : 0;
   const chainAccessible = input?.chainAccessible ? 1 : 0;
   const containerCycle = input?.containerCycle ? 1 : 0;
@@ -157,7 +161,7 @@ function invokeSimCoreBridge(input: InteractionBridgeInput | null | undefined): 
     [
       verb,
       String(Number(target.status) & 0xff),
-      String(String(target.holder_kind || "none").toLowerCase()),
+      normalizeWorldObjectHolderKindRuntime(target.holder_kind),
       String(ownerMatches),
       String(hasContainer),
       String(chainAccessible),
@@ -205,7 +209,7 @@ function applyCanonicalWorldInteractionCommand(input: InteractionBridgeInput | n
 
   interface InteractionPatch {
     status: number;
-    holder_kind: string;
+    holder_kind: WorldObjectHolderKind;
     holder_id?: string;
     holder_key?: string;
     x?: number;
@@ -215,7 +219,7 @@ function applyCanonicalWorldInteractionCommand(input: InteractionBridgeInput | n
 
   const patch: InteractionPatch = {
     status: Number(canonical.status) & 0xff,
-    holder_kind: String(canonical.holder_kind || "none")
+    holder_kind: normalizeWorldObjectHolderKindRuntime(canonical.holder_kind)
   };
 
   const action: WorldObjectInteractionVerb = verb;
