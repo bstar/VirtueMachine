@@ -5,21 +5,29 @@ import {
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
   activeBootIntroPaletteRuntime,
+  bootIntroClipRectRuntime,
   bootIntroPaletteCacheKeyRuntime,
   bootIntroInputPlanRuntime,
   bootIntroScenePaletteIndexRuntime,
+  bootIntroSpriteDrawRectRuntime,
   bootIntroStonesPaletteShiftRuntime,
   bootIntroWindowRandRuntime,
   bootIntroWindowSceneBaseRuntime,
   bootIntroWindowStateAtRuntime,
   bootIntroTvAddSpriteRuntime,
   bootIntroTvRandRuntime,
+  bootIntroTvStaticDrawCellsRuntime,
   bootIntroTvStateAtRuntime,
   bootIntroPrintTextOnCardRuntime,
   bootIntroPrintTextRuntime,
   bootIntroClockFramesRuntime,
   bootIntroClockSpritesRuntime,
+  buildBootIntroLayerRenderPlanRuntime,
+  buildBootIntroLoungeRenderPlanRuntime,
+  buildBootIntroSplashRenderPlanRuntime,
+  buildBootIntroStonesRenderPlanRuntime,
   buildBootIntroTextCardRenderPlanRuntime,
+  buildBootIntroWindowRenderPlanRuntime,
   bootIntroWouCharWidthRuntime,
   bootIntroTvStaticCellsRuntime,
   createBootIntroTvMachineRuntime,
@@ -133,6 +141,54 @@ function testOverlayAlpha() {
   advanceBootIntroRuntime(state, Math.floor((BOOT_INTRO_SCENES[0].fadeInMs || 0) / 3));
   const midAlpha = bootIntroOverlayAlphaRuntime(state);
   assert.ok(midAlpha < startAlpha, "fade alpha should decrease during fade in");
+}
+
+function testLayerAndSplashRenderPlanning() {
+  assert.deepEqual(buildBootIntroLayerRenderPlanRuntime(null), {
+    kind: "startup",
+    overlayAlpha: 0,
+    scene: null,
+    sceneKind: null
+  });
+  const state = createBootIntroRuntimeState();
+  startBootIntroRuntime(state);
+  const plan = buildBootIntroLayerRenderPlanRuntime(state);
+  assert.equal(plan.kind, "intro");
+  assert.equal(plan.scene?.id, "logo_1");
+  assert.equal(plan.sceneKind, "splash");
+  assert.equal(plan.overlayAlpha, bootIntroOverlayAlphaRuntime(state));
+  advancePastScene(state);
+  advancePastScene(state);
+  const loungePlan = buildBootIntroLayerRenderPlanRuntime(state);
+  assert.equal(loungePlan.kind, "intro");
+  assert.equal(loungePlan.scene?.id, "lounge_opening");
+  assert.equal(loungePlan.sceneKind, "lounge");
+
+  const splashScene = BOOT_INTRO_SCENES[0];
+  assert.deepEqual(buildBootIntroSplashRenderPlanRuntime({
+    scale: 2,
+    scene: splashScene,
+    spriteHeight: 80,
+    spriteWidth: 160
+  }), {
+    clear: true,
+    sprite: {
+      frame: Number(splashScene.splashFrame) | 0,
+      h: 160,
+      w: 320,
+      x: 160,
+      y: 120
+    }
+  });
+  assert.deepEqual(buildBootIntroSplashRenderPlanRuntime({
+    scale: 2,
+    scene: splashScene,
+    spriteHeight: 0,
+    spriteWidth: 160
+  }), {
+    clear: true,
+    sprite: null
+  });
 }
 
 function makePalette(offset = 0) {
@@ -354,6 +410,143 @@ function testTvStaticAndClockPlanning() {
   ]);
 }
 
+function testBootIntroDrawGeometry() {
+  assert.deepEqual(bootIntroSpriteDrawRectRuntime({
+    alpha: 2,
+    h: 8,
+    scale: 3,
+    spriteHeight: 12,
+    spriteWidth: 16,
+    w: null,
+    x: 1.4,
+    y: -2.2
+  }), {
+    alpha: 1,
+    h: 24,
+    w: 48,
+    x: 4,
+    y: -7
+  });
+  assert.deepEqual(bootIntroSpriteDrawRectRuntime({
+    alpha: -1,
+    scale: 2,
+    spriteHeight: 7,
+    spriteWidth: 9,
+    w: 5,
+    x: 0,
+    y: 0
+  }), {
+    alpha: 0,
+    h: 14,
+    w: 10,
+    x: 0,
+    y: 0
+  });
+  assert.deepEqual(bootIntroClipRectRuntime({
+    clipH: 37,
+    clipW: 57,
+    clipX: 70,
+    clipY: 50,
+    scale: 2
+  }), {
+    h: 74,
+    w: 114,
+    x: 140,
+    y: 100
+  });
+  const staticPalette: Array<readonly number[] | null> = [];
+  staticPalette[0x00] = [1, 2, 3];
+  staticPalette[0x3e] = [4, 5, 6];
+  assert.deepEqual(bootIntroTvStaticDrawCellsRuntime({
+    height: 1,
+    palette: staticPalette,
+    scale: 2,
+    seed: 0x12345678,
+    width: 3,
+    x: 10,
+    y: 20
+  }), [
+    { color: "rgb(4, 5, 6)", h: 2, w: 2, x: 20, y: 40 },
+    { color: "rgb(1, 2, 3)", h: 2, w: 2, x: 22, y: 40 },
+    { color: "rgb(4, 5, 6)", h: 2, w: 2, x: 24, y: 40 }
+  ]);
+  assert.deepEqual(bootIntroTvStaticDrawCellsRuntime({
+    height: 1,
+    palette: null,
+    scale: 1,
+    seed: 0x12345678,
+    width: 2
+  }).map((cell) => cell.color), ["rgb(230, 209, 160)", "rgb(0, 0, 0)"]);
+}
+
+function testLoungeRenderPlanning() {
+  const opening = BOOT_INTRO_SCENES.find((scene) => scene.id === "lounge_opening");
+  assert.ok(opening, "lounge opening scene fixture missing");
+  const openingPlan = buildBootIntroLoungeRenderPlanRuntime({
+    elapsedMs: 0,
+    now: new Date("2026-06-16T09:05:00"),
+    scene: opening
+  });
+  assert.equal(openingPlan.clear, true);
+  assert.deepEqual(openingPlan.sprites.slice(0, 6).map((sprite) => ({
+    bank: sprite.bank,
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { bank: "intro1", frame: 15, x: 210, y: 0 },
+    { bank: "intro1", frame: 0, x: 0, y: 0 },
+    { bank: "intro1", frame: 1, x: 320, y: 0 },
+    { bank: "intro1", frame: 13, x: 0, y: 63 },
+    { bank: "intro1", frame: 14, x: 143, y: 91 },
+    { bank: "intro1", frame: 0x0e, x: 143, y: 91 }
+  ]);
+  assert.deepEqual(openingPlan.staticOps, [
+    { x: 0xe5, y: 0x32, w: 57, h: 37, seed: 0x9e3779b9 ^ 0 }
+  ]);
+  assert.deepEqual(openingPlan.sprites.slice(-4).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 12, x: 0xdd, y: 0x14 },
+    { frame: 11, x: 0xe1, y: 0x14 },
+    { frame: 2, x: 0xe7, y: 0x14 },
+    { frame: 7, x: 0xeb, y: 0x14 }
+  ]);
+
+  const pan = BOOT_INTRO_SCENES.find((scene) => scene.id === "lounge_pan");
+  assert.ok(pan, "lounge pan scene fixture missing");
+  const panPlan = buildBootIntroLoungeRenderPlanRuntime({
+    elapsedMs: 4000,
+    now: new Date("2026-06-16T21:47:00"),
+    scene: pan
+  });
+  assert.equal(panPlan.sprites[1].x, -159);
+  assert.equal(panPlan.sprites[2].x, 161);
+  assert.deepEqual(panPlan.clippedSprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y,
+    clipX: sprite.clipX,
+    clipY: sprite.clipY,
+    clipW: sprite.clipW,
+    clipH: sprite.clipH
+  })), [
+    { frame: 62, x: 70, y: 50, clipX: 70, clipY: 50, clipW: 57, clipH: 37 }
+  ]);
+  assert.deepEqual(panPlan.sprites.slice(-4).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 12, x: 0xdd - 159, y: 0x14 },
+    { frame: 11, x: 0xe1 - 159, y: 0x14 },
+    { frame: 6, x: 0xe7 - 159, y: 0x14 },
+    { frame: 9, x: 0xeb - 159, y: 0x14 }
+  ]);
+}
+
 function testTextCardRenderPlanning() {
   assert.equal(buildBootIntroTextCardRenderPlanRuntime({
     card: null,
@@ -446,6 +639,204 @@ function testWindowHelpers() {
   assert.ok(late.clouds.every((cloud) => Number.isFinite(cloud.x) && Number.isFinite(cloud.y)));
 }
 
+function testWindowRenderPlanning() {
+  const pan = BOOT_INTRO_SCENES.find((scene) => scene.id === "window_pan");
+  assert.ok(pan, "window pan scene fixture missing");
+  const panStart = buildBootIntroWindowRenderPlanRuntime({
+    elapsedMs: 0,
+    scene: pan
+  });
+  assert.equal(panStart.clear, true);
+  assert.equal(panStart.sprites.length, 25);
+  assert.deepEqual(panStart.sprites.slice(0, 11).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 1, x: 0, y: 0 },
+    { frame: 0, x: -159, y: -5 },
+    { frame: 0, x: -479, y: -5 },
+    { frame: 10, x: 0, y: 76 },
+    { frame: 8, x: 0, y: 0 },
+    { frame: 2, x: 266, y: 6 },
+    { frame: 3, x: -29, y: 16 },
+    { frame: 2, x: 68, y: 7 },
+    { frame: 3, x: -32, y: 16 },
+    { frame: 2, x: -31, y: 11 },
+    { frame: 19, x: 158, y: 114 }
+  ]);
+  assert.deepEqual(panStart.sprites.slice(-4).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 28, x: 0, y: 0 },
+    { frame: 27, x: 57, y: 0 },
+    { frame: 24, x: 320, y: 0 },
+    { frame: 25, x: 573, y: 0 }
+  ]);
+
+  const panMid = buildBootIntroWindowRenderPlanRuntime({
+    elapsedMs: 2000,
+    scene: pan
+  });
+  assert.deepEqual(panMid.sprites.slice(-4).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 28, x: -160, y: 0 },
+    { frame: 27, x: -103, y: 0 },
+    { frame: 24, x: 160, y: 0 },
+    { frame: 25, x: 413, y: 0 }
+  ]);
+
+  const doorOpen = BOOT_INTRO_SCENES.find((scene) => scene.id === "window_door_open");
+  assert.ok(doorOpen, "window door scene fixture missing");
+  assert.deepEqual(buildBootIntroWindowRenderPlanRuntime({
+    elapsedMs: 1000,
+    scene: doorOpen
+  }).sprites.slice(-4).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 28, x: -320, y: 0 },
+    { frame: 26, x: -263, y: 0 },
+    { frame: 24, x: -40, y: 0 },
+    { frame: 25, x: 293, y: 0 }
+  ]);
+
+  const run = BOOT_INTRO_SCENES.find((scene) => scene.id === "window_run");
+  assert.ok(run, "window run scene fixture missing");
+  assert.deepEqual(buildBootIntroWindowRenderPlanRuntime({
+    elapsedMs: 0,
+    scene: run
+  }).sprites.slice(-4).map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 28, x: -320, y: 0 },
+    { frame: 26, x: -263, y: 0 },
+    { frame: 24, x: -68, y: 0 },
+    { frame: 25, x: 321, y: 0 }
+  ]);
+}
+
+function testStonesRenderPlanning() {
+  const opening = BOOT_INTRO_SCENES.find((scene) => scene.id === "stones_opening");
+  assert.ok(opening, "stones opening scene fixture missing");
+  assert.deepEqual(buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 0,
+    scene: opening
+  }).sprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 0, x: 0, y: 0 },
+    { frame: 3, x: 0x96, y: 0x64 }
+  ]);
+
+  const pickup = BOOT_INTRO_SCENES.find((scene) => scene.id === "stones_pickup");
+  assert.ok(pickup, "stones pickup scene fixture missing");
+  assert.deepEqual(buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 1000,
+    scene: pickup
+  }).sprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 0, x: 0, y: 0 },
+    { frame: 3, x: 0x96, y: 0x64 },
+    { frame: 1, x: 0xbd, y: 89 }
+  ]);
+
+  const gate = BOOT_INTRO_SCENES.find((scene) => scene.id === "stones_gate");
+  assert.ok(gate, "stones gate scene fixture missing");
+  const gateStart = buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 0,
+    scene: gate
+  });
+  assert.deepEqual(gateStart.sprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 5, x: 0, y: 0 },
+    { frame: 4, x: 0x5e, y: 0x66 },
+    { frame: 1, x: 0xbd, y: 0x54 }
+  ]);
+  assert.deepEqual(gateStart.clippedSprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y,
+    clipX: sprite.clipX,
+    clipY: sprite.clipY,
+    clipW: sprite.clipW,
+    clipH: sprite.clipH
+  })), [
+    { frame: 2, x: 0x7c, y: 0x64, clipX: 0, clipY: 0, clipW: 320, clipH: 0x66 }
+  ]);
+
+  const gateDone = buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 3000,
+    scene: gate
+  });
+  assert.equal(gateDone.sprites[2].y, 134);
+  assert.equal(gateDone.clippedSprites[0].y, 5);
+
+  const memory = BOOT_INTRO_SCENES.find((scene) => scene.id === "stones_memory");
+  assert.ok(memory, "stones memory scene fixture missing");
+  assert.deepEqual(buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 0,
+    scene: memory
+  }).sprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 5, x: 0, y: 0 },
+    { frame: 4, x: 0x5e, y: 0x66 },
+    { frame: 6, x: 0x9b, y: 0x44 }
+  ]);
+
+  const sink = BOOT_INTRO_SCENES.find((scene) => scene.id === "stones_sink");
+  assert.ok(sink, "stones sink scene fixture missing");
+  assert.equal(buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 240,
+    scene: sink
+  }).clippedSprites[0].x, 0x7d);
+
+  const enter = BOOT_INTRO_SCENES.find((scene) => scene.id === "stones_enter");
+  assert.ok(enter, "stones enter scene fixture missing");
+  const enterMid = buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 3000,
+    scene: enter
+  });
+  assert.deepEqual(enterMid.clippedSprites.map((sprite) => ({
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { frame: 2, x: 0x7d, y: 0x64 }
+  ]);
+  assert.deepEqual(enterMid.sprites.slice(-1).map((sprite) => ({
+    alpha: sprite.alpha,
+    frame: sprite.frame,
+    x: sprite.x,
+    y: sprite.y
+  })), [
+    { alpha: 0.5, frame: 23, x: -2, y: -20 }
+  ]);
+  assert.equal(buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: 4000,
+    scene: enter
+  }).sprites.at(-1)?.alpha, 0);
+}
+
 function testTextWrapHelpers() {
   assert.deepEqual(wrapBootIntroTextRuntime("  one   two three  ", 7), ["one two", "three"]);
   assert.deepEqual(wrapBootIntroTextRuntime("", 7), []);
@@ -464,14 +855,19 @@ testStartAndAdvance();
 testInputAdvance();
 testAbort();
 testOverlayAlpha();
+testLayerAndSplashRenderPlanning();
 testPaletteHelpers();
 testZeroFadeSceneHasNoOverlay();
 testTvMachine();
 testWouFontHelpers();
 testTextDrawingHelpers();
 testTvStaticAndClockPlanning();
+testBootIntroDrawGeometry();
+testLoungeRenderPlanning();
 testTextCardRenderPlanning();
 testWindowHelpers();
+testWindowRenderPlanning();
+testStonesRenderPlanning();
 testTextWrapHelpers();
 
 console.log("ui_boot_intro_runtime_test: ok");

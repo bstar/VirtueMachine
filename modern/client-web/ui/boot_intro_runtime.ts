@@ -57,6 +57,91 @@ export type BootIntroClockSpriteRuntime = {
   y: number;
 };
 
+export type BootIntroSpriteOpRuntime = {
+  alpha?: number;
+  bank: "intro1" | "intro2" | "intro3";
+  frame: number;
+  h?: number | null;
+  scene: BootIntroSceneSpec;
+  w?: number | null;
+  x: number;
+  y: number;
+};
+
+export type BootIntroClippedSpriteOpRuntime = BootIntroSpriteOpRuntime & {
+  clipH: number;
+  clipW: number;
+  clipX: number;
+  clipY: number;
+};
+
+export type BootIntroStaticOpRuntime = {
+  h: number;
+  seed: number;
+  w: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroDrawRectRuntime = {
+  alpha: number;
+  h: number;
+  w: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroLayerRenderPlanRuntime =
+  | {
+    kind: "startup";
+    overlayAlpha: 0;
+    scene: null;
+    sceneKind: null;
+  }
+  | {
+    kind: "intro";
+    overlayAlpha: number;
+    scene: BootIntroSceneSpec;
+    sceneKind: BootIntroSceneKind;
+  };
+
+export type BootIntroSplashRenderPlanRuntime = {
+  clear: true;
+  sprite: {
+    frame: number;
+    h: number;
+    w: number;
+    x: number;
+    y: number;
+  } | null;
+};
+
+export type BootIntroStaticDrawCellRuntime = {
+  color: string;
+  h: number;
+  w: number;
+  x: number;
+  y: number;
+};
+
+export type BootIntroLoungeRenderPlanRuntime = {
+  clear: true;
+  clippedSprites: BootIntroClippedSpriteOpRuntime[];
+  sprites: BootIntroSpriteOpRuntime[];
+  staticOps: BootIntroStaticOpRuntime[];
+};
+
+export type BootIntroWindowRenderPlanRuntime = {
+  clear: true;
+  sprites: BootIntroSpriteOpRuntime[];
+};
+
+export type BootIntroStonesRenderPlanRuntime = {
+  clear: true;
+  clippedSprites: BootIntroClippedSpriteOpRuntime[];
+  sprites: BootIntroSpriteOpRuntime[];
+};
+
 export type BootIntroTextCardPanelRuntime = {
   frame: number;
   x: number;
@@ -1063,6 +1148,133 @@ export function bootIntroTvStaticCellsRuntime(seed: number, width = 57, height =
   return cells;
 }
 
+export function bootIntroSpriteDrawRectRuntime(args: {
+  alpha?: unknown;
+  h?: unknown;
+  scale?: unknown;
+  spriteHeight: unknown;
+  spriteWidth: unknown;
+  w?: unknown;
+  x?: unknown;
+  y?: unknown;
+}): BootIntroDrawRectRuntime {
+  const scale = Math.max(1, Number(args.scale) || 1);
+  const spriteWidth = Math.max(0, Number(args.spriteWidth) || 0);
+  const spriteHeight = Math.max(0, Number(args.spriteHeight) || 0);
+  const w = args.w == null ? spriteWidth : Math.max(0, Number(args.w) || 0);
+  const h = args.h == null ? spriteHeight : Math.max(0, Number(args.h) || 0);
+  return {
+    alpha: Math.max(0, Math.min(1, Number(args.alpha ?? 1))),
+    h: Math.round(h * scale),
+    w: Math.round(w * scale),
+    x: Math.round((Number(args.x) || 0) * scale),
+    y: Math.round((Number(args.y) || 0) * scale)
+  };
+}
+
+export function bootIntroClipRectRuntime(args: {
+  clipH?: unknown;
+  clipW?: unknown;
+  clipX?: unknown;
+  clipY?: unknown;
+  scale?: unknown;
+}): Pick<BootIntroDrawRectRuntime, "h" | "w" | "x" | "y"> {
+  const scale = Math.max(1, Number(args.scale) || 1);
+  return {
+    h: Math.round((Number(args.clipH) || 0) * scale),
+    w: Math.round((Number(args.clipW) || 0) * scale),
+    x: Math.round((Number(args.clipX) || 0) * scale),
+    y: Math.round((Number(args.clipY) || 0) * scale)
+  };
+}
+
+export function bootIntroTvStaticDrawCellsRuntime(args: {
+  fallbackDark?: readonly number[];
+  fallbackLight?: readonly number[];
+  height?: unknown;
+  palette?: readonly (readonly number[] | null | undefined)[] | null;
+  scale?: unknown;
+  seed: unknown;
+  width?: unknown;
+  x?: unknown;
+  y?: unknown;
+}): BootIntroStaticDrawCellRuntime[] {
+  const scale = Math.max(1, Number(args.scale) | 0);
+  const cell = Math.max(1, scale);
+  const x = Number(args.x) || 0;
+  const y = Number(args.y) || 0;
+  const palette = Array.isArray(args.palette) ? args.palette : [];
+  const fallbackLight = Array.isArray(args.fallbackLight) ? args.fallbackLight : [230, 209, 160];
+  const fallbackDark = Array.isArray(args.fallbackDark) ? args.fallbackDark : [0, 0, 0];
+  return bootIntroTvStaticCellsRuntime(
+    Number(args.seed) | 0,
+    Number(args.width ?? 57) | 0,
+    Number(args.height ?? 37) | 0
+  ).map((staticCell) => {
+    const idx = staticCell.colorIndex;
+    const rgb = palette[idx] || (idx ? fallbackLight : fallbackDark);
+    return {
+      color: `rgb(${Number(rgb[0]) | 0}, ${Number(rgb[1]) | 0}, ${Number(rgb[2]) | 0})`,
+      h: cell,
+      w: cell,
+      x: Math.round((x + staticCell.px) * scale),
+      y: Math.round((y + staticCell.py) * scale)
+    };
+  });
+}
+
+export function buildBootIntroSplashRenderPlanRuntime(args: {
+  scale?: unknown;
+  scene: BootIntroSceneSpec;
+  spriteHeight?: unknown;
+  spriteWidth?: unknown;
+}): BootIntroSplashRenderPlanRuntime {
+  const scale = Math.max(1, Number(args.scale) || 1);
+  const spriteWidth = Number(args.spriteWidth);
+  const spriteHeight = Number(args.spriteHeight);
+  const hasSprite = Number.isFinite(spriteWidth) && spriteWidth > 0 && Number.isFinite(spriteHeight) && spriteHeight > 0;
+  return {
+    clear: true,
+    sprite: hasSprite
+      ? {
+        frame: Number(args.scene?.splashFrame) | 0,
+        h: Math.round(spriteHeight * scale),
+        w: Math.round(spriteWidth * scale),
+        x: Math.floor(((320 * scale) - (spriteWidth * scale)) / 2),
+        y: Math.floor(((200 * scale) - (spriteHeight * scale)) / 2)
+      }
+      : null
+  };
+}
+
+export function buildBootIntroLayerRenderPlanRuntime(
+  state: BootIntroRuntimeState | null | undefined
+): BootIntroLayerRenderPlanRuntime {
+  if (!state?.active) {
+    return {
+      kind: "startup",
+      overlayAlpha: 0,
+      scene: null,
+      sceneKind: null
+    };
+  }
+  const scene = currentBootIntroSceneRuntime(state);
+  if (!scene) {
+    return {
+      kind: "startup",
+      overlayAlpha: 0,
+      scene: null,
+      sceneKind: null
+    };
+  }
+  return {
+    kind: "intro",
+    overlayAlpha: bootIntroOverlayAlphaRuntime(state),
+    scene,
+    sceneKind: scene.kind
+  };
+}
+
 export function bootIntroClockFramesRuntime(now: Date = new Date()): number[] {
   let hour = now.getHours();
   const minute = now.getMinutes();
@@ -1090,6 +1302,64 @@ export function bootIntroClockSpritesRuntime(now: Date, scrollPx: unknown): Boot
     { frame: frames[2], x: 0xe7 - xOff, y: 0x14 },
     { frame: frames[3], x: 0xeb - xOff, y: 0x14 }
   ];
+}
+
+export function buildBootIntroLoungeRenderPlanRuntime(args: {
+  elapsedMs: unknown;
+  now?: Date;
+  scene: BootIntroSceneSpec;
+}): BootIntroLoungeRenderPlanRuntime {
+  const scene = args.scene;
+  const elapsed = Number(args.elapsedMs) | 0;
+  const scrollPx = scene?.id === "lounge_pan"
+    ? Math.min(319, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 319))
+    : 0;
+  const tvBaseX = 0xe5 - scrollPx;
+  const tvBaseY = 0x32;
+  const tvSceneBase = scene?.id === "lounge_reflection" ? 120 : (scene?.id === "lounge_pan" ? 240 : 0);
+  const tvUpdate = tvSceneBase + Math.floor(elapsed / 100);
+  const tvState = bootIntroTvStateAtRuntime(tvUpdate);
+  const clipX = Math.max(0, tvBaseX);
+  const coord = (value: number): number => Object.is(value, -0) ? 0 : value;
+  const sprites: BootIntroSpriteOpRuntime[] = [
+    { bank: "intro1", frame: 15, x: 210 - Math.max(0, scrollPx - 160), y: 0, scene },
+    { bank: "intro1", frame: 0, x: coord(-scrollPx), y: 0, scene },
+    { bank: "intro1", frame: 1, x: 320 - scrollPx, y: 0, scene },
+    { bank: "intro1", frame: 13, x: coord(-Math.floor(scrollPx * 2)), y: 63, scene },
+    { bank: "intro1", frame: 14, x: 143 - Math.floor(scrollPx * 2), y: 91, scene }
+  ];
+  const staticOps = tvState.staticVisible
+    ? [{ x: tvBaseX, y: tvBaseY, w: 57, h: 37, seed: 0x9e3779b9 ^ tvUpdate }]
+    : [];
+  const clippedSprites = tvState.sprites.map((tvSprite) => ({
+    bank: "intro1" as const,
+    frame: tvSprite.frame,
+    x: tvBaseX + tvSprite.xOff,
+    y: tvBaseY + tvSprite.yOff,
+    scene,
+    clipX,
+    clipY: tvBaseY,
+    clipW: 57,
+    clipH: 37
+  }));
+  if (tvState.fingerVisible) {
+    sprites.push({ bank: "intro1", frame: 0x0e, x: 143 - Math.floor(scrollPx * 2), y: 91, scene });
+  }
+  for (const clockSprite of bootIntroClockSpritesRuntime(args.now ?? new Date(), scrollPx)) {
+    sprites.push({
+      bank: "intro1",
+      frame: clockSprite.frame,
+      x: clockSprite.x,
+      y: clockSprite.y,
+      scene
+    });
+  }
+  return {
+    clear: true,
+    clippedSprites,
+    sprites,
+    staticOps
+  };
 }
 
 export function buildBootIntroTextCardRenderPlanRuntime(args: {
@@ -1267,6 +1537,137 @@ export function bootIntroWindowStateAtRuntime(
   }
   void scene;
   return ctx;
+}
+
+export function buildBootIntroWindowRenderPlanRuntime(args: {
+  elapsedMs: unknown;
+  scene: BootIntroSceneSpec;
+}): BootIntroWindowRenderPlanRuntime {
+  const scene = args.scene;
+  const elapsed = Number(args.elapsedMs) | 0;
+  const panPx = scene?.id === "window_pan"
+    ? Math.min(320, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 320))
+    : ((scene?.id === "window_door_open" || scene?.id === "window_run") ? 320 : 0);
+  const doorOpenPx = scene?.id === "window_door_open"
+    ? Math.min(68, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 68))
+    : (scene?.id === "window_run" ? 68 : 0);
+  const strikeVisible = scene?.id === "window_strike"
+    || (scene?.id === "window_pan" && panPx <= 160);
+  const updateCount = bootIntroWindowSceneBaseRuntime(scene?.id) + Math.floor(elapsed / 80);
+  const windowState = bootIntroWindowStateAtRuntime(scene, updateCount, strikeVisible);
+  const coord = (value: number): number => Object.is(value, -0) ? 0 : value;
+  const sprites: BootIntroSpriteOpRuntime[] = [
+    { bank: "intro2", frame: 1, x: 0, y: 0, scene },
+    { bank: "intro2", frame: 0, x: windowState.cloudX, y: -5, scene },
+    { bank: "intro2", frame: 0, x: windowState.cloudX - 320, y: -5, scene },
+    { bank: "intro2", frame: 10, x: 0, y: 0x4c, scene },
+    { bank: "intro2", frame: 8, x: 0, y: 0, scene }
+  ];
+  for (const cloud of windowState.clouds) {
+    sprites.push({ bank: "intro2", frame: cloud.frame, x: cloud.x, y: cloud.y, scene });
+  }
+  if (windowState.lightningVisible) {
+    sprites.push({
+      bank: "intro2",
+      frame: windowState.lightningFrame,
+      x: windowState.lightningDrawX,
+      y: windowState.lightningDrawY,
+      scene
+    });
+  }
+  if (strikeVisible) {
+    sprites.push({ bank: "intro2", frame: windowState.strikeFrame, x: 158, y: 114, scene });
+  }
+  for (const drop of windowState.rain) {
+    sprites.push({ bank: "intro2", frame: drop.frame, x: drop.x, y: drop.y, scene });
+  }
+  sprites.push(
+    { bank: "intro2", frame: 28, x: coord(-panPx), y: 0, scene },
+    { bank: "intro2", frame: windowState.windowFrame, x: 0x39 - panPx, y: 0, scene },
+    { bank: "intro2", frame: 24, x: 320 - panPx - doorOpenPx, y: 0, scene },
+    { bank: "intro2", frame: 25, x: 573 - panPx + doorOpenPx, y: 0, scene }
+  );
+  return {
+    clear: true,
+    sprites
+  };
+}
+
+export function buildBootIntroStonesRenderPlanRuntime(args: {
+  elapsedMs: unknown;
+  scene: BootIntroSceneSpec;
+}): BootIntroStonesRenderPlanRuntime {
+  const scene = args.scene;
+  const elapsed = Number(args.elapsedMs) | 0;
+  const gateScene =
+    scene?.id === "stones_gate"
+    || scene?.id === "stones_memory"
+    || scene?.id === "stones_warning"
+    || scene?.id === "stones_sink"
+    || scene?.id === "stones_decision"
+    || scene?.id === "stones_enter";
+  const gateRisePx = scene?.id === "stones_gate"
+    ? Math.max(5, 0x64 - Math.floor(elapsed / 25))
+    : (gateScene ? 5 : 0x64);
+  const gateSinkPx = scene?.id === "stones_enter"
+    ? Math.min(0x64, 5 + Math.floor(elapsed / 25))
+    : gateRisePx;
+  const gateRiseDoneMs = (0x64 - 0x05) * 25;
+  const handY = scene?.id === "stones_pickup"
+    ? Math.max(0x54, 0xc7 - Math.floor(elapsed / 18) * 2)
+    : (scene?.id === "stones_gate"
+      ? Math.min(0xc7, 0x54 + Math.max(0, Math.floor((elapsed - gateRiseDoneMs) / 25)) * 2)
+      : (scene?.id === "stones_memory" ? 0x44 : 0xc7));
+  const sprites: BootIntroSpriteOpRuntime[] = [
+    { bank: "intro3", frame: gateScene ? 5 : 0, x: 0, y: 0, scene }
+  ];
+  if (!gateScene) {
+    sprites.push({ bank: "intro3", frame: 3, x: 0x96, y: 0x64, scene });
+  }
+  if (gateScene) {
+    sprites.push({ bank: "intro3", frame: 4, x: 0x5e, y: 0x66, scene });
+  }
+  if (scene?.id === "stones_pickup" || scene?.id === "stones_gate" || scene?.id === "stones_memory") {
+    sprites.push({
+      bank: "intro3",
+      frame: scene?.id === "stones_memory" ? 6 : 1,
+      x: scene?.id === "stones_memory" ? 0x9b : 0xbd,
+      y: handY,
+      scene
+    });
+  }
+  const clippedSprites: BootIntroClippedSpriteOpRuntime[] = [];
+  if (gateScene) {
+    const shake = (scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter")
+      ? (Math.floor(elapsed / 80) % 2)
+      : 0;
+    clippedSprites.push({
+      bank: "intro3",
+      frame: 2,
+      x: 0x7c + shake,
+      y: scene?.id === "stones_enter" ? gateSinkPx : gateRisePx,
+      scene,
+      clipX: 0,
+      clipY: 0,
+      clipW: 320,
+      clipH: 0x66
+    });
+  }
+  if (scene?.id === "stones_enter") {
+    sprites.push({
+      alpha: Math.max(0, 1 - Math.max(0, elapsed - 2400) / 1200),
+      bank: "intro3",
+      frame: 7 + Math.min(19, Math.floor(elapsed / 180)),
+      x: -2,
+      y: Math.max(-20, 0x12 - Math.floor(elapsed / 60)),
+      scene
+    });
+  }
+  return {
+    clear: true,
+    clippedSprites,
+    sprites
+  };
 }
 
 export function wrapBootIntroTextRuntime(text: unknown, maxChars: number): string[] {

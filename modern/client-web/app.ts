@@ -481,16 +481,18 @@ import {
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
   activeBootIntroPaletteRuntime,
+  bootIntroClipRectRuntime,
   bootIntroPaletteCacheKeyRuntime,
-  bootIntroWindowSceneBaseRuntime,
-  bootIntroWindowStateAtRuntime,
   bootIntroPrintTextOnCardRuntime,
   bootIntroPrintTextRuntime,
-  bootIntroClockFramesRuntime,
-  bootIntroClockSpritesRuntime,
-  bootIntroTvStateAtRuntime,
-  bootIntroTvStaticCellsRuntime,
+  bootIntroSpriteDrawRectRuntime,
+  bootIntroTvStaticDrawCellsRuntime,
+  buildBootIntroLayerRenderPlanRuntime,
+  buildBootIntroLoungeRenderPlanRuntime,
+  buildBootIntroSplashRenderPlanRuntime,
+  buildBootIntroStonesRenderPlanRuntime,
   buildBootIntroTextCardRenderPlanRuntime,
+  buildBootIntroWindowRenderPlanRuntime,
   bootIntroInputPlanRuntime,
   bootIntroWouCharWidthRuntime,
   decodeBootIntroWouFontRuntime,
@@ -504,15 +506,14 @@ import {
   type BootIntroSceneSpec,
   type BootIntroTextCard,
   type BootIntroTextCanvasRuntime,
-  type BootIntroWindowStateRuntime,
   type BootIntroWouFontRuntime,
   wrapBootIntroTextPixelsRuntime
 } from "./ui/boot_intro_runtime.ts";
 import {
   applyStartupMenuIndexRuntime,
   bindSkipIntroPreferenceRuntime,
+  buildStartupMenuRenderPlanRuntime,
   journeyOnwardStartedDiagRuntime,
-  startupMenuItemEnabledRuntime,
   startupMenuKeyPatchRuntime,
   startupAssetsReadyDiagRuntime,
   startupMenuIndexAtSurfacePointRuntime,
@@ -694,7 +695,7 @@ import {
   buildStatusPanelTextRuntime,
   formatLedgerEntryCountRuntime,
   normalizeDiagKindPresentationRuntime,
-  serverStatusOverlayLayoutRuntime
+  drawServerStatusOverlayRuntime
 } from "./ui/status_text_runtime.ts";
 
 const TICK_MS = 100;
@@ -2848,30 +2849,6 @@ function renderLegacyHudStubOnBackdrop(): void {
   drawTile(LEGACY_UI_TILE.BUTTON_RIGHT, 152, 176);
 }
 
-function drawCenteredServerStatusOnSurface(
-  g: LegacyTextCanvasRuntime,
-  scale: number,
-  offsetX: number,
-  offsetY: number,
-  text: string,
-  color: string
-): void {
-  const layout = serverStatusOverlayLayoutRuntime({
-    offsetX,
-    offsetY,
-    scale,
-    text
-  });
-  g.fillStyle = "#1f0f0a";
-  g.fillRect(
-    layout.background.x,
-    layout.background.y,
-    layout.background.w,
-    layout.background.h
-  );
-  drawU6MainText(g, layout.text, layout.textX, layout.textY, layout.drawScale, color);
-}
-
 function currentInGameServerStatusOverlay(nowMs: number): { color: string; text: string } | null {
   return currentInGameServerStatusOverlayRuntime({
     isServerConnectionBroken: isServerConnectionBroken(),
@@ -2891,13 +2868,27 @@ function drawInGameServerStatusOverlay(): void {
     if (bg) {
       bg.imageSmoothingEnabled = false;
       const scale = Math.max(1, Math.floor((legacyBackdropCanvas.width | 0) / 320));
-      drawCenteredServerStatusOnSurface(bg, scale, 0, 0, overlay.text, overlay.color);
+      drawServerStatusOverlayRuntime({
+        canvas: bg,
+        color: overlay.color,
+        drawText: drawU6MainText,
+        scale,
+        text: overlay.text
+      });
     }
     if (legacyViewportCanvas) {
       const vg = legacyViewportCanvas.getContext("2d");
       if (vg) {
         vg.imageSmoothingEnabled = false;
-        drawCenteredServerStatusOnSurface(vg, 1, LEGACY_UI_MAP_RECT.x, LEGACY_UI_MAP_RECT.y, overlay.text, overlay.color);
+        drawServerStatusOverlayRuntime({
+          canvas: vg,
+          color: overlay.color,
+          drawText: drawU6MainText,
+          offsetX: LEGACY_UI_MAP_RECT.x,
+          offsetY: LEGACY_UI_MAP_RECT.y,
+          scale: 1,
+          text: overlay.text
+        });
       }
     }
     return;
@@ -2905,7 +2896,13 @@ function drawInGameServerStatusOverlay(): void {
   if (ctx && canvas) {
     ctx.imageSmoothingEnabled = false;
     const scale = Math.max(1, Math.floor((canvas.width | 0) / 320));
-    drawCenteredServerStatusOnSurface(ctx, scale, 0, 0, overlay.text, overlay.color);
+    drawServerStatusOverlayRuntime({
+      canvas: ctx,
+      color: overlay.color,
+      drawText: drawU6MainText,
+      scale,
+      text: overlay.text
+    });
   }
 }
 
@@ -2934,20 +2931,31 @@ function drawLegacyTileScaled(
 
 function renderStartupMenuLayer(g: CanvasRenderingContext2D, scale: number): void {
   const startupState = state as StartupMenuRenderStateView;
-  const x = (v: number): number => v * scale;
-  const y = (v: number): number => v * scale;
-
   const startupPal = buildStartupPaletteForMenu();
   const titlePixmaps = startupState.startupTitlePixmaps;
-  const hasStartupArt = startupPal
+  const hasStartupArt = !!(startupPal
     && titlePixmaps
     && titlePixmaps[0]
     && titlePixmaps[1]
-    && startupState.startupMenuPixmap;
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, x(320), y(200));
-  if (hasStartupArt) {
-    const drawSprite = (key: string, pixmap: IndexedPixmapRuntime | null | undefined, sx: number, sy: number): void => {
+    && startupState.startupMenuPixmap);
+  const plan = buildStartupMenuRenderPlanRuntime({
+    hasStartupArt,
+    hudTextColor: LEGACY_HUD_TEXT_COLOR,
+    isAuthenticated: isNetAuthenticated(),
+    menu: STARTUP_MENU,
+    scale,
+    selectedIndex: startupState.startupMenuIndex,
+    slotTileId: LEGACY_UI_TILE.SLOT_EMPTY
+  });
+  g.fillStyle = plan.clear.fillStyle;
+  g.fillRect(plan.clear.x, plan.clear.y, plan.clear.w, plan.clear.h);
+  if (plan.useStartupArt && startupPal) {
+    const drawSprite = (
+      key: string,
+      pixmap: IndexedPixmapRuntime | null | undefined,
+      sx: number,
+      sy: number
+    ): void => {
       if (!pixmap) {
         return;
       }
@@ -2960,43 +2968,35 @@ function renderStartupMenuLayer(g: CanvasRenderingContext2D, scale: number): voi
       if (!sprite) {
         return;
       }
-      g.drawImage(sprite, x(sx), y(sy), x(sprite.width), y(sprite.height));
+      g.drawImage(sprite, sx, sy, sprite.width * scale, sprite.height * scale);
     };
-    drawSprite("title", titlePixmaps?.[0], 0x13, 0x00);
-    drawSprite("subtitle", titlePixmaps?.[1], 0x3b, 0x2f);
-    drawSprite("menu", startupState.startupMenuPixmap, 0x31, 0x53);
+    for (const sprite of plan.artSprites) {
+      drawSprite(
+        sprite.key,
+        sprite.key === "title"
+          ? titlePixmaps?.[0]
+          : (sprite.key === "subtitle" ? titlePixmaps?.[1] : startupState.startupMenuPixmap),
+        sprite.x,
+        sprite.y
+      );
+    }
     return;
   }
 
-  for (let i = 0; i < 20; i += 1) {
-    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, x(i * 16), 0, scale);
-    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, x(i * 16), y(184), scale);
+  for (const tile of plan.tiles) {
+    drawLegacyTileScaled(g, tile.tileId, tile.x, tile.y, tile.scale);
   }
-  for (let i = 1; i < 11; i += 1) {
-    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, 0, y(i * 16), scale);
-    drawLegacyTileScaled(g, LEGACY_UI_TILE.SLOT_EMPTY, x(304), y(i * 16), scale);
+  for (const rect of plan.rects) {
+    g.fillStyle = rect.fillStyle;
+    g.fillRect(rect.x, rect.y, rect.w, rect.h);
   }
-
-  drawU6MainText(g, "ULTIMA VI", x(112), y(30), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-  drawU6MainText(g, "THE FALSE PROPHET", x(94), y(44), Math.max(1, scale), LEGACY_HUD_TEXT_COLOR);
-
-  for (let i = 0; i < STARTUP_MENU.length; i += 1) {
-    const item = STARTUP_MENU[i];
-    const enabled = startupMenuItemEnabledRuntime(item, isNetAuthenticated());
-    const rowY = 74 + (i * 20);
-    const selected = i === startupState.startupMenuIndex;
-    g.fillStyle = selected ? "#5f2e1d" : "#1f1a14";
-    g.fillRect(x(62), y(rowY), x(196), y(16));
-    g.strokeStyle = selected ? "#d7b981" : "#6a5131";
-    g.strokeRect(x(62) + 0.5, y(rowY) + 0.5, x(196) - 1, y(16) - 1);
-    if (selected) {
-      drawU6MainText(g, ">>", x(68), y(rowY + 4), Math.max(1, scale), "#f2dfb6");
-    }
-    const textColor = enabled ? (selected ? "#f2dfb6" : "#d8be8a") : "#76644a";
-    drawU6MainText(g, item.label, x(86), y(rowY + 4), Math.max(1, scale), textColor);
+  for (const stroke of plan.strokes) {
+    g.strokeStyle = stroke.strokeStyle;
+    g.strokeRect(stroke.x, stroke.y, stroke.w, stroke.h);
   }
-
-  drawU6MainText(g, "Use ARROWS + ENTER", x(98), y(162), Math.max(1, scale), "#8e7a55");
+  for (const text of plan.texts) {
+    drawU6MainText(g, text.text, text.x, text.y, text.scale, text.color);
+  }
 }
 
 function buildStartupPaletteForMenu(): RgbPaletteRuntime | null {
@@ -3080,23 +3080,25 @@ function drawBootIntroSprite(
     return;
   }
   const prevAlpha = g.globalAlpha;
-  g.globalAlpha = Math.max(0, Math.min(1, alpha));
-  const sx = Math.round((Number(lx) || 0) * scale);
-  const sy = Math.round((Number(ly) || 0) * scale);
-  const dw = Math.round((sw == null ? sprite.width : sw) * scale);
-  const dh = Math.round((sh == null ? sprite.height : sh) * scale);
+  const rect = bootIntroSpriteDrawRectRuntime({
+    alpha,
+    h: sh,
+    scale,
+    spriteHeight: sprite.height,
+    spriteWidth: sprite.width,
+    w: sw,
+    x: lx,
+    y: ly
+  });
+  g.globalAlpha = rect.alpha;
   g.drawImage(
     sprite,
-    sx,
-    sy,
-    dw,
-    dh
+    rect.x,
+    rect.y,
+    rect.w,
+    rect.h
   );
   g.globalAlpha = prevAlpha;
-}
-
-function bootIntroTvStateAt(updateCount: number): ReturnType<typeof bootIntroTvStateAtRuntime> {
-  return bootIntroTvStateAtRuntime(updateCount);
 }
 
 function drawBootIntroClippedSprite(
@@ -3112,22 +3114,28 @@ function drawBootIntroClippedSprite(
   clipW: number,
   clipH: number
 ): void {
+  const clip = bootIntroClipRectRuntime({ clipH, clipW, clipX, clipY, scale });
   g.save();
   g.beginPath();
-  g.rect(Math.round(clipX * scale), Math.round(clipY * scale), Math.round(clipW * scale), Math.round(clipH * scale));
+  g.rect(clip.x, clip.y, clip.w, clip.h);
   g.clip();
   drawBootIntroSprite(g, bankName, frameIdx, lx, ly, scale, scene);
   g.restore();
 }
 
-function drawBootIntroTvStatic(g: CanvasRenderingContext2D, x: number, y: number, scale: number, seed: number): void {
+function drawBootIntroTvStatic(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  seed: number,
+  width = 57,
+  height = 37
+): void {
   const pal = activeTitleIntroPalette({ kind: "lounge" }) || [];
-  const cell = Math.max(1, scale | 0);
-  for (const staticCell of bootIntroTvStaticCellsRuntime(seed)) {
-    const idx = staticCell.colorIndex;
-    const rgb = pal[idx] || (idx ? [230, 209, 160] : [0, 0, 0]);
-    g.fillStyle = `rgb(${rgb[0] | 0}, ${rgb[1] | 0}, ${rgb[2] | 0})`;
-    g.fillRect(Math.round((x + staticCell.px) * scale), Math.round((y + staticCell.py) * scale), cell, cell);
+  for (const cell of bootIntroTvStaticDrawCellsRuntime({ height, palette: pal, scale, seed, width, x, y })) {
+    g.fillStyle = cell.color;
+    g.fillRect(cell.x, cell.y, cell.w, cell.h);
   }
 }
 
@@ -3235,24 +3243,6 @@ function bootIntroPrintTextOnCard(
   });
 }
 
-function bootIntroClockFrames(now = new Date()): ReturnType<typeof bootIntroClockFramesRuntime> {
-  return bootIntroClockFramesRuntime(now);
-}
-
-function drawBootIntroClock(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number, scrollPx: number): void {
-  for (const sprite of bootIntroClockSpritesRuntime(new Date(), scrollPx)) {
-    drawBootIntroSprite(g, "intro1", sprite.frame, sprite.x, sprite.y, scale, scene);
-  }
-}
-
-function bootIntroWindowSceneBase(sceneId: string): number {
-  return bootIntroWindowSceneBaseRuntime(sceneId);
-}
-
-function bootIntroWindowStateAt(scene: BootIntroSceneSpec, updateCount: number, forceStrike: boolean): BootIntroWindowStateRuntime {
-  return bootIntroWindowStateAtRuntime(scene, updateCount, forceStrike);
-}
-
 function wrapBootIntroTextPixels(text: unknown, maxWidthPx: number): string[] {
   return wrapBootIntroTextPixelsRuntime(text, maxWidthPx, measureBootIntroTextWidth);
 }
@@ -3321,166 +3311,127 @@ function renderBootIntroTextCard(
 function renderBootIntroSplash(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
   const frame = Number(scene?.splashFrame) | 0;
   const sprite = bootIntroSceneSpriteCanvas("intro1", frame, scene);
+  const plan = buildBootIntroSplashRenderPlanRuntime({
+    scale,
+    scene,
+    spriteHeight: sprite?.height,
+    spriteWidth: sprite?.width
+  });
   g.fillStyle = "#000000";
   g.fillRect(0, 0, 320 * scale, 200 * scale);
-  if (!sprite) {
+  if (!sprite || !plan.sprite) {
     return;
   }
-  const sx = Math.floor(((320 * scale) - (sprite.width * scale)) / 2);
-  const sy = Math.floor(((200 * scale) - (sprite.height * scale)) / 2);
-  g.drawImage(sprite, sx, sy, sprite.width * scale, sprite.height * scale);
+  g.drawImage(sprite, plan.sprite.x, plan.sprite.y, plan.sprite.w, plan.sprite.h);
 }
 
 function renderBootIntroLounge(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
   const introState = state as BootIntroRenderStateView;
-  const elapsed = Number(introState.bootIntro?.sceneElapsedMs) | 0;
-  const scrollPx = (scene?.id === "lounge_pan")
-    ? Math.min(319, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 319))
-    : 0;
-  const tvBaseX = 0xe5 - scrollPx;
-  const tvBaseY = 0x32;
-  const tvSceneBase = scene?.id === "lounge_reflection" ? 120 : (scene?.id === "lounge_pan" ? 240 : 0);
-  const tvUpdate = tvSceneBase + Math.floor(elapsed / 100);
-  const tvState = bootIntroTvStateAt(tvUpdate);
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, 320 * scale, 200 * scale);
-  drawBootIntroSprite(g, "intro1", 15, 210 - Math.max(0, scrollPx - 160), 0, scale, scene);
-  drawBootIntroSprite(g, "intro1", 0, -scrollPx, 0, scale, scene);
-  drawBootIntroSprite(g, "intro1", 1, 320 - scrollPx, 0, scale, scene);
-  drawBootIntroSprite(g, "intro1", 13, -Math.floor(scrollPx * 2), 63, scale, scene);
-  drawBootIntroSprite(g, "intro1", 14, 143 - Math.floor(scrollPx * 2), 91, scale, scene);
-  const clipX = Math.max(0, tvBaseX);
-  if (tvState.staticVisible) {
+  const plan = buildBootIntroLoungeRenderPlanRuntime({
+    elapsedMs: introState.bootIntro?.sceneElapsedMs,
+    scene
+  });
+  if (plan.clear) {
+    g.fillStyle = "#000000";
+    g.fillRect(0, 0, 320 * scale, 200 * scale);
+  }
+  for (const sprite of plan.sprites) {
+    drawBootIntroSprite(g, sprite.bank, sprite.frame, sprite.x, sprite.y, scale, scene, sprite.w, sprite.h, sprite.alpha);
+  }
+  for (const staticOp of plan.staticOps) {
     g.save();
     g.beginPath();
-    g.rect(Math.round(clipX * scale), Math.round(tvBaseY * scale), Math.round(57 * scale), Math.round(37 * scale));
+    g.rect(
+      Math.round(Math.max(0, staticOp.x) * scale),
+      Math.round(staticOp.y * scale),
+      Math.round(staticOp.w * scale),
+      Math.round(staticOp.h * scale)
+    );
     g.clip();
-    drawBootIntroTvStatic(g, tvBaseX, tvBaseY, scale, 0x9e3779b9 ^ tvUpdate);
+    drawBootIntroTvStatic(g, staticOp.x, staticOp.y, scale, staticOp.seed, staticOp.w, staticOp.h);
     g.restore();
   }
-  for (const tvSprite of tvState.sprites) {
+  for (const sprite of plan.clippedSprites) {
     drawBootIntroClippedSprite(
       g,
-      "intro1",
-      tvSprite.frame,
-      tvBaseX + tvSprite.xOff,
-      tvBaseY + tvSprite.yOff,
+      sprite.bank,
+      sprite.frame,
+      sprite.x,
+      sprite.y,
       scale,
       scene,
-      clipX,
-      tvBaseY,
-      57,
-      37
+      sprite.clipX,
+      sprite.clipY,
+      sprite.clipW,
+      sprite.clipH
     );
   }
-  if (tvState.fingerVisible) {
-    drawBootIntroSprite(g, "intro1", 0x0e, 143 - Math.floor(scrollPx * 2), 91, scale, scene);
-  }
-  drawBootIntroClock(g, scene, scale, scrollPx);
 }
 
 function renderBootIntroWindow(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
   const introState = state as BootIntroRenderStateView;
-  const elapsed = Number(introState.bootIntro?.sceneElapsedMs) | 0;
-  const panPx = (scene?.id === "window_pan")
-    ? Math.min(320, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 320))
-    : ((scene?.id === "window_door_open" || scene?.id === "window_run") ? 320 : 0);
-  const doorOpenPx = (scene?.id === "window_door_open")
-    ? Math.min(68, Math.floor((elapsed / Math.max(1, scene.autoAdvanceMs || 1)) * 68))
-    : (scene?.id === "window_run" ? 68 : 0);
-  const strikeVisible = scene?.id === "window_strike"
-    || (scene?.id === "window_pan" && panPx <= 160);
-  const updateCount = bootIntroWindowSceneBase(scene?.id) + Math.floor(elapsed / 80);
-  const windowState = bootIntroWindowStateAt(scene, updateCount, strikeVisible);
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, 320 * scale, 200 * scale);
-  drawBootIntroSprite(g, "intro2", 1, 0, 0, scale, scene);
-  drawBootIntroSprite(g, "intro2", 0, windowState.cloudX, -5, scale, scene);
-  drawBootIntroSprite(g, "intro2", 0, windowState.cloudX - 320, -5, scale, scene);
-  drawBootIntroSprite(g, "intro2", 10, 0, 0x4c, scale, scene);
-  drawBootIntroSprite(g, "intro2", 8, 0, 0, scale, scene);
-  for (const cloud of windowState.clouds) {
-    drawBootIntroSprite(g, "intro2", cloud.frame, cloud.x, cloud.y, scale, scene);
+  const plan = buildBootIntroWindowRenderPlanRuntime({
+    elapsedMs: introState.bootIntro?.sceneElapsedMs,
+    scene
+  });
+  if (plan.clear) {
+    g.fillStyle = "#000000";
+    g.fillRect(0, 0, 320 * scale, 200 * scale);
   }
-  if (windowState.lightningVisible) {
-    drawBootIntroSprite(g, "intro2", windowState.lightningFrame, windowState.lightningDrawX, windowState.lightningDrawY, scale, scene);
+  for (const sprite of plan.sprites) {
+    drawBootIntroSprite(g, sprite.bank, sprite.frame, sprite.x, sprite.y, scale, scene, sprite.w, sprite.h, sprite.alpha);
   }
-  if (strikeVisible) {
-    drawBootIntroSprite(g, "intro2", windowState.strikeFrame, 158, 114, scale, scene);
-  }
-  for (const drop of windowState.rain) {
-    drawBootIntroSprite(g, "intro2", drop.frame, drop.x, drop.y, scale, scene);
-  }
-  drawBootIntroSprite(g, "intro2", 28, -panPx, 0, scale, scene);
-  drawBootIntroSprite(g, "intro2", windowState.windowFrame, 0x39 - panPx, 0, scale, scene);
-  drawBootIntroSprite(g, "intro2", 24, 320 - panPx - doorOpenPx, 0, scale, scene);
-  drawBootIntroSprite(g, "intro2", 25, 573 - panPx + doorOpenPx, 0, scale, scene);
 }
 
 function renderBootIntroStones(g: CanvasRenderingContext2D, scene: BootIntroSceneSpec, scale: number): void {
   const introState = state as BootIntroRenderStateView;
-  const elapsed = Number(introState.bootIntro?.sceneElapsedMs) | 0;
-  const gateRisePx = (scene?.id === "stones_gate")
-    ? Math.max(5, 0x64 - Math.floor(elapsed / 25))
-    : ((scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") ? 5 : 0x64);
-  const gateSinkPx = (scene?.id === "stones_enter")
-    ? Math.min(0x64, 5 + Math.floor(elapsed / 25))
-    : gateRisePx;
-  const gateRiseDoneMs = (0x64 - 0x05) * 25;
-  const handY = (scene?.id === "stones_pickup")
-    ? Math.max(0x54, 0xc7 - Math.floor(elapsed / 18) * 2)
-    : (scene?.id === "stones_gate"
-      ? Math.min(0xc7, 0x54 + Math.max(0, Math.floor((elapsed - gateRiseDoneMs) / 25)) * 2)
-      : ((scene?.id === "stones_memory") ? 0x44 : 0xc7));
-  g.fillStyle = "#000000";
-  g.fillRect(0, 0, 320 * scale, 200 * scale);
-  const bgFrame = (scene?.id === "stones_gate" || scene?.id === "stones_memory" || scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") ? 5 : 0;
-  drawBootIntroSprite(g, "intro3", bgFrame, 0, 0, scale, scene);
-  if (scene?.id !== "stones_gate" && scene?.id !== "stones_memory" && scene?.id !== "stones_warning" && scene?.id !== "stones_sink" && scene?.id !== "stones_decision" && scene?.id !== "stones_enter") {
-    drawBootIntroSprite(g, "intro3", 3, 0x96, 0x64, scale, scene);
+  const plan = buildBootIntroStonesRenderPlanRuntime({
+    elapsedMs: introState.bootIntro?.sceneElapsedMs,
+    scene
+  });
+  if (plan.clear) {
+    g.fillStyle = "#000000";
+    g.fillRect(0, 0, 320 * scale, 200 * scale);
   }
-  if (scene?.id === "stones_gate" || scene?.id === "stones_memory" || scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") {
-    drawBootIntroSprite(g, "intro3", 4, 0x5e, 0x66, scale, scene);
+  for (const sprite of plan.sprites) {
+    drawBootIntroSprite(g, sprite.bank, sprite.frame, sprite.x, sprite.y, scale, scene, sprite.w, sprite.h, sprite.alpha);
   }
-  if (scene?.id === "stones_pickup" || scene?.id === "stones_gate" || scene?.id === "stones_memory") {
-    const handFrame = scene?.id === "stones_memory" ? 6 : 1;
-    const handX = scene?.id === "stones_memory" ? 0x9b : 0xbd;
-    drawBootIntroSprite(g, "intro3", handFrame, handX, handY, scale, scene);
-  }
-  if (scene?.id === "stones_gate" || scene?.id === "stones_memory" || scene?.id === "stones_warning" || scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter") {
-    const shake = (scene?.id === "stones_sink" || scene?.id === "stones_decision" || scene?.id === "stones_enter")
-      ? (Math.floor(elapsed / 80) % 2)
-      : 0;
-    const gateY = (scene?.id === "stones_enter") ? gateSinkPx : gateRisePx;
-    drawBootIntroClippedSprite(g, "intro3", 2, 0x7c + shake, gateY, scale, scene, 0, 0, 320, 0x66);
-  }
-  if (scene?.id === "stones_enter") {
-    const avatarFrame = 7 + Math.min(19, Math.floor(elapsed / 180));
-    const avatarAlpha = Math.max(0, 1 - Math.max(0, elapsed - 2400) / 1200);
-    drawBootIntroSprite(g, "intro3", avatarFrame, -2, Math.max(-20, 0x12 - Math.floor(elapsed / 60)), scale, scene, null, null, avatarAlpha);
+  for (const sprite of plan.clippedSprites) {
+    drawBootIntroClippedSprite(
+      g,
+      sprite.bank,
+      sprite.frame,
+      sprite.x,
+      sprite.y,
+      scale,
+      scene,
+      sprite.clipX,
+      sprite.clipY,
+      sprite.clipW,
+      sprite.clipH
+    );
   }
 }
 
 function renderBootIntroLayer(g: CanvasRenderingContext2D, scale: number): void {
   const introState = state as BootIntroRenderStateView;
-  const scene = currentBootIntroSceneRuntime(introState.bootIntro);
-  if (!scene) {
+  const plan = buildBootIntroLayerRenderPlanRuntime(introState.bootIntro);
+  if (plan.kind === "startup") {
     renderStartupMenuLayer(g, scale);
     return;
   }
-  if (scene.kind === "splash") {
-    renderBootIntroSplash(g, scene, scale);
-  } else if (scene.kind === "lounge") {
-    renderBootIntroLounge(g, scene, scale);
-  } else if (scene.kind === "window") {
-    renderBootIntroWindow(g, scene, scale);
+  if (plan.sceneKind === "splash") {
+    renderBootIntroSplash(g, plan.scene, scale);
+  } else if (plan.sceneKind === "lounge") {
+    renderBootIntroLounge(g, plan.scene, scale);
+  } else if (plan.sceneKind === "window") {
+    renderBootIntroWindow(g, plan.scene, scale);
   } else {
-    renderBootIntroStones(g, scene, scale);
+    renderBootIntroStones(g, plan.scene, scale);
   }
-  renderBootIntroTextCard(g, scale, scene, scene.textCard || null);
-  const overlayAlpha = bootIntroOverlayAlphaRuntime(introState.bootIntro);
-  if (overlayAlpha > 0) {
-    g.fillStyle = `rgba(0,0,0,${Math.max(0, Math.min(1, overlayAlpha / 255))})`;
+  renderBootIntroTextCard(g, scale, plan.scene, plan.scene.textCard || null);
+  if (plan.overlayAlpha > 0) {
+    g.fillStyle = `rgba(0,0,0,${Math.max(0, Math.min(1, plan.overlayAlpha / 255))})`;
     g.fillRect(0, 0, 320 * scale, 200 * scale);
   }
 }

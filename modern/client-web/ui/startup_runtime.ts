@@ -176,6 +176,149 @@ export function startupMenuItemEnabledRuntime(
   return true;
 }
 
+export type StartupMenuRenderPlanRectRuntime = {
+  fillStyle: string;
+  h: number;
+  w: number;
+  x: number;
+  y: number;
+};
+
+export type StartupMenuRenderPlanStrokeRuntime = StartupMenuRenderPlanRectRuntime & {
+  strokeStyle: string;
+};
+
+export type StartupMenuRenderPlanTextRuntime = {
+  color: string;
+  scale: number;
+  text: string;
+  x: number;
+  y: number;
+};
+
+export type StartupMenuRenderPlanTileRuntime = {
+  scale: number;
+  tileId: number;
+  x: number;
+  y: number;
+};
+
+export type StartupMenuRenderPlanArtSpriteRuntime = {
+  key: "title" | "subtitle" | "menu";
+  x: number;
+  y: number;
+};
+
+export type StartupMenuRenderPlanRuntime = {
+  artSprites: StartupMenuRenderPlanArtSpriteRuntime[];
+  clear: StartupMenuRenderPlanRectRuntime;
+  rects: StartupMenuRenderPlanRectRuntime[];
+  strokes: StartupMenuRenderPlanStrokeRuntime[];
+  texts: StartupMenuRenderPlanTextRuntime[];
+  tiles: StartupMenuRenderPlanTileRuntime[];
+  useStartupArt: boolean;
+};
+
+export function buildStartupMenuRenderPlanRuntime(args: {
+  hasStartupArt?: unknown;
+  hudTextColor?: unknown;
+  isAuthenticated: boolean;
+  menu: readonly ({ id?: string; label?: string; enabled?: boolean } | null | undefined)[];
+  scale?: unknown;
+  selectedIndex?: unknown;
+  slotTileId: unknown;
+}): StartupMenuRenderPlanRuntime {
+  const scale = Math.max(1, Number(args.scale) | 0);
+  const x = (v: number): number => v * scale;
+  const y = (v: number): number => v * scale;
+  const useStartupArt = !!args.hasStartupArt;
+  const plan: StartupMenuRenderPlanRuntime = {
+    artSprites: [],
+    clear: { fillStyle: "#000000", x: 0, y: 0, w: x(320), h: y(200) },
+    rects: [],
+    strokes: [],
+    texts: [],
+    tiles: [],
+    useStartupArt
+  };
+  if (useStartupArt) {
+    plan.artSprites.push(
+      { key: "title", x: x(0x13), y: y(0x00) },
+      { key: "subtitle", x: x(0x3b), y: y(0x2f) },
+      { key: "menu", x: x(0x31), y: y(0x53) }
+    );
+    return plan;
+  }
+
+  const slotTileId = Number(args.slotTileId) | 0;
+  for (let i = 0; i < 20; i += 1) {
+    plan.tiles.push(
+      { tileId: slotTileId, x: x(i * 16), y: 0, scale },
+      { tileId: slotTileId, x: x(i * 16), y: y(184), scale }
+    );
+  }
+  for (let i = 1; i < 11; i += 1) {
+    plan.tiles.push(
+      { tileId: slotTileId, x: 0, y: y(i * 16), scale },
+      { tileId: slotTileId, x: x(304), y: y(i * 16), scale }
+    );
+  }
+
+  const textScale = Math.max(1, scale);
+  const hudTextColor = String(args.hudTextColor || "#8b3f24");
+  plan.texts.push(
+    { text: "ULTIMA VI", x: x(112), y: y(30), scale: textScale, color: hudTextColor },
+    { text: "THE FALSE PROPHET", x: x(94), y: y(44), scale: textScale, color: hudTextColor }
+  );
+
+  const selectedIndex = Number(args.selectedIndex) | 0;
+  for (let i = 0; i < args.menu.length; i += 1) {
+    const item = args.menu[i];
+    const enabled = startupMenuItemEnabledRuntime(item, args.isAuthenticated);
+    const rowY = 74 + (i * 20);
+    const selected = i === selectedIndex;
+    plan.rects.push({
+      fillStyle: selected ? "#5f2e1d" : "#1f1a14",
+      x: x(62),
+      y: y(rowY),
+      w: x(196),
+      h: y(16)
+    });
+    plan.strokes.push({
+      fillStyle: "",
+      strokeStyle: selected ? "#d7b981" : "#6a5131",
+      x: x(62) + 0.5,
+      y: y(rowY) + 0.5,
+      w: x(196) - 1,
+      h: y(16) - 1
+    });
+    if (selected) {
+      plan.texts.push({
+        text: ">>",
+        x: x(68),
+        y: y(rowY + 4),
+        scale: textScale,
+        color: "#f2dfb6"
+      });
+    }
+    plan.texts.push({
+      text: String(item?.label || ""),
+      x: x(86),
+      y: y(rowY + 4),
+      scale: textScale,
+      color: enabled ? (selected ? "#f2dfb6" : "#d8be8a") : "#76644a"
+    });
+  }
+  plan.texts.push({
+    text: "Use ARROWS + ENTER",
+    x: x(98),
+    y: y(162),
+    scale: textScale,
+    color: "#8e7a55"
+  });
+  return plan;
+}
+
 export type StartupMenuSelectionActionRuntime =
   | { kind: "none" }
   | { kind: "start_session" }

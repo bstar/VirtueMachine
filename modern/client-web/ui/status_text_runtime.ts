@@ -61,6 +61,22 @@ export type ServerStatusOverlayLayoutRuntime = {
   textY: number;
 };
 
+export type ServerStatusOverlayCanvasRuntime = {
+  fillStyle: string | CanvasGradient | CanvasPattern;
+  font: string;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  fillText(text: string, x: number, y: number): void;
+};
+
+export type ServerStatusOverlayTextRendererRuntime = (
+  canvas: ServerStatusOverlayCanvasRuntime,
+  text: string,
+  x: number,
+  y: number,
+  scale: number,
+  color: string
+) => void;
+
 export function serverStatusOverlayLayoutRuntime(args: {
   logicalWidth?: unknown;
   logicalY?: unknown;
@@ -91,6 +107,30 @@ export function serverStatusOverlayLayoutRuntime(args: {
     textX,
     textY
   };
+}
+
+export function drawServerStatusOverlayRuntime(args: {
+  backgroundColor?: unknown;
+  canvas: ServerStatusOverlayCanvasRuntime;
+  color: string;
+  drawText: ServerStatusOverlayTextRendererRuntime;
+  logicalWidth?: unknown;
+  logicalY?: unknown;
+  offsetX?: unknown;
+  offsetY?: unknown;
+  scale?: unknown;
+  text: string;
+}): ServerStatusOverlayLayoutRuntime {
+  const layout = serverStatusOverlayLayoutRuntime(args);
+  args.canvas.fillStyle = String(args.backgroundColor || "#1f0f0a");
+  args.canvas.fillRect(
+    layout.background.x,
+    layout.background.y,
+    layout.background.w,
+    layout.background.h
+  );
+  args.drawText(args.canvas, layout.text, layout.textX, layout.textY, layout.drawScale, args.color);
+  return layout;
 }
 
 export function normalizeDiagKindPresentationRuntime(

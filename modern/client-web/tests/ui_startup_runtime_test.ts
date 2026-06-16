@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   applyStartupMenuIndexRuntime,
   bindSkipIntroPreferenceRuntime,
+  buildStartupMenuRenderPlanRuntime,
   journeyOnwardStartedDiagRuntime,
   normalizeStartupMenuIndexRuntime,
   shouldStartSessionFromSkipIntroRuntime,
@@ -125,6 +126,84 @@ const menu = [
   { id: "journey", label: "Journey Onward", enabled: true },
   { id: "credits", label: "Credits", enabled: true }
 ];
+{
+  const plan = buildStartupMenuRenderPlanRuntime({
+    hasStartupArt: true,
+    isAuthenticated: false,
+    menu,
+    scale: 2,
+    selectedIndex: 1,
+    slotTileId: 0x19a
+  });
+  assert.equal(plan.useStartupArt, true);
+  assert.deepEqual(plan.clear, { fillStyle: "#000000", x: 0, y: 0, w: 640, h: 400 });
+  assert.deepEqual(plan.artSprites, [
+    { key: "title", x: 0x13 * 2, y: 0 },
+    { key: "subtitle", x: 0x3b * 2, y: 0x2f * 2 },
+    { key: "menu", x: 0x31 * 2, y: 0x53 * 2 }
+  ]);
+  assert.equal(plan.tiles.length, 0);
+  assert.equal(plan.texts.length, 0);
+}
+{
+  const plan = buildStartupMenuRenderPlanRuntime({
+    hasStartupArt: false,
+    hudTextColor: "#8b3f24",
+    isAuthenticated: false,
+    menu,
+    scale: 2,
+    selectedIndex: 1,
+    slotTileId: 0x19a
+  });
+  assert.equal(plan.useStartupArt, false);
+  assert.equal(plan.tiles.length, 60);
+  assert.deepEqual(plan.tiles.slice(0, 4), [
+    { tileId: 0x19a, x: 0, y: 0, scale: 2 },
+    { tileId: 0x19a, x: 0, y: 368, scale: 2 },
+    { tileId: 0x19a, x: 32, y: 0, scale: 2 },
+    { tileId: 0x19a, x: 32, y: 368, scale: 2 }
+  ]);
+  assert.deepEqual(plan.rects[1], {
+    fillStyle: "#5f2e1d",
+    x: 124,
+    y: 188,
+    w: 392,
+    h: 32
+  });
+  assert.deepEqual(plan.strokes[1], {
+    fillStyle: "",
+    strokeStyle: "#d7b981",
+    x: 124.5,
+    y: 188.5,
+    w: 391,
+    h: 31
+  });
+  assert.deepEqual(plan.texts.slice(0, 5), [
+    { text: "ULTIMA VI", x: 224, y: 60, scale: 2, color: "#8b3f24" },
+    { text: "THE FALSE PROPHET", x: 188, y: 88, scale: 2, color: "#8b3f24" },
+    { text: "Introduction", x: 172, y: 156, scale: 2, color: "#76644a" },
+    { text: ">>", x: 136, y: 196, scale: 2, color: "#f2dfb6" },
+    { text: "Journey Onward", x: 172, y: 196, scale: 2, color: "#76644a" }
+  ]);
+  assert.deepEqual(plan.texts.at(-1), {
+    text: "Use ARROWS + ENTER",
+    x: 196,
+    y: 324,
+    scale: 2,
+    color: "#8e7a55"
+  });
+}
+{
+  const plan = buildStartupMenuRenderPlanRuntime({
+    hasStartupArt: false,
+    isAuthenticated: true,
+    menu,
+    scale: 1,
+    selectedIndex: 1,
+    slotTileId: 0x19a
+  });
+  assert.equal(plan.texts.find((text) => text.text === "Journey Onward")?.color, "#f2dfb6");
+}
 assert.deepEqual(startupMenuSelectionActionRuntime([], 0, true), { kind: "none" });
 assert.deepEqual(startupMenuSelectionActionRuntime(menu, 0, true), {
   kind: "unavailable",

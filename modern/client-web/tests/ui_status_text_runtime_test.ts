@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   applyDiagPresentationRuntime,
   buildStatusPanelTextRuntime,
+  drawServerStatusOverlayRuntime,
   formatAudioStatusRuntime,
   formatAvatarStateRuntime,
   formatCenterTilesRuntime,
@@ -87,6 +88,45 @@ assert.equal(serverStatusOverlayLayoutRuntime({
   scale: 0,
   text: "X"
 }).drawScale, 1);
+{
+  const calls: string[] = [];
+  const canvas = {
+    fillStyle: "",
+    font: "",
+    fillRect: (x: number, y: number, w: number, h: number) => {
+      calls.push(`rect:${x},${y},${w},${h}`);
+    },
+    fillText: (text: string, x: number, y: number) => {
+      calls.push(`fillText:${text}:${x},${y}`);
+    }
+  };
+  const layout = drawServerStatusOverlayRuntime({
+    canvas,
+    color: "#b00000",
+    drawText: (_canvas, text, x, y, scale, color) => {
+      calls.push(`text:${text}:${x},${y}:${scale}:${color}`);
+    },
+    scale: 2,
+    text: "SERVER LOST"
+  });
+  assert.deepEqual(layout, {
+    background: {
+      h: 24,
+      w: 192,
+      x: 224,
+      y: 28
+    },
+    drawScale: 2,
+    text: "SERVER LOST",
+    textX: 232,
+    textY: 32
+  });
+  assert.equal(canvas.fillStyle, "#1f0f0a");
+  assert.deepEqual(calls, [
+    "rect:224,28,192,24",
+    "text:SERVER LOST:232,32:2:#b00000"
+  ]);
+}
 
 assert.deepEqual(formatClockRuntime({ time_h: 9, time_m: 5 }), {
   hh: "09",
