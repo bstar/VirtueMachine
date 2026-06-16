@@ -21,6 +21,10 @@ import {
   writeSkipIntroPreferenceRuntime
 } from "../ui/startup_runtime.ts";
 
+type StartupTestListener = {
+  current?: () => void;
+};
+
 assert.equal(normalizeStartupMenuIndexRuntime(-1, 5), 4);
 assert.equal(normalizeStartupMenuIndexRuntime(5, 5), 0);
 assert.equal(normalizeStartupMenuIndexRuntime(2, 5), 2);
@@ -442,13 +446,13 @@ assert.equal(shouldStartSessionFromSkipIntroRuntime({
 }), false);
 {
   const calls: boolean[] = [];
-  let listener: (() => void) | null = null;
+  const listener: StartupTestListener = {};
   let maybeStartCount = 0;
   const checkbox = {
     checked: false,
     addEventListener(type: "change", fn: () => void) {
       assert.equal(type, "change");
-      listener = fn;
+      listener.current = fn;
     }
   };
   assert.deepEqual(bindSkipIntroPreferenceRuntime({
@@ -467,11 +471,12 @@ assert.equal(shouldStartSessionFromSkipIntroRuntime({
   });
   assert.deepEqual(calls, [true]);
   checkbox.checked = false;
-  listener?.();
+  assert(listener.current, "skip-intro preference listener should be bound");
+  listener.current();
   assert.deepEqual(calls, [true, false]);
   assert.equal(maybeStartCount, 0);
   checkbox.checked = true;
-  listener?.();
+  listener.current();
   assert.deepEqual(calls, [true, false, true]);
   assert.equal(maybeStartCount, 1);
 }
