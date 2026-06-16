@@ -25,6 +25,11 @@ export type CursorCycleRuntime = {
   index: number;
 };
 
+export type CursorShapeSelectionRuntime<T extends CursorShapeRuntime> = {
+  index: number;
+  shape: T;
+};
+
 export type LegacyCursorLayerTargetRuntime =
   | {
     kind: "backdrop";
@@ -38,6 +43,78 @@ export type LegacyCursorLayerTargetRuntime =
     mouseX: number;
     mouseY: number;
   };
+
+export type LegacySelectCellMarkerPlanRuntime = {
+  fallbackStroke: {
+    h: number;
+    lineWidth: number;
+    strokeStyle: string;
+    w: number;
+    x: number;
+    y: number;
+  };
+  tile: {
+    h: number;
+    tileId: number;
+    w: number;
+    x: number;
+    y: number;
+  } | null;
+};
+
+export function cursorShapeSelectionRuntime<T extends CursorShapeRuntime>(args: {
+  cursorIndex: unknown;
+  cursorPixmaps: readonly T[] | null | undefined;
+  mouseInCanvas: boolean;
+  targetCursorIndex: unknown;
+  useCursorActive: boolean;
+}): CursorShapeSelectionRuntime<T> | null {
+  const cursorPixmaps = args.cursorPixmaps;
+  if (!args.mouseInCanvas || !cursorPixmaps || cursorPixmaps.length <= 0) {
+    return null;
+  }
+  const fallbackIndex = Number(args.cursorIndex) | 0;
+  const requestedIndex = args.useCursorActive ? (Number(args.targetCursorIndex) | 0) : fallbackIndex;
+  const shape = cursorPixmaps[requestedIndex] || cursorPixmaps[fallbackIndex] || cursorPixmaps[0];
+  if (!shape) {
+    return null;
+  }
+  return {
+    index: cursorPixmaps[requestedIndex] ? requestedIndex : cursorPixmaps[fallbackIndex] ? fallbackIndex : 0,
+    shape
+  };
+}
+
+export function legacySelectCellMarkerPlanRuntime(args: {
+  px: unknown;
+  py: unknown;
+  selectorTileId: unknown;
+  size: unknown;
+}): LegacySelectCellMarkerPlanRuntime {
+  const px = Number(args.px) | 0;
+  const py = Number(args.py) | 0;
+  const size = Math.max(0, Number(args.size) | 0);
+  const selectorTileId = Number(args.selectorTileId);
+  return {
+    fallbackStroke: {
+      h: Math.max(0, size - 4),
+      lineWidth: 2,
+      strokeStyle: "#f6d365",
+      w: Math.max(0, size - 4),
+      x: px + 2,
+      y: py + 2
+    },
+    tile: Number.isFinite(selectorTileId)
+      ? {
+        h: size,
+        tileId: selectorTileId & 0xffff,
+        w: size,
+        x: px,
+        y: py
+      }
+      : null
+  };
+}
 
 export function cursorCycleRuntime(args: {
   count: unknown;

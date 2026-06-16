@@ -3,6 +3,7 @@ import {
   applyLegacyCornerVariantRuntime,
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
+  legacyHudBackdropRenderPlanRuntime,
   legacyViewportFramePlacementsRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
@@ -43,6 +44,43 @@ const frameTiles = {
   right: 0x1b7,
   top: 0x1b1
 };
+
+assert.deepEqual(legacyHudBackdropRenderPlanRuntime({
+  backdropH: 400,
+  backdropW: 640,
+  legacyFramePreviewEnabled: false
+}), { kind: "skip" });
+assert.deepEqual(legacyHudBackdropRenderPlanRuntime({
+  backdropH: 0,
+  backdropW: 640,
+  legacyFramePreviewEnabled: true
+}), { kind: "skip" });
+assert.deepEqual(legacyHudBackdropRenderPlanRuntime({
+  backdropH: 400,
+  backdropW: 640,
+  baseH: 400,
+  baseW: 640,
+  legacyFramePreviewEnabled: true
+}), {
+  backdropH: 400,
+  backdropW: 640,
+  kind: "render",
+  restoreBase: true,
+  scale: 2
+});
+assert.deepEqual(legacyHudBackdropRenderPlanRuntime({
+  backdropH: 200,
+  backdropW: 319,
+  baseH: 200,
+  baseW: 640,
+  legacyFramePreviewEnabled: true
+}), {
+  backdropH: 200,
+  backdropW: 319,
+  kind: "render",
+  restoreBase: false,
+  scale: 1
+});
 
 {
   const placements = legacyViewportFramePlacementsRuntime({ tiles: frameTiles });

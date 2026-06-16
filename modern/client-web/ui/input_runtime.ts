@@ -56,6 +56,8 @@ export type CanvasMouseEventRuntime = {
   clientY?: unknown;
 };
 
+export type ActiveCursorSurfaceRuntime = "legacy_backdrop" | "main";
+
 export type CanvasMouseSurfaceRuntime = {
   getBoundingClientRect(): SurfaceBoundsRuntime;
 };
@@ -89,6 +91,11 @@ export type KeyboardShortcutRuntime = {
   shiftKey?: boolean;
 };
 
+export type LegacyHudClickPlanRuntime<T> =
+  | { kind: "ignore" }
+  | { kind: "block_server" }
+  | { kind: "hit"; hit: T; point: LogicalPointRuntime };
+
 export function shouldSuppressShiftContextMenuRuntime(ev: PointerGestureRuntime): boolean {
   return !!ev.shiftKey;
 }
@@ -108,6 +115,13 @@ export function shouldLetBrowserHandleShortcutRuntime(ev: KeyboardShortcutRuntim
     return false;
   }
   return !isHoverReportCopyKeyRuntime(ev);
+}
+
+export function activeCursorSurfaceRuntime(args: {
+  hasLegacyBackdrop: boolean;
+  legacyFramePreviewEnabled: boolean;
+}): ActiveCursorSurfaceRuntime {
+  return args.legacyFramePreviewEnabled && args.hasLegacyBackdrop ? "legacy_backdrop" : "main";
 }
 
 export function passTurnKeyRuntime(key: unknown): InputDiagRuntime | null {
@@ -267,4 +281,42 @@ export function logicalPointInBoundsRuntime(
     && point.y >= 0
     && point.x < logicalSize.width
     && point.y < logicalSize.height;
+}
+
+export function legacyHudClickPlanRuntime<T>(args: {
+  clientX: unknown;
+  clientY: unknown;
+  hitTest: (x: number, y: number) => T | null | undefined;
+  legacyFramePreviewEnabled: boolean;
+  legacyHudLayerHidden: boolean;
+  serverConnectionBroken: boolean;
+  sessionStarted: boolean;
+  surfaceBounds: SurfaceBoundsRuntime;
+  surfaceSize: SurfaceSizeRuntime;
+}): LegacyHudClickPlanRuntime<T> {
+  if (!args.sessionStarted) {
+    return { kind: "ignore" };
+  }
+  if (args.serverConnectionBroken) {
+    return { kind: "block_server" };
+  }
+  if (!args.legacyFramePreviewEnabled || args.legacyHudLayerHidden) {
+    return { kind: "ignore" };
+  }
+  const logicalSize = { width: 320, height: 200 };
+  const point = logicalPointAtSurfaceRuntime({
+    clientX: args.clientX,
+    clientY: args.clientY,
+    bounds: args.surfaceBounds,
+    surfaceSize: args.surfaceSize,
+    logicalSize
+  });
+  if (!logicalPointInBoundsRuntime(point, logicalSize)) {
+    return { kind: "ignore" };
+  }
+  const hit = args.hitTest(point.x, point.y);
+  if (!hit) {
+    return { kind: "ignore" };
+  }
+  return { kind: "hit", hit, point };
 }

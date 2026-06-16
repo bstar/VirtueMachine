@@ -5,6 +5,7 @@ import {
   advanceBootIntroInputRuntime,
   advanceBootIntroRuntime,
   activeBootIntroPaletteRuntime,
+  bootIntroCachedCanvasRuntime,
   bootIntroClipRectRuntime,
   bootIntroPaletteCacheKeyRuntime,
   bootIntroInputPlanRuntime,
@@ -37,6 +38,7 @@ import {
   bootIntroOverlayAlphaRuntime,
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
+  resolveBootIntroTextCardPrintOpRuntime,
   startBootIntroRuntime,
   wrapBootIntroTextPixelsRuntime,
   wrapBootIntroTextRuntime
@@ -211,6 +213,45 @@ function testPaletteHelpers() {
   assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "stones", id: "stones_enter" }, 250), "p3:enter:r2");
   assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "stones", id: "stones_gate" }, 125), "p3:r1");
   assert.equal(bootIntroPaletteCacheKeyRuntime({ kind: "splash" }, 0), "p0");
+
+  {
+    const cachedCanvas = { id: "cached" };
+    const cache = new Map<string, { id: string } | null>([["sprite", cachedCanvas]]);
+    let createCount = 0;
+    assert.equal(bootIntroCachedCanvasRuntime({
+      cache,
+      cacheKey: "sprite",
+      createCanvas: () => {
+        createCount += 1;
+        return { id: "new" };
+      }
+    }), cachedCanvas);
+    assert.equal(createCount, 0);
+  }
+  {
+    const cache = new Map<string, { id: string } | null>();
+    let createCount = 0;
+    const created = bootIntroCachedCanvasRuntime({
+      cache,
+      cacheKey: "sprite",
+      createCanvas: () => {
+        createCount += 1;
+        return { id: "new" };
+      }
+    });
+    assert.deepEqual(created, { id: "new" });
+    assert.deepEqual(cache.get("sprite"), { id: "new" });
+    assert.equal(createCount, 1);
+  }
+  {
+    const cache = new Map<string, { id: string } | null>();
+    assert.equal(bootIntroCachedCanvasRuntime({
+      cache,
+      cacheKey: "missing",
+      createCanvas: () => null
+    }), null);
+    assert.equal(cache.has("missing"), false);
+  }
 
   const base = makePalette(0);
   const intro = [makePalette(10), makePalette(20), makePalette(30), makePalette(40)];
@@ -610,6 +651,31 @@ function testTextCardRenderPlanning() {
       { text: "two", startX: 8, width: 68, x: -1, y: -1 }
     ],
     textMaxWidth: 68
+  });
+
+  assert.deepEqual(resolveBootIntroTextCardPrintOpRuntime(
+    { text: "one", startX: 8, width: 50, x: 1, y: 2 },
+    { x: 20, y: 30 }
+  ), {
+    text: "one",
+    startX: 8,
+    width: 50,
+    x: 1,
+    y: 2,
+    resolvedX: 1,
+    resolvedY: 2
+  });
+  assert.deepEqual(resolveBootIntroTextCardPrintOpRuntime(
+    { text: "two", startX: 8, width: 50, x: -1, y: -1 },
+    { x: 20, y: 30 }
+  ), {
+    text: "two",
+    startX: 8,
+    width: 50,
+    x: -1,
+    y: -1,
+    resolvedX: 20,
+    resolvedY: 30
   });
 }
 

@@ -26,6 +26,25 @@ export type StartupSkipIntroCheckboxRuntime = {
   addEventListener?(type: "change", listener: () => void): void;
 };
 
+export type StartupCanvasCacheRuntime<TCanvas> = {
+  get(key: string): TCanvas | null | undefined;
+  set(key: string, canvas: TCanvas | null): unknown;
+};
+
+export function startupCachedCanvasRuntime<TCanvas>(args: {
+  cache: StartupCanvasCacheRuntime<TCanvas>;
+  cacheKey: string;
+  createCanvas: () => TCanvas | null | undefined;
+}): TCanvas | null {
+  const cached = args.cache.get(args.cacheKey);
+  if (cached !== undefined) {
+    return cached || null;
+  }
+  const canvas = args.createCanvas() || null;
+  args.cache.set(args.cacheKey, canvas);
+  return canvas;
+}
+
 export function applyStartupMenuIndexRuntime(
   state: StartupMenuIndexStateRuntime,
   nextIndex: unknown,
@@ -218,6 +237,72 @@ export type StartupMenuRenderPlanRuntime = {
   tiles: StartupMenuRenderPlanTileRuntime[];
   useStartupArt: boolean;
 };
+
+export type StartupScreenLayerRuntime = "boot_intro" | "startup_menu";
+
+export type StartupScreenRenderPlanRuntime = {
+  legacyPreview: null | {
+    backdropH: number;
+    backdropW: number;
+    layer: StartupScreenLayerRuntime;
+    restoreBase: boolean;
+    scale: number;
+    viewport: {
+      destH: 160;
+      destW: 160;
+      destX: 0;
+      destY: 0;
+      sourceH: number;
+      sourceW: number;
+      sourceX: number;
+      sourceY: number;
+    };
+  };
+  mainLayer: StartupScreenLayerRuntime;
+  mainScale: number;
+};
+
+export function buildStartupScreenRenderPlanRuntime(args: {
+  bootIntroActive?: boolean;
+  canvasW: unknown;
+  legacyBackdropBaseH?: unknown;
+  legacyBackdropBaseW?: unknown;
+  legacyBackdropH?: unknown;
+  legacyBackdropW?: unknown;
+  legacyPreviewEnabled?: boolean;
+}): StartupScreenRenderPlanRuntime {
+  const canvasW = Number(args.canvasW) | 0;
+  const mainScale = Math.max(1, Math.floor(canvasW / 320));
+  const layer: StartupScreenLayerRuntime = args.bootIntroActive ? "boot_intro" : "startup_menu";
+  const backdropW = Number(args.legacyBackdropW) | 0;
+  const backdropH = Number(args.legacyBackdropH) | 0;
+  const legacyScale = Math.max(1, Math.floor(backdropW / 320));
+  const restoreBase = (Number(args.legacyBackdropBaseW) | 0) === backdropW
+    && (Number(args.legacyBackdropBaseH) | 0) === backdropH;
+  return {
+    legacyPreview: args.legacyPreviewEnabled && backdropW > 0 && backdropH > 0
+      ? {
+        backdropH,
+        backdropW,
+        layer,
+        restoreBase,
+        scale: legacyScale,
+        viewport: {
+          destH: 160,
+          destW: 160,
+          destX: 0,
+          destY: 0,
+          sourceH: 160 * legacyScale,
+          sourceW: 160 * legacyScale,
+          sourceX: 8 * legacyScale,
+          sourceY: 8 * legacyScale
+        }
+      }
+      : null,
+    mainLayer: layer,
+    mainScale
+  };
+}
 
 export function buildStartupMenuRenderPlanRuntime(args: {
   hasStartupArt?: unknown;

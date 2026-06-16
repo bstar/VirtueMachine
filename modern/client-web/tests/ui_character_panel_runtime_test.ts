@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildCharacterPanelRenderPlanRuntime,
   CHARACTER_PANEL_SLOTS_RUNTIME,
   projectCharacterPanelPicksRuntime
 } from "../ui/character_panel_runtime.ts";
@@ -10,6 +11,60 @@ assert.deepEqual(CHARACTER_PANEL_SLOTS_RUNTIME, [
   { x: 172, y: 8, w: 76, h: 96 },
   { x: 254, y: 8, w: 76, h: 96 }
 ]);
+
+{
+  const plan = buildCharacterPanelRenderPlanRuntime({
+    canvasH: 120,
+    canvasW: 340,
+    dataReady: false
+  });
+  assert.deepEqual(plan.background, { fillStyle: "#090909", x: 0, y: 0, w: 340, h: 120 });
+  assert.equal(plan.slotRects.length, 4);
+  assert.deepEqual(plan.slotRects[0], { fillStyle: "#111827", x: 8, y: 8, w: 76, h: 96 });
+  assert.deepEqual(plan.slotStrokes[0], { strokeStyle: "#334155", x: 8.5, y: 8.5, w: 75, h: 95 });
+  assert.deepEqual(plan.message, {
+    color: "#94a3b8",
+    font: "11px var(--vm-ui-font), monospace",
+    text: "Awaiting actor sprite data...",
+    x: 12,
+    y: 22
+  });
+  assert.deepEqual(plan.sprites, []);
+  assert.deepEqual(plan.texts, []);
+}
+
+{
+  const plan = buildCharacterPanelRenderPlanRuntime({
+    canvasH: 120,
+    canvasW: 340,
+    dataReady: true,
+    picks: [
+      { label: "AVATAR", tileId: 0x123 },
+      { label: "NPC 4", tileId: null }
+    ],
+    slots: [
+      { x: 8, y: 8, w: 76, h: 96 },
+      { x: 90, y: 8, w: 76, h: 96 }
+    ]
+  });
+  assert.equal(plan.message, null);
+  assert.deepEqual(plan.texts, [
+    { color: "#9ca3af", font: "10px var(--vm-ui-font), monospace", text: "AVATAR", x: 14, y: 20 },
+    { color: "#64748b", font: "9px var(--vm-ui-font), monospace", text: "0x123", x: 14, y: 96 },
+    { color: "#9ca3af", font: "10px var(--vm-ui-font), monospace", text: "NPC 4", x: 96, y: 20 }
+  ]);
+  assert.deepEqual(plan.sprites, [{
+    destH: 48,
+    destW: 48,
+    destX: 22,
+    destY: 28,
+    sourceH: 16,
+    sourceW: 16,
+    sourceX: 0,
+    sourceY: 0,
+    tileId: 0x123
+  }]);
+}
 
 {
   const animatedInputs: number[] = [];

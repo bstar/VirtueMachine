@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  activeCursorSurfaceRuntime,
   activeGameKeydownPlanRuntime,
   applyCanvasMouseEventRuntime,
   applyCanvasMouseStatePatchRuntime,
@@ -7,6 +8,7 @@ import {
   clearCanvasMouseStateRuntime,
   isHoverReportCopyKeyRuntime,
   isShiftRightClickCopyGestureRuntime,
+  legacyHudClickPlanRuntime,
   logicalPointAtSurfaceRuntime,
   logicalPointInBoundsRuntime,
   normalizedPointAtSurfaceRuntime,
@@ -154,6 +156,60 @@ assert.equal(shouldLetBrowserHandleShortcutRuntime({ metaKey: true, key: "a" }),
 assert.equal(shouldLetBrowserHandleShortcutRuntime({ ctrlKey: true, altKey: true, key: "s" }), false);
 assert.equal(shouldLetBrowserHandleShortcutRuntime({ ctrlKey: true, shiftKey: true, key: "c" }), false);
 assert.equal(shouldLetBrowserHandleShortcutRuntime({ shiftKey: true, code: "Backquote" }), false);
+assert.equal(activeCursorSurfaceRuntime({
+  hasLegacyBackdrop: true,
+  legacyFramePreviewEnabled: true
+}), "legacy_backdrop");
+assert.equal(activeCursorSurfaceRuntime({
+  hasLegacyBackdrop: false,
+  legacyFramePreviewEnabled: true
+}), "main");
+assert.equal(activeCursorSurfaceRuntime({
+  hasLegacyBackdrop: true,
+  legacyFramePreviewEnabled: false
+}), "main");
+{
+  const baseHudClick = {
+    clientX: 160,
+    clientY: 100,
+    hitTest: (x: number, y: number) => x === 160 && y === 100 ? ({ id: "avatar" }) : null,
+    legacyFramePreviewEnabled: true,
+    legacyHudLayerHidden: false,
+    serverConnectionBroken: false,
+    sessionStarted: true,
+    surfaceBounds: { left: 0, top: 0, width: 320, height: 200 },
+    surfaceSize: { width: 320, height: 200 }
+  };
+  assert.deepEqual(legacyHudClickPlanRuntime(baseHudClick), {
+    kind: "hit",
+    hit: { id: "avatar" },
+    point: { x: 160, y: 100 }
+  });
+  assert.deepEqual(legacyHudClickPlanRuntime({
+    ...baseHudClick,
+    sessionStarted: false
+  }), { kind: "ignore" });
+  assert.deepEqual(legacyHudClickPlanRuntime({
+    ...baseHudClick,
+    serverConnectionBroken: true
+  }), { kind: "block_server" });
+  assert.deepEqual(legacyHudClickPlanRuntime({
+    ...baseHudClick,
+    legacyFramePreviewEnabled: false
+  }), { kind: "ignore" });
+  assert.deepEqual(legacyHudClickPlanRuntime({
+    ...baseHudClick,
+    legacyHudLayerHidden: true
+  }), { kind: "ignore" });
+  assert.deepEqual(legacyHudClickPlanRuntime({
+    ...baseHudClick,
+    clientX: 400
+  }), { kind: "ignore" });
+  assert.deepEqual(legacyHudClickPlanRuntime({
+    ...baseHudClick,
+    hitTest: () => null
+  }), { kind: "ignore" });
+}
 assert.deepEqual(passTurnKeyRuntime(" "), {
   diagClass: "diag ok",
   diagText: "Pass turn."

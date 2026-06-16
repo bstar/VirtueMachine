@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   applyDiagPresentationRuntime,
+  applyStatusPanelTextRuntime,
   buildStatusPanelTextRuntime,
   drawServerStatusOverlayRuntime,
   formatAudioStatusRuntime,
@@ -23,6 +24,30 @@ import {
   serverStatusOverlayLayoutRuntime
 } from "../ui/status_text_runtime.ts";
 
+const sampleStatusText = {
+  audio: "audio ready",
+  avatarState: "avatar (E, sit)",
+  centerBand: "static",
+  centerTiles: "0x1 -> 0x2",
+  clock: "09:05",
+  date: "1 / 3 / 99",
+  entities: "2 / 9",
+  hash: "0xabc",
+  inputMode: "World",
+  loopHealth: "dt 16ms",
+  netPlayers: "3",
+  npcOcclusionBlocks: "5",
+  objects: "4 / 12",
+  palettePhase: "35",
+  position: "307, 347, 0",
+  queued: "2",
+  renderParity: "ok",
+  simLoop: "running",
+  tick: "77",
+  tile: "0x2d2",
+  topTimeOfDay: "morning (09:05)"
+};
+
 {
   const target = { className: "", textContent: "" };
   applyDiagPresentationRuntime(null, { diagClass: "diag ok", diagText: "ignored" });
@@ -33,6 +58,65 @@ import {
   applyDiagPresentationRuntime(target, { diagClass: "", diagText: null });
   assert.deepEqual(target, { className: "", textContent: "" });
 }
+
+{
+  const targets = {
+    statAudio: { textContent: "old audio" },
+    statAvatarState: { textContent: "" },
+    statCenterBand: { textContent: "" },
+    statCenterTiles: { textContent: "" },
+    statClock: { textContent: "" },
+    statDate: { textContent: "" },
+    statEntities: { textContent: "" },
+    statHash: { textContent: "" },
+    statLoopHealth: { textContent: "" },
+    statNetPlayers: { textContent: "" },
+    statNpcOcclusionBlocks: { textContent: "" },
+    statObjects: { textContent: "" },
+    statPalettePhase: { textContent: "" },
+    statPos: { textContent: "" },
+    statQueued: { textContent: "" },
+    statRenderParity: { textContent: "" },
+    statSimLoop: { textContent: "" },
+    statTick: { textContent: "" },
+    topInputMode: { textContent: "" },
+    topTimeOfDay: { textContent: "" }
+  };
+  applyStatusPanelTextRuntime(targets, sampleStatusText, { audioReady: false });
+  assert.equal(targets.statTick.textContent, "77");
+  assert.equal(targets.statPos.textContent, "307, 347, 0");
+  assert.equal(targets.statClock.textContent, "09:05");
+  assert.equal(targets.statDate.textContent, "1 / 3 / 99");
+  assert.equal(targets.topTimeOfDay.textContent, "morning (09:05)");
+  assert.equal(targets.topInputMode.textContent, "World");
+  assert.equal(targets.statQueued.textContent, "2");
+  assert.equal(targets.statObjects.textContent, "4 / 12");
+  assert.equal(targets.statEntities.textContent, "2 / 9");
+  assert.equal(targets.statRenderParity.textContent, "ok");
+  assert.equal(targets.statAvatarState.textContent, "avatar (E, sit)");
+  assert.equal(targets.statNpcOcclusionBlocks.textContent, "5");
+  assert.equal(targets.statHash.textContent, "0xabc");
+  assert.equal(targets.statSimLoop.textContent, "running");
+  assert.equal(targets.statLoopHealth.textContent, "dt 16ms");
+  assert.equal(targets.statAudio.textContent, "old audio");
+  assert.equal(targets.statPalettePhase.textContent, "35");
+  assert.equal(targets.statCenterTiles.textContent, "0x1 -> 0x2");
+  assert.equal(targets.statCenterBand.textContent, "static");
+  assert.equal(targets.statNetPlayers.textContent, "3");
+
+  applyStatusPanelTextRuntime(targets, sampleStatusText, { audioReady: true });
+  assert.equal(targets.statAudio.textContent, "audio ready");
+}
+
+assert.doesNotThrow(() => applyStatusPanelTextRuntime({
+  statClock: { textContent: "" },
+  statDate: { textContent: "" },
+  statHash: { textContent: "" },
+  statObjects: { textContent: "" },
+  statPos: { textContent: "" },
+  statQueued: { textContent: "" },
+  statTick: { textContent: "" }
+}, sampleStatusText, { audioReady: true }));
 
 assert.equal(normalizeDiagKindPresentationRuntime(null), null);
 assert.deepEqual(normalizeDiagKindPresentationRuntime({ diagClass: "ok", diagText: "Ready." }), {

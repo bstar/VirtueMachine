@@ -48,6 +48,33 @@ export type StatusPanelTextRuntime = {
   topTimeOfDay: string;
 };
 
+export type StatusTextTargetRuntime = {
+  textContent: string | null;
+};
+
+export type StatusPanelTextTargetsRuntime = {
+  statAudio?: StatusTextTargetRuntime | null;
+  statAvatarState?: StatusTextTargetRuntime | null;
+  statCenterBand?: StatusTextTargetRuntime | null;
+  statCenterTiles?: StatusTextTargetRuntime | null;
+  statClock: StatusTextTargetRuntime;
+  statDate: StatusTextTargetRuntime;
+  statEntities?: StatusTextTargetRuntime | null;
+  statHash: StatusTextTargetRuntime;
+  statLoopHealth?: StatusTextTargetRuntime | null;
+  statNetPlayers?: StatusTextTargetRuntime | null;
+  statNpcOcclusionBlocks?: StatusTextTargetRuntime | null;
+  statObjects: StatusTextTargetRuntime;
+  statPalettePhase?: StatusTextTargetRuntime | null;
+  statPos: StatusTextTargetRuntime;
+  statQueued: StatusTextTargetRuntime;
+  statRenderParity?: StatusTextTargetRuntime | null;
+  statSimLoop?: StatusTextTargetRuntime | null;
+  statTick: StatusTextTargetRuntime;
+  topInputMode?: StatusTextTargetRuntime | null;
+  topTimeOfDay?: StatusTextTargetRuntime | null;
+};
+
 export type ServerStatusOverlayLayoutRuntime = {
   background: {
     h: number;
@@ -155,6 +182,35 @@ export function applyDiagPresentationRuntime(
   }
   target.className = String(presentation.diagClass || "");
   target.textContent = String(presentation.diagText || "");
+}
+
+export function applyStatusPanelTextRuntime(
+  targets: StatusPanelTextTargetsRuntime,
+  text: StatusPanelTextRuntime,
+  options: { audioReady?: boolean } = {}
+): void {
+  targets.statTick.textContent = text.tick;
+  targets.statPos.textContent = text.position;
+  targets.statClock.textContent = text.clock;
+  targets.statDate.textContent = text.date;
+  targets.topTimeOfDay && (targets.topTimeOfDay.textContent = text.topTimeOfDay);
+  targets.topInputMode && (targets.topInputMode.textContent = text.inputMode);
+  targets.statQueued.textContent = text.queued;
+  targets.statObjects.textContent = text.objects;
+  targets.statEntities && (targets.statEntities.textContent = text.entities);
+  targets.statRenderParity && (targets.statRenderParity.textContent = text.renderParity);
+  targets.statAvatarState && (targets.statAvatarState.textContent = text.avatarState);
+  targets.statNpcOcclusionBlocks && (targets.statNpcOcclusionBlocks.textContent = text.npcOcclusionBlocks);
+  targets.statHash.textContent = text.hash;
+  targets.statSimLoop && (targets.statSimLoop.textContent = text.simLoop);
+  targets.statLoopHealth && (targets.statLoopHealth.textContent = text.loopHealth);
+  if (targets.statAudio && options.audioReady) {
+    targets.statAudio.textContent = text.audio;
+  }
+  targets.statPalettePhase && (targets.statPalettePhase.textContent = text.palettePhase);
+  targets.statCenterTiles && (targets.statCenterTiles.textContent = text.centerTiles);
+  targets.statCenterBand && (targets.statCenterBand.textContent = text.centerBand);
+  targets.statNetPlayers && (targets.statNetPlayers.textContent = text.netPlayers);
 }
 
 export function formatClockRuntime(world: Pick<StatusWorldRuntime, "time_h" | "time_m">): {

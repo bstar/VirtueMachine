@@ -19,6 +19,51 @@ export type CharacterPanelPickRuntime = {
   tileId: number | null;
 };
 
+export type CharacterPanelRectRuntime = {
+  fillStyle: string;
+  h: number;
+  w: number;
+  x: number;
+  y: number;
+};
+
+export type CharacterPanelStrokeRuntime = {
+  h: number;
+  strokeStyle: string;
+  w: number;
+  x: number;
+  y: number;
+};
+
+export type CharacterPanelTextRuntime = {
+  color: string;
+  font: string;
+  text: string;
+  x: number;
+  y: number;
+};
+
+export type CharacterPanelSpriteRuntime = {
+  destH: number;
+  destW: number;
+  destX: number;
+  destY: number;
+  sourceH: 16;
+  sourceW: 16;
+  sourceX: 0;
+  sourceY: 0;
+  tileId: number;
+};
+
+export type CharacterPanelRenderPlanRuntime = {
+  background: CharacterPanelRectRuntime;
+  message: CharacterPanelTextRuntime | null;
+  slotRects: CharacterPanelRectRuntime[];
+  slotStrokes: CharacterPanelStrokeRuntime[];
+  sprites: CharacterPanelSpriteRuntime[];
+  texts: CharacterPanelTextRuntime[];
+};
+
 export const CHARACTER_PANEL_SLOTS_RUNTIME: readonly CharacterPanelSlotRuntime[] = Object.freeze([
   { x: 8, y: 8, w: 76, h: 96 },
   { x: 90, y: 8, w: 76, h: 96 },
@@ -70,4 +115,85 @@ export function projectCharacterPanelPicksRuntime(args: {
     picks.push({ label: "EMPTY", tileId: null });
   }
   return picks.slice(0, slotCount);
+}
+
+export function buildCharacterPanelRenderPlanRuntime(args: {
+  canvasH: unknown;
+  canvasW: unknown;
+  dataReady: boolean;
+  picks?: readonly CharacterPanelPickRuntime[] | null;
+  slots?: readonly CharacterPanelSlotRuntime[] | null;
+}): CharacterPanelRenderPlanRuntime {
+  const slots = args.slots && args.slots.length ? args.slots : CHARACTER_PANEL_SLOTS_RUNTIME;
+  const plan: CharacterPanelRenderPlanRuntime = {
+    background: {
+      fillStyle: "#090909",
+      h: Number(args.canvasH) | 0,
+      w: Number(args.canvasW) | 0,
+      x: 0,
+      y: 0
+    },
+    message: null,
+    slotRects: [],
+    slotStrokes: [],
+    sprites: [],
+    texts: []
+  };
+  for (const slot of slots) {
+    plan.slotRects.push({ fillStyle: "#111827", x: slot.x, y: slot.y, w: slot.w, h: slot.h });
+    plan.slotStrokes.push({
+      h: slot.h - 1,
+      strokeStyle: "#334155",
+      w: slot.w - 1,
+      x: slot.x + 0.5,
+      y: slot.y + 0.5
+    });
+  }
+  if (!args.dataReady) {
+    plan.message = {
+      color: "#94a3b8",
+      font: "11px var(--vm-ui-font), monospace",
+      text: "Awaiting actor sprite data...",
+      x: 12,
+      y: 22
+    };
+    return plan;
+  }
+  const picks = Array.isArray(args.picks) ? args.picks : [];
+  for (let i = 0; i < slots.length; i += 1) {
+    const slot = slots[i];
+    const pick = picks[i] || { label: "EMPTY", tileId: null };
+    plan.texts.push({
+      color: "#9ca3af",
+      font: "10px var(--vm-ui-font), monospace",
+      text: pick.label,
+      x: slot.x + 6,
+      y: slot.y + 12
+    });
+    if (pick.tileId == null) {
+      continue;
+    }
+    const scale = 3;
+    const destW = 16 * scale;
+    const destH = 16 * scale;
+    plan.sprites.push({
+      destH,
+      destW,
+      destX: slot.x + Math.floor((slot.w - destW) / 2),
+      destY: slot.y + 20,
+      sourceH: 16,
+      sourceW: 16,
+      sourceX: 0,
+      sourceY: 0,
+      tileId: pick.tileId & 0xffff
+    });
+    plan.texts.push({
+      color: "#64748b",
+      font: "9px var(--vm-ui-font), monospace",
+      text: `0x${(pick.tileId & 0xffff).toString(16)}`,
+      x: slot.x + 6,
+      y: slot.y + slot.h - 8
+    });
+  }
+  return plan;
 }

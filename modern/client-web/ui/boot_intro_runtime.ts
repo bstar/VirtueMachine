@@ -156,6 +156,11 @@ export type BootIntroTextCardPrintOpRuntime = {
   y: number;
 };
 
+export type BootIntroTextCardResolvedPrintOpRuntime = BootIntroTextCardPrintOpRuntime & {
+  resolvedX: number;
+  resolvedY: number;
+};
+
 export type BootIntroTextCardLineRuntime = {
   drawX: number;
   text: string;
@@ -194,6 +199,11 @@ export type BootIntroWouFontRuntime = {
 export type BootIntroTextCanvasRuntime = {
   fillStyle?: unknown;
   fillRect(x: number, y: number, w: number, h: number): void;
+};
+
+export type BootIntroCanvasCacheRuntime<TCanvas> = {
+  get(key: string): TCanvas | null | undefined;
+  set(key: string, canvas: TCanvas | null): unknown;
 };
 
 export type BootIntroWindowSpriteRuntime = {
@@ -789,6 +799,22 @@ export function bootIntroPaletteCacheKeyRuntime(
     suffix = `${scene?.id === "stones_enter" ? ":enter" : ""}:r${bootIntroStonesPaletteShiftRuntime(scene, elapsedMs)}`;
   }
   return `p${idx}${suffix}`;
+}
+
+export function bootIntroCachedCanvasRuntime<TCanvas>(args: {
+  cache: BootIntroCanvasCacheRuntime<TCanvas>;
+  cacheKey: string;
+  createCanvas: () => TCanvas | null | undefined;
+}): TCanvas | null {
+  const cached = args.cache.get(args.cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const canvas = args.createCanvas() || null;
+  if (canvas) {
+    args.cache.set(args.cacheKey, canvas);
+  }
+  return canvas;
 }
 
 export function activeBootIntroPaletteRuntime(args: {
@@ -1427,6 +1453,17 @@ export function buildBootIntroTextCardRenderPlanRuntime(args: {
     panel,
     printOps: [],
     textMaxWidth
+  };
+}
+
+export function resolveBootIntroTextCardPrintOpRuntime(
+  op: BootIntroTextCardPrintOpRuntime,
+  last: { x: unknown; y: unknown } = { x: 0, y: 0 }
+): BootIntroTextCardResolvedPrintOpRuntime {
+  return {
+    ...op,
+    resolvedX: (Number(op.x) | 0) >= 0 ? (Number(op.x) | 0) : (Number(last.x) | 0),
+    resolvedY: (Number(op.y) | 0) >= 0 ? (Number(op.y) | 0) : (Number(last.y) | 0)
   };
 }
 

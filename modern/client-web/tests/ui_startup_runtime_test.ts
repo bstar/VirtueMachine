@@ -3,6 +3,7 @@ import {
   applyStartupMenuIndexRuntime,
   bindSkipIntroPreferenceRuntime,
   buildStartupMenuRenderPlanRuntime,
+  buildStartupScreenRenderPlanRuntime,
   journeyOnwardStartedDiagRuntime,
   normalizeStartupMenuIndexRuntime,
   shouldStartSessionFromSkipIntroRuntime,
@@ -14,6 +15,7 @@ import {
   startupMenuKeyPatchRuntime,
   startupMenuSelectionActionRuntime,
   startupMenuSelectionPresentationRuntime,
+  startupCachedCanvasRuntime,
   startupSessionGuardDiagRuntime,
   startupRuntimeModeTextRuntime,
   writeSkipIntroPreferenceRuntime
@@ -23,6 +25,51 @@ assert.equal(normalizeStartupMenuIndexRuntime(-1, 5), 4);
 assert.equal(normalizeStartupMenuIndexRuntime(5, 5), 0);
 assert.equal(normalizeStartupMenuIndexRuntime(2, 5), 2);
 assert.equal(normalizeStartupMenuIndexRuntime(2, 0), 0);
+{
+  const cachedCanvas = { id: "cached" };
+  const cache = new Map<string, { id: string } | null>([["sprite", cachedCanvas]]);
+  let createCount = 0;
+  assert.equal(startupCachedCanvasRuntime({
+    cache,
+    cacheKey: "sprite",
+    createCanvas: () => {
+      createCount += 1;
+      return { id: "new" };
+    }
+  }), cachedCanvas);
+  assert.equal(createCount, 0);
+}
+{
+  const cache = new Map<string, { id: string } | null>();
+  const created = startupCachedCanvasRuntime({
+    cache,
+    cacheKey: "sprite",
+    createCanvas: () => ({ id: "new" })
+  });
+  assert.deepEqual(created, { id: "new" });
+  assert.deepEqual(cache.get("sprite"), { id: "new" });
+}
+{
+  const cache = new Map<string, { id: string } | null>();
+  let createCount = 0;
+  assert.equal(startupCachedCanvasRuntime({
+    cache,
+    cacheKey: "missing",
+    createCanvas: () => {
+      createCount += 1;
+      return null;
+    }
+  }), null);
+  assert.equal(startupCachedCanvasRuntime({
+    cache,
+    cacheKey: "missing",
+    createCanvas: () => {
+      createCount += 1;
+      return { id: "late" };
+    }
+  }), null);
+  assert.equal(createCount, 1);
+}
 {
   let clearCount = 0;
   const state = {
@@ -120,6 +167,60 @@ assert.equal(startupMenuItemEnabledRuntime({ id: "journey", enabled: true }, fal
 assert.equal(startupMenuItemEnabledRuntime({ id: "docs", enabled: true }, false), true);
 assert.equal(startupMenuItemEnabledRuntime({ id: "docs", enabled: false }, true), false);
 assert.equal(startupMenuItemEnabledRuntime(null, true), false);
+
+assert.deepEqual(buildStartupScreenRenderPlanRuntime({
+  bootIntroActive: false,
+  canvasW: 704,
+  legacyPreviewEnabled: false
+}), {
+  legacyPreview: null,
+  mainLayer: "startup_menu",
+  mainScale: 2
+});
+assert.deepEqual(buildStartupScreenRenderPlanRuntime({
+  bootIntroActive: true,
+  canvasW: 960,
+  legacyBackdropBaseH: 400,
+  legacyBackdropBaseW: 640,
+  legacyBackdropH: 400,
+  legacyBackdropW: 640,
+  legacyPreviewEnabled: true
+}), {
+  legacyPreview: {
+    backdropH: 400,
+    backdropW: 640,
+    layer: "boot_intro",
+    restoreBase: true,
+    scale: 2,
+    viewport: {
+      destH: 160,
+      destW: 160,
+      destX: 0,
+      destY: 0,
+      sourceH: 320,
+      sourceW: 320,
+      sourceX: 16,
+      sourceY: 16
+    }
+  },
+  mainLayer: "boot_intro",
+  mainScale: 3
+});
+assert.deepEqual(buildStartupScreenRenderPlanRuntime({
+  bootIntroActive: false,
+  canvasW: 0,
+  legacyBackdropBaseH: 300,
+  legacyBackdropBaseW: 640,
+  legacyBackdropH: 400,
+  legacyBackdropW: 640,
+  legacyPreviewEnabled: true
+})?.legacyPreview?.restoreBase, false);
+assert.equal(buildStartupScreenRenderPlanRuntime({
+  canvasW: 320,
+  legacyBackdropH: 0,
+  legacyBackdropW: 640,
+  legacyPreviewEnabled: true
+}).legacyPreview, null);
 
 const menu = [
   { id: "intro", label: "Introduction", enabled: false },

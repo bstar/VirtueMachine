@@ -3,8 +3,97 @@ import {
   cursorCycleRuntime,
   cursorDrawRectRuntime,
   cursorLogicalWidthRuntime,
+  cursorShapeSelectionRuntime,
+  legacySelectCellMarkerPlanRuntime,
   legacyCursorLayerTargetRuntime
 } from "../ui/cursor_runtime.ts";
+
+const pointerShape = { width: 16, height: 16, hotX: 0, hotY: 0, name: "pointer" };
+const selectShape = { width: 12, height: 14, hotX: 1, hotY: 2, name: "select" };
+
+assert.deepEqual(cursorShapeSelectionRuntime({
+  cursorIndex: 0,
+  cursorPixmaps: [pointerShape, selectShape],
+  mouseInCanvas: true,
+  targetCursorIndex: 1,
+  useCursorActive: true
+}), {
+  index: 1,
+  shape: selectShape
+});
+assert.deepEqual(cursorShapeSelectionRuntime({
+  cursorIndex: 0,
+  cursorPixmaps: [pointerShape, selectShape],
+  mouseInCanvas: true,
+  targetCursorIndex: 99,
+  useCursorActive: true
+}), {
+  index: 0,
+  shape: pointerShape
+});
+assert.deepEqual(cursorShapeSelectionRuntime({
+  cursorIndex: 1,
+  cursorPixmaps: [pointerShape, selectShape],
+  mouseInCanvas: true,
+  targetCursorIndex: 0,
+  useCursorActive: false
+}), {
+  index: 1,
+  shape: selectShape
+});
+assert.equal(cursorShapeSelectionRuntime({
+  cursorIndex: 0,
+  cursorPixmaps: [pointerShape],
+  mouseInCanvas: false,
+  targetCursorIndex: 0,
+  useCursorActive: false
+}), null);
+assert.equal(cursorShapeSelectionRuntime({
+  cursorIndex: 0,
+  cursorPixmaps: [],
+  mouseInCanvas: true,
+  targetCursorIndex: 0,
+  useCursorActive: false
+}), null);
+
+assert.deepEqual(legacySelectCellMarkerPlanRuntime({
+  px: 64,
+  py: 128,
+  selectorTileId: 0x16d,
+  size: 64
+}), {
+  fallbackStroke: {
+    h: 60,
+    lineWidth: 2,
+    strokeStyle: "#f6d365",
+    w: 60,
+    x: 66,
+    y: 130
+  },
+  tile: {
+    h: 64,
+    tileId: 0x16d,
+    w: 64,
+    x: 64,
+    y: 128
+  }
+});
+assert.deepEqual(legacySelectCellMarkerPlanRuntime({
+  px: 1,
+  py: 2,
+  selectorTileId: Number.NaN,
+  size: 3
+}), {
+  fallbackStroke: {
+    h: 0,
+    lineWidth: 2,
+    strokeStyle: "#f6d365",
+    w: 0,
+    x: 3,
+    y: 4
+  },
+  tile: null
+});
 
 assert.deepEqual(cursorCycleRuntime({ count: 4, currentIndex: 0, delta: 1 }), {
   diagClass: "diag ok",

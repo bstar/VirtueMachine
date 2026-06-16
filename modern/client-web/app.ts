@@ -482,6 +482,7 @@ import {
   advanceBootIntroRuntime,
   activeBootIntroPaletteRuntime,
   bootIntroClipRectRuntime,
+  bootIntroCachedCanvasRuntime,
   bootIntroPaletteCacheKeyRuntime,
   bootIntroPrintTextOnCardRuntime,
   bootIntroPrintTextRuntime,
@@ -501,6 +502,7 @@ import {
   createBootIntroRuntimeState,
   currentBootIntroSceneRuntime,
   measureBootIntroTextWidthRuntime,
+  resolveBootIntroTextCardPrintOpRuntime,
   startBootIntroRuntime,
   type BootIntroRuntimeState,
   type BootIntroSceneSpec,
@@ -513,12 +515,14 @@ import {
   applyStartupMenuIndexRuntime,
   bindSkipIntroPreferenceRuntime,
   buildStartupMenuRenderPlanRuntime,
+  buildStartupScreenRenderPlanRuntime,
   journeyOnwardStartedDiagRuntime,
   startupMenuKeyPatchRuntime,
   startupAssetsReadyDiagRuntime,
   startupMenuIndexAtSurfacePointRuntime,
   startupMenuSelectionActionRuntime,
   startupMenuSelectionPresentationRuntime,
+  startupCachedCanvasRuntime,
   startupSessionGuardDiagRuntime,
   shouldStartSessionFromSkipIntroRuntime,
   writeSkipIntroPreferenceRuntime
@@ -547,26 +551,29 @@ import {
   cursorCycleRuntime,
   cursorDrawRectRuntime,
   cursorLogicalWidthRuntime,
+  cursorShapeSelectionRuntime,
+  legacySelectCellMarkerPlanRuntime,
   legacyCursorLayerTargetRuntime
 } from "./ui/cursor_runtime.ts";
 import {
   applyLegacyCornerVariantRuntime,
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
+  legacyHudBackdropRenderPlanRuntime,
   legacyViewportFramePlacementsRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
 } from "./ui/legacy_view_tile_runtime.ts";
 import {
+  activeCursorSurfaceRuntime,
   activeGameKeydownPlanRuntime,
   applyCanvasMouseEventRuntime,
   clearCanvasMouseStateRuntime,
   isHoverReportCopyKeyRuntime,
   isTypingContextRuntime,
   isShiftRightClickCopyGestureRuntime,
-  logicalPointAtSurfaceRuntime,
-  logicalPointInBoundsRuntime,
+  legacyHudClickPlanRuntime,
   shouldLetBrowserHandleShortcutRuntime,
   shouldSuppressShiftContextMenuRuntime
 } from "./ui/input_runtime.ts";
@@ -591,6 +598,7 @@ import {
   resolvePartySwitchDigitRuntime
 } from "./ui/party_message_runtime.ts";
 import {
+  buildCharacterPanelRenderPlanRuntime,
   CHARACTER_PANEL_SLOTS_RUNTIME,
   projectCharacterPanelPicksRuntime,
   type CharacterPanelEntityRuntime
@@ -692,6 +700,7 @@ import {
 } from "./ui/hover_report_runtime.ts";
 import {
   applyDiagPresentationRuntime,
+  applyStatusPanelTextRuntime,
   buildStatusPanelTextRuntime,
   formatLedgerEntryCountRuntime,
   normalizeDiagKindPresentationRuntime,
@@ -2406,31 +2415,30 @@ function renderLegacyHudStubOnBackdrop(): void {
   if (!legacyBackdropCanvas) {
     return;
   }
-  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
-  if (!enabled) {
-    return;
-  }
   const g = legacyBackdropCanvas.getContext("2d");
   if (!g) {
     return;
   }
-  const w = legacyBackdropCanvas.width | 0;
-  const h = legacyBackdropCanvas.height | 0;
-  if (w <= 0 || h <= 0) {
+  const plan = legacyHudBackdropRenderPlanRuntime({
+    backdropH: legacyBackdropCanvas.height,
+    backdropW: legacyBackdropCanvas.width,
+    baseH: renderState.legacyBackdropBaseCanvas?.height,
+    baseW: renderState.legacyBackdropBaseCanvas?.width,
+    legacyFramePreviewEnabled: document.documentElement.getAttribute("data-legacy-frame-preview") === "on"
+  });
+  if (plan.kind === "skip") {
     return;
   }
   g.imageSmoothingEnabled = false;
-  if (renderState.legacyBackdropBaseCanvas
-    && renderState.legacyBackdropBaseCanvas.width === w
-    && renderState.legacyBackdropBaseCanvas.height === h) {
-    g.clearRect(0, 0, w, h);
+  if (plan.restoreBase && renderState.legacyBackdropBaseCanvas) {
+    g.clearRect(0, 0, plan.backdropW, plan.backdropH);
     g.drawImage(renderState.legacyBackdropBaseCanvas, 0, 0);
   }
   if (renderState.legacyHudLayerHidden) {
     return;
   }
 
-  const scale = Math.max(1, Math.floor(w / 320));
+  const scale = plan.scale;
   const x = (v: number): number => v * scale;
   const y = (v: number): number => v * scale;
   const drawTile = (tileId: number, sx: number, sy: number): void => {
@@ -2960,11 +2968,11 @@ function renderStartupMenuLayer(g: CanvasRenderingContext2D, scale: number): voi
         return;
       }
       const cacheKey = `${key}:${startupState.startupMenuIndex}`;
-      let sprite = startupState.startupCanvasCache.get(cacheKey);
-      if (!sprite) {
-        sprite = canvasFromIndexedPixels(pixmap, startupPal, 0xff);
-        startupState.startupCanvasCache.set(cacheKey, sprite);
-      }
+      const sprite = startupCachedCanvasRuntime({
+        cache: startupState.startupCanvasCache,
+        cacheKey,
+        createCanvas: () => canvasFromIndexedPixels(pixmap, startupPal, 0xff)
+      });
       if (!sprite) {
         return;
       }
@@ -3034,14 +3042,11 @@ function bootIntroSceneSpriteCanvas(
     return null;
   }
   const cacheKey = `${bankName}:${frameIdx}:${bootIntroPaletteCacheKey(scene)}`;
-  let sprite = introState.bootIntroCanvasCache.get(cacheKey);
-  if (!sprite) {
-    sprite = canvasFromIndexedPixels(pixmap, pal, 0xff);
-    if (sprite) {
-      introState.bootIntroCanvasCache.set(cacheKey, sprite);
-    }
-  }
-  return sprite || null;
+  return bootIntroCachedCanvasRuntime({
+    cache: introState.bootIntroCanvasCache,
+    cacheKey,
+    createCanvas: () => canvasFromIndexedPixels(pixmap, pal, 0xff)
+  });
 }
 
 function bootIntroBlockSpriteCanvas(frameIdx: number, scene: BootIntroSceneSpec | null = null): HTMLCanvasElement | null {
@@ -3053,14 +3058,11 @@ function bootIntroBlockSpriteCanvas(frameIdx: number, scene: BootIntroSceneSpec 
     return null;
   }
   const cacheKey = `blocks:${frameIdx}:${bootIntroPaletteCacheKey(scene)}`;
-  let sprite = introState.bootIntroCanvasCache.get(cacheKey);
-  if (!sprite) {
-    sprite = canvasFromIndexedPixels(pixmap, pal, 0xff);
-    if (sprite) {
-      introState.bootIntroCanvasCache.set(cacheKey, sprite);
-    }
-  }
-  return sprite || null;
+  return bootIntroCachedCanvasRuntime({
+    cache: introState.bootIntroCanvasCache,
+    cacheKey,
+    createCanvas: () => canvasFromIndexedPixels(pixmap, pal, 0xff)
+  });
 }
 
 function drawBootIntroSprite(
@@ -3278,9 +3280,8 @@ function renderBootIntroTextCard(
       return;
     }
     let last = { x: 0, y: 0 };
-    for (const op of plan.printOps) {
-      const opX = (Number(op.x) | 0) >= 0 ? (Number(op.x) | 0) : last.x;
-      const opY = (Number(op.y) | 0) >= 0 ? (Number(op.y) | 0) : last.y;
+    for (const plannedOp of plan.printOps) {
+      const op = resolveBootIntroTextCardPrintOpRuntime(plannedOp, last);
       last = bootIntroPrintTextOnCard(
         g,
         Number(card.x) || 0,
@@ -3288,8 +3289,8 @@ function renderBootIntroTextCard(
         op.text,
         op.startX,
         op.width,
-        opX,
-        opY,
+        op.resolvedX,
+        op.resolvedY,
         Math.max(1, scale),
         plan.color
       );
@@ -3437,46 +3438,46 @@ function renderBootIntroLayer(g: CanvasRenderingContext2D, scale: number): void 
 }
 
 function renderStartupScreen(): void {
-  const mainScale = Math.max(1, Math.floor(canvas.width / 320));
   const introState = state as BootIntroRenderStateView;
   const compositionState = state as LegacyCompositionStateView;
   if (!ctx) {
     return;
   }
-  if (introState.bootIntro && introState.bootIntro.active) {
-    renderBootIntroLayer(ctx, mainScale);
+  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
+  const plan = buildStartupScreenRenderPlanRuntime({
+    bootIntroActive: !!(introState.bootIntro && introState.bootIntro.active),
+    canvasW: canvas.width,
+    legacyBackdropBaseH: compositionState.legacyBackdropBaseCanvas?.height,
+    legacyBackdropBaseW: compositionState.legacyBackdropBaseCanvas?.width,
+    legacyBackdropH: legacyBackdropCanvas?.height,
+    legacyBackdropW: legacyBackdropCanvas?.width,
+    legacyPreviewEnabled: enabled && !!legacyBackdropCanvas
+  });
+  if (plan.mainLayer === "boot_intro") {
+    renderBootIntroLayer(ctx, plan.mainScale);
   } else {
-    renderStartupMenuLayer(ctx, mainScale);
+    renderStartupMenuLayer(ctx, plan.mainScale);
   }
 
-  const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
-  if (!enabled || !legacyBackdropCanvas) {
+  if (!plan.legacyPreview || !legacyBackdropCanvas) {
     return;
   }
   const g = legacyBackdropCanvas.getContext("2d");
   if (!g) {
     return;
   }
-  const w = legacyBackdropCanvas.width | 0;
-  const h = legacyBackdropCanvas.height | 0;
-  if (w <= 0 || h <= 0) {
-    return;
-  }
   g.imageSmoothingEnabled = false;
-  if (compositionState.legacyBackdropBaseCanvas
-    && compositionState.legacyBackdropBaseCanvas.width === w
-    && compositionState.legacyBackdropBaseCanvas.height === h) {
-    g.clearRect(0, 0, w, h);
+  if (plan.legacyPreview.restoreBase && compositionState.legacyBackdropBaseCanvas) {
+    g.clearRect(0, 0, plan.legacyPreview.backdropW, plan.legacyPreview.backdropH);
     g.drawImage(compositionState.legacyBackdropBaseCanvas, 0, 0);
   } else {
     g.fillStyle = "#000";
-    g.fillRect(0, 0, w, h);
+    g.fillRect(0, 0, plan.legacyPreview.backdropW, plan.legacyPreview.backdropH);
   }
-  const scale = Math.max(1, Math.floor(w / 320));
-  if (introState.bootIntro && introState.bootIntro.active) {
-    renderBootIntroLayer(g, scale);
+  if (plan.legacyPreview.layer === "boot_intro") {
+    renderBootIntroLayer(g, plan.legacyPreview.scale);
   } else {
-    renderStartupMenuLayer(g, scale);
+    renderStartupMenuLayer(g, plan.legacyPreview.scale);
   }
 
   legacyViewportCanvas.width = 160;
@@ -3487,7 +3488,18 @@ function renderStartupScreen(): void {
   }
   lv.imageSmoothingEnabled = false;
   lv.clearRect(0, 0, 160, 160);
-  lv.drawImage(legacyBackdropCanvas, 8 * scale, 8 * scale, 160 * scale, 160 * scale, 0, 0, 160, 160);
+  const viewport = plan.legacyPreview.viewport;
+  lv.drawImage(
+    legacyBackdropCanvas,
+    viewport.sourceX,
+    viewport.sourceY,
+    viewport.sourceW,
+    viewport.sourceH,
+    viewport.destX,
+    viewport.destY,
+    viewport.destW,
+    viewport.destH
+  );
 }
 
 function drawCustomCursorOnContext(
@@ -3498,13 +3510,17 @@ function drawCustomCursorOnContext(
 ): void {
   const cursorState = state as LegacyCompositionStateView;
   const cursorPixmaps = cursorState.cursorPixmaps;
-  if (!cursorState.mouseInCanvas || !cursorPixmaps || !cursorPixmaps.length) {
+  const selection = cursorShapeSelectionRuntime({
+    cursorIndex: cursorState.cursorIndex,
+    cursorPixmaps,
+    mouseInCanvas: cursorState.mouseInCanvas,
+    targetCursorIndex: legacyVerbMouseCursorIndexRuntime(state.targetVerb),
+    useCursorActive: state.useCursorActive
+  });
+  if (!selection) {
     return;
   }
-  const targetCursorIndex = state.useCursorActive
-    ? legacyVerbMouseCursorIndexRuntime(state.targetVerb)
-    : cursorState.cursorIndex;
-  const cursorShape = cursorPixmaps[targetCursorIndex] || cursorPixmaps[cursorState.cursorIndex] || cursorPixmaps[0];
+  const cursorShape = selection.shape;
   if (!cursorShape || !cursorState.basePalette || !g || targetW <= 0 || targetH <= 0) {
     return;
   }
@@ -6340,64 +6356,71 @@ function renderCharacterStubPanel(): void {
   }
   g.imageSmoothingEnabled = false;
   g.clearRect(0, 0, charStubCanvas.width, charStubCanvas.height);
-  g.fillStyle = "#090909";
-  g.fillRect(0, 0, charStubCanvas.width, charStubCanvas.height);
 
-  const slots = CHARACTER_PANEL_SLOTS_RUNTIME;
-  for (const s of slots) {
-    g.fillStyle = "#111827";
-    g.fillRect(s.x, s.y, s.w, s.h);
-    g.strokeStyle = "#334155";
-    g.strokeRect(s.x + 0.5, s.y + 0.5, s.w - 1, s.h - 1);
+  const dataReady = !!(state.tileSet && state.entityLayer && Array.isArray(state.entityLayer.entries));
+  let picks = null;
+  if (dataReady && state.entityLayer) {
+    const avatarTile = avatarRenderTileId();
+    const px = state.sim.world.map_x | 0;
+    const py = state.sim.world.map_y | 0;
+    const pz = state.sim.world.map_z | 0;
+    const tick = animationTick();
+    picks = projectCharacterPanelPicksRuntime({
+      avatarEntityId: AVATAR_ENTITY_ID,
+      avatarTileId: avatarTile,
+      entities: state.entityLayer.entries,
+      playerX: px,
+      playerY: py,
+      playerZ: pz,
+      resolveAnimatedTile: (entity: CharacterPanelEntityRuntime & { tileId: number }) => resolveAnimatedObjectTileAtTick(entity, tick),
+      slotCount: CHARACTER_PANEL_SLOTS_RUNTIME.length
+    });
   }
-
-  if (!state.tileSet || !state.entityLayer || !Array.isArray(state.entityLayer.entries)) {
-    g.fillStyle = "#94a3b8";
-    g.font = "11px var(--vm-ui-font), monospace";
-    g.fillText("Awaiting actor sprite data...", 12, 22);
+  const plan = buildCharacterPanelRenderPlanRuntime({
+    canvasH: charStubCanvas.height,
+    canvasW: charStubCanvas.width,
+    dataReady,
+    picks
+  });
+  g.fillStyle = plan.background.fillStyle;
+  g.fillRect(plan.background.x, plan.background.y, plan.background.w, plan.background.h);
+  for (const rect of plan.slotRects) {
+    g.fillStyle = rect.fillStyle;
+    g.fillRect(rect.x, rect.y, rect.w, rect.h);
+  }
+  for (const stroke of plan.slotStrokes) {
+    g.strokeStyle = stroke.strokeStyle;
+    g.strokeRect(stroke.x, stroke.y, stroke.w, stroke.h);
+  }
+  if (plan.message) {
+    g.fillStyle = plan.message.color;
+    g.font = plan.message.font;
+    g.fillText(plan.message.text, plan.message.x, plan.message.y);
     return;
   }
-
-  const avatarTile = avatarRenderTileId();
-  const px = state.sim.world.map_x | 0;
-  const py = state.sim.world.map_y | 0;
-  const pz = state.sim.world.map_z | 0;
-  const tick = animationTick();
-  const picks = projectCharacterPanelPicksRuntime({
-    avatarEntityId: AVATAR_ENTITY_ID,
-    avatarTileId: avatarTile,
-    entities: state.entityLayer.entries,
-    playerX: px,
-    playerY: py,
-    playerZ: pz,
-    resolveAnimatedTile: (entity: CharacterPanelEntityRuntime & { tileId: number }) => resolveAnimatedObjectTileAtTick(entity, tick),
-    slotCount: slots.length
-  });
-
-  for (let i = 0; i < slots.length; i += 1) {
-    const slot = slots[i];
-    const pick = picks[i];
-    g.fillStyle = "#9ca3af";
-    g.font = "10px var(--vm-ui-font), monospace";
-    g.fillText(pick.label, slot.x + 6, slot.y + 12);
-    if (pick.tileId == null) {
-      continue;
-    }
-    const pal = paletteForTile(pick.tileId);
-    const key = paletteKeyForTile(pick.tileId);
-    const tc = state.tileSet.tileCanvas(pick.tileId, pal, key);
+  for (const text of plan.texts) {
+    g.fillStyle = text.color;
+    g.font = text.font;
+    g.fillText(text.text, text.x, text.y);
+  }
+  for (const sprite of plan.sprites) {
+    const pal = paletteForTile(sprite.tileId);
+    const key = paletteKeyForTile(sprite.tileId);
+    const tc = state.tileSet?.tileCanvas(sprite.tileId, pal, key);
     if (!tc) {
       continue;
     }
-    const scale = 3;
-    const dw = 16 * scale;
-    const dh = 16 * scale;
-    const dx = slot.x + Math.floor((slot.w - dw) / 2);
-    const dy = slot.y + 20;
-    g.drawImage(tc, 0, 0, 16, 16, dx, dy, dw, dh);
-    g.fillStyle = "#64748b";
-    g.font = "9px var(--vm-ui-font), monospace";
-    g.fillText(`0x${(pick.tileId & 0xffff).toString(16)}`, slot.x + 6, slot.y + slot.h - 8);
+    g.drawImage(
+      tc,
+      sprite.sourceX,
+      sprite.sourceY,
+      sprite.sourceW,
+      sprite.sourceH,
+      sprite.destX,
+      sprite.destY,
+      sprite.destW,
+      sprite.destH
+    );
   }
 }
 
@@ -6504,20 +6527,30 @@ function drawLegacySelectCellMarker(g: CanvasRenderingContext2D, px: number, py:
   /* Canonical world-target selector in seg_0A33:
      SelectRange < 0 => TIL_16C (direction), else TIL_16D (select). */
   const verb = String(state.targetVerb || "");
-  const selectorTileId = legacyVerbWorldCursorTileRuntime(verb);
-  if (state.tileSet && Number.isFinite(selectorTileId)) {
-    const pal = paletteForTile(selectorTileId);
-    const key = paletteKeyForTile(selectorTileId);
-    const marker = state.tileSet.tileCanvas(selectorTileId, pal, key);
+  const plan = legacySelectCellMarkerPlanRuntime({
+    px,
+    py,
+    selectorTileId: legacyVerbWorldCursorTileRuntime(verb),
+    size
+  });
+  if (state.tileSet && plan.tile) {
+    const pal = paletteForTile(plan.tile.tileId);
+    const key = paletteKeyForTile(plan.tile.tileId);
+    const marker = state.tileSet.tileCanvas(plan.tile.tileId, pal, key);
     if (marker) {
       g.imageSmoothingEnabled = false;
-      g.drawImage(marker, px, py, size, size);
+      g.drawImage(marker, plan.tile.x, plan.tile.y, plan.tile.w, plan.tile.h);
       return;
     }
   }
-  g.strokeStyle = "#f6d365";
-  g.lineWidth = 2;
-  g.strokeRect(px + 2, py + 2, size - 4, size - 4);
+  g.strokeStyle = plan.fallbackStroke.strokeStyle;
+  g.lineWidth = plan.fallbackStroke.lineWidth;
+  g.strokeRect(
+    plan.fallbackStroke.x,
+    plan.fallbackStroke.y,
+    plan.fallbackStroke.w,
+    plan.fallbackStroke.h
+  );
 }
 
 function drawTileGrid(): void {
@@ -6838,52 +6871,30 @@ function updateStats(): void {
     useCursorActive: state.useCursorActive,
     world: w
   });
-  statTick.textContent = statusText.tick;
-  statPos.textContent = statusText.position;
-  statClock.textContent = statusText.clock;
-  statDate.textContent = statusText.date;
-  if (topTimeOfDay) {
-    topTimeOfDay.textContent = statusText.topTimeOfDay;
-  }
-  if (topInputMode) {
-    topInputMode.textContent = statusText.inputMode;
-  }
-  statQueued.textContent = statusText.queued;
-  statObjects.textContent = statusText.objects;
-  if (statEntities) {
-    statEntities.textContent = statusText.entities;
-  }
-  if (statRenderParity) {
-    statRenderParity.textContent = statusText.renderParity;
-  }
-  if (statAvatarState) {
-    statAvatarState.textContent = statusText.avatarState;
-  }
-  if (statNpcOcclusionBlocks) {
-    statNpcOcclusionBlocks.textContent = statusText.npcOcclusionBlocks;
-  }
-  statHash.textContent = statusText.hash;
-  if (statSimLoop) {
-    statSimLoop.textContent = statusText.simLoop;
-  }
-  if (statLoopHealth) {
-    statLoopHealth.textContent = statusText.loopHealth;
-  }
+  applyStatusPanelTextRuntime({
+    statAudio,
+    statAvatarState,
+    statCenterBand,
+    statCenterTiles,
+    statClock,
+    statDate,
+    statEntities,
+    statHash,
+    statLoopHealth,
+    statNetPlayers,
+    statNpcOcclusionBlocks,
+    statObjects,
+    statPalettePhase,
+    statPos,
+    statQueued,
+    statRenderParity,
+    statSimLoop,
+    statTick,
+    topInputMode,
+    topTimeOfDay
+  }, statusText, { audioReady: !!state.audio });
   if (statAudio && state.audio) {
-    statAudio.textContent = statusText.audio;
     updateAudioMuteUi();
-  }
-  if (statPalettePhase) {
-    statPalettePhase.textContent = statusText.palettePhase;
-  }
-  if (statCenterTiles) {
-    statCenterTiles.textContent = statusText.centerTiles;
-  }
-  if (statCenterBand) {
-    statCenterBand.textContent = statusText.centerBand;
-  }
-  if (statNetPlayers) {
-    statNetPlayers.textContent = statusText.netPlayers;
   }
   if (state.debugPanelTab === "chat") {
     renderDebugChatLedgerPanel();
@@ -7864,40 +7875,30 @@ installUiProbeDebugHooksRuntime({
 });
 
 function handleLegacyHudClick(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): boolean {
-  if (!state.sessionStarted) {
+  const s = surface || canvas;
+  const rect = s.getBoundingClientRect();
+  const plan = legacyHudClickPlanRuntime({
+    clientX: ev.clientX,
+    clientY: ev.clientY,
+    hitTest: uiProbeHitTest,
+    legacyFramePreviewEnabled: document.documentElement.getAttribute("data-legacy-frame-preview") === "on",
+    legacyHudLayerHidden: state.legacyHudLayerHidden,
+    serverConnectionBroken: isServerConnectionBroken(),
+    sessionStarted: state.sessionStarted,
+    surfaceBounds: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+    surfaceSize: { width: s.width || 0, height: s.height || 0 },
+  });
+  if (plan.kind === "ignore") {
     return false;
   }
-  if (blockGameplayForBrokenServer()) {
+  if (plan.kind === "block_server") {
+    blockGameplayForBrokenServer();
     ev.preventDefault();
     return true;
   }
-  if (document.documentElement.getAttribute("data-legacy-frame-preview") !== "on") {
-    return false;
-  }
-  if (state.legacyHudLayerHidden) {
-    return false;
-  }
-  const s = surface || canvas;
-  const rect = s.getBoundingClientRect();
-  const logicalW = 320;
-  const logicalH = 200;
-  const point = logicalPointAtSurfaceRuntime({
-    clientX: ev.clientX,
-    clientY: ev.clientY,
-    bounds: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-    surfaceSize: { width: s.width || 0, height: s.height || 0 },
-    logicalSize: { width: logicalW, height: logicalH }
-  });
-  if (!logicalPointInBoundsRuntime(point, { width: logicalW, height: logicalH })) {
-    return false;
-  }
-  const hit = uiProbeHitTest(point.x, point.y);
-  if (!hit) {
-    return false;
-  }
   clearTransientReconnectMessageOnCommand();
-  state.legacyHudSelection = hit;
-  applyDiag(legacyHudHitDiagRuntime(hit));
+  state.legacyHudSelection = plan.hit;
+  applyDiag(legacyHudHitDiagRuntime(plan.hit));
   ev.preventDefault();
   return true;
 }
@@ -8326,12 +8327,11 @@ function handleShiftRightMouseDownCopy(ev: MouseEvent, surface: HTMLCanvasElemen
 }
 
 function activeCursorSurface(): HTMLCanvasElement {
-  if (isLegacyFramePreviewOn()) {
-    if (legacyBackdropCanvas) {
-      return legacyBackdropCanvas;
-    }
-  }
-  return canvas;
+  const surface = activeCursorSurfaceRuntime({
+    hasLegacyBackdrop: !!legacyBackdropCanvas,
+    legacyFramePreviewEnabled: isLegacyFramePreviewOn()
+  });
+  return surface === "legacy_backdrop" && legacyBackdropCanvas ? legacyBackdropCanvas : canvas;
 }
 
 function updateCanvasMouseFromEvent(ev: MouseEvent, surface: HTMLCanvasElement | null | undefined): void {

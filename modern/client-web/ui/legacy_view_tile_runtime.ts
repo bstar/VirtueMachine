@@ -44,6 +44,40 @@ export type LegacyViewportFramePlacementRuntime = {
   y: number;
 };
 
+export type LegacyHudBackdropRenderPlanRuntime =
+  | { kind: "skip" }
+  | {
+    backdropH: number;
+    backdropW: number;
+    kind: "render";
+    restoreBase: boolean;
+    scale: number;
+  };
+
+export function legacyHudBackdropRenderPlanRuntime(args: {
+  backdropH: unknown;
+  backdropW: unknown;
+  baseH?: unknown;
+  baseW?: unknown;
+  legacyFramePreviewEnabled: boolean;
+}): LegacyHudBackdropRenderPlanRuntime {
+  if (!args.legacyFramePreviewEnabled) {
+    return { kind: "skip" };
+  }
+  const backdropW = Number(args.backdropW) | 0;
+  const backdropH = Number(args.backdropH) | 0;
+  if (backdropW <= 0 || backdropH <= 0) {
+    return { kind: "skip" };
+  }
+  return {
+    backdropH,
+    backdropW,
+    kind: "render",
+    restoreBase: (Number(args.baseW) | 0) === backdropW && (Number(args.baseH) | 0) === backdropH,
+    scale: Math.max(1, Math.floor(backdropW / 320))
+  };
+}
+
 export function legacyViewportFramePlacementsRuntime(args: {
   cellSize?: unknown;
   edgeCells?: unknown;
