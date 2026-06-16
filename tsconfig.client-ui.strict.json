@@ -28,6 +28,8 @@
     "modern/client-web/ui/party_message_runtime.ts",
     "modern/client-web/ui/preference_runtime.ts",
     "modern/client-web/ui/status_text_runtime.ts",
+    "modern/client-web/ui/hotkey_runtime.ts",
+    "modern/client-web/tests/ui_hotkey_runtime_test.ts",
     "modern/client-web/error_runtime.ts",
     "modern/common/**/*.ts"
   ]

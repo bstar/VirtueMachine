@@ -16,6 +16,7 @@ import {
   worldSnapshotSaveFailedHotkeyDiagRuntime,
   worldSnapshotSavedHotkeyDiagRuntime
 } from "../ui/hotkey_runtime.ts";
+import type { DebugHotkeyHandlersRuntime } from "../ui/hotkey_runtime.ts";
 
 assert.equal(debugHotkeyActionRuntime({ ctrlKey: true, key: "s" }), "save_snapshot");
 assert.equal(debugHotkeyActionRuntime({ ctrlKey: true, key: "r" }), "load_snapshot");
@@ -46,11 +47,16 @@ assert.equal(debugHotkeyActionRuntime({ shiftKey: true, code: "BracketRight" }),
 
 {
   const calls: string[] = [];
-  assert.equal(runDebugHotkeyActionRuntime("none", { save_snapshot: () => calls.push("save") }), false);
+  const handlers: DebugHotkeyHandlersRuntime = {
+    save_snapshot: () => {
+      calls.push("save");
+    }
+  };
+  assert.equal(runDebugHotkeyActionRuntime("none", handlers), false);
   assert.deepEqual(calls, []);
-  assert.equal(runDebugHotkeyActionRuntime("load_snapshot", { save_snapshot: () => calls.push("save") }), false);
+  assert.equal(runDebugHotkeyActionRuntime("load_snapshot", handlers), false);
   assert.deepEqual(calls, []);
-  assert.equal(runDebugHotkeyActionRuntime("save_snapshot", { save_snapshot: () => calls.push("save") }), true);
+  assert.equal(runDebugHotkeyActionRuntime("save_snapshot", handlers), true);
   assert.deepEqual(calls, ["save"]);
 }
 
