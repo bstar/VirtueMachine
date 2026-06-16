@@ -12,6 +12,10 @@ import {
   startupMenuMusicPhaseRuntime
 } from "../audio/audio_ui_runtime.ts";
 
+type AudioUiTestListener = {
+  current?: () => void;
+};
+
 assert.deepEqual(audioMuteButtonModelRuntime(false), {
   ariaPressed: "false",
   isActive: false,
@@ -26,13 +30,14 @@ function fakeButton(): HTMLButtonElement & {
   attrs: Record<string, string>;
   classes: Set<string>;
 } {
+  const attrs: Record<string, string> = {};
   const classes = new Set<string>();
-  return {
-    attrs: {},
+  const button = {
+    attrs,
     classes,
     textContent: "",
     setAttribute(name: string, value: string) {
-      this.attrs[name] = value;
+      attrs[name] = value;
     },
     classList: {
       toggle(name: string, force?: boolean) {
@@ -43,7 +48,8 @@ function fakeButton(): HTMLButtonElement & {
         }
       }
     }
-  } as unknown as HTMLButtonElement & { attrs: Record<string, string>; classes: Set<string> };
+  };
+  return button as unknown as HTMLButtonElement & { attrs: Record<string, string>; classes: Set<string> };
 }
 {
   const button = fakeButton();
@@ -71,12 +77,12 @@ assert.deepEqual(audioMuteTogglePlanRuntime({ muted: true, reason: "Ready." }), 
   diagText: "Ready."
 });
 {
-  let listener: (() => void) | null = null;
+  const listener: AudioUiTestListener = {};
   let toggles = 0;
   const button = {
     addEventListener(type: "click", nextListener: () => void) {
       assert.equal(type, "click");
-      listener = nextListener;
+      listener.current = nextListener;
     }
   };
   assert.equal(bindAudioMuteButtonRuntime({
@@ -85,8 +91,9 @@ assert.deepEqual(audioMuteTogglePlanRuntime({ muted: true, reason: "Ready." }), 
       toggles += 1;
     }
   }), true);
-  listener?.();
-  listener?.();
+  assert(listener.current, "mute button listener should be bound");
+  listener.current();
+  listener.current();
   assert.equal(toggles, 2);
   assert.equal(bindAudioMuteButtonRuntime({
     button: null,

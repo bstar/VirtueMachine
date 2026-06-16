@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createU6AudioRuntime } from "../audio/audio_runtime.ts";
 
-let pendingPlayResolve: (() => void) | null = null;
+const pendingPlayResolve: {
+  current?: () => void;
+} = {};
 let pauseCount = 0;
 const audioInstances: MockAudio[] = [];
 
@@ -22,7 +24,7 @@ class MockAudio {
   play(): Promise<void> {
     this.paused = false;
     return new Promise((resolve) => {
-      pendingPlayResolve = resolve;
+      pendingPlayResolve.current = resolve;
     });
   }
 
@@ -48,17 +50,18 @@ audio.setBackendMode("adlib");
 audio.setMusicEnabled(true);
 
 async function waitForPendingPlay(): Promise<void> {
-  for (let i = 0; i < 20 && !pendingPlayResolve; i += 1) {
+  for (let i = 0; i < 20 && !pendingPlayResolve.current; i += 1) {
     await Promise.resolve();
   }
-  assert.ok(pendingPlayResolve, "rendered audio element should receive a play request");
+  assert.ok(pendingPlayResolve.current, "rendered audio element should receive a play request");
 }
 
 assert.equal(audio.playMusic("bootup.m"), true, "music request should be accepted");
 assert.equal(audio.status().musicLoading, true, "music should enter loading state");
 
 await waitForPendingPlay();
-pendingPlayResolve?.();
+assert(pendingPlayResolve.current, "pending play resolver should be captured");
+pendingPlayResolve.current();
 await Promise.resolve();
 await Promise.resolve();
 

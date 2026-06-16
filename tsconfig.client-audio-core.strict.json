@@ -27,7 +27,9 @@
     "modern/client-web/tests/audio_ambient_sfx_runtime_test.ts",
     "modern/client-web/tests/audio_pc_speaker_runtime_test.ts",
     "modern/client-web/tests/audio_runtime_music_path_test.ts",
+    "modern/client-web/tests/audio_runtime_mute_test.ts",
     "modern/client-web/tests/audio_u6m_music_runtime_test.ts",
+    "modern/client-web/tests/audio_ui_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }
