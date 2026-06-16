@@ -7,13 +7,18 @@ import {
 import {
   applyNetStatusPresentationRuntime,
   applyNetStatusRuntime,
+  brokenServerGameplayBlockDiagRuntime,
+  clearTransientReconnectMessageOnCommandRuntime,
+  currentInGameServerStatusOverlayRuntime,
   deriveCriticalRecoveryStatTextRuntime,
   deriveIntroPhaseUiModelRuntime,
   deriveNetAuthButtonModel,
   deriveNetIndicatorState,
+  deriveNetOnlineStatusTextRuntime,
   deriveNetQuickStatusText,
   deriveNetSessionText,
   deriveTopNetStatusText,
+  markServerReconnectedStateRuntime,
   netLogoutDiagRuntime,
   netStatusAutoLoginRuntime,
   netStatusChooseAccountRuntime,
@@ -24,6 +29,7 @@ import {
   renderIntroPhaseUiRuntime,
   renderNetSessionUiRuntime,
   renderNetStatusViewRuntime,
+  shouldProbeReconnectRuntime,
   shouldShowInGameServerBrokenRuntime
 } from "../net/status_runtime.ts";
 
@@ -41,6 +47,111 @@ assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, status
 assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "error" }), true);
 assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "sync" }), false);
 assert.equal(shouldShowInGameServerBrokenRuntime({ isAuthenticated: true, statusLevel: "online" }), false);
+assert.equal(deriveNetOnlineStatusTextRuntime({ username: "avatar", characterName: "Avatar" }), "avatar/Avatar");
+assert.equal(deriveNetOnlineStatusTextRuntime({ username: "", characterName: "Avatar" }), "account/Avatar");
+assert.equal(deriveNetOnlineStatusTextRuntime({ username: "avatar", characterName: "" }), "avatar/(no-char)");
+assert.equal(deriveNetOnlineStatusTextRuntime({ username: " ", characterName: " " }), "Connected.");
+assert.deepEqual(currentInGameServerStatusOverlayRuntime({
+  isServerConnectionBroken: true,
+  nowMs: 100,
+  reconnectedMessageUntilMs: 200
+}), { color: "#b00000", text: "SERVER LOST" });
+assert.deepEqual(currentInGameServerStatusOverlayRuntime({
+  isServerConnectionBroken: false,
+  nowMs: 100,
+  reconnectedMessageUntilMs: 200
+}), { color: "#138000", text: "RECONNECTED" });
+assert.equal(currentInGameServerStatusOverlayRuntime({
+  isServerConnectionBroken: false,
+  nowMs: 201,
+  reconnectedMessageUntilMs: 200
+}), null);
+assert.equal(shouldProbeReconnectRuntime({
+  isAuthenticated: true,
+  isServerConnectionBroken: true,
+  sessionStarted: true,
+  reconnectProbeInFlight: false,
+  nowMs: 1500,
+  reconnectProbeLastMs: 1000,
+  reconnectProbeIntervalMs: 500
+}), true);
+assert.equal(shouldProbeReconnectRuntime({
+  isAuthenticated: true,
+  isServerConnectionBroken: true,
+  sessionStarted: true,
+  reconnectProbeInFlight: false,
+  nowMs: 1499,
+  reconnectProbeLastMs: 1000,
+  reconnectProbeIntervalMs: 500
+}), false);
+assert.equal(shouldProbeReconnectRuntime({
+  isAuthenticated: true,
+  isServerConnectionBroken: true,
+  sessionStarted: true,
+  reconnectProbeInFlight: true,
+  nowMs: 2000,
+  reconnectProbeLastMs: 1000,
+  reconnectProbeIntervalMs: 500
+}), false);
+assert.equal(shouldProbeReconnectRuntime({
+  isAuthenticated: false,
+  isServerConnectionBroken: true,
+  sessionStarted: true,
+  reconnectProbeInFlight: false,
+  nowMs: 2000,
+  reconnectProbeLastMs: 1000,
+  reconnectProbeIntervalMs: 500
+}), false);
+assert.equal(shouldProbeReconnectRuntime({
+  isAuthenticated: true,
+  isServerConnectionBroken: true,
+  sessionStarted: true,
+  reconnectProbeInFlight: false,
+  nowMs: "bad",
+  reconnectProbeLastMs: 1000,
+  reconnectProbeIntervalMs: 500
+}), false);
+assert.equal(currentInGameServerStatusOverlayRuntime({
+  isServerConnectionBroken: false,
+  nowMs: "bad",
+  reconnectedMessageUntilMs: 200
+}), null);
+{
+  const reconnectState = {
+    reconnectedMessageClearOnCommand: false,
+    reconnectedMessageUntilMs: 0
+  };
+  assert.equal(markServerReconnectedStateRuntime({
+    durationMs: 3200,
+    nowMs: 100,
+    state: reconnectState
+  }), reconnectState);
+  assert.deepEqual(reconnectState, {
+    reconnectedMessageClearOnCommand: true,
+    reconnectedMessageUntilMs: 3300
+  });
+  assert.equal(clearTransientReconnectMessageOnCommandRuntime(reconnectState), true);
+  assert.deepEqual(reconnectState, {
+    reconnectedMessageClearOnCommand: false,
+    reconnectedMessageUntilMs: 0
+  });
+  assert.equal(clearTransientReconnectMessageOnCommandRuntime(reconnectState), false);
+}
+assert.equal(brokenServerGameplayBlockDiagRuntime({
+  isServerConnectionBroken: false,
+  sessionStarted: true
+}), null);
+assert.equal(brokenServerGameplayBlockDiagRuntime({
+  isServerConnectionBroken: true,
+  sessionStarted: false
+}), null);
+assert.deepEqual(brokenServerGameplayBlockDiagRuntime({
+  isServerConnectionBroken: true,
+  sessionStarted: true
+}), {
+  diagClass: "diag warn",
+  diagText: "Server connection lost. Waiting to reconnect before accepting commands."
+});
 assert.equal(deriveNetQuickStatusText(true), "Account: Signed in");
 assert.equal(deriveNetQuickStatusText(false), "Account: Signed out");
 assert.equal(deriveNetSessionText({ token: "", userId: "u", username: "avatar", characterName: "Avatar" }), "offline");

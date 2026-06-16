@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildInventoryEquipRegressionProbesRuntime,
   buildLegacyInventoryPaperdollLayoutRuntime,
+  legacyInventoryPaperdollHitTestFromProbeRuntime,
   legacyInventoryPaperdollHitTestRuntime
 } from "../ui/inventory_paperdoll_layout_runtime.ts";
 
@@ -106,10 +107,54 @@ function testRegressionProbeMatrix() {
   );
 }
 
+function testProbeAwareHitboxes() {
+  assert.deepEqual(legacyInventoryPaperdollHitTestFromProbeRuntime({
+    canonicalUi: {
+      conversation_panel: {
+        show_inventory: true
+      }
+    },
+    logicalX: 200,
+    logicalY: 24,
+    statusDisplay: 0x9e,
+    talkStatusDisplay: 0x9e
+  }), { kind: "equip", slot: 0 }, "talk panel with inventory should expose equipment hitbox");
+  assert.equal(legacyInventoryPaperdollHitTestFromProbeRuntime({
+    canonicalUi: {
+      conversation_panel: {
+        show_inventory: false
+      }
+    },
+    logicalX: 200,
+    logicalY: 24,
+    statusDisplay: 0x9e,
+    talkStatusDisplay: 0x9e
+  }), null, "talk panel without inventory should hide equipment hitbox");
+  assert.deepEqual(legacyInventoryPaperdollHitTestFromProbeRuntime({
+    canonicalUi: {
+      conversation_panel: {
+        show_inventory: false
+      }
+    },
+    logicalX: 216,
+    logicalY: 24,
+    statusDisplay: 0x9e,
+    talkStatusDisplay: 0x9e
+  }), { kind: "portrait", index: 0 }, "portrait-only talk panel should shift portrait hitbox");
+  assert.deepEqual(legacyInventoryPaperdollHitTestFromProbeRuntime({
+    canonicalUi: null,
+    logicalX: 249,
+    logicalY: 33,
+    statusDisplay: 0x92,
+    talkStatusDisplay: 0x9e
+  }), { kind: "inventory", index: 0 }, "non-talk panel should keep inventory grid hitbox");
+}
+
 testCmd92Layout();
 testTalkLayoutWithInventory();
 testTalkLayoutPortraitOnly();
 testHitboxes();
 testRegressionProbeMatrix();
+testProbeAwareHitboxes();
 
 console.log("ui_inventory_paperdoll_layout_test: ok");

@@ -55,6 +55,19 @@ export type CaptureViewportStatusSourceRuntime = {
   dataSource?: unknown;
 };
 
+export type CaptureViewportStatusElementsRuntime = {
+  clock?: Pick<HTMLElement, "textContent"> | null;
+  dataSource?: Pick<HTMLElement, "textContent"> | null;
+  date?: Pick<HTMLElement, "textContent"> | null;
+  diagnostic?: Pick<HTMLElement, "textContent"> | null;
+  entityOverlay?: Pick<HTMLElement, "textContent"> | null;
+  mapPosition?: Pick<HTMLElement, "textContent"> | null;
+  objectOverlay?: Pick<HTMLElement, "textContent"> | null;
+  renderParity?: Pick<HTMLElement, "textContent"> | null;
+  stateHash?: Pick<HTMLElement, "textContent"> | null;
+  tile?: Pick<HTMLElement, "textContent"> | null;
+};
+
 export type CaptureViewportCanvasRuntimeArgs = {
   canvas: HTMLCanvasElement;
   document: Pick<Document, "createElement">;
@@ -174,6 +187,23 @@ export function captureViewportStatusRowsRuntime(
     });
   }
   return rows;
+}
+
+export function captureViewportStatusRowsFromElementsRuntime(
+  elements: CaptureViewportStatusElementsRuntime
+): CaptureViewportStatusRowRuntime[] {
+  return captureViewportStatusRowsRuntime({
+    clock: elements.clock?.textContent,
+    dataSource: elements.dataSource?.textContent,
+    date: elements.date?.textContent,
+    diagnostic: elements.diagnostic?.textContent,
+    entityOverlay: elements.entityOverlay?.textContent,
+    mapPosition: elements.mapPosition?.textContent,
+    objectOverlay: elements.objectOverlay?.textContent,
+    renderParity: elements.renderParity?.textContent,
+    stateHash: elements.stateHash?.textContent,
+    tile: elements.tile?.textContent
+  });
 }
 
 export function composeViewportCaptureCanvasRuntime(

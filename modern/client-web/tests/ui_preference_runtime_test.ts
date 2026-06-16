@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import {
   applyAnimationModePreferenceRuntime,
+  applyAnimationModePreferenceStateRuntime,
   applyBooleanTogglePreferenceRuntime,
+  applyBooleanTogglePreferenceStateRuntime,
   applyFontPreferenceRuntime,
   applyMovementModePreferenceRuntime,
   applyMovementModePreferenceStateRuntime,
   applyNamedPreferenceRuntime,
+  applyPaletteFxPreferenceStateRuntime,
   applyThemePreferenceRuntime,
   animationModePreferenceModelRuntime,
   booleanTogglePreferenceModelRuntime,
@@ -184,6 +187,29 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
   assert.deepEqual(applied, [true]);
 }
 {
+  const storage = memoryStorage();
+  const select = { value: "" };
+  const state = { showGrid: false, showOverlayDebug: true };
+  assert.deepEqual(applyBooleanTogglePreferenceStateRuntime({
+    enabled: true,
+    key: "grid",
+    select,
+    state,
+    stateKey: "showGrid",
+    storage
+  }), {
+    enabled: true,
+    stored: true,
+    value: "on"
+  });
+  assert.deepEqual(state, {
+    showGrid: true,
+    showOverlayDebug: true
+  });
+  assert.equal(select.value, "on");
+  assert.equal(storage.data.grid, "on");
+}
+{
   const storage = memoryStorage({ scale: "native" });
   const applied: string[] = [];
   let listener: (() => void) | null = null;
@@ -311,6 +337,52 @@ assert.deepEqual(animationModePreferenceModelRuntime("bad", 123), {
   });
   assert.equal(select.value, "freeze");
   assert.equal(storage.data.animation, "freeze");
+}
+{
+  const storage = memoryStorage();
+  const select = { value: "" };
+  const state = {
+    animationFrozen: false,
+    frozenAnimationTick: null
+  };
+  assert.deepEqual(applyAnimationModePreferenceStateRuntime({
+    mode: "freeze",
+    currentTick: 456,
+    key: "animation",
+    select,
+    state,
+    storage
+  }), {
+    animationFrozen: true,
+    frozenAnimationTick: 456,
+    stored: true,
+    value: "freeze"
+  });
+  assert.deepEqual(state, {
+    animationFrozen: true,
+    frozenAnimationTick: 456
+  });
+  assert.equal(select.value, "freeze");
+  assert.equal(storage.data.animation, "freeze");
+  assert.deepEqual(applyAnimationModePreferenceStateRuntime({
+    mode: "live",
+    currentTick: 789,
+    key: "animation",
+    select,
+    state,
+    storage
+  }), {
+    animationFrozen: false,
+    frozenAnimationTick: null,
+    stored: true,
+    value: "live"
+  });
+  assert.deepEqual(state, {
+    animationFrozen: false,
+    frozenAnimationTick: null
+  });
+  assert.equal(select.value, "live");
+  assert.equal(storage.data.animation, "live");
 }
 {
   const storage: PreferenceStorageRuntime = {
@@ -459,6 +531,33 @@ assert.deepEqual(legacyScaleModePreferenceModelRuntime("bad", ["fit", "1", "2", 
   legacyScaleMode: "fit",
   value: "fit"
 });
+{
+  const storage = memoryStorage();
+  const select = { value: "" };
+  const state = {
+    enablePaletteFx: false,
+    paletteFrameTick: 123,
+    paletteFrame: { stale: true }
+  };
+  assert.deepEqual(applyPaletteFxPreferenceStateRuntime({
+    enabled: true,
+    key: "palette",
+    select,
+    state,
+    storage
+  }), {
+    enabled: true,
+    stored: true,
+    value: "on"
+  });
+  assert.deepEqual(state, {
+    enablePaletteFx: true,
+    paletteFrameTick: -1,
+    paletteFrame: null
+  });
+  assert.equal(select.value, "on");
+  assert.equal(storage.data.palette, "on");
+}
 assert.equal(nextLegacyScaleModeRuntime("fit", 1, ["fit", "1", "2", "3", "4"], "fit"), "1");
 assert.equal(nextLegacyScaleModeRuntime("fit", -1, ["fit", "1", "2", "3", "4"], "fit"), "4");
 assert.equal(nextLegacyScaleModeRuntime("bad", 2, ["fit", "1", "2", "3", "4"], "fit"), "2");

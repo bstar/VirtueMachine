@@ -34,6 +34,17 @@ export function deriveNetSessionText(args: {
   return `${String(args.username || "")}/${name}`;
 }
 
+export function deriveNetOnlineStatusTextRuntime(args: {
+  characterName?: unknown;
+  username?: unknown;
+}): string {
+  const username = String(args.username || "").trim();
+  const characterName = String(args.characterName || "").trim();
+  return username || characterName
+    ? `${username || "account"}/${characterName || "(no-char)"}`
+    : "Connected.";
+}
+
 export function deriveNetAuthButtonModel(isAuthenticated: boolean): {
   text: string;
   addClass: "control-btn--login" | "control-btn--logout";
@@ -59,6 +70,93 @@ export function shouldShowInGameServerBrokenRuntime(args: {
   }
   const level = String(args.statusLevel || "").trim().toLowerCase();
   return level === "offline" || level === "error";
+}
+
+export type InGameServerStatusOverlayRuntime = {
+  color: "#138000" | "#b00000";
+  text: "RECONNECTED" | "SERVER LOST";
+};
+
+export function currentInGameServerStatusOverlayRuntime(args: {
+  isServerConnectionBroken: boolean;
+  nowMs: unknown;
+  reconnectedMessageUntilMs: unknown;
+}): InGameServerStatusOverlayRuntime | null {
+  if (args.isServerConnectionBroken) {
+    return { color: "#b00000", text: "SERVER LOST" };
+  }
+  const nowMs = Number(args.nowMs);
+  const reconnectedMessageUntilMs = Number(args.reconnectedMessageUntilMs);
+  if (Number.isFinite(nowMs) && Number.isFinite(reconnectedMessageUntilMs) && reconnectedMessageUntilMs > nowMs) {
+    return { color: "#138000", text: "RECONNECTED" };
+  }
+  return null;
+}
+
+export function shouldProbeReconnectRuntime(args: {
+  isAuthenticated: boolean;
+  isServerConnectionBroken: boolean;
+  sessionStarted: boolean;
+  reconnectProbeInFlight: boolean;
+  nowMs: unknown;
+  reconnectProbeLastMs: unknown;
+  reconnectProbeIntervalMs: unknown;
+}): boolean {
+  if (!args.isAuthenticated || !args.isServerConnectionBroken || !args.sessionStarted || args.reconnectProbeInFlight) {
+    return false;
+  }
+  const nowMs = Number(args.nowMs);
+  const lastMs = Number(args.reconnectProbeLastMs);
+  const intervalMs = Number(args.reconnectProbeIntervalMs);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(lastMs) || !Number.isFinite(intervalMs)) {
+    return false;
+  }
+  return nowMs - lastMs >= Math.max(0, intervalMs);
+}
+
+export type ReconnectMessageStateRuntime = {
+  reconnectedMessageClearOnCommand: boolean;
+  reconnectedMessageUntilMs: number;
+};
+
+export function markServerReconnectedStateRuntime<T extends ReconnectMessageStateRuntime>(args: {
+  durationMs: unknown;
+  nowMs: unknown;
+  state: T;
+}): T {
+  const nowMs = Number(args.nowMs);
+  const durationMs = Number(args.durationMs);
+  args.state.reconnectedMessageUntilMs =
+    (Number.isFinite(nowMs) ? nowMs : 0) + Math.max(0, Number.isFinite(durationMs) ? durationMs : 0);
+  args.state.reconnectedMessageClearOnCommand = true;
+  return args.state;
+}
+
+export function clearTransientReconnectMessageOnCommandRuntime<T extends ReconnectMessageStateRuntime>(state: T): boolean {
+  if (!state.reconnectedMessageClearOnCommand) {
+    return false;
+  }
+  state.reconnectedMessageClearOnCommand = false;
+  state.reconnectedMessageUntilMs = 0;
+  return true;
+}
+
+export type BrokenServerGameplayBlockDiagRuntime = {
+  diagClass: "diag warn";
+  diagText: "Server connection lost. Waiting to reconnect before accepting commands.";
+};
+
+export function brokenServerGameplayBlockDiagRuntime(args: {
+  isServerConnectionBroken: boolean;
+  sessionStarted: boolean;
+}): BrokenServerGameplayBlockDiagRuntime | null {
+  if (!args.sessionStarted || !args.isServerConnectionBroken) {
+    return null;
+  }
+  return {
+    diagClass: "diag warn",
+    diagText: "Server connection lost. Waiting to reconnect before accepting commands."
+  };
 }
 
 export type NetStatusPresentationRuntime = {

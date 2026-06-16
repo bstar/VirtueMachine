@@ -18,7 +18,8 @@ import {
   formatSimpleCountRuntime,
   formatSimLoopStateRuntime,
   formatTopTimeOfDayRuntime,
-  normalizeDiagKindPresentationRuntime
+  normalizeDiagKindPresentationRuntime,
+  serverStatusOverlayLayoutRuntime
 } from "../ui/status_text_runtime.ts";
 
 {
@@ -49,6 +50,43 @@ assert.deepEqual(normalizeDiagKindPresentationRuntime({ diagClass: "warn" }), {
   diagClass: "diag warn",
   diagText: ""
 });
+
+assert.deepEqual(serverStatusOverlayLayoutRuntime({
+  scale: 2,
+  text: "SERVER LOST"
+}), {
+  background: {
+    h: 24,
+    w: 192,
+    x: 224,
+    y: 28
+  },
+  drawScale: 2,
+  text: "SERVER LOST",
+  textX: 232,
+  textY: 32
+});
+assert.deepEqual(serverStatusOverlayLayoutRuntime({
+  offsetX: 8,
+  offsetY: 16,
+  scale: 1,
+  text: "RECONNECTED"
+}), {
+  background: {
+    h: 12,
+    w: 96,
+    x: 104,
+    y: -2
+  },
+  drawScale: 1,
+  text: "RECONNECTED",
+  textX: 108,
+  textY: 0
+});
+assert.equal(serverStatusOverlayLayoutRuntime({
+  scale: 0,
+  text: "X"
+}).drawScale, 1);
 
 assert.deepEqual(formatClockRuntime({ time_h: 9, time_m: 5 }), {
   hh: "09",

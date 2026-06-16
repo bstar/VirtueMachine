@@ -9,6 +9,7 @@ import {
   capturePresetFilenameRuntime,
   capturePresetOptionsRuntime,
   captureSuccessDiagRuntime,
+  captureViewportStatusRowsFromElementsRuntime,
   captureViewportStatusRowsRuntime,
   movedCameraFocusTextRuntime,
   populateCapturePresetSelectRuntime
@@ -155,6 +156,28 @@ assert.equal(
   captureViewportStatusRowsRuntime({ diagnostic: "x".repeat(80) }).at(-1)?.value,
   `${"x".repeat(69)}...`
 );
+assert.deepEqual(captureViewportStatusRowsFromElementsRuntime({
+  clock: { textContent: "10:20" },
+  dataSource: { textContent: "runtime" },
+  date: { textContent: "2 / 3 / 99" },
+  diagnostic: { textContent: "" },
+  entityOverlay: null,
+  mapPosition: { textContent: "1, 2, 0" },
+  objectOverlay: { textContent: "4 / 12" },
+  renderParity: { textContent: "ok" },
+  stateHash: { textContent: "abc" },
+  tile: { textContent: "0x123" }
+}), [
+  { label: "Map Position", value: "1, 2, 0" },
+  { label: "Clock", value: "10:20" },
+  { label: "Date", value: "2 / 3 / 99" },
+  { label: "Tile", value: "0x123" },
+  { label: "Render Parity", value: "ok" },
+  { label: "Object Overlay", value: "4 / 12" },
+  { label: "Entity Overlay", value: "-" },
+  { label: "Data Source", value: "runtime" },
+  { label: "State Hash", value: "abc" }
+]);
 
 {
   const listeners: Record<string, () => void> = {};

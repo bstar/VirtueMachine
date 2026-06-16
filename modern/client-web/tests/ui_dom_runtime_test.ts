@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   canvas2dContextRuntime,
+  legacyFrameLayoutModelRuntime,
   requiredElementRuntime
 } from "../ui/dom_runtime.ts";
 
@@ -26,6 +27,48 @@ import {
     () => canvas2dContextRuntime({ getContext: () => null }, "legacy"),
     /legacy 2D context is unavailable/
   );
+}
+
+{
+  assert.deepEqual(legacyFrameLayoutModelRuntime({
+    hostH: 900,
+    hostW: 1400,
+    legacyScaleMode: "fit",
+    mapRect: { x: 8, y: 8, w: 160, h: 160 },
+    srcH: 200,
+    srcW: 320
+  }), {
+    mapRect: { x: 32, y: 32, w: 640, h: 640 },
+    outH: 800,
+    outW: 1280,
+    scale: 4
+  });
+  assert.deepEqual(legacyFrameLayoutModelRuntime({
+    hostH: 900,
+    hostW: 1400,
+    legacyScaleMode: "2x",
+    mapRect: { x: 8, y: 8, w: 160, h: 160 },
+    srcH: 200,
+    srcW: 320
+  }), {
+    mapRect: { x: 16, y: 16, w: 320, h: 320 },
+    outH: 400,
+    outW: 640,
+    scale: 2
+  });
+  assert.deepEqual(legacyFrameLayoutModelRuntime({
+    hostH: 0,
+    hostW: 0,
+    legacyScaleMode: "bad",
+    mapRect: { x: 8, y: 8, w: 160, h: 160 },
+    srcH: 200,
+    srcW: 320
+  }), {
+    mapRect: { x: 8, y: 8, w: 160, h: 160 },
+    outH: 200,
+    outW: 320,
+    scale: 1
+  });
 }
 
 console.log("ui_dom_runtime_test: ok");

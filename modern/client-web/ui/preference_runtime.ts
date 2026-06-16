@@ -187,6 +187,22 @@ export function initBooleanTogglePreferenceRuntime(args: {
   };
 }
 
+export function applyBooleanTogglePreferenceStateRuntime<
+  TState extends Record<TKey, boolean>,
+  TKey extends keyof TState & string
+>(args: {
+  enabled: unknown;
+  key: string;
+  select?: PreferenceSelectRuntime | null;
+  state: TState;
+  stateKey: TKey;
+  storage?: PreferenceStorageRuntime | null;
+}): ReturnType<typeof applyBooleanTogglePreferenceRuntime> {
+  const model = applyBooleanTogglePreferenceRuntime(args);
+  args.state[args.stateKey] = model.enabled as TState[TKey];
+  return model;
+}
+
 export function initChoicePreferenceRuntime<TChoice extends string>(args: {
   aliases?: Partial<Record<string, TChoice>>;
   allowed: readonly TChoice[];
@@ -255,6 +271,25 @@ export function applyAnimationModePreferenceRuntime(args: {
   };
 }
 
+export type AnimationModePreferenceStateRuntime = {
+  animationFrozen: boolean;
+  frozenAnimationTick: number | null;
+};
+
+export function applyAnimationModePreferenceStateRuntime(args: {
+  currentTick: unknown;
+  key: string;
+  mode: unknown;
+  select?: PreferenceSelectRuntime | null;
+  state: AnimationModePreferenceStateRuntime;
+  storage?: PreferenceStorageRuntime | null;
+}): ReturnType<typeof applyAnimationModePreferenceRuntime> {
+  const model = applyAnimationModePreferenceRuntime(args);
+  args.state.animationFrozen = model.animationFrozen;
+  args.state.frozenAnimationTick = model.frozenAnimationTick;
+  return model;
+}
+
 export function movementModePreferenceModelRuntime(mode: unknown): {
   movementMode: "avatar" | "ghost";
   statText: "avatar" | "ghost";
@@ -315,6 +350,26 @@ export function applyMovementModePreferenceStateRuntime(args: {
   if (args.statAvatarState) {
     args.statAvatarState.textContent = model.statText;
   }
+  return model;
+}
+
+export type PaletteFxPreferenceStateRuntime = {
+  enablePaletteFx: boolean;
+  paletteFrame: unknown;
+  paletteFrameTick: number;
+};
+
+export function applyPaletteFxPreferenceStateRuntime(args: {
+  enabled: unknown;
+  key: string;
+  select?: PreferenceSelectRuntime | null;
+  state: PaletteFxPreferenceStateRuntime;
+  storage?: PreferenceStorageRuntime | null;
+}): ReturnType<typeof applyBooleanTogglePreferenceRuntime> {
+  const model = applyBooleanTogglePreferenceRuntime(args);
+  args.state.enablePaletteFx = model.enabled;
+  args.state.paletteFrameTick = -1;
+  args.state.paletteFrame = null;
   return model;
 }
 

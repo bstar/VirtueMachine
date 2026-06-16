@@ -25,6 +25,20 @@ export type CursorCycleRuntime = {
   index: number;
 };
 
+export type LegacyCursorLayerTargetRuntime =
+  | {
+    kind: "backdrop";
+    logicalW: 320;
+    mouseX: number;
+    mouseY: number;
+  }
+  | {
+    kind: "viewport";
+    logicalW: 160;
+    mouseX: number;
+    mouseY: number;
+  };
+
 export function cursorCycleRuntime(args: {
   count: unknown;
   currentIndex: unknown;
@@ -110,5 +124,45 @@ export function cursorDrawRectRuntime(args: {
     scale,
     scaleX,
     scaleY
+  };
+}
+
+export function legacyCursorLayerTargetRuntime(args: {
+  backdropH: unknown;
+  backdropW: unknown;
+  hasViewport: boolean;
+  mapRect: { h: unknown; w: unknown; x: unknown; y: unknown };
+  mouseNormX: unknown;
+  mouseNormY: unknown;
+  sessionStarted: boolean;
+}): LegacyCursorLayerTargetRuntime | null {
+  const backdropW = Number(args.backdropW) | 0;
+  const backdropH = Number(args.backdropH) | 0;
+  if (backdropW <= 0 || backdropH <= 0) {
+    return null;
+  }
+  const mouseX = Math.floor(Number(args.mouseNormX || 0) * backdropW);
+  const mouseY = Math.floor(Number(args.mouseNormY || 0) * backdropH);
+  if (args.sessionStarted && args.hasViewport) {
+    const scale = Math.max(1, Math.floor(backdropW / 320));
+    const mapX = (Number(args.mapRect.x) | 0) * scale;
+    const mapY = (Number(args.mapRect.y) | 0) * scale;
+    const mapW = (Number(args.mapRect.w) | 0) * scale;
+    const mapH = (Number(args.mapRect.h) | 0) * scale;
+    const overMap = mouseX >= mapX && mouseX < (mapX + mapW) && mouseY >= mapY && mouseY < (mapY + mapH);
+    if (overMap) {
+      return {
+        kind: "viewport",
+        logicalW: 160,
+        mouseX: (mouseX - mapX) / scale,
+        mouseY: (mouseY - mapY) / scale
+      };
+    }
+  }
+  return {
+    kind: "backdrop",
+    logicalW: 320,
+    mouseX,
+    mouseY
   };
 }

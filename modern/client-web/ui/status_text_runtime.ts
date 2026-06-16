@@ -48,6 +48,51 @@ export type StatusPanelTextRuntime = {
   topTimeOfDay: string;
 };
 
+export type ServerStatusOverlayLayoutRuntime = {
+  background: {
+    h: number;
+    w: number;
+    x: number;
+    y: number;
+  };
+  drawScale: number;
+  text: string;
+  textX: number;
+  textY: number;
+};
+
+export function serverStatusOverlayLayoutRuntime(args: {
+  logicalWidth?: unknown;
+  logicalY?: unknown;
+  offsetX?: unknown;
+  offsetY?: unknown;
+  scale?: unknown;
+  text?: unknown;
+}): ServerStatusOverlayLayoutRuntime {
+  const text = String(args.text || "");
+  const scale = Math.max(1, Number(args.scale) | 0);
+  const logicalWidth = Math.max(1, Number(args.logicalWidth ?? 320) | 0);
+  const logicalY = Number(args.logicalY ?? 16) | 0;
+  const offsetX = Number(args.offsetX ?? 0) | 0;
+  const offsetY = Number(args.offsetY ?? 0) | 0;
+  const textW = text.length * 8;
+  const logicalX = Math.floor((logicalWidth - textW) / 2);
+  const textX = (logicalX - offsetX) * scale;
+  const textY = (logicalY - offsetY) * scale;
+  return {
+    background: {
+      h: 12 * scale,
+      w: (textW + 8) * scale,
+      x: textX - (4 * scale),
+      y: textY - (2 * scale)
+    },
+    drawScale: scale,
+    text,
+    textX,
+    textY
+  };
+}
+
 export function normalizeDiagKindPresentationRuntime(
   presentation: DiagKindPresentationRuntime | null | undefined
 ): DiagPresentationRuntime | null {

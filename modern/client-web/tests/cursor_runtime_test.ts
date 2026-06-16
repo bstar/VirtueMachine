@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import {
   cursorCycleRuntime,
   cursorDrawRectRuntime,
-  cursorLogicalWidthRuntime
+  cursorLogicalWidthRuntime,
+  legacyCursorLayerTargetRuntime
 } from "../ui/cursor_runtime.ts";
 
 assert.deepEqual(cursorCycleRuntime({ count: 4, currentIndex: 0, delta: 1 }), {
@@ -122,6 +123,53 @@ assert.equal(cursorDrawRectRuntime({
   shape: { width: 16, height: 16 },
   targetW: 0,
   targetH: 100
+}), null);
+
+assert.deepEqual(legacyCursorLayerTargetRuntime({
+  backdropH: 400,
+  backdropW: 640,
+  hasViewport: true,
+  mapRect: { x: 8, y: 8, w: 160, h: 160 },
+  mouseNormX: 0.5,
+  mouseNormY: 0.5,
+  sessionStarted: true
+}), {
+  kind: "viewport",
+  logicalW: 160,
+  mouseX: 152,
+  mouseY: 92
+});
+assert.deepEqual(legacyCursorLayerTargetRuntime({
+  backdropH: 400,
+  backdropW: 640,
+  hasViewport: true,
+  mapRect: { x: 8, y: 8, w: 160, h: 160 },
+  mouseNormX: 0.95,
+  mouseNormY: 0.95,
+  sessionStarted: true
+}), {
+  kind: "backdrop",
+  logicalW: 320,
+  mouseX: 608,
+  mouseY: 380
+});
+assert.deepEqual(legacyCursorLayerTargetRuntime({
+  backdropH: 400,
+  backdropW: 640,
+  hasViewport: false,
+  mapRect: { x: 8, y: 8, w: 160, h: 160 },
+  mouseNormX: 0.5,
+  mouseNormY: 0.5,
+  sessionStarted: true
+})?.kind, "backdrop");
+assert.equal(legacyCursorLayerTargetRuntime({
+  backdropH: 0,
+  backdropW: 640,
+  hasViewport: true,
+  mapRect: { x: 8, y: 8, w: 160, h: 160 },
+  mouseNormX: 0.5,
+  mouseNormY: 0.5,
+  sessionStarted: true
 }), null);
 
 console.log("cursor_runtime_test: ok");

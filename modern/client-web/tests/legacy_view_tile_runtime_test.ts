@@ -3,6 +3,7 @@ import {
   applyLegacyCornerVariantRuntime,
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
+  legacyViewportFramePlacementsRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
@@ -31,6 +32,55 @@ function viewCtx(args: {
     wallAtWorld: args.wall ?? (() => false)
   };
 }
+
+const frameTiles = {
+  bottom: 0x1b4,
+  cornerBL: 0x1b3,
+  cornerBR: 0x1b5,
+  cornerTL: 0x1b0,
+  cornerTR: 0x1b2,
+  left: 0x1b6,
+  right: 0x1b7,
+  top: 0x1b1
+};
+
+{
+  const placements = legacyViewportFramePlacementsRuntime({ tiles: frameTiles });
+  assert.equal(placements.length, 40);
+  assert.deepEqual(placements.slice(0, 4), [
+    { tileId: 0x1b0, x: 0, y: 0 },
+    { tileId: 0x1b2, x: 160, y: 0 },
+    { tileId: 0x1b3, x: 0, y: 160 },
+    { tileId: 0x1b5, x: 160, y: 160 }
+  ]);
+  assert.deepEqual(placements.slice(4, 8), [
+    { tileId: 0x1b1, x: 16, y: 0 },
+    { tileId: 0x1b4, x: 16, y: 160 },
+    { tileId: 0x1b6, x: 0, y: 16 },
+    { tileId: 0x1b7, x: 160, y: 16 }
+  ]);
+  assert.deepEqual(placements.slice(-4), [
+    { tileId: 0x1b1, x: 144, y: 0 },
+    { tileId: 0x1b4, x: 144, y: 160 },
+    { tileId: 0x1b6, x: 0, y: 144 },
+    { tileId: 0x1b7, x: 160, y: 144 }
+  ]);
+}
+
+assert.deepEqual(legacyViewportFramePlacementsRuntime({
+  cellSize: 8,
+  edgeCells: 1,
+  tiles: frameTiles
+}), [
+  { tileId: 0x1b0, x: 0, y: 0 },
+  { tileId: 0x1b2, x: 16, y: 0 },
+  { tileId: 0x1b3, x: 0, y: 16 },
+  { tileId: 0x1b5, x: 16, y: 16 },
+  { tileId: 0x1b1, x: 8, y: 0 },
+  { tileId: 0x1b4, x: 8, y: 16 },
+  { tileId: 0x1b6, x: 0, y: 8 },
+  { tileId: 0x1b7, x: 16, y: 8 }
+]);
 
 assert.equal(applyLegacyCornerVariantRuntime(0x0c0, 10, 20, 0, deps({
   terrainOf: () => 0xf6

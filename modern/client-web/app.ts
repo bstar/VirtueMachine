@@ -280,6 +280,11 @@ import {
 import {
   applyNetStatusPresentationRuntime,
   applyNetStatusRuntime,
+  brokenServerGameplayBlockDiagRuntime,
+  clearTransientReconnectMessageOnCommandRuntime,
+  currentInGameServerStatusOverlayRuntime,
+  deriveNetOnlineStatusTextRuntime,
+  markServerReconnectedStateRuntime,
   netStatusAutoLoginRuntime,
   netStatusChooseAccountRuntime,
   netStatusNotLoggedInRuntime,
@@ -290,6 +295,7 @@ import {
   renderIntroPhaseUiRuntime,
   renderNetSessionUiRuntime,
   renderNetStatusViewRuntime,
+  shouldProbeReconnectRuntime,
   shouldShowInGameServerBrokenRuntime,
   type NetSessionUiElementsRuntime
 } from "./net/status_runtime.ts";
@@ -532,12 +538,14 @@ import {
 import {
   cursorCycleRuntime,
   cursorDrawRectRuntime,
-  cursorLogicalWidthRuntime
+  cursorLogicalWidthRuntime,
+  legacyCursorLayerTargetRuntime
 } from "./ui/cursor_runtime.ts";
 import {
   applyLegacyCornerVariantRuntime,
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
+  legacyViewportFramePlacementsRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
@@ -556,10 +564,12 @@ import {
 } from "./ui/input_runtime.ts";
 import {
   canvas2dContextRuntime,
+  legacyFrameLayoutModelRuntime,
   requiredElementRuntime
 } from "./ui/dom_runtime.ts";
 import {
   buildLegacyInventoryPaperdollLayoutRuntime,
+  legacyInventoryPaperdollHitTestFromProbeRuntime,
   legacyInventoryPaperdollHitTestRuntime,
   type LegacyHudPanelHitRuntime
 } from "./ui/inventory_paperdoll_layout_runtime.ts";
@@ -576,10 +586,13 @@ import {
 } from "./ui/character_panel_runtime.ts";
 import {
   applyBooleanTogglePreferenceRuntime,
+  applyBooleanTogglePreferenceStateRuntime,
   applyAnimationModePreferenceRuntime,
+  applyAnimationModePreferenceStateRuntime,
   applyFontPreferenceRuntime,
   applyMovementModePreferenceStateRuntime,
   applyNamedPreferenceRuntime,
+  applyPaletteFxPreferenceStateRuntime,
   applyThemePreferenceRuntime,
   initChoicePreferenceRuntime,
   initPreferenceControlsRuntime,
@@ -615,7 +628,7 @@ import {
   captureFilePlanRuntime,
   capturePresetByIdRuntime,
   captureSuccessDiagRuntime,
-  captureViewportStatusRowsRuntime,
+  captureViewportStatusRowsFromElementsRuntime,
   composeViewportCaptureCanvasRuntime,
   composeWorldHudCaptureCanvasRuntime,
   populateCapturePresetSelectRuntime,
@@ -668,7 +681,8 @@ import {
   applyDiagPresentationRuntime,
   buildStatusPanelTextRuntime,
   formatLedgerEntryCountRuntime,
-  normalizeDiagKindPresentationRuntime
+  normalizeDiagKindPresentationRuntime,
+  serverStatusOverlayLayoutRuntime
 } from "./ui/status_text_runtime.ts";
 
 const TICK_MS = 100;
@@ -749,6 +763,7 @@ type U6TextCanvasApp = LegacyTextCanvasRuntime | {
 type AnimationPaletteState = {
   animData: U6AnimDataRuntime | null;
   basePalette: RgbPaletteRuntime | null;
+  enablePaletteFx: boolean;
   frozenAnimationTick: number | null;
   paletteFrame: RgbPaletteRuntime | null;
   paletteFrameTick: number;
@@ -2455,18 +2470,14 @@ function applyLegacyFrameLayout(): void {
   const srcH = pixmap.height | 0;
   const host = legacyWorldSurface.parentElement || legacyWorldSurface;
   const hostRect = host.getBoundingClientRect();
-  const fitScaleX = Math.floor((hostRect.width || srcW) / srcW);
-  const fitScaleY = Math.floor((hostRect.height || srcH) / srcH);
-  const fitScale = Math.max(1, Math.min(fitScaleX, fitScaleY));
-  let scale = fitScale;
-  if (renderState.legacyScaleMode !== "fit") {
-    const fixed = Number.parseInt(renderState.legacyScaleMode, 10);
-    if (Number.isFinite(fixed) && fixed >= 1) {
-      scale = fixed;
-    }
-  }
-  const outW = Math.max(1, Math.round(srcW * scale));
-  const outH = Math.max(1, Math.round(srcH * scale));
+  const layout = legacyFrameLayoutModelRuntime({
+    hostH: hostRect.height,
+    hostW: hostRect.width,
+    legacyScaleMode: renderState.legacyScaleMode,
+    mapRect: LEGACY_UI_MAP_RECT,
+    srcH,
+    srcW
+  });
 
   const src = document.createElement("canvas");
   src.width = srcW;
@@ -2485,39 +2496,35 @@ function applyLegacyFrameLayout(): void {
   }
   sg.putImageData(id, 0, 0);
 
-  legacyBackdropCanvas.width = outW;
-  legacyBackdropCanvas.height = outH;
+  legacyBackdropCanvas.width = layout.outW;
+  legacyBackdropCanvas.height = layout.outH;
   const bg = legacyBackdropCanvas.getContext("2d");
   if (!bg) {
     return;
   }
   bg.imageSmoothingEnabled = false;
-  bg.clearRect(0, 0, outW, outH);
-  bg.drawImage(src, 0, 0, srcW, srcH, 0, 0, outW, outH);
+  bg.clearRect(0, 0, layout.outW, layout.outH);
+  bg.drawImage(src, 0, 0, srcW, srcH, 0, 0, layout.outW, layout.outH);
   if (!renderState.legacyBackdropBaseCanvas) {
     renderState.legacyBackdropBaseCanvas = document.createElement("canvas");
   }
   const baseCanvas = renderState.legacyBackdropBaseCanvas;
-  baseCanvas.width = outW;
-  baseCanvas.height = outH;
+  baseCanvas.width = layout.outW;
+  baseCanvas.height = layout.outH;
   const bb = baseCanvas.getContext("2d");
   if (!bb) {
     return;
   }
   bb.imageSmoothingEnabled = false;
-  bb.clearRect(0, 0, outW, outH);
+  bb.clearRect(0, 0, layout.outW, layout.outH);
   bb.drawImage(legacyBackdropCanvas, 0, 0);
 
-  const mapX = LEGACY_UI_MAP_RECT.x * scale;
-  const mapY = LEGACY_UI_MAP_RECT.y * scale;
-  const mapW = LEGACY_UI_MAP_RECT.w * scale;
-  const mapH = LEGACY_UI_MAP_RECT.h * scale;
-  legacyWorldSurface.style.width = `${outW}px`;
-  legacyWorldSurface.style.height = `${outH}px`;
-  legacyViewportCanvas.style.left = `${mapX}px`;
-  legacyViewportCanvas.style.top = `${mapY}px`;
-  legacyViewportCanvas.style.width = `${mapW}px`;
-  legacyViewportCanvas.style.height = `${mapH}px`;
+  legacyWorldSurface.style.width = `${layout.outW}px`;
+  legacyWorldSurface.style.height = `${layout.outH}px`;
+  legacyViewportCanvas.style.left = `${layout.mapRect.x}px`;
+  legacyViewportCanvas.style.top = `${layout.mapRect.y}px`;
+  legacyViewportCanvas.style.width = `${layout.mapRect.w}px`;
+  legacyViewportCanvas.style.height = `${layout.mapRect.h}px`;
 }
 
 function renderLegacyHudStubOnBackdrop(): void {
@@ -2976,25 +2983,28 @@ function drawCenteredServerStatusOnSurface(
   text: string,
   color: string
 ): void {
-  const warningText = String(text || "");
-  const textW = warningText.length * 8;
-  const logicalX = Math.floor((320 - textW) / 2);
-  const logicalY = 16;
-  const sx = (logicalX - offsetX) * scale;
-  const sy = (logicalY - offsetY) * scale;
+  const layout = serverStatusOverlayLayoutRuntime({
+    offsetX,
+    offsetY,
+    scale,
+    text
+  });
   g.fillStyle = "#1f0f0a";
-  g.fillRect(sx - (4 * scale), sy - (2 * scale), (textW + 8) * scale, 12 * scale);
-  drawU6MainText(g, warningText, sx, sy, Math.max(1, scale), color);
+  g.fillRect(
+    layout.background.x,
+    layout.background.y,
+    layout.background.w,
+    layout.background.h
+  );
+  drawU6MainText(g, layout.text, layout.textX, layout.textY, layout.drawScale, color);
 }
 
 function currentInGameServerStatusOverlay(nowMs: number): { color: string; text: string } | null {
-  if (isServerConnectionBroken()) {
-    return { color: "#b00000", text: "SERVER LOST" };
-  }
-  if (Number(state.reconnectedMessageUntilMs) > nowMs) {
-    return { color: "#138000", text: "RECONNECTED" };
-  }
-  return null;
+  return currentInGameServerStatusOverlayRuntime({
+    isServerConnectionBroken: isServerConnectionBroken(),
+    nowMs,
+    reconnectedMessageUntilMs: state.reconnectedMessageUntilMs
+  });
 }
 
 function drawInGameServerStatusOverlay(): void {
@@ -3715,31 +3725,31 @@ function drawCustomCursorLayer(): void {
     if (bw <= 0 || bh <= 0) {
       return;
     }
-    const mx = Math.floor(cursorState.mouseNormX * bw);
-    const my = Math.floor(cursorState.mouseNormY * bh);
+    const target = legacyCursorLayerTargetRuntime({
+      backdropH: bh,
+      backdropW: bw,
+      hasViewport: !!legacyViewportCanvas,
+      mapRect: LEGACY_UI_MAP_RECT,
+      mouseNormX: cursorState.mouseNormX,
+      mouseNormY: cursorState.mouseNormY,
+      sessionStarted: cursorState.sessionStarted
+    });
+    if (!target) {
+      return;
+    }
 
-    if (cursorState.sessionStarted && legacyViewportCanvas) {
-      const scale = Math.max(1, Math.floor(bw / 320));
-      const mapX = LEGACY_UI_MAP_RECT.x * scale;
-      const mapY = LEGACY_UI_MAP_RECT.y * scale;
-      const mapW = LEGACY_UI_MAP_RECT.w * scale;
-      const mapH = LEGACY_UI_MAP_RECT.h * scale;
-      const overMap = mx >= mapX && mx < (mapX + mapW) && my >= mapY && my < (mapY + mapH);
-      if (overMap) {
-        const vg = legacyViewportCanvas.getContext("2d");
-        const vx = (mx - mapX) / scale;
-        const vy = (my - mapY) / scale;
-        drawCustomCursorOnContext(
-          vg,
-          legacyViewportCanvas.width | 0,
-          legacyViewportCanvas.height | 0,
-          { mouseX: vx, mouseY: vy, logicalW: 160 }
-        );
-        return;
-      }
+    if (target.kind === "viewport" && legacyViewportCanvas) {
+      const vg = legacyViewportCanvas.getContext("2d");
+      drawCustomCursorOnContext(
+        vg,
+        legacyViewportCanvas.width | 0,
+        legacyViewportCanvas.height | 0,
+        { mouseX: target.mouseX, mouseY: target.mouseY, logicalW: target.logicalW }
+      );
+      return;
     }
     const g = legacyBackdropCanvas.getContext("2d");
-    drawCustomCursorOnContext(g, bw, bh, { mouseX: mx, mouseY: my, logicalW: 320 });
+    drawCustomCursorOnContext(g, bw, bh, { mouseX: target.mouseX, mouseY: target.mouseY, logicalW: target.logicalW });
     return;
   }
   drawCustomCursorOnContext(ctx, canvas.width | 0, canvas.height | 0);
@@ -3783,17 +3793,8 @@ function composeLegacyViewportFromModernGrid(): void {
       }
     };
 
-    /* Legacy order from C_0A33_09CE/seg_2FC1: frame overlays drawn over map. */
-    drawFrameTile(LEGACY_FRAME_TILES.cornerTL, 0, 0);
-    drawFrameTile(LEGACY_FRAME_TILES.cornerTR, 160, 0);
-    drawFrameTile(LEGACY_FRAME_TILES.cornerBL, 0, 160);
-    drawFrameTile(LEGACY_FRAME_TILES.cornerBR, 160, 160);
-    for (let i = 1; i < 10; i += 1) {
-      const pos = i * 16;
-      drawFrameTile(LEGACY_FRAME_TILES.top, pos, 0);
-      drawFrameTile(LEGACY_FRAME_TILES.bottom, pos, 160);
-      drawFrameTile(LEGACY_FRAME_TILES.left, 0, pos);
-      drawFrameTile(LEGACY_FRAME_TILES.right, 160, pos);
+    for (const placement of legacyViewportFramePlacementsRuntime({ tiles: LEGACY_FRAME_TILES })) {
+      drawFrameTile(placement.tileId, placement.x, placement.y);
     }
   }
 
@@ -3930,11 +3931,10 @@ function setNetStatus(level: string, text: string): void {
 }
 
 function netOnlineStatusText(): string {
-  const username = String(state.net.username || "").trim();
-  const characterName = String(state.net.characterName || "").trim();
-  return username || characterName
-    ? `${username || "account"}/${characterName || "(no-char)"}`
-    : "Connected.";
+  return deriveNetOnlineStatusTextRuntime({
+    characterName: state.net.characterName,
+    username: state.net.username
+  });
 }
 
 function isServerConnectionBroken(): boolean {
@@ -3945,28 +3945,28 @@ function isServerConnectionBroken(): boolean {
 }
 
 function markServerReconnected(): void {
-  state.reconnectedMessageUntilMs = performance.now() + NET_RECONNECTED_MESSAGE_MS;
-  state.reconnectedMessageClearOnCommand = true;
+  markServerReconnectedStateRuntime({
+    durationMs: NET_RECONNECTED_MESSAGE_MS,
+    nowMs: performance.now(),
+    state
+  });
   state.net.backgroundSyncPaused = false;
   setNetStatus("online", netOnlineStatusText());
 }
 
 function clearTransientReconnectMessageOnCommand(): void {
-  if (!state.reconnectedMessageClearOnCommand) {
-    return;
-  }
-  state.reconnectedMessageClearOnCommand = false;
-  state.reconnectedMessageUntilMs = 0;
+  clearTransientReconnectMessageOnCommandRuntime(state);
 }
 
 function blockGameplayForBrokenServer(): boolean {
-  if (!state.sessionStarted || !isServerConnectionBroken()) {
+  const diag = brokenServerGameplayBlockDiagRuntime({
+    isServerConnectionBroken: isServerConnectionBroken(),
+    sessionStarted: state.sessionStarted
+  });
+  if (!diag) {
     return false;
   }
-  applyDiag({
-    diagClass: "diag warn",
-    diagText: "Server connection lost. Waiting to reconnect before accepting commands."
-  });
+  applyDiag(diag);
   return true;
 }
 
@@ -4814,28 +4814,46 @@ function initNetPanel(): void {
 }
 
 function setGrid(enabled: boolean): void {
-  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: GRID_KEY, select: gridToggle, storage: localStorage });
-  state.showGrid = model.enabled;
+  applyBooleanTogglePreferenceStateRuntime({
+    enabled,
+    key: GRID_KEY,
+    select: gridToggle,
+    state,
+    stateKey: "showGrid",
+    storage: localStorage
+  });
 }
 
 function setOverlayDebug(enabled: boolean): void {
-  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: DEBUG_OVERLAY_KEY, select: debugOverlayToggle, storage: localStorage });
-  state.showOverlayDebug = model.enabled;
+  applyBooleanTogglePreferenceStateRuntime({
+    enabled,
+    key: DEBUG_OVERLAY_KEY,
+    select: debugOverlayToggle,
+    state,
+    stateKey: "showOverlayDebug",
+    storage: localStorage
+  });
 }
 
 function setAnimationMode(mode: string): void {
-  const animationState = state as AnimationPaletteState;
-  const model = applyAnimationModePreferenceRuntime({ mode, currentTick: state.sim.tick, key: ANIMATION_KEY, select: animationToggle, storage: localStorage });
-  state.animationFrozen = model.animationFrozen;
-  animationState.frozenAnimationTick = model.frozenAnimationTick;
+  applyAnimationModePreferenceStateRuntime({
+    mode,
+    currentTick: state.sim.tick,
+    key: ANIMATION_KEY,
+    select: animationToggle,
+    state,
+    storage: localStorage
+  });
 }
 
 function setPaletteFxMode(enabled: boolean): void {
-  const paletteState = state as AnimationPaletteState;
-  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: PALETTE_FX_KEY, select: paletteFxToggle, storage: localStorage });
-  state.enablePaletteFx = model.enabled;
-  paletteState.paletteFrameTick = -1;
-  paletteState.paletteFrame = null;
+  applyPaletteFxPreferenceStateRuntime({
+    enabled,
+    key: PALETTE_FX_KEY,
+    select: paletteFxToggle,
+    state: state as AnimationPaletteState,
+    storage: localStorage
+  });
 }
 
 function setMovementMode(mode: string): void {
@@ -5690,17 +5708,17 @@ function captureViewportPng(): void {
   const composed = composeViewportCaptureCanvasRuntime({
     canvas,
     document,
-    rows: captureViewportStatusRowsRuntime({
-      clock: statClock?.textContent,
-      dataSource: statSource?.textContent,
-      date: statDate?.textContent,
-      diagnostic: diagBox?.textContent,
-      entityOverlay: statEntities?.textContent,
-      mapPosition: statPos?.textContent,
-      objectOverlay: statObjects?.textContent,
-      renderParity: statRenderParity?.textContent,
-      stateHash: statHash?.textContent,
-      tile: statTile?.textContent
+    rows: captureViewportStatusRowsFromElementsRuntime({
+      clock: statClock,
+      dataSource: statSource,
+      date: statDate,
+      diagnostic: diagBox,
+      entityOverlay: statEntities,
+      mapPosition: statPos,
+      objectOverlay: statObjects,
+      renderParity: statRenderParity,
+      stateHash: statHash,
+      tile: statTile
     })
   });
   downloadCanvasPngRuntime({ canvas: composed, document, filename: plan.filename });
@@ -6607,13 +6625,13 @@ function parseProbeTileHex(v: unknown): number | null {
 }
 
 function uiProbeHitTest(logicalX: number, logicalY: number): LegacyHudPanelHitRuntime | null {
-  const statusDisplay = Number(state.legacyStatusDisplay) | 0;
-  const layout = buildLegacyInventoryPaperdollLayoutRuntime({
-    statusDisplay,
-    talkStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E,
-    talkShowInventory: (getUiProbeForRender().canonical_ui?.conversation_panel?.show_inventory) !== false
+  return legacyInventoryPaperdollHitTestFromProbeRuntime({
+    canonicalUi: getUiProbeForRender().canonical_ui,
+    logicalX,
+    logicalY,
+    statusDisplay: state.legacyStatusDisplay,
+    talkStatusDisplay: LEGACY_STATUS_DISPLAY.CMD_9E
   });
-  return legacyInventoryPaperdollHitTestRuntime(layout, logicalX | 0, logicalY | 0);
 }
 
 function buildOverlayCells(
@@ -7305,14 +7323,17 @@ function tickLoop(ts: number): void {
         );
         state.npcOcclusionBlockedMoves += blocked;
       }
-      if (
-        isNetAuthenticated()
-        && isServerConnectionBroken()
-        && state.sessionStarted
-        && !state.reconnectProbeInFlight
-        && (performance.now() - state.reconnectProbeLastMs) >= NET_RECONNECT_PROBE_INTERVAL_MS
-      ) {
-        state.reconnectProbeLastMs = performance.now();
+      const nowMs = performance.now();
+      if (shouldProbeReconnectRuntime({
+        isAuthenticated: isNetAuthenticated(),
+        isServerConnectionBroken: isServerConnectionBroken(),
+        sessionStarted: state.sessionStarted,
+        reconnectProbeInFlight: state.reconnectProbeInFlight,
+        nowMs,
+        reconnectProbeLastMs: state.reconnectProbeLastMs,
+        reconnectProbeIntervalMs: NET_RECONNECT_PROBE_INTERVAL_MS
+      })) {
+        state.reconnectProbeLastMs = nowMs;
         netProbeReconnect().catch((_err) => {});
       }
       if (

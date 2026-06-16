@@ -27,6 +27,49 @@ export type LegacyBaseTileBuffersRuntime = {
   rawTiles: Uint16Array;
 };
 
+export type LegacyViewportFrameTilesRuntime = {
+  bottom: number;
+  cornerBL: number;
+  cornerBR: number;
+  cornerTL: number;
+  cornerTR: number;
+  left: number;
+  right: number;
+  top: number;
+};
+
+export type LegacyViewportFramePlacementRuntime = {
+  tileId: number;
+  x: number;
+  y: number;
+};
+
+export function legacyViewportFramePlacementsRuntime(args: {
+  cellSize?: unknown;
+  edgeCells?: unknown;
+  tiles: LegacyViewportFrameTilesRuntime;
+}): LegacyViewportFramePlacementRuntime[] {
+  const cellSize = Math.max(1, Number(args.cellSize ?? 16) | 0);
+  const edgeCells = Math.max(0, Number(args.edgeCells ?? 9) | 0);
+  const edgeEnd = (edgeCells + 1) * cellSize;
+  const placements: LegacyViewportFramePlacementRuntime[] = [
+    { tileId: args.tiles.cornerTL, x: 0, y: 0 },
+    { tileId: args.tiles.cornerTR, x: edgeEnd, y: 0 },
+    { tileId: args.tiles.cornerBL, x: 0, y: edgeEnd },
+    { tileId: args.tiles.cornerBR, x: edgeEnd, y: edgeEnd }
+  ];
+  for (let i = 1; i <= edgeCells; i += 1) {
+    const pos = i * cellSize;
+    placements.push(
+      { tileId: args.tiles.top, x: pos, y: 0 },
+      { tileId: args.tiles.bottom, x: pos, y: edgeEnd },
+      { tileId: args.tiles.left, x: 0, y: pos },
+      { tileId: args.tiles.right, x: edgeEnd, y: pos }
+    );
+  }
+  return placements;
+}
+
 export function buildLegacyViewContextRuntime(args: {
   dateD: number;
   dateM: number;

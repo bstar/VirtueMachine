@@ -166,6 +166,25 @@ export function legacyInventoryPaperdollHitTestRuntime(
   return null;
 }
 
+export function legacyInventoryPaperdollHitTestFromProbeRuntime(args: {
+  canonicalUi?: {
+    conversation_panel?: {
+      show_inventory?: unknown;
+    } | null;
+  } | null;
+  logicalX: unknown;
+  logicalY: unknown;
+  statusDisplay: unknown;
+  talkStatusDisplay: unknown;
+}): LegacyHudPanelHitRuntime | null {
+  const layout = buildLegacyInventoryPaperdollLayoutRuntime({
+    statusDisplay: Number(args.statusDisplay) | 0,
+    talkStatusDisplay: Number(args.talkStatusDisplay) | 0,
+    talkShowInventory: args.canonicalUi?.conversation_panel?.show_inventory !== false
+  });
+  return legacyInventoryPaperdollHitTestRuntime(layout, Number(args.logicalX) | 0, Number(args.logicalY) | 0);
+}
+
 export function buildInventoryEquipRegressionProbesRuntime(
   layout: LegacyInventoryPaperdollLayoutRuntime
 ): {
