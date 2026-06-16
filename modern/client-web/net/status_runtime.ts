@@ -159,6 +159,56 @@ export function brokenServerGameplayBlockDiagRuntime(args: {
   };
 }
 
+export type ReconnectProbeStateRuntime = {
+  net: {
+    backgroundSyncPaused: boolean;
+    lastClockPollTick: number;
+    lastPresencePollTick: number;
+  };
+  reconnectProbeInFlight: boolean;
+};
+
+export async function performReconnectProbeRuntime<TState extends ReconnectProbeStateRuntime>(args: {
+  isAuthenticated: () => boolean;
+  isServerConnectionBroken: () => boolean;
+  markServerReconnected: () => void;
+  pollPresence: () => Promise<unknown>;
+  pollWorldClock: () => Promise<unknown>;
+  requestHealth: () => Promise<unknown>;
+  state: TState;
+}): Promise<{
+  attempted: boolean;
+  reconnected: boolean;
+}> {
+  if (args.state.reconnectProbeInFlight || !args.isAuthenticated() || !args.isServerConnectionBroken()) {
+    return {
+      attempted: false,
+      reconnected: false
+    };
+  }
+  args.state.reconnectProbeInFlight = true;
+  try {
+    await args.requestHealth();
+    args.state.net.backgroundSyncPaused = false;
+    args.state.net.lastClockPollTick = -1;
+    args.state.net.lastPresencePollTick = -1;
+    await args.pollWorldClock();
+    await args.pollPresence();
+    args.markServerReconnected();
+    return {
+      attempted: true,
+      reconnected: true
+    };
+  } catch (_err) {
+    return {
+      attempted: true,
+      reconnected: false
+    };
+  } finally {
+    args.state.reconnectProbeInFlight = false;
+  }
+}
+
 export type NetStatusPresentationRuntime = {
   level: "idle" | "error" | "offline" | "online" | "sync" | "connecting";
   text: string;

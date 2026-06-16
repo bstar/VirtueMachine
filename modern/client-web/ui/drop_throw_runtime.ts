@@ -1,4 +1,8 @@
-import type { WorldRuntimeDropThrowEffect, WorldRuntimeJson } from "../net/world_runtime.ts";
+import {
+  dropThrowPlanRuntime,
+  type WorldRuntimeDropThrowEffect,
+  type WorldRuntimeJson
+} from "../net/world_runtime.ts";
 
 export type DropThrowSpriteRuntime = {
   alpha: number;
@@ -14,6 +18,38 @@ export type DropThrowRenderPlanRuntime = {
   remaining: WorldRuntimeDropThrowEffect[];
   sprites: DropThrowSpriteRuntime[];
 };
+
+export type QueueDropThrowEffectResultRuntime = {
+  landedObjects: Array<WorldRuntimeJson["target"] | null>;
+  effects: WorldRuntimeDropThrowEffect[];
+};
+
+export function queueDropThrowEffectRuntime(args: {
+  currentEffects: readonly WorldRuntimeDropThrowEffect[];
+  durationMs: number;
+  fromX: number;
+  fromY: number;
+  landObject: WorldRuntimeJson["target"] | null | undefined;
+  nowMs: number;
+  toX: number;
+  toY: number;
+  z: number;
+}): QueueDropThrowEffectResultRuntime {
+  const plan = dropThrowPlanRuntime(args);
+  if (plan.kind === "apply_now") {
+    return {
+      effects: [...(args.currentEffects || [])],
+      landedObjects: [plan.landObject]
+    };
+  }
+  const effects = (args.currentEffects || [])
+    .filter((effect) => effect.objectKey !== plan.effect.objectKey);
+  effects.push(plan.effect);
+  return {
+    effects,
+    landedObjects: []
+  };
+}
 
 export function dropThrowRenderPlanRuntime(args: {
   arcPx: number;

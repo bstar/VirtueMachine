@@ -1,6 +1,15 @@
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
 import type { WorldRuntimeInventoryObject } from "../net/world_runtime.ts";
 import { normalizePartyMemberIdsRuntime } from "./party_runtime.ts";
+import {
+  partitionCommandsForTickRuntime,
+  type SimCommandRuntime
+} from "./queue_runtime.ts";
+import {
+  advanceWorldMinuteRuntime,
+  expireRemovedWorldPropsRuntime,
+  xorshift32Runtime
+} from "./sim_utils_runtime.ts";
 
 export type AppSimState = Omit<SimSnapshotRuntime, "doorOpenStates"> & {
   doorOpenStates: Record<string, number>;
@@ -57,6 +66,22 @@ export type LoopFrameTimingPatchRuntime = {
   accMs: number;
   lastTs: number;
   loopHealth: LoopHealthRuntime;
+};
+
+export type AdvanceSimTickOptionsRuntime = {
+  daysPerMonth: number;
+  hoursPerDay: number;
+  isNetAuthenticated: () => boolean;
+  minutesPerHour: number;
+  monthsPerYear: number;
+  ticksPerMinute: number;
+  worldPropResetTicks: number;
+};
+
+export type AdvanceSimTickResultRuntime = {
+  appliedCount: number;
+  nextTick: number;
+  pending: SimCommandRuntime[];
 };
 
 export type LoopVisibilityResetPatchRuntime = {
@@ -276,6 +301,39 @@ export function createInitialAppSimState(
     avatarPoseAnchor: null,
     partySize: 1,
     world: { ...initialWorld }
+  };
+}
+
+export function advanceSimTickRuntime(args: {
+  applyCommand: (sim: AppSimState, command: SimCommandRuntime) => void;
+  options: AdvanceSimTickOptionsRuntime;
+  queue: readonly SimCommandRuntime[];
+  sim: AppSimState;
+}): AdvanceSimTickResultRuntime {
+  const sim = args.sim;
+  const nextTick = (sim.tick + 1) >>> 0;
+  const { due, pending } = partitionCommandsForTickRuntime(args.queue, nextTick);
+  for (const cmd of due) {
+    args.applyCommand(sim, cmd);
+  }
+
+  sim.rngState = xorshift32Runtime(sim.rngState);
+  sim.worldFlags ^= sim.rngState & 1;
+  expireRemovedWorldPropsRuntime(sim, nextTick, args.options.worldPropResetTicks);
+  if (!args.options.isNetAuthenticated() && (nextTick % Math.max(1, Number(args.options.ticksPerMinute) | 0)) === 0) {
+    advanceWorldMinuteRuntime(sim.world, {
+      minutesPerHour: args.options.minutesPerHour,
+      hoursPerDay: args.options.hoursPerDay,
+      daysPerMonth: args.options.daysPerMonth,
+      monthsPerYear: args.options.monthsPerYear
+    });
+  }
+  sim.tick = nextTick;
+
+  return {
+    appliedCount: due.length,
+    nextTick,
+    pending
   };
 }
 

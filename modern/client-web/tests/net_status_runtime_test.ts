@@ -24,6 +24,7 @@ import {
   netStatusChooseAccountRuntime,
   netStatusNotLoggedInRuntime,
   netStatusSessionExpiredRuntime,
+  performReconnectProbeRuntime,
   pulseNetIndicatorRuntime,
   renderCriticalRecoveryStatRuntime,
   renderIntroPhaseUiRuntime,
@@ -152,6 +153,96 @@ assert.deepEqual(brokenServerGameplayBlockDiagRuntime({
   diagClass: "diag warn",
   diagText: "Server connection lost. Waiting to reconnect before accepting commands."
 });
+{
+  const calls: string[] = [];
+  const state = {
+    net: {
+      backgroundSyncPaused: true,
+      lastClockPollTick: 44,
+      lastPresencePollTick: 55
+    },
+    reconnectProbeInFlight: false
+  };
+  assert.deepEqual(await performReconnectProbeRuntime({
+    isAuthenticated: () => true,
+    isServerConnectionBroken: () => true,
+    markServerReconnected: () => calls.push("mark"),
+    pollPresence: async () => { calls.push("presence"); },
+    pollWorldClock: async () => { calls.push("clock"); },
+    requestHealth: async () => { calls.push("health"); },
+    state
+  }), {
+    attempted: true,
+    reconnected: true
+  });
+  assert.deepEqual(calls, ["health", "clock", "presence", "mark"]);
+  assert.deepEqual(state, {
+    net: {
+      backgroundSyncPaused: false,
+      lastClockPollTick: -1,
+      lastPresencePollTick: -1
+    },
+    reconnectProbeInFlight: false
+  });
+}
+{
+  const state = {
+    net: {
+      backgroundSyncPaused: true,
+      lastClockPollTick: 44,
+      lastPresencePollTick: 55
+    },
+    reconnectProbeInFlight: true
+  };
+  assert.deepEqual(await performReconnectProbeRuntime({
+    isAuthenticated: () => true,
+    isServerConnectionBroken: () => true,
+    markServerReconnected: () => { throw new Error("should not mark"); },
+    pollPresence: async () => { throw new Error("should not poll"); },
+    pollWorldClock: async () => { throw new Error("should not poll"); },
+    requestHealth: async () => { throw new Error("should not request"); },
+    state
+  }), {
+    attempted: false,
+    reconnected: false
+  });
+  assert.equal(state.reconnectProbeInFlight, true);
+}
+{
+  const calls: string[] = [];
+  const state = {
+    net: {
+      backgroundSyncPaused: true,
+      lastClockPollTick: 44,
+      lastPresencePollTick: 55
+    },
+    reconnectProbeInFlight: false
+  };
+  assert.deepEqual(await performReconnectProbeRuntime({
+    isAuthenticated: () => true,
+    isServerConnectionBroken: () => true,
+    markServerReconnected: () => calls.push("mark"),
+    pollPresence: async () => { calls.push("presence"); },
+    pollWorldClock: async () => { calls.push("clock"); },
+    requestHealth: async () => {
+      calls.push("health");
+      throw new Error("offline");
+    },
+    state
+  }), {
+    attempted: true,
+    reconnected: false
+  });
+  assert.deepEqual(calls, ["health"]);
+  assert.deepEqual(state, {
+    net: {
+      backgroundSyncPaused: true,
+      lastClockPollTick: 44,
+      lastPresencePollTick: 55
+    },
+    reconnectProbeInFlight: false
+  });
+}
 assert.equal(deriveNetQuickStatusText(true), "Account: Signed in");
 assert.equal(deriveNetQuickStatusText(false), "Account: Signed out");
 assert.equal(deriveNetSessionText({ token: "", userId: "u", username: "avatar", characterName: "Avatar" }), "offline");

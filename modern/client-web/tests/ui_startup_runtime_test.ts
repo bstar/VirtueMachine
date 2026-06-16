@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   applyStartupMenuIndexRuntime,
+  bindSkipIntroPreferenceRuntime,
   journeyOnwardStartedDiagRuntime,
   normalizeStartupMenuIndexRuntime,
+  shouldStartSessionFromSkipIntroRuntime,
   startupAssetsReadyDiagRuntime,
   startupMenuIndexAtLogicalPosRuntime,
   startupMenuIndexAtSurfacePointRuntime,
@@ -12,7 +14,8 @@ import {
   startupMenuSelectionActionRuntime,
   startupMenuSelectionPresentationRuntime,
   startupSessionGuardDiagRuntime,
-  startupRuntimeModeTextRuntime
+  startupRuntimeModeTextRuntime,
+  writeSkipIntroPreferenceRuntime
 } from "../ui/startup_runtime.ts";
 
 assert.equal(normalizeStartupMenuIndexRuntime(-1, 5), 4);
@@ -188,5 +191,109 @@ assert.deepEqual(startupAssetsReadyDiagRuntime({
   diagClass: "diag warn",
   diagText: "Assets missing (ash): startup menu running in fallback mode."
 });
+{
+  const checkbox = { checked: false };
+  const storage = {
+    data: {} as Record<string, string>,
+    setItem(key: string, value: string) {
+      this.data[key] = value;
+    }
+  };
+  assert.deepEqual(writeSkipIntroPreferenceRuntime({
+    checkbox,
+    enabled: true,
+    key: "skip",
+    storage
+  }), {
+    enabled: true,
+    stored: true,
+    value: "on"
+  });
+  assert.equal(checkbox.checked, true);
+  assert.equal(storage.data.skip, "on");
+}
+{
+  const checkbox = { checked: true };
+  assert.deepEqual(writeSkipIntroPreferenceRuntime({
+    checkbox,
+    enabled: false,
+    key: "skip",
+    storage: {
+      setItem() {
+        throw new Error("blocked");
+      }
+    }
+  }), {
+    enabled: false,
+    stored: false,
+    value: "off"
+  });
+  assert.equal(checkbox.checked, false);
+}
+assert.equal(shouldStartSessionFromSkipIntroRuntime({
+  isAuthenticated: true,
+  runtimeReady: true,
+  sessionStarted: false,
+  skipIntroEnabled: true
+}), true);
+assert.equal(shouldStartSessionFromSkipIntroRuntime({
+  isAuthenticated: false,
+  runtimeReady: true,
+  sessionStarted: false,
+  skipIntroEnabled: true
+}), false);
+assert.equal(shouldStartSessionFromSkipIntroRuntime({
+  isAuthenticated: true,
+  runtimeReady: false,
+  sessionStarted: false,
+  skipIntroEnabled: true
+}), false);
+assert.equal(shouldStartSessionFromSkipIntroRuntime({
+  isAuthenticated: true,
+  runtimeReady: true,
+  sessionStarted: true,
+  skipIntroEnabled: true
+}), false);
+assert.equal(shouldStartSessionFromSkipIntroRuntime({
+  isAuthenticated: true,
+  runtimeReady: true,
+  sessionStarted: false,
+  skipIntroEnabled: false
+}), false);
+{
+  const calls: boolean[] = [];
+  let listener: (() => void) | null = null;
+  let maybeStartCount = 0;
+  const checkbox = {
+    checked: false,
+    addEventListener(type: "change", fn: () => void) {
+      assert.equal(type, "change");
+      listener = fn;
+    }
+  };
+  assert.deepEqual(bindSkipIntroPreferenceRuntime({
+    checkbox,
+    key: "skip",
+    onMaybeStart: () => {
+      maybeStartCount += 1;
+    },
+    setEnabled: (enabled) => {
+      calls.push(enabled);
+      checkbox.checked = enabled;
+    }
+  }), {
+    bound: true,
+    initialEnabled: true
+  });
+  assert.deepEqual(calls, [true]);
+  checkbox.checked = false;
+  listener?.();
+  assert.deepEqual(calls, [true, false]);
+  assert.equal(maybeStartCount, 0);
+  checkbox.checked = true;
+  listener?.();
+  assert.deepEqual(calls, [true, false, true]);
+  assert.equal(maybeStartCount, 1);
+}
 
 console.log("ui_startup_runtime_test: ok");

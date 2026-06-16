@@ -402,6 +402,50 @@ export function nextLegacyScaleModeRuntime<TMode extends string>(
   return allowedModes[nextIdx] || fallback;
 }
 
+export function applyLegacyFramePreviewPreferenceRuntime(args: {
+  applyLayout?: (() => void) | null;
+  documentElement?: PreferenceAttributeTargetRuntime | null;
+  enabled: unknown;
+  key: string;
+  select?: PreferenceSelectRuntime | null;
+  storage?: PreferenceStorageRuntime | null;
+}): ReturnType<typeof applyBooleanTogglePreferenceRuntime> {
+  const model = applyBooleanTogglePreferenceRuntime(args);
+  if (args.documentElement) {
+    args.documentElement.setAttribute("data-legacy-frame-preview", model.value);
+  }
+  args.applyLayout?.();
+  return model;
+}
+
+export function applyLegacyScaleModePreferenceStateRuntime<
+  TMode extends string,
+  TState extends Record<TKey, TMode>,
+  TKey extends keyof TState & string
+>(args: {
+  allowed: readonly TMode[];
+  applyLayout?: (() => void) | null;
+  fallback: TMode;
+  key: string;
+  mode: unknown;
+  select?: PreferenceSelectRuntime | null;
+  state: TState;
+  stateKey: TKey;
+  storage?: PreferenceStorageRuntime | null;
+}): ReturnType<typeof applyNamedPreferenceRuntime<TMode>> {
+  const model = applyNamedPreferenceRuntime({
+    allowed: args.allowed,
+    fallback: args.fallback,
+    key: args.key,
+    select: args.select,
+    storage: args.storage,
+    value: args.mode
+  });
+  args.state[args.stateKey] = model.value as TState[TKey];
+  args.applyLayout?.();
+  return model;
+}
+
 export function namedPreferenceModelRuntime<TChoice extends string>(
   value: unknown,
   allowed: readonly TChoice[],

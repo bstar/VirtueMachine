@@ -16,6 +16,7 @@ import {
   normalizeLegacyTargetVerbRuntime
 } from "../sim/legacy_command_runtime.ts";
 import {
+  applySimCommandActionPlanRuntime,
   appendCommandLogRuntime,
   enqueueCommandRuntime,
   filterFutureCommandsOfTypeRuntime,
@@ -269,6 +270,122 @@ assert.deepEqual(simCommandActionRuntime({
   facingDy: 0,
   shouldUpdateFacing: false
 });
+
+{
+  const sim = { commandsApplied: 0, calls: [] as string[] };
+  const result = applySimCommandActionPlanRuntime({
+    handlers: {},
+    plan: {
+      action: "none",
+      arg0: 1,
+      arg1: 2,
+      facingDx: 0,
+      facingDy: 0,
+      shouldUpdateFacing: false
+    },
+    sim
+  });
+  assert.deepEqual(result, {
+    action: "none",
+    applied: true,
+    commandsApplied: 1,
+    facingUpdated: false
+  });
+  assert.equal(sim.commandsApplied, 1);
+  assert.deepEqual(sim.calls, []);
+}
+
+{
+  const sim = { commandsApplied: 4, calls: [] as string[] };
+  const facingState = { avatarFacingDx: 0, avatarFacingDy: 1 };
+  const result = applySimCommandActionPlanRuntime({
+    facingState,
+    handlers: {
+      useAtCell: (_sim, x, y) => _sim.calls.push(`use:${x},${y}`)
+    },
+    plan: {
+      action: "use_at_cell",
+      arg0: 12,
+      arg1: 8,
+      facingDx: 1,
+      facingDy: -1,
+      shouldUpdateFacing: true
+    },
+    sim
+  });
+  assert.deepEqual(result, {
+    action: "use_at_cell",
+    applied: true,
+    commandsApplied: 5,
+    facingUpdated: true
+  });
+  assert.deepEqual(facingState, { avatarFacingDx: 1, avatarFacingDy: -1 });
+  assert.deepEqual(sim.calls, ["use:12,8"]);
+}
+
+{
+  const sim = { commandsApplied: 7, calls: [] as string[] };
+  const result = applySimCommandActionPlanRuntime({
+    handlers: {
+      moveAvatar: (_sim, dx, dy) => {
+        _sim.calls.push(`move:${dx},${dy}`);
+        return false;
+      }
+    },
+    plan: {
+      action: "move_avatar",
+      arg0: 1,
+      arg1: 0,
+      facingDx: 0,
+      facingDy: 0,
+      shouldUpdateFacing: false
+    },
+    sim
+  });
+  assert.deepEqual(result, {
+    action: "move_avatar",
+    applied: false,
+    commandsApplied: 7,
+    facingUpdated: false
+  });
+  assert.deepEqual(sim.calls, ["move:1,0"]);
+}
+
+{
+  const sim = { commandsApplied: 2, calls: [] as string[] };
+  applySimCommandActionPlanRuntime({
+    handlers: {
+      dropAtCell: (_sim, x, y) => _sim.calls.push(`drop:${x},${y}`),
+      useAtCell: (_sim, x, y) => _sim.calls.push(`use:${x},${y}`)
+    },
+    plan: {
+      action: "drop_at_cell",
+      arg0: 3,
+      arg1: 4,
+      facingDx: 0,
+      facingDy: 0,
+      shouldUpdateFacing: false
+    },
+    sim
+  });
+  applySimCommandActionPlanRuntime({
+    handlers: {
+      dropAtCell: (_sim, x, y) => _sim.calls.push(`drop:${x},${y}`),
+      useAtCell: (_sim, x, y) => _sim.calls.push(`use:${x},${y}`)
+    },
+    plan: {
+      action: "use_verb_at_cell",
+      arg0: 5,
+      arg1: 6,
+      facingDx: 0,
+      facingDy: 0,
+      shouldUpdateFacing: false
+    },
+    sim
+  });
+  assert.equal(sim.commandsApplied, 4);
+  assert.deepEqual(sim.calls, ["drop:3,4", "use:5,6"]);
+}
 
 const commandLog = [{ type: 99, tick: 0 }];
 appendCommandLogRuntime(commandLog, { type: USE, tick: 1 }, 1);

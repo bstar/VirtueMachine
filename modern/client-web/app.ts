@@ -66,12 +66,21 @@ import {
   type U6ShapeRuntime
 } from "./assets/shape_archive_runtime.ts";
 import {
-  buildLegacyPaletteFrameRuntime,
   buildPackedIntroPalettesRuntime,
   buildPaletteFromU6PalRuntime,
   type RgbPaletteRuntime,
   buildStartupPaletteForMenuRuntime
 } from "./assets/palette_runtime.ts";
+import {
+  animationTickForStateRuntime,
+  renderPaletteForStateRuntime,
+  renderPaletteKeyRuntime,
+  resolveAnimatedObjectTileAtTickRuntime,
+  resolveAnimatedTileAtTickRuntime,
+  resolveFootprintObjectTileRuntime,
+  type AnimatedTileObjectRuntime,
+  type AnimationPaletteStateRuntime
+} from "./render/animation_palette_runtime.ts";
 import { errorMessageRuntime } from "./error_runtime.ts";
 import { buildUiProbeContract, uiProbeDigest } from "./ui_probe_contract.ts";
 import {
@@ -149,8 +158,6 @@ import {
   runtimeExtensionsSummary
 } from "../common/runtime_contract.ts";
 import {
-  OBJ_COORD_USE_EQUIP,
-  OBJ_COORD_USE_LOCXYZ,
   coordUseOfStatus
 } from "../common/u6_object_constants.ts";
 import {
@@ -205,7 +212,6 @@ import {
   collectWorldItemsForMaintenanceFromLayer,
   criticalMaintenanceDiagRuntime,
   criticalMaintenanceFailureRuntime,
-  dropThrowPlanRuntime,
   hiddenWorldObjectVisibilityForClientRuntime,
   inventoryDisplayEntriesFromObjectsRuntime,
   inventoryCountMapForDropValidationRuntime,
@@ -213,7 +219,6 @@ import {
   inventorySyncFailureDiagRuntime,
   markHiddenWorldObjectClientStateRuntime,
   requestIntroPhaseRuntime,
-  requestDropWorldObjectRuntime,
   requestTakeWorldObjectRuntime,
   requestWorldObjectsAroundRuntime,
   removeHiddenWorldObjectsFromLayerRuntime,
@@ -231,8 +236,11 @@ import {
   type WorldRuntimeServerObject
 } from "./net/world_runtime.ts";
 import {
+  performNetDropInventoryObjectRuntime,
+  performNetGetAtCellRuntime
+} from "./net/world_interaction_runtime.ts";
+import {
   objectLayerProjectionActionsFromServerObjectsRuntime,
-  targetObjectsFromServerObjectsRuntime
 } from "./net/world_object_projection_runtime.ts";
 import { performNetEnsureCharacter } from "./net/character_runtime.ts";
 import { performNetLogoutSequence } from "./net/logout_runtime.ts";
@@ -290,6 +298,7 @@ import {
   netStatusNotLoggedInRuntime,
   netStatusSessionExpiredRuntime,
   netLogoutDiagRuntime,
+  performReconnectProbeRuntime,
   pulseNetIndicatorRuntime,
   renderCriticalRecoveryStatRuntime,
   renderIntroPhaseUiRuntime,
@@ -312,10 +321,7 @@ import {
 } from "./gameplay/legacy_verb_runtime.ts";
 import { specialUseSfxAtCellRuntime } from "./gameplay/special_interaction_runtime.ts";
 import {
-  advanceWorldMinuteRuntime,
-  clampI32Runtime,
-  expireRemovedWorldPropsRuntime,
-  xorshift32Runtime
+  clampI32Runtime
 } from "./sim/sim_utils_runtime.ts";
 import {
   asU32SignedRuntime,
@@ -325,9 +331,9 @@ import {
 } from "./sim/hash_runtime.ts";
 import { timeOfDayLabelRuntime } from "./sim/time_runtime.ts";
 import {
+  applySimCommandActionPlanRuntime,
   filterFutureCommandsOfTypeRuntime,
   moveDeltaFromKeyRuntime,
-  partitionCommandsForTickRuntime,
   queueAvatarMoveCommandRuntime,
   queueCellCommandRuntime,
   queueFacingUseCommandRuntime,
@@ -338,7 +344,7 @@ import {
   type SimCommandRuntime
 } from "./sim/queue_runtime.ts";
 import {
-  animationTickPatchRuntime,
+  advanceSimTickRuntime,
   applyPauseLoopStateRuntime,
   bindBrowserLifecycleRuntime,
   bindPauseLoopButtonRuntime,
@@ -439,12 +445,10 @@ import {
 } from "./sim/object_types_runtime.ts";
 import {
   legacyDropAsyncFailurePresentationRuntime,
-  legacyDropPlacedPresentationRuntime,
   legacyGetAsyncFailurePresentationRuntime,
   legacyGetCheckingPresentationRuntime,
   legacyGetFailurePresentationRuntime,
   legacyGetPickedPresentationRuntime,
-  legacyGetTakingPresentationRuntime,
   legacyLookPresentationRuntime,
   legacyTalkAsyncFailurePresentationRuntime,
   legacyTalkAuthoritativeStartedPresentationRuntime,
@@ -506,6 +510,7 @@ import {
 } from "./ui/boot_intro_runtime.ts";
 import {
   applyStartupMenuIndexRuntime,
+  bindSkipIntroPreferenceRuntime,
   journeyOnwardStartedDiagRuntime,
   startupMenuItemEnabledRuntime,
   startupMenuKeyPatchRuntime,
@@ -513,7 +518,9 @@ import {
   startupMenuIndexAtSurfacePointRuntime,
   startupMenuSelectionActionRuntime,
   startupMenuSelectionPresentationRuntime,
-  startupSessionGuardDiagRuntime
+  startupSessionGuardDiagRuntime,
+  shouldStartSessionFromSkipIntroRuntime,
+  writeSkipIntroPreferenceRuntime
 } from "./ui/startup_runtime.ts";
 import {
   areaIdForWorldXYRuntime,
@@ -573,7 +580,10 @@ import {
   legacyInventoryPaperdollHitTestRuntime,
   type LegacyHudPanelHitRuntime
 } from "./ui/inventory_paperdoll_layout_runtime.ts";
-import { projectLegacyEquipmentSlotsRuntime } from "./ui/paperdoll_equipment_runtime.ts";
+import {
+  legacyEquipmentSlotsForTalkActorRuntime,
+  projectLegacyEquipmentSlotsRuntime
+} from "./ui/paperdoll_equipment_runtime.ts";
 import {
   normalizePartyMemberIdsRuntime,
   partySwitchDigitDiagRuntime,
@@ -585,13 +595,12 @@ import {
   type CharacterPanelEntityRuntime
 } from "./ui/character_panel_runtime.ts";
 import {
-  applyBooleanTogglePreferenceRuntime,
   applyBooleanTogglePreferenceStateRuntime,
-  applyAnimationModePreferenceRuntime,
   applyAnimationModePreferenceStateRuntime,
   applyFontPreferenceRuntime,
+  applyLegacyFramePreviewPreferenceRuntime,
+  applyLegacyScaleModePreferenceStateRuntime,
   applyMovementModePreferenceStateRuntime,
-  applyNamedPreferenceRuntime,
   applyPaletteFxPreferenceStateRuntime,
   applyThemePreferenceRuntime,
   initChoicePreferenceRuntime,
@@ -619,7 +628,10 @@ import {
   downloadCanvasPngRuntime,
   downloadJsonFileRuntime
 } from "./ui/download_runtime.ts";
-import { dropThrowRenderPlanRuntime } from "./ui/drop_throw_runtime.ts";
+import {
+  dropThrowRenderPlanRuntime,
+  queueDropThrowEffectRuntime
+} from "./ui/drop_throw_runtime.ts";
 import {
   CAPTURE_PRESETS_RUNTIME,
   activeCapturePresetFromSelectRuntime,
@@ -760,24 +772,8 @@ type U6TextCanvasApp = LegacyTextCanvasRuntime | {
   fillStyle?: unknown;
   fillRect(x: number, y: number, w: number, h: number): void;
 };
-type AnimationPaletteState = {
-  animData: U6AnimDataRuntime | null;
-  basePalette: RgbPaletteRuntime | null;
-  enablePaletteFx: boolean;
-  frozenAnimationTick: number | null;
-  paletteFrame: RgbPaletteRuntime | null;
-  paletteFrameTick: number;
-};
-type AnimatedTileObject = {
-  baseTile?: number;
-  frame?: number;
-  tileId?: number;
-  order?: number;
-  type?: number;
-  x?: number;
-  y?: number;
-  z?: number;
-};
+type AnimationPaletteState = AnimationPaletteStateRuntime;
+type AnimatedTileObject = AnimatedTileObjectRuntime;
 type LegacyTalkActor = {
   baseTile?: number;
   frame?: number;
@@ -1629,21 +1625,18 @@ const CURSOR_ASPECT_X = 1.0;
 const CURSOR_ASPECT_Y = 1.2;
 
 function animationTick(): number {
-  const patch = animationTickPatchRuntime({
-    animationFrozen: state.animationFrozen,
+  return animationTickForStateRuntime({
     currentTick: state.sim.tick,
-    frozenAnimationTick: (state as AnimationPaletteState).frozenAnimationTick
+    state: state as AnimationPaletteState
   });
-  (state as AnimationPaletteState).frozenAnimationTick = patch.frozenAnimationTick;
-  return patch.tick;
 }
 
 function resolveAnimatedTileAtTick(tileId: number, counter: number): number {
-  const animData = (state as AnimationPaletteState).animData;
-  if (!animData || !animData.hasBaseTile(tileId)) {
-    return tileId & 0xffff;
-  }
-  return animData.animatedTile(tileId, counter);
+  return resolveAnimatedTileAtTickRuntime({
+    animData: (state as AnimationPaletteState).animData,
+    counter,
+    tileId
+  });
 }
 
 function resolveAnimatedTile(tileId: number): number {
@@ -1651,36 +1644,12 @@ function resolveAnimatedTile(tileId: number): number {
 }
 
 function resolveAnimatedObjectTileAtTick(obj: AnimatedTileObject | null | undefined, counter: number): number {
-  if (!obj) {
-    return 0;
-  }
-  const baseTile = Number(obj.baseTile);
-  const frame = Number.isFinite(Number(obj.frame)) ? Number(obj.frame) | 0 : 0;
-  if (!Number.isFinite(baseTile)) {
-    return Number(obj.tileId) & 0xffff;
-  }
-  const hasDoorAnchor = Number.isFinite(Number(obj.type))
-    && Number.isFinite(Number(obj.x))
-    && Number.isFinite(Number(obj.y))
-    && Number.isFinite(Number(obj.z))
-    && Number.isFinite(Number(obj.order));
-  const doorTileId = hasDoorAnchor
-    ? resolveDoorTileIdRuntime(state.sim, {
-      baseTile: baseTile | 0,
-      frame,
-      order: Number(obj.order) | 0,
-      type: Number(obj.type) | 0,
-      x: Number(obj.x) | 0,
-      y: Number(obj.y) | 0,
-      z: Number(obj.z) | 0
-    })
-    : ((baseTile | 0) + frame) & 0xffff;
-  const animData = (state as AnimationPaletteState).animData;
-  if (animData && animData.hasBaseTile(baseTile | 0)) {
-    const animBase = animData.animatedTile(baseTile | 0, counter);
-    return (animBase + frame) & 0xffff;
-  }
-  return resolveAnimatedTileAtTick(doorTileId, counter);
+  return resolveAnimatedObjectTileAtTickRuntime({
+    animData: (state as AnimationPaletteState).animData,
+    counter,
+    obj,
+    sim: state.sim
+  });
 }
 
 function resolveAnimatedObjectTile(obj: AnimatedTileObject | null | undefined): number {
@@ -1688,30 +1657,9 @@ function resolveAnimatedObjectTile(obj: AnimatedTileObject | null | undefined): 
 }
 
 function resolveFootprintObjectTile(obj: AnimatedTileObject | null | undefined): number {
-  if (!obj) {
-    return 0;
-  }
-  const baseTile = Number(obj.baseTile);
-  const frame = Number.isFinite(Number(obj.frame)) ? Number(obj.frame) | 0 : 0;
-  if (!Number.isFinite(baseTile)) {
-    return Number(obj.tileId) & 0xffff;
-  }
-  const hasDoorAnchor = Number.isFinite(Number(obj.type))
-    && Number.isFinite(Number(obj.x))
-    && Number.isFinite(Number(obj.y))
-    && Number.isFinite(Number(obj.z))
-    && Number.isFinite(Number(obj.order));
-  if (!hasDoorAnchor) {
-    return ((baseTile | 0) + frame) & 0xffff;
-  }
-  return resolveDoorTileIdRuntime(state.sim, {
-    baseTile: baseTile | 0,
-    frame,
-    order: Number(obj.order) | 0,
-    type: Number(obj.type) | 0,
-    x: Number(obj.x) | 0,
-    y: Number(obj.y) | 0,
-    z: Number(obj.z) | 0
+  return resolveFootprintObjectTileRuntime({
+    obj,
+    sim: state.sim
   });
 }
 
@@ -1725,27 +1673,17 @@ function legacyPalettePhase(): number {
 }
 
 function getRenderPalette(): RgbPaletteRuntime | null {
-  const paletteState = state as AnimationPaletteState;
-  if (!paletteState.basePalette) {
-    return null;
-  }
-  if (!state.enablePaletteFx) {
-    return paletteState.basePalette;
-  }
-  const phase = legacyPalettePhase();
-  if (paletteState.paletteFrame && paletteState.paletteFrameTick === phase) {
-    return paletteState.paletteFrame;
-  }
-  paletteState.paletteFrame = buildLegacyPaletteFrameRuntime(paletteState.basePalette, phase);
-  paletteState.paletteFrameTick = phase;
-  return paletteState.paletteFrame;
+  return renderPaletteForStateRuntime({
+    phase: legacyPalettePhase(),
+    state: state as AnimationPaletteState
+  });
 }
 
 function getRenderPaletteKey(): string {
-  if (!state.enablePaletteFx) {
-    return "pal-static";
-  }
-  return `palfx-${legacyPalettePhase()}`;
+  return renderPaletteKeyRuntime({
+    enablePaletteFx: state.enablePaletteFx,
+    phase: legacyPalettePhase()
+  });
 }
 
 function decompressU6Lzw(bytes: Uint8Array): Uint8Array {
@@ -1777,81 +1715,16 @@ function areaIdForWorldXY(x: unknown, y: unknown): number {
 }
 
 function legacyEquipmentSlotsForTalkActor(actor: LegacyTalkActor | null | undefined): ReturnType<typeof projectLegacyEquipmentSlotsRuntime> {
-  if (!actor) {
-    return [];
-  }
-  const actorId = Number(actor.id) | 0;
-  const actorX = Number(actor.x) | 0;
-  const actorY = Number(actor.y) | 0;
-  const actorZ = Number(actor.z) | 0;
-  const actorType = Number(actor.type) & 0x03ff;
-  const rootAssocOwner = (row: U6ObjectEntryRuntime): U6ObjectEntryRuntime | null => {
-    let cur: U6ObjectEntryRuntime | null | undefined = row;
-    const seen = new Set<string>();
-    for (let i = 0; i < 64; i += 1) {
-      if (!cur || typeof cur !== "object") {
-        return null;
-      }
-      if ((cur.coordUse | 0) === OBJ_COORD_USE_LOCXYZ) {
-        return cur;
-      }
-      const key = String(cur.index);
-      if (seen.has(key)) {
-        return null;
-      }
-      seen.add(key);
-      cur = cur.assocObj || null;
-    }
-    return null;
-  };
-  const ownerMatchesActor = (owner: U6ObjectEntryRuntime | null): boolean => !!owner
-    && ((owner.coordUse | 0) === OBJ_COORD_USE_LOCXYZ)
-    && ((owner.x | 0) === actorX)
-    && ((owner.y | 0) === actorY)
-    && ((owner.z | 0) === actorZ)
-    && ((owner.type & 0x03ff) === actorType);
-  const selectEquipRows = (rows: unknown, useObjblkOwnerFallback: boolean): U6ObjectEntryRuntime[] => (Array.isArray(rows) ? rows : [])
-    .filter((row) => {
-      if (!row || (row.coordUse | 0) !== OBJ_COORD_USE_EQUIP) {
-        return false;
-      }
-      const byIndex = ((row.assocIndex | 0) === actorId);
-      let byAssocObj = false;
-      if (useObjblkOwnerFallback) {
-        const owner = rootAssocOwner(row);
-        byAssocObj = ownerMatchesActor(owner);
-      }
-      if (!byIndex && !byAssocObj) {
-        return false;
-      }
-      const type = row.type & 0x03ff;
-      if (type === 0x150 || type === 0x151) {
-        return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      const ao = Number((a.legacyOrder != null) ? a.legacyOrder : a.order) | 0;
-      const bo = Number((b.legacyOrder != null) ? b.legacyOrder : b.order) | 0;
-      if (ao !== bo) return ao - bo;
-      return (a.index | 0) - (b.index | 0);
-    });
   /*
     Canonical source first: objlist actor table stores actor-owned/equipped objects.
     Objblk assoc rows are a fallback for baseline/static snapshots.
   */
   const layerState = state as AppObjectLayerStateView;
-  let equipRows = selectEquipRows(layerState.entityLayer?.assocEntries, false);
-  if (!equipRows.length) {
-    equipRows = selectEquipRows(layerState.objectLayer?.assocEntries, true);
-  }
-  if (!equipRows.length) {
-    return [];
-  }
-  return projectLegacyEquipmentSlotsRuntime(equipRows.map((row) => ({
-    tileId: Number(row.tileId) & 0xffff,
-    object_key: `objblk:${Number(row.sourceArea) | 0}:${Number(row.index) | 0}`
-  })));
+  return legacyEquipmentSlotsForTalkActorRuntime({
+    actor,
+    entityAssocEntries: layerState.entityLayer?.assocEntries,
+    objectAssocEntries: layerState.objectLayer?.assocEntries
+  });
 }
 
 function endLegacyConversation(): void {
@@ -4493,23 +4366,15 @@ async function netPollWorldClock(): Promise<void> {
 }
 
 async function netProbeReconnect(): Promise<void> {
-  if (state.reconnectProbeInFlight || !isNetAuthenticated() || !isServerConnectionBroken()) {
-    return;
-  }
-  state.reconnectProbeInFlight = true;
-  try {
-    await netRequest("/health", { method: "GET" }, false);
-    state.net.backgroundSyncPaused = false;
-    state.net.lastClockPollTick = -1;
-    state.net.lastPresencePollTick = -1;
-    await netPollWorldClock();
-    await netPollPresence();
-    markServerReconnected();
-  } catch (_err) {
-    // Stay in SERVER LOST state; the next probe will retry.
-  } finally {
-    state.reconnectProbeInFlight = false;
-  }
+  await performReconnectProbeRuntime({
+    isAuthenticated: isNetAuthenticated,
+    isServerConnectionBroken,
+    markServerReconnected,
+    pollPresence: netPollPresence,
+    pollWorldClock: netPollWorldClock,
+    requestHealth: () => netRequest("/health", { method: "GET" }, false),
+    state
+  });
 }
 
 function startAuthoritativeConversationFromPayload(
@@ -4868,15 +4733,28 @@ function setMovementMode(mode: string): void {
 }
 
 function setLegacyFramePreview(enabled: boolean): void {
-  const model = applyBooleanTogglePreferenceRuntime({ enabled, key: LEGACY_FRAME_PREVIEW_KEY, select: capturePreviewToggle, storage: localStorage });
-  document.documentElement.setAttribute("data-legacy-frame-preview", model.value);
-  applyLegacyFrameLayout();
+  applyLegacyFramePreviewPreferenceRuntime({
+    applyLayout: applyLegacyFrameLayout,
+    documentElement: document.documentElement,
+    enabled,
+    key: LEGACY_FRAME_PREVIEW_KEY,
+    select: capturePreviewToggle,
+    storage: localStorage
+  });
 }
 
 function setLegacyScaleMode(mode: string): void {
-  const model = applyNamedPreferenceRuntime({ value: mode, allowed: LEGACY_SCALE_MODES, fallback: "fit", key: LEGACY_SCALE_MODE_KEY, select: legacyScaleModeToggle, storage: localStorage });
-  state.legacyScaleMode = model.value;
-  applyLegacyFrameLayout();
+  applyLegacyScaleModePreferenceStateRuntime({
+    allowed: LEGACY_SCALE_MODES,
+    applyLayout: applyLegacyFrameLayout,
+    fallback: "fit",
+    key: LEGACY_SCALE_MODE_KEY,
+    mode,
+    select: legacyScaleModeToggle,
+    state,
+    stateKey: "legacyScaleMode",
+    storage: localStorage
+  });
 }
 
 function cycleLegacyScaleMode(step: number): void {
@@ -5138,17 +5016,16 @@ function queueDropThrowEffect(args: {
   toY: number;
   z: number;
 }): void {
-  const plan = dropThrowPlanRuntime({
+  const result = queueDropThrowEffectRuntime({
     ...args,
+    currentEffects: state.dropThrowEffects,
     durationMs: DROP_THROW_EFFECT_MS,
     nowMs: performance.now()
   });
-  if (plan.kind === "apply_now") {
-    applyAuthoritativeWorldObjectsToLayer([plan.landObject]);
-    return;
+  for (const landObject of result.landedObjects) {
+    applyAuthoritativeWorldObjectsToLayer([landObject]);
   }
-  state.dropThrowEffects = state.dropThrowEffects.filter((effect) => effect.objectKey !== plan.effect.objectKey);
-  state.dropThrowEffects.push(plan.effect);
+  state.dropThrowEffects = result.effects;
 }
 
 function isTileIgnoredForGet(tileId: number): boolean {
@@ -5160,30 +5037,17 @@ function isTerrainDamageTileForGet(tileId: number): boolean {
 }
 
 async function netGetAtCell(sim: AppSimState, tx: number, ty: number): Promise<boolean> {
-  const tz = sim.world.map_z | 0;
-  const out = await netFetchWorldObjectsAtCell(tx, ty, tz);
-  const objects = targetObjectsFromServerObjectsRuntime(out?.objects || []);
-  const result = resolveLegacyGetSelectionRuntime({
-    world: sim.world,
-    objects,
+  return performNetGetAtCellRuntime({
+    applyDiag: applyDiagKind,
+    fetchWorldObjectsAtCell: netFetchWorldObjectsAtCell,
+    isTerrainDamageTile: isTerrainDamageTileForGet,
+    isTileIgnored: isTileIgnoredForGet,
+    lookupDeps: WORLD_OBJECT_LOOKUP_DEPS,
     sim,
+    takeWorldObject: (obj, x, y, z) => netTakeWorldObject(obj as InventoryObjectRuntime & { frame: number }, x, y, z),
     tx,
-    ty,
-    deps: {
-      ...WORLD_OBJECT_LOOKUP_DEPS,
-      isTerrainDamageTile: isTerrainDamageTileForGet,
-      isTileIgnored: isTileIgnoredForGet
-    }
+    ty
   });
-  if (result.ok === false) {
-    const diag = legacyGetFailurePresentationRuntime(result.reason, result.selected, tx, ty, tz);
-    applyDiagKind(diag);
-    return false;
-  }
-  const diag = legacyGetTakingPresentationRuntime(result.object, tx, ty, tz);
-  applyDiagKind(diag);
-  await netTakeWorldObject(result.object as InventoryObjectRuntime & { frame: number }, tx, ty, tz);
-  return true;
 }
 
 function pushLegacyDropTargetPrompt(item: WorldRuntimeInventoryObject | null | undefined): void {
@@ -5201,36 +5065,17 @@ function pushLegacyDropTargetPrompt(item: WorldRuntimeInventoryObject | null | u
 
 async function netDropInventoryObject(sim: AppSimState, tx: number, ty: number) {
   const actorId = await netWorldObjectActorId();
-  let item = inventoryObjectForDropSelectionRuntime(sim.inventoryObjects, state.legacyHudSelection);
-  if (!item) {
-    await netSyncInventoryProjection();
-    item = inventoryObjectForDropSelectionRuntime(sim.inventoryObjects, state.legacyHudSelection);
-  }
-  if (!item) {
-    throw new Error("inventory is empty");
-  }
-  const out = await requestDropWorldObjectRuntime({
+  return performNetDropInventoryObjectRuntime({
     actorId,
-    actorX: sim.world.map_x | 0,
-    actorY: sim.world.map_y | 0,
-    actorZ: sim.world.map_z | 0,
-    dropX: tx | 0,
-    dropY: ty | 0,
-    dropZ: sim.world.map_z | 0,
-    targetKey: item.object_key
-  }, netRequest);
-  queueDropThrowEffect({
-    fromX: sim.world.map_x | 0,
-    fromY: sim.world.map_y | 0,
-    toX: tx | 0,
-    toY: ty | 0,
-    z: sim.world.map_z | 0,
-    landObject: out?.target || null
+    applyDiag: applyDiagKind,
+    legacyHudSelection: state.legacyHudSelection,
+    netRequest,
+    queueDropThrowEffect,
+    sim,
+    syncInventoryProjection: netSyncInventoryProjection,
+    tx,
+    ty
   });
-  await netSyncInventoryProjection();
-  const diag = legacyDropPlacedPresentationRuntime(tx, ty, sim.world.map_z | 0);
-  applyDiagKind(diag);
-  return out;
 }
 
 function tryGetAtCell(sim: AppSimState, tx: number, ty: number): boolean {
@@ -5543,27 +5388,31 @@ function isSkipIntroEnabled(): boolean {
 }
 
 function setSkipIntroEnabled(enabled: boolean): void {
-  skipIntroCheckbox.checked = !!enabled;
-  try {
-    localStorage.setItem(SKIP_INTRO_KEY, enabled ? "on" : "off");
-  } catch (_err) {
-    // ignore storage failures
-  }
+  writeSkipIntroPreferenceRuntime({
+    checkbox: skipIntroCheckbox,
+    enabled,
+    key: SKIP_INTRO_KEY,
+    storage: localStorage
+  });
 }
 
 function initSkipIntroPreference(): void {
-  skipIntroCheckbox.checked = true;
-  setSkipIntroEnabled(true);
-  skipIntroCheckbox.addEventListener("change", () => {
-    setSkipIntroEnabled(skipIntroCheckbox.checked);
-    if (skipIntroCheckbox.checked) {
-      maybeStartSessionFromSkipIntro();
-    }
+  bindSkipIntroPreferenceRuntime({
+    checkbox: skipIntroCheckbox,
+    key: SKIP_INTRO_KEY,
+    onMaybeStart: maybeStartSessionFromSkipIntro,
+    setEnabled: setSkipIntroEnabled,
+    storage: localStorage
   });
 }
 
 function maybeStartSessionFromSkipIntro(): void {
-  if (!isSkipIntroEnabled() || state.sessionStarted || !state.runtimeReady || !isNetAuthenticated()) {
+  if (!shouldStartSessionFromSkipIntroRuntime({
+    isAuthenticated: isNetAuthenticated(),
+    runtimeReady: state.runtimeReady,
+    sessionStarted: state.sessionStarted,
+    skipIntroEnabled: isSkipIntroEnabled()
+  })) {
     return;
   }
   if (state.bootIntro?.active) {
@@ -5820,90 +5669,76 @@ function applyCommand(sim: AppSimState, cmd: SimCommandRuntime): void {
     avatarX: sim.world.map_x,
     avatarY: sim.world.map_y
   });
-  if (plan.action === "move_avatar") {
-    const moveResult = applyAvatarMoveCommandRuntime(sim, plan.arg0, plan.arg1, {
-      isBlockedAt: (x, y, z) => isBlockedAt(sim, x, y, z),
-      movementMode: state.movementMode
-    });
-    if (moveResult.kind === "pose-set-this-tick") {
-      return;
-    }
-    const patch = avatarMoveAnimationPatchRuntime({
-      result: moveResult,
-      simTick: sim.tick,
-      nowMs: performance.now(),
-      walkAnimWindowMs: AVATAR_WALK_ANIM_WINDOW_MS
-    });
-    if (patch.avatarLastMoveTick != null) {
-      state.avatarLastMoveTick = patch.avatarLastMoveTick;
-    }
-    if (patch.avatarWalkAnimUntilMs != null) {
-      state.avatarWalkAnimUntilMs = patch.avatarWalkAnimUntilMs;
-    }
-    if (moveResult.kind === "avatar-move") {
-      /*
-        Canonical-facing behavior: actor pose follows occupied furniture cell.
-        NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
-      */
-      const landedFurniture = furnitureAtCell(sim, moveResult.targetX, moveResult.targetY);
-      if (landedFurniture && isChairObjectRuntime(landedFurniture)) {
-        tryInteractFurnitureObject(sim, landedFurniture);
-      }
-    } else if (moveResult.kind === "blocked") {
-      // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
-      if (!tryInteractFurnitureObject(sim, furnitureAtCell(sim, moveResult.targetX, moveResult.targetY))) {
-        playSfx(U6_SFX.BLOCKED);
-      }
-    }
-  } else if (plan.action === "use_facing") {
-    tryInteractFacing(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "use_at_cell") {
-    if (plan.shouldUpdateFacing) {
-      state.avatarFacingDx = plan.facingDx;
-      state.avatarFacingDy = plan.facingDy;
-    }
-    tryInteractAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "look_at_cell") {
-    tryLookAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "talk_at_cell") {
-    tryTalkAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "get_at_cell") {
-    tryGetAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "attack_at_cell") {
-    tryAttackAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "cast_at_cell") {
-    tryCastAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "drop_at_cell") {
-    tryDropAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "move_at_cell") {
-    tryMoveVerbAtCell(sim, plan.arg0, plan.arg1);
-  } else if (plan.action === "use_verb_at_cell") {
-    tryInteractAtCell(sim, plan.arg0, plan.arg1);
-  }
-  sim.commandsApplied += 1;
+  applySimCommandActionPlanRuntime({
+    facingState: state,
+    handlers: {
+      attackAtCell: tryAttackAtCell,
+      castAtCell: tryCastAtCell,
+      dropAtCell: tryDropAtCell,
+      getAtCell: tryGetAtCell,
+      lookAtCell: tryLookAtCell,
+      moveAtCell: tryMoveVerbAtCell,
+      moveAvatar: (_sim, dx, dy) => {
+        const moveResult = applyAvatarMoveCommandRuntime(_sim, dx, dy, {
+          isBlockedAt: (x, y, z) => isBlockedAt(_sim, x, y, z),
+          movementMode: state.movementMode
+        });
+        if (moveResult.kind === "pose-set-this-tick") {
+          return false;
+        }
+        const patch = avatarMoveAnimationPatchRuntime({
+          result: moveResult,
+          simTick: _sim.tick,
+          nowMs: performance.now(),
+          walkAnimWindowMs: AVATAR_WALK_ANIM_WINDOW_MS
+        });
+        if (patch.avatarLastMoveTick != null) {
+          state.avatarLastMoveTick = patch.avatarLastMoveTick;
+        }
+        if (patch.avatarWalkAnimUntilMs != null) {
+          state.avatarWalkAnimUntilMs = patch.avatarWalkAnimUntilMs;
+        }
+        if (moveResult.kind === "avatar-move") {
+          /*
+            Canonical-facing behavior: actor pose follows occupied furniture cell.
+            NPCs auto-sit from cell occupancy; mirror that for avatar on passable stools/chairs.
+          */
+          const landedFurniture = furnitureAtCell(_sim, moveResult.targetX, moveResult.targetY);
+          if (landedFurniture && isChairObjectRuntime(landedFurniture)) {
+            tryInteractFurnitureObject(_sim, landedFurniture);
+          }
+        } else if (moveResult.kind === "blocked") {
+          // QoL: walking into a chair/bed acts like interaction and triggers sit/sleep.
+          if (!tryInteractFurnitureObject(_sim, furnitureAtCell(_sim, moveResult.targetX, moveResult.targetY))) {
+            playSfx(U6_SFX.BLOCKED);
+          }
+        }
+        return true;
+      },
+      talkAtCell: tryTalkAtCell,
+      useAtCell: tryInteractAtCell,
+      useFacing: tryInteractFacing
+    },
+    plan,
+    sim
+  });
 }
 
 function stepSimTick(sim: AppSimState, queue: readonly SimCommandRuntime[]): SimCommandRuntime[] {
-  const nextTick = (sim.tick + 1) >>> 0;
-  const { due, pending } = partitionCommandsForTickRuntime(queue, nextTick);
-  for (const cmd of due) {
-    applyCommand(sim, cmd);
-  }
-
-  sim.rngState = xorshift32Runtime(sim.rngState);
-  sim.worldFlags ^= sim.rngState & 1;
-  expireRemovedWorldPropsRuntime(sim, nextTick, WORLD_PROP_RESET_TICKS);
-  if (!isNetAuthenticated() && (nextTick % TICKS_PER_MINUTE) === 0) {
-    advanceWorldMinuteRuntime(sim.world, {
-      minutesPerHour: MINUTES_PER_HOUR,
-      hoursPerDay: HOURS_PER_DAY,
+  return advanceSimTickRuntime({
+    applyCommand,
+    options: {
       daysPerMonth: DAYS_PER_MONTH,
-      monthsPerYear: MONTHS_PER_YEAR
-    });
-  }
-  sim.tick = nextTick;
-
-  return pending;
+      hoursPerDay: HOURS_PER_DAY,
+      isNetAuthenticated,
+      minutesPerHour: MINUTES_PER_HOUR,
+      monthsPerYear: MONTHS_PER_YEAR,
+      ticksPerMinute: TICKS_PER_MINUTE,
+      worldPropResetTicks: WORLD_PROP_RESET_TICKS
+    },
+    queue,
+    sim
+  }).pending;
 }
 
 function primeAudioFromUserGesture(): void {

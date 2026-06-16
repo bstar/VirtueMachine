@@ -56,6 +56,83 @@ export type SimCommandActionPlanRuntime = {
   shouldUpdateFacing: boolean;
 };
 
+export type SimCommandApplyStateRuntime = {
+  commandsApplied: number;
+};
+
+export type SimCommandFacingStateRuntime = {
+  avatarFacingDx: number;
+  avatarFacingDy: number;
+};
+
+export type SimCommandActionHandlersRuntime<TSim extends SimCommandApplyStateRuntime> = {
+  attackAtCell?: (sim: TSim, x: number, y: number) => void;
+  castAtCell?: (sim: TSim, x: number, y: number) => void;
+  dropAtCell?: (sim: TSim, x: number, y: number) => void;
+  getAtCell?: (sim: TSim, x: number, y: number) => void;
+  lookAtCell?: (sim: TSim, x: number, y: number) => void;
+  moveAtCell?: (sim: TSim, x: number, y: number) => void;
+  moveAvatar?: (sim: TSim, dx: number, dy: number) => boolean | void;
+  talkAtCell?: (sim: TSim, x: number, y: number) => void;
+  useAtCell?: (sim: TSim, x: number, y: number) => void;
+  useFacing?: (sim: TSim, dx: number, dy: number) => void;
+};
+
+export function applySimCommandActionPlanRuntime<TSim extends SimCommandApplyStateRuntime>(args: {
+  facingState?: SimCommandFacingStateRuntime | null;
+  handlers: SimCommandActionHandlersRuntime<TSim>;
+  plan: SimCommandActionPlanRuntime;
+  sim: TSim;
+}): {
+  action: SimCommandActionRuntime;
+  applied: boolean;
+  commandsApplied: number;
+  facingUpdated: boolean;
+} {
+  const { handlers, plan, sim } = args;
+  let applied = true;
+  let facingUpdated = false;
+  if (plan.action === "none") {
+    // The app shell consumes due no-op commands after dispatch, matching the pre-extraction path.
+  } else if (plan.action === "move_avatar") {
+    applied = handlers.moveAvatar?.(sim, plan.arg0, plan.arg1) !== false;
+  } else if (plan.action === "use_facing") {
+    handlers.useFacing?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "use_at_cell") {
+    if (plan.shouldUpdateFacing && args.facingState) {
+      args.facingState.avatarFacingDx = plan.facingDx;
+      args.facingState.avatarFacingDy = plan.facingDy;
+      facingUpdated = true;
+    }
+    handlers.useAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "look_at_cell") {
+    handlers.lookAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "talk_at_cell") {
+    handlers.talkAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "get_at_cell") {
+    handlers.getAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "attack_at_cell") {
+    handlers.attackAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "cast_at_cell") {
+    handlers.castAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "drop_at_cell") {
+    handlers.dropAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "move_at_cell") {
+    handlers.moveAtCell?.(sim, plan.arg0, plan.arg1);
+  } else if (plan.action === "use_verb_at_cell") {
+    handlers.useAtCell?.(sim, plan.arg0, plan.arg1);
+  }
+  if (applied) {
+    sim.commandsApplied = (Number(sim.commandsApplied) + 1) >>> 0;
+  }
+  return {
+    action: plan.action,
+    applied,
+    commandsApplied: sim.commandsApplied,
+    facingUpdated
+  };
+}
+
 export function simCommandDispatchRuntime(commandType: unknown): SimCommandDispatchRuntime {
   switch (Number(commandType) | 0) {
     case LEGACY_COMMAND_TYPE_RUNTIME.MOVE_AVATAR:

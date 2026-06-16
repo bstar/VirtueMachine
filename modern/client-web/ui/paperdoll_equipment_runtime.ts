@@ -1,3 +1,8 @@
+import {
+  OBJ_COORD_USE_EQUIP,
+  OBJ_COORD_USE_LOCXYZ
+} from "../../common/u6_object_constants.ts";
+
 export const LEGACY_PAPERDOLL_SLOT_KEYS = Object.freeze([
   "head",
   "neck",
@@ -40,6 +45,102 @@ type LegacyEquipOccupiedEntryRuntime = {
   tile_id: number;
   object_key: string;
 };
+
+export type LegacyEquipmentActorRuntime = {
+  id?: number;
+  type?: number;
+  x?: number;
+  y?: number;
+  z?: number;
+};
+
+export type LegacyEquipmentAssocRowRuntime = {
+  assocIndex?: number;
+  assocObj?: LegacyEquipmentAssocRowRuntime | null;
+  coordUse?: number;
+  index?: number;
+  legacyOrder?: number | null;
+  order?: number;
+  sourceArea?: number;
+  tileId?: number;
+  type?: number;
+  x?: number;
+  y?: number;
+  z?: number;
+};
+
+function rootAssocOwnerRuntime(row: LegacyEquipmentAssocRowRuntime): LegacyEquipmentAssocRowRuntime | null {
+  let cur: LegacyEquipmentAssocRowRuntime | null | undefined = row;
+  const seen = new Set<string>();
+  for (let i = 0; i < 64; i += 1) {
+    if (!cur || typeof cur !== "object") {
+      return null;
+    }
+    if ((Number(cur.coordUse) | 0) === OBJ_COORD_USE_LOCXYZ) {
+      return cur;
+    }
+    const key = String(cur.index);
+    if (seen.has(key)) {
+      return null;
+    }
+    seen.add(key);
+    cur = cur.assocObj || null;
+  }
+  return null;
+}
+
+function legacyEquipmentOwnerMatchesActorRuntime(
+  owner: LegacyEquipmentAssocRowRuntime | null,
+  actor: Required<LegacyEquipmentActorRuntime>
+): boolean {
+  return !!owner
+    && ((Number(owner.coordUse) | 0) === OBJ_COORD_USE_LOCXYZ)
+    && ((Number(owner.x) | 0) === actor.x)
+    && ((Number(owner.y) | 0) === actor.y)
+    && ((Number(owner.z) | 0) === actor.z)
+    && ((Number(owner.type) & 0x03ff) === actor.type);
+}
+
+export function selectLegacyEquipmentAssocRowsRuntime(args: {
+  actor: LegacyEquipmentActorRuntime | null | undefined;
+  rows: unknown;
+  useObjblkOwnerFallback?: boolean;
+}): LegacyEquipmentAssocRowRuntime[] {
+  const rawActor = args.actor;
+  if (!rawActor) {
+    return [];
+  }
+  const actor: Required<LegacyEquipmentActorRuntime> = {
+    id: Number(rawActor.id) | 0,
+    type: Number(rawActor.type) & 0x03ff,
+    x: Number(rawActor.x) | 0,
+    y: Number(rawActor.y) | 0,
+    z: Number(rawActor.z) | 0
+  };
+  return (Array.isArray(args.rows) ? args.rows : [])
+    .filter((row): row is LegacyEquipmentAssocRowRuntime => {
+      if (!row || typeof row !== "object" || (Number(row.coordUse) | 0) !== OBJ_COORD_USE_EQUIP) {
+        return false;
+      }
+      const byIndex = ((Number(row.assocIndex) | 0) === actor.id);
+      const byAssocObj = !!args.useObjblkOwnerFallback
+        && legacyEquipmentOwnerMatchesActorRuntime(rootAssocOwnerRuntime(row), actor);
+      if (!byIndex && !byAssocObj) {
+        return false;
+      }
+      const type = Number(row.type) & 0x03ff;
+      if (type === 0x150 || type === 0x151) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const ao = Number((a.legacyOrder != null) ? a.legacyOrder : a.order) | 0;
+      const bo = Number((b.legacyOrder != null) ? b.legacyOrder : b.order) | 0;
+      if (ao !== bo) return ao - bo;
+      return (Number(a.index) | 0) - (Number(b.index) | 0);
+    });
+}
 
 /*
   Mirrors STAT_GetEquipSlot tile->slot family with SLOT_2HND/SLOT_RING pseudo slots.
@@ -156,6 +257,35 @@ export function projectLegacyEquipmentSlotsRuntime(
   }
   const resolution = resolveLegacyEquipmentCandidatesRuntime(candidates);
   return resolution.placed;
+}
+
+export function legacyEquipmentSlotsForTalkActorRuntime(args: {
+  actor: LegacyEquipmentActorRuntime | null | undefined;
+  entityAssocEntries?: unknown;
+  objectAssocEntries?: unknown;
+}): LegacyEquipResolutionPlacedRuntime[] {
+  if (!args.actor) {
+    return [];
+  }
+  let equipRows = selectLegacyEquipmentAssocRowsRuntime({
+    actor: args.actor,
+    rows: args.entityAssocEntries,
+    useObjblkOwnerFallback: false
+  });
+  if (!equipRows.length) {
+    equipRows = selectLegacyEquipmentAssocRowsRuntime({
+      actor: args.actor,
+      rows: args.objectAssocEntries,
+      useObjblkOwnerFallback: true
+    });
+  }
+  if (!equipRows.length) {
+    return [];
+  }
+  return projectLegacyEquipmentSlotsRuntime(equipRows.map((row) => ({
+    tileId: Number(row.tileId) & 0xffff,
+    object_key: `objblk:${Number(row.sourceArea) | 0}:${Number(row.index) | 0}`
+  })));
 }
 
 export function buildLegacyEquipmentResolutionRegressionProbesRuntime(): {

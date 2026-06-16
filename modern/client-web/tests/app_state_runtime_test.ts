@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  advanceSimTickRuntime,
   animationTickPatchRuntime,
   applyPauseLoopStateRuntime,
   bindBrowserLifecycleRuntime,
@@ -21,6 +22,7 @@ import {
   toAppSimStateRuntime
 } from "../sim/app_state_runtime.ts";
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
+import type { SimCommandRuntime } from "../sim/queue_runtime.ts";
 
 const world: SimSnapshotRuntime["world"] = {
   is_on_quest: 0,
@@ -44,6 +46,75 @@ assert.equal(initial.rngState, 0x12345678);
 assert.equal(initial.partySize, 1);
 assert.deepEqual(initial.partyMembers, [1]);
 assert.deepEqual(initial.doorOpenStates, {});
+{
+  const sim = createInitialAppSimState({ ...world, time_m: 59, time_h: 23, date_d: 30, date_m: 12, date_y: 99 }, 1);
+  sim.tick = 3;
+  sim.removedObjectKeys = { fresh: 1, stale: 1 };
+  sim.removedObjectAtTick = { fresh: 2, stale: 0 };
+  sim.removedObjectCount = 2;
+  const applied: SimCommandRuntime[] = [];
+  const result = advanceSimTickRuntime({
+    applyCommand: (_sim, cmd) => {
+      applied.push(cmd);
+      _sim.commandsApplied += 1;
+    },
+    options: {
+      daysPerMonth: 30,
+      hoursPerDay: 24,
+      isNetAuthenticated: () => false,
+      minutesPerHour: 60,
+      monthsPerYear: 12,
+      ticksPerMinute: 4,
+      worldPropResetTicks: 3
+    },
+    queue: [
+      { tick: 4, type: 1, arg0: 1, arg1: 0 },
+      { tick: 5, type: 2, arg0: 9, arg1: 9 }
+    ],
+    sim
+  });
+  assert.deepEqual(applied, [{ tick: 4, type: 1, arg0: 1, arg1: 0 }]);
+  assert.deepEqual(result.pending, [{ tick: 5, type: 2, arg0: 9, arg1: 9 }]);
+  assert.equal(result.nextTick, 4);
+  assert.equal(result.appliedCount, 1);
+  assert.equal(sim.tick, 4);
+  assert.notEqual(sim.rngState, 1);
+  assert.equal(sim.commandsApplied, 1);
+  assert.deepEqual(sim.removedObjectKeys, { fresh: 1 });
+  assert.equal(sim.removedObjectCount, 1);
+  assert.deepEqual({
+    time_m: sim.world.time_m,
+    time_h: sim.world.time_h,
+    date_d: sim.world.date_d,
+    date_m: sim.world.date_m,
+    date_y: sim.world.date_y
+  }, {
+    time_m: 0,
+    time_h: 0,
+    date_d: 1,
+    date_m: 1,
+    date_y: 100
+  });
+}
+{
+  const sim = createInitialAppSimState({ ...world, time_m: 59 }, 1);
+  sim.tick = 3;
+  advanceSimTickRuntime({
+    applyCommand: () => undefined,
+    options: {
+      daysPerMonth: 30,
+      hoursPerDay: 24,
+      isNetAuthenticated: () => true,
+      minutesPerHour: 60,
+      monthsPerYear: 12,
+      ticksPerMinute: 4,
+      worldPropResetTicks: 3
+    },
+    queue: [],
+    sim
+  });
+  assert.equal(sim.world.time_m, 59);
+}
 assert.deepEqual(pauseLoopUiModelRuntime(false), {
   buttonText: "Pause Loop",
   statText: "running"

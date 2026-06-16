@@ -17,6 +17,15 @@ export type StartupMenuIndexStateRuntime = {
   startupMenuIndex: number;
 };
 
+export type StartupPreferenceStorageRuntime = {
+  setItem(key: string, value: string): void;
+};
+
+export type StartupSkipIntroCheckboxRuntime = {
+  checked: boolean;
+  addEventListener?(type: "change", listener: () => void): void;
+};
+
 export function applyStartupMenuIndexRuntime(
   state: StartupMenuIndexStateRuntime,
   nextIndex: unknown,
@@ -284,5 +293,78 @@ export function startupAssetsReadyDiagRuntime(args: {
   return {
     diagClass: "diag warn",
     diagText: `Assets missing (${runtimeModeText}): startup menu running in fallback mode.`
+  };
+}
+
+export function writeSkipIntroPreferenceRuntime(args: {
+  checkbox?: { checked: boolean } | null;
+  enabled: unknown;
+  key: string;
+  storage?: StartupPreferenceStorageRuntime | null;
+}): {
+  enabled: boolean;
+  stored: boolean;
+  value: "on" | "off";
+} {
+  const enabled = !!args.enabled;
+  const value = enabled ? "on" : "off";
+  if (args.checkbox) {
+    args.checkbox.checked = enabled;
+  }
+  let stored = false;
+  if (args.storage) {
+    try {
+      args.storage.setItem(args.key, value);
+      stored = true;
+    } catch (_err) {
+      stored = false;
+    }
+  }
+  return { enabled, stored, value };
+}
+
+export function shouldStartSessionFromSkipIntroRuntime(args: {
+  isAuthenticated: unknown;
+  runtimeReady: unknown;
+  sessionStarted: unknown;
+  skipIntroEnabled: unknown;
+}): boolean {
+  return !!args.skipIntroEnabled
+    && !args.sessionStarted
+    && !!args.runtimeReady
+    && !!args.isAuthenticated;
+}
+
+export function bindSkipIntroPreferenceRuntime(args: {
+  checkbox: StartupSkipIntroCheckboxRuntime;
+  key: string;
+  onMaybeStart: () => void;
+  setEnabled?: ((enabled: boolean) => void) | null;
+  storage?: StartupPreferenceStorageRuntime | null;
+}): {
+  bound: boolean;
+  initialEnabled: boolean;
+} {
+  const apply = args.setEnabled || ((enabled: boolean) => {
+    writeSkipIntroPreferenceRuntime({
+      checkbox: args.checkbox,
+      enabled,
+      key: args.key,
+      storage: args.storage
+    });
+  });
+  args.checkbox.checked = true;
+  apply(true);
+  if (args.checkbox.addEventListener) {
+    args.checkbox.addEventListener("change", () => {
+      apply(args.checkbox.checked);
+      if (args.checkbox.checked) {
+        args.onMaybeStart();
+      }
+    });
+  }
+  return {
+    bound: !!args.checkbox.addEventListener,
+    initialEnabled: true
   };
 }

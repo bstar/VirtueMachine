@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   dropThrowRenderPlanRuntime,
+  queueDropThrowEffectRuntime,
   type DropThrowSpriteRuntime
 } from "../ui/drop_throw_runtime.ts";
 import type { WorldRuntimeDropThrowEffect } from "../net/world_runtime.ts";
@@ -73,6 +74,65 @@ function plan(effects: readonly WorldRuntimeDropThrowEffect[], nowMs = 1180) {
   assert.deepEqual(out.landedObjects, []);
   assert.deepEqual(out.remaining, [offscreen]);
   assert.deepEqual(out.sprites, []);
+}
+
+{
+  const current = effect({ objectKey: "old", landObject: { object_key: "old", tile_id: 0x200 } });
+  const out = queueDropThrowEffectRuntime({
+    currentEffects: [current],
+    durationMs: 360,
+    fromX: 10,
+    fromY: 10,
+    landObject: { object_key: "drop-2", tile_id: 0x285, type: 0x078, frame: 0 },
+    nowMs: 1000,
+    toX: 12,
+    toY: 10,
+    z: 0
+  });
+  assert.deepEqual(out.landedObjects, []);
+  assert.equal(out.effects.length, 2);
+  assert.equal(out.effects[0], current);
+  assert.equal(out.effects[1].objectKey, "drop-2");
+  assert.equal(out.effects[1].startMs, 1000);
+  assert.equal(out.effects[1].endMs, 1360);
+  assert.equal(out.effects[1].tileId, 0x285);
+}
+
+{
+  const stale = effect({ objectKey: "drop-2", toX: 99 });
+  const out = queueDropThrowEffectRuntime({
+    currentEffects: [stale],
+    durationMs: 360,
+    fromX: 10,
+    fromY: 10,
+    landObject: { object_key: "drop-2", tile_id: 0x285, type: 0x078, frame: 0 },
+    nowMs: 1000,
+    toX: 12,
+    toY: 10,
+    z: 0
+  });
+  assert.equal(out.effects.length, 1);
+  assert.notEqual(out.effects[0], stale);
+  assert.equal(out.effects[0].objectKey, "drop-2");
+  assert.equal(out.effects[0].toX, 12);
+}
+
+{
+  const current = effect({ objectKey: "old" });
+  const landed = { object_key: "drop-now", tile_id: 0x285, type: 0x078, frame: 0 };
+  const out = queueDropThrowEffectRuntime({
+    currentEffects: [current],
+    durationMs: 360,
+    fromX: 10,
+    fromY: 10,
+    landObject: landed,
+    nowMs: 1000,
+    toX: 10,
+    toY: 10,
+    z: 0
+  });
+  assert.deepEqual(out.landedObjects, [landed]);
+  assert.deepEqual(out.effects, [current]);
 }
 
 console.log("ui_drop_throw_runtime_test: ok");

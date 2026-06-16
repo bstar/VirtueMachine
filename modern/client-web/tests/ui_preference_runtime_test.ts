@@ -5,6 +5,8 @@ import {
   applyBooleanTogglePreferenceRuntime,
   applyBooleanTogglePreferenceStateRuntime,
   applyFontPreferenceRuntime,
+  applyLegacyFramePreviewPreferenceRuntime,
+  applyLegacyScaleModePreferenceStateRuntime,
   applyMovementModePreferenceRuntime,
   applyMovementModePreferenceStateRuntime,
   applyNamedPreferenceRuntime,
@@ -561,6 +563,60 @@ assert.deepEqual(legacyScaleModePreferenceModelRuntime("bad", ["fit", "1", "2", 
 assert.equal(nextLegacyScaleModeRuntime("fit", 1, ["fit", "1", "2", "3", "4"], "fit"), "1");
 assert.equal(nextLegacyScaleModeRuntime("fit", -1, ["fit", "1", "2", "3", "4"], "fit"), "4");
 assert.equal(nextLegacyScaleModeRuntime("bad", 2, ["fit", "1", "2", "3", "4"], "fit"), "2");
+{
+  const storage = memoryStorage();
+  const attrs: Record<string, string> = {};
+  const select = { value: "" };
+  let layoutCount = 0;
+  assert.deepEqual(applyLegacyFramePreviewPreferenceRuntime({
+    applyLayout: () => {
+      layoutCount += 1;
+    },
+    documentElement: {
+      setAttribute(name: string, value: string) {
+        attrs[name] = value;
+      }
+    },
+    enabled: true,
+    key: "preview",
+    select,
+    storage
+  }), {
+    enabled: true,
+    stored: true,
+    value: "on"
+  });
+  assert.equal(attrs["data-legacy-frame-preview"], "on");
+  assert.equal(select.value, "on");
+  assert.equal(storage.data.preview, "on");
+  assert.equal(layoutCount, 1);
+}
+{
+  const storage = memoryStorage();
+  const select = { value: "" };
+  const state = { legacyScaleMode: "fit" as "fit" | "1" | "2" | "3" | "4" };
+  let layoutCount = 0;
+  assert.deepEqual(applyLegacyScaleModePreferenceStateRuntime({
+    allowed: ["fit", "1", "2", "3", "4"],
+    applyLayout: () => {
+      layoutCount += 1;
+    },
+    fallback: "fit",
+    key: "scale",
+    mode: "3",
+    select,
+    state,
+    stateKey: "legacyScaleMode",
+    storage
+  }), {
+    stored: true,
+    value: "3"
+  });
+  assert.equal(state.legacyScaleMode, "3");
+  assert.equal(select.value, "3");
+  assert.equal(storage.data.scale, "3");
+  assert.equal(layoutCount, 1);
+}
 assert.deepEqual(namedPreferenceModelRuntime("sans", ["sans", "silkscreen"], "silkscreen"), {
   value: "sans"
 });
