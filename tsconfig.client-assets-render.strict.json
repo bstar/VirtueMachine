@@ -24,6 +24,12 @@
     "modern/client-web/render/indexed_pixels_runtime.ts",
     "modern/client-web/render/legacy_text_render_runtime.ts",
     "modern/client-web/render/tile_set_runtime.ts",
+    "modern/client-web/tests/indexed_pixels_runtime_test.ts",
+    "modern/client-web/tests/legacy_pixmap_runtime_test.ts",
+    "modern/client-web/tests/legacy_text_render_runtime_test.ts",
+    "modern/client-web/tests/palette_runtime_test.ts",
+    "modern/client-web/tests/shape_archive_runtime_test.ts",
+    "modern/client-web/tests/tile_set_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

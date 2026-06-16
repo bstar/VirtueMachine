@@ -24,6 +24,12 @@
     "modern/client-web/sim/map_runtime.ts",
     "modern/client-web/sim/object_baseline_runtime.ts",
     "modern/client-web/sim/object_layer_runtime.ts",
+    "modern/client-web/tests/anim_data_runtime_test.ts",
+    "modern/client-web/tests/entity_layer_runtime_test.ts",
+    "modern/client-web/tests/legacy_actor_frame_runtime_test.ts",
+    "modern/client-web/tests/map_runtime_test.ts",
+    "modern/client-web/tests/object_baseline_runtime_test.ts",
+    "modern/client-web/tests/object_layer_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

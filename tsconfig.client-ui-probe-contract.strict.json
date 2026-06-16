@@ -27,6 +27,8 @@
     "modern/client-web/ui/panel_scope_runtime.ts",
     "modern/client-web/ui/paperdoll_equipment_runtime.ts",
     "modern/client-web/ui/party_message_runtime.ts",
+    "modern/client-web/tests/ui_probe_contract_test.ts",
+    "modern/client-web/tests/ui_probe_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

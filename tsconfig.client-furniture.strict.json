@@ -20,6 +20,7 @@
   "include": [
     "modern/client-web/sim/furniture_pose_runtime.ts",
     "modern/client-web/sim/object_types_runtime.ts",
+    "modern/client-web/tests/furniture_pose_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

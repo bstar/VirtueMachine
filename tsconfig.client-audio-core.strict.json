@@ -24,6 +24,10 @@
     "modern/client-web/audio/sfx_ids_runtime.ts",
     "modern/client-web/audio/u6m_music_runtime.ts",
     "modern/client-web/error_runtime.ts",
+    "modern/client-web/tests/audio_ambient_sfx_runtime_test.ts",
+    "modern/client-web/tests/audio_pc_speaker_runtime_test.ts",
+    "modern/client-web/tests/audio_runtime_music_path_test.ts",
+    "modern/client-web/tests/audio_u6m_music_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

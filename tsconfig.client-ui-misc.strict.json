@@ -21,6 +21,9 @@
     "modern/client-web/error_runtime.ts",
     "modern/client-web/ui/cursor_runtime.ts",
     "modern/client-web/ui/legacy_view_tile_runtime.ts",
+    "modern/client-web/tests/cursor_runtime_test.ts",
+    "modern/client-web/tests/error_runtime_test.ts",
+    "modern/client-web/tests/legacy_view_tile_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }
