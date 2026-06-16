@@ -67,7 +67,9 @@ const profiles: NetProfile[] = [
   { apiBase: "http://two", username: "dupre", password: "", characterName: "Dupre", email: "" }
 ];
 
-let selected: NetProfile | null = null;
+const selected: {
+  current?: NetProfile;
+} = {};
 const accountSelect = {
   value: profileKey(profiles[1])
 } as HTMLSelectElement;
@@ -76,10 +78,10 @@ applySelectedAccountProfileRuntime({
   accountSelect,
   loadProfiles: () => profiles,
   profileKey,
-  applyProfile: (profile) => { selected = profile; }
+  applyProfile: (profile) => { selected.current = profile; }
 });
 
-assert.equal(selected?.username, "dupre");
+assert.equal(selected.current?.username, "dupre");
 
 {
   const apiBaseInput = fakeControl();

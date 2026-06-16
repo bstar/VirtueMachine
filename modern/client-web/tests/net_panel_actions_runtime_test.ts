@@ -5,6 +5,10 @@ import {
   runNetPanelActionRuntime
 } from "../net/panel_actions_runtime.ts";
 
+type NetPanelActionTestListener = {
+  current?: () => void;
+};
+
 assert.deepEqual(netPanelActionDiagRuntime("ok", "Saved."), {
   diagClass: "diag ok",
   diagText: "Saved."
@@ -55,14 +59,14 @@ assert.deepEqual(netPanelActionDiagRuntime("warn", "Failed."), {
 }
 
 {
-  let listener: (() => void) | null = null;
+  const listener: NetPanelActionTestListener = {};
   const statuses: string[] = [];
   const diagnostics: string[] = [];
   const bound = bindNetPanelActionButtonRuntime({
     button: {
       addEventListener(type: "click", fn: () => void) {
         assert.equal(type, "click");
-        listener = fn;
+        listener.current = fn;
       }
     },
     run: async () => ({ ok: true }),
@@ -73,7 +77,8 @@ assert.deepEqual(netPanelActionDiagRuntime("warn", "Failed."), {
     errorDiagPrefix: "Save failed"
   });
   assert.equal(bound, true);
-  listener?.();
+  assert(listener.current, "panel action listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(statuses, []);
   assert.deepEqual(diagnostics, ["ok:Saved."]);

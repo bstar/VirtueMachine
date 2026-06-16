@@ -15,6 +15,10 @@ import {
 } from "../net/auth_runtime.ts";
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
 
+type NetAuthTestListener = {
+  current?: () => void;
+};
+
 assert.equal(netLoginTokenRuntime({ token: "token" }), "token");
 assert.equal(netLoginUserIdRuntime({ user: { user_id: "u1" } }), "u1");
 assert.equal(netLoginUsernameRuntime({ user: { username: "avatar" } }, "fallback"), "avatar");
@@ -45,7 +49,7 @@ assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
   statusText: "Auto-login failed: offline"
 });
 {
-  let listener: (() => void) | null = null;
+  const listener: NetAuthTestListener = {};
   const statuses: string[] = [];
   const diags: string[] = [];
   const modalStates: boolean[] = [];
@@ -54,7 +58,7 @@ assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
     button: {
       addEventListener(type: "click", fn: () => void) {
         assert.equal(type, "click");
-        listener = fn;
+        listener.current = fn;
       }
     },
     characterName: () => "Avatar",
@@ -71,7 +75,8 @@ assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
     username: () => "avatar",
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "login listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(loginCount, 1);
   assert.deepEqual(modalStates, [false]);
@@ -79,13 +84,13 @@ assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
   assert.deepEqual(diags, ["diag ok:Net login ok: avatar/Avatar"]);
 }
 {
-  let listener: (() => void) | null = null;
+  const listener: NetAuthTestListener = {};
   const statuses: string[] = [];
   const diags: string[] = [];
   assert.equal(bindNetLoginButtonRuntime({
     button: {
       addEventListener(_type: "click", fn: () => void) {
-        listener = fn;
+        listener.current = fn;
       }
     },
     characterName: () => "Avatar",
@@ -104,18 +109,19 @@ assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
     username: () => "avatar",
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "failing login listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(statuses, ["error:Login failed: bad password"]);
   assert.deepEqual(diags, ["diag warn:Net login failed: bad password"]);
 }
 {
-  let listener: (() => void) | null = null;
+  const listener: NetAuthTestListener = {};
   let logoutCount = 0;
   assert.equal(bindNetLoginButtonRuntime({
     button: {
       addEventListener(_type: "click", fn: () => void) {
-        listener = fn;
+        listener.current = fn;
       }
     },
     characterName: () => "Avatar",
@@ -134,7 +140,8 @@ assert.deepEqual(netAutoLoginFailureRuntime("offline"), {
     username: () => "avatar",
     setDiag: () => {}
   }), true);
-  listener?.();
+  assert(listener.current, "logout listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(logoutCount, 1);
   assert.equal(bindNetLoginButtonRuntime({
