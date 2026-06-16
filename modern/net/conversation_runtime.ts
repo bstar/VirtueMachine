@@ -4,6 +4,7 @@ import type {
   ConversationArchivesRuntime,
   ConversationPositionRuntime,
   ConversationRuntimeState,
+  ConversationSessionMapRuntime,
   ConversationSessionPayloadRuntime,
   ConversationSessionRuntime,
   ReplyAuthoritativeConversationInputRuntime,
@@ -179,7 +180,7 @@ function startAuthoritativeConversation(
     conversationMacroSymbolToIndex
   );
   const openingLines = canonicalizeOpeningLines(npcId, openingLinesRaw, fallback)
-    .map((line) => renderConversationMacrosWithContext(String(line || "").trim(), vmContext))
+    .map((line: unknown) => renderConversationMacrosWithContext(String(line || "").trim(), vmContext))
     .filter(Boolean);
   const sessionId = nodeCrypto.randomUUID();
   const session: ConversationSessionRuntime = {
@@ -203,7 +204,8 @@ function startAuthoritativeConversation(
   if (!state.conversationSessions || typeof state.conversationSessions !== "object") {
     state.conversationSessions = Object.create(null);
   }
-  state.conversationSessions[sessionId] = session;
+  const sessions = state.conversationSessions as ConversationSessionMapRuntime;
+  sessions[sessionId] = session;
   if (session.persistTalkFlags) {
     copyTalkFlagsBack(state?.npcRuntime?.talkFlags, vmContext.talkFlags);
   }
@@ -222,7 +224,7 @@ function replyAuthoritativeConversation(
   const typed = String(input?.typed || "").trim();
   const sessions = state?.conversationSessions;
   const session = sessions && typeof sessions === "object" ? sessions[sessionId] : null;
-  if (!session) {
+  if (!sessions || !session) {
     return { ok: false, http: 404, code: "conversation_session_not_found", message: "conversation session not found" };
   }
   const query = typed || "bye";
@@ -267,7 +269,7 @@ function replyAuthoritativeConversation(
       },
       keyMatchesInput: conversationKeyMatchesInput,
       decodeResponseOpcodeAware: decodeConversationResponseOpcodeAware,
-      renderMacros: (line, ctx) => renderConversationMacrosWithContext(line, ctx)
+      renderMacros: (line: unknown, ctx: unknown) => renderConversationMacrosWithContext(line, ctx)
     });
     if (cursorReply && cursorReply.kind === "ok") {
       session.pc = Number(cursorReply.nextPc) | 0;
