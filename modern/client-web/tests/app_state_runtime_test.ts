@@ -24,6 +24,10 @@ import {
 import type { SimSnapshotRuntime } from "../net/snapshot_codec_runtime.ts";
 import type { SimCommandRuntime } from "../sim/queue_runtime.ts";
 
+type AppStateTestListener = {
+  current?: () => void;
+};
+
 const world: SimSnapshotRuntime["world"] = {
   is_on_quest: 0,
   next_sleep: 0,
@@ -185,11 +189,11 @@ assert.deepEqual(pauseLoopReasonDiagRuntime("Loop paused."), {
 });
 assert.equal(pauseLoopReasonDiagRuntime(""), null);
 {
-  let listener: (() => void) | null = null;
+  const listener: AppStateTestListener = {};
   const button = {
     addEventListener(type: "click", nextListener: () => void) {
       assert.equal(type, "click");
-      listener = nextListener;
+      listener.current = nextListener;
     }
   };
   let paused = false;
@@ -202,8 +206,9 @@ assert.equal(pauseLoopReasonDiagRuntime(""), null);
       transitions.push({ paused: nextPaused, reason });
     }
   }), true);
-  listener?.();
-  listener?.();
+  assert(listener.current, "pause loop listener should be bound");
+  listener.current();
+  listener.current();
   assert.deepEqual(transitions, [
     {
       paused: true,
@@ -221,21 +226,21 @@ assert.equal(pauseLoopReasonDiagRuntime(""), null);
   }), false);
 }
 {
-  let resizeListener: (() => void) | null = null;
-  let visibilityListener: (() => void) | null = null;
+  const resizeListener: AppStateTestListener = {};
+  const visibilityListener: AppStateTestListener = {};
   let resizeCount = 0;
   let visibilityCount = 0;
   const result = bindBrowserLifecycleRuntime({
     window: {
       addEventListener(type: "resize", listener: () => void) {
         assert.equal(type, "resize");
-        resizeListener = listener;
+        resizeListener.current = listener;
       }
     },
     document: {
       addEventListener(type: "visibilitychange", listener: () => void) {
         assert.equal(type, "visibilitychange");
-        visibilityListener = listener;
+        visibilityListener.current = listener;
       }
     },
     onResize: () => {
@@ -249,8 +254,10 @@ assert.equal(pauseLoopReasonDiagRuntime(""), null);
     boundResize: true,
     boundVisibilityChange: true
   });
-  resizeListener?.();
-  visibilityListener?.();
+  assert(resizeListener.current, "resize listener should be bound");
+  assert(visibilityListener.current, "visibility listener should be bound");
+  resizeListener.current();
+  visibilityListener.current();
   assert.equal(resizeCount, 1);
   assert.equal(visibilityCount, 1);
   assert.deepEqual(bindBrowserLifecycleRuntime({

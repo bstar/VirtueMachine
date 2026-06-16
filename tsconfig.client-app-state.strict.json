@@ -22,6 +22,7 @@
     "modern/client-web/sim/hash_runtime.ts",
     "modern/client-web/sim/inventory_runtime.ts",
     "modern/client-web/sim/sim_utils_runtime.ts",
+    "modern/client-web/tests/app_state_runtime_test.ts",
     "modern/client-web/tests/hash_runtime_test.ts",
     "modern/client-web/tests/sim_utils_runtime_test.ts",
     "modern/common/**/*.ts"

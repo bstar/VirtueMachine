@@ -31,7 +31,9 @@ import {
   simCommandActionRuntime,
   simCommandDispatchRuntime,
   shouldSuppressRepeatedMoveRuntime,
-  upsertMoveCommandForTickRuntime
+  upsertMoveCommandForTickRuntime,
+  type AvatarMoveQueueStateRuntime,
+  type SimCommandRuntime
 } from "../sim/queue_runtime.ts";
 
 const MOVE = 1;
@@ -462,11 +464,11 @@ assert.deepEqual(partitionCommandsForTickRuntime(queue, 3), {
   });
 }
 
-const upsertQueue = [
+const upsertQueue: SimCommandRuntime[] = [
   { type: MOVE, tick: 4, arg0: 1, arg1: 0 },
   { type: USE, tick: 4, arg0: 7, arg1: 8 }
 ];
-const upsertLog = [{ type: MOVE, tick: 4, arg0: 1, arg1: 0 }];
+const upsertLog: SimCommandRuntime[] = [{ type: MOVE, tick: 4, arg0: 1, arg1: 0 }];
 assert.equal(upsertMoveCommandForTickRuntime({
   queue: upsertQueue,
   commandLog: upsertLog,
@@ -481,8 +483,8 @@ assert.deepEqual(upsertQueue, [
 ]);
 assert.deepEqual(upsertLog, [{ type: MOVE, tick: 4, arg0: -1, arg1: 0 }]);
 
-const enqueueQueue = [];
-const enqueueLog = [];
+const enqueueQueue: SimCommandRuntime[] = [];
+const enqueueLog: SimCommandRuntime[] = [];
 enqueueCommandRuntime({
   queue: enqueueQueue,
   commandLog: enqueueLog,
@@ -493,7 +495,7 @@ assert.deepEqual(enqueueQueue, [{ type: USE, tick: 6, arg0: 1 }]);
 assert.deepEqual(enqueueLog, [{ type: USE, tick: 6, arg0: 1 }]);
 
 {
-  const moveState = {
+  const moveState: AvatarMoveQueueStateRuntime = {
     avatarFacingDx: 0,
     avatarFacingDy: 0,
     avatarWalkAnimUntilMs: -1,
@@ -562,7 +564,7 @@ assert.deepEqual(enqueueLog, [{ type: USE, tick: 6, arg0: 1 }]);
 }
 
 {
-  const moveState = {
+  const moveState: AvatarMoveQueueStateRuntime = {
     avatarFacingDx: 0,
     avatarFacingDy: 1,
     avatarWalkAnimUntilMs: 123,
@@ -611,8 +613,8 @@ assert.deepEqual(enqueueLog, [{ type: USE, tick: 6, arg0: 1 }]);
 }
 
 {
-  const queue = [];
-  const commandLog = [];
+  const queue: SimCommandRuntime[] = [];
+  const commandLog: SimCommandRuntime[] = [];
   queueFacingUseCommandRuntime({
     queue,
     commandLog,
@@ -626,8 +628,8 @@ assert.deepEqual(enqueueLog, [{ type: USE, tick: 6, arg0: 1 }]);
 }
 
 {
-  const queue = [];
-  const commandLog = [];
+  const queue: SimCommandRuntime[] = [];
+  const commandLog: SimCommandRuntime[] = [];
   assert.equal(queueCellCommandRuntime({
     queue,
     commandLog,
@@ -651,8 +653,8 @@ assert.deepEqual(enqueueLog, [{ type: USE, tick: 6, arg0: 1 }]);
 }
 
 {
-  const queue = [];
-  const commandLog = [];
+  const queue: SimCommandRuntime[] = [];
+  const commandLog: SimCommandRuntime[] = [];
   assert.equal(queueLegacyTargetVerbCommandRuntime({
     queue,
     commandLog,
