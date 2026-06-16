@@ -12,6 +12,7 @@ matches="$(
     "$ROOT_DIR/modern/common" \
     "$ROOT_DIR/modern/client-web" \
     "$ROOT_DIR/modern/net" \
+    "$ROOT_DIR/modern/tools" \
     --glob '*.ts' \
     --glob '!**/tests/**' \
     --glob '!**/assets/**' \

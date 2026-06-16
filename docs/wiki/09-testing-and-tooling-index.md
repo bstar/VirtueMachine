@@ -32,7 +32,7 @@ Use these when hover reports indicate source/insertion ordering anomalies.
 
 - `npm test`: top-level quality gate (`typecheck`, type-safety lint gates, broad TypeScript unit tests, UI fixture drift, legacy UI anchors, net contract wrapper)
 - `npm run typecheck`: TypeScript project checks only
-- `npm run lint:types`: explicit-`any` ban plus production escape-hatch ban for `as unknown as`, TypeScript suppressions, and eslint disable comments
+- `npm run lint:types`: explicit-`any` ban plus app/net/common/tooling escape-hatch ban for `as unknown as`, TypeScript suppressions, and eslint disable comments
 - `npm run test:ts`: broad Node test runner over client-web and net TypeScript tests
 - `npm run test:fixtures`: UI probe fixture drift check
 - `npm run test:legacy-ui`: canonical legacy UI anchor check
