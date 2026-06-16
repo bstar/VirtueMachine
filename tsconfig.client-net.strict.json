@@ -20,6 +20,15 @@
   "include": [
     "modern/client-web/net/**/*.ts",
     "modern/client-web/error_runtime.ts",
+    "modern/client-web/tests/net_account_runtime_test.ts",
+    "modern/client-web/tests/net_character_runtime_test.ts",
+    "modern/client-web/tests/net_conversation_runtime_test.ts",
+    "modern/client-web/tests/net_panel_runtime_test.ts",
+    "modern/client-web/tests/net_presence_runtime_test.ts",
+    "modern/client-web/tests/net_profile_runtime_test.ts",
+    "modern/client-web/tests/net_request_runtime_test.ts",
+    "modern/client-web/tests/net_runtime_profile_config_runtime_test.ts",
+    "modern/client-web/tests/net_world_interaction_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }
