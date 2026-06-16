@@ -26,6 +26,7 @@
     "modern/client-web/conversation/session_runtime.ts",
     "modern/client-web/conversation/text_runtime.ts",
     "modern/client-web/conversation/vm_runtime.ts",
+    "modern/client-web/tests/conversation_transcript_alignment_test.ts",
     "modern/common/**/*.ts"
   ]
 }

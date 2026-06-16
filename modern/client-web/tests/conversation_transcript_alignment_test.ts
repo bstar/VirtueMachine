@@ -5,19 +5,19 @@ import path from "node:path";
 const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const TRANSCRIPT_PATH = path.join(ROOT, "..", "legacy", "transcript reference", "Transcript_U6.txt");
 
-function mustReadTranscript() {
+function mustReadTranscript(): string {
   assert.ok(fs.existsSync(TRANSCRIPT_PATH), `missing transcript reference: ${TRANSCRIPT_PATH}`);
   return fs.readFileSync(TRANSCRIPT_PATH, "utf8");
 }
 
-function normalize(s) {
+function normalize(s: string): string {
   return String(s || "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function assertTranscriptContainsAll(text, expected) {
+function assertTranscriptContainsAll(text: string, expected: readonly string[]): void {
   const hay = normalize(text);
   for (const line of expected) {
     assert.ok(
