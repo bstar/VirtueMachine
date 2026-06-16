@@ -20,6 +20,7 @@
   "include": [
     "modern/client-web/legacy_object_order.ts",
     "modern/client-web/render_composition.ts",
+    "modern/client-web/tests/render_composition_fixtures.ts",
     "modern/common/**/*.ts"
   ]
 }

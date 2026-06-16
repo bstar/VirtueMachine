@@ -3,7 +3,9 @@ import {
   buildOverlayCellsModel,
   isLegacyPixelTransparent,
   measureActorOcclusionParityModel,
-  topInteractiveOverlayAtModel
+  topInteractiveOverlayAtModel,
+  type RenderCompositionObject,
+  type RenderOverlayGrid
 } from "../render_composition.ts";
 import {
   compareLegacyObjectOrderStrict,
@@ -13,13 +15,23 @@ import {
 const VIEW_W = 5;
 const VIEW_H = 5;
 
-function key(x, y, z) {
+type FixtureObject = RenderCompositionObject & {
+  drawPri?: number;
+  tileId: number;
+};
+
+type FixtureObjectLayer = {
+  objectsAt(x: number, y: number, z: number): readonly FixtureObject[];
+  objectsInWindowLegacyOrder(startX: number, startY: number, viewW: number, viewH: number, z: number): readonly FixtureObject[];
+};
+
+function key(x: number, y: number, z: number): string {
   return `${x},${y},${z}`;
 }
 
-function makeObjectLayer(entries) {
-  const by = new Map();
-  const stream = entries.slice().sort((a, b) => {
+function makeObjectLayer(entries: readonly FixtureObject[]): FixtureObjectLayer {
+  const by = new Map<string, FixtureObject[]>();
+  const stream = entries.slice().sort((a: FixtureObject, b: FixtureObject) => {
     if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
     if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
     if ((a.z | 0) !== (b.z | 0)) return (b.z | 0) - (a.z | 0);
@@ -33,16 +45,16 @@ function makeObjectLayer(entries) {
     if (!by.has(k)) {
       by.set(k, []);
     }
-    by.get(k).push(e);
+    by.get(k)?.push(e);
   }
   return {
-    objectsAt(x, y, z) {
+    objectsAt(x: number, y: number, z: number): readonly FixtureObject[] {
       return by.get(key(x, y, z)) ?? [];
     },
-    objectsInWindowLegacyOrder(startX, startY, viewW, viewH, wz) {
+    objectsInWindowLegacyOrder(startX: number, startY: number, viewW: number, viewH: number, wz: number): readonly FixtureObject[] {
       const endX = startX + viewW;
       const endY = startY + viewH;
-      return stream.filter((o) => (
+      return stream.filter((o: FixtureObject) => (
         (o.z | 0) === (wz | 0)
         && (o.x | 0) >= startX
         && (o.x | 0) < endX
@@ -51,6 +63,11 @@ function makeObjectLayer(entries) {
       ));
     }
   };
+}
+
+function requireOverlayCells(out: { overlayCells: RenderOverlayGrid | null }): RenderOverlayGrid {
+  assert(out.overlayCells, "overlay cells should be available for a valid object layer");
+  return out.overlayCells;
 }
 
 function runSpillOrderingFixture() {
@@ -92,11 +109,12 @@ function runSpillOrderingFixture() {
   assert.equal(out.overlayCount, 1, "expected one source overlay record");
   assert.equal(out.parity.unsortedSourceCount, 0, "sorted source order expected");
 
-  const main = topInteractiveOverlayAtModel(out.overlayCells, VIEW_W, VIEW_H, startX, startY, 302, 342);
+  const overlayCells = requireOverlayCells(out);
+  const main = topInteractiveOverlayAtModel(overlayCells, VIEW_W, VIEW_H, startX, startY, 302, 342);
   assert(main, "main interactive overlay should exist");
   assert.equal(main.tileId, 0x200, "main interactive overlay tile mismatch");
 
-  const spillLeftCell = out.overlayCells[((342 - startY) * VIEW_W) + (301 - startX)];
+  const spillLeftCell = overlayCells[((342 - startY) * VIEW_W) + (301 - startX)];
   assert(spillLeftCell.length > 0, "left spill cell should be populated");
   assert.equal(spillLeftCell[0].tileId, 0x1ff, "left spill tile mismatch");
   assert.equal(spillLeftCell[0].occluder, true, "left spill should be marked occluder");
@@ -139,7 +157,8 @@ function runVisibilitySuppressionFixture() {
   });
 
   assert.equal(out.parity.hiddenSuppressedCount >= 1, true, "hidden suppression should be counted");
-  const hiddenCell = out.overlayCells[((342 - startY) * VIEW_W) + (302 - startX)];
+  const overlayCells = requireOverlayCells(out);
+  const hiddenCell = overlayCells[((342 - startY) * VIEW_W) + (302 - startX)];
   assert.equal(hiddenCell.length, 0, "hidden source cell should not contain overlays");
 }
 
@@ -233,8 +252,11 @@ function runLegacyStreamOrderingFixture() {
   });
 
   assert.equal(out.parity.unsortedSourceCount, 0, "legacy stream order should be monotonic");
-  const left = topInteractiveOverlayAtModel(out.overlayCells, VIEW_W, VIEW_H, startX, startY, 300, 341);
-  const right = topInteractiveOverlayAtModel(out.overlayCells, VIEW_W, VIEW_H, startX, startY, 301, 341);
+  const overlayCells = requireOverlayCells(out);
+  const left = topInteractiveOverlayAtModel(overlayCells, VIEW_W, VIEW_H, startX, startY, 300, 341);
+  const right = topInteractiveOverlayAtModel(overlayCells, VIEW_W, VIEW_H, startX, startY, 301, 341);
+  assert(left, "left interactive overlay should exist");
+  assert(right, "right interactive overlay should exist");
   assert.equal(left.tileId, 0x3b3, "left tile mismatch");
   assert.equal(right.tileId, 0x3b4, "right tile mismatch");
 }
@@ -266,7 +288,8 @@ function runLegacyInjectionHookFixture() {
   });
 
   assert.equal(out.overlayCount, 1, "legacy inject hook should contribute overlay count");
-  const list = out.overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
+  const overlayCells = requireOverlayCells(out);
+  const list = overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
   assert(Array.isArray(list) && list.length > 0, "injected overlay should exist at world cell");
   assert.equal(list[0].tileId, 0x1ba, "injected tile mismatch");
 }
@@ -298,7 +321,8 @@ function runFloorInsertionOrderFixture() {
     hasWallTerrain() { return false; }
   });
 
-  const list = out.overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
+  const overlayCells = requireOverlayCells(out);
+  const list = overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
   assert.equal(list.length, 3, "expected three entries");
   // Legacy: floor entry is inserted after non-floor chain, not before it.
   assert.equal(list[0].tileId, 0x302, "newest non-floor should be at head");
@@ -335,7 +359,8 @@ function runRightFringeSpillFixture() {
   // Source anchor is outside view (x=305), but +1 source-window should still
   // process it so the left spill (x=304) lands in-view.
   assert.equal(out.overlayCount, 1, "right fringe source should be processed via +1 window");
-  const inViewSpill = out.overlayCells[((342 - startY) * VIEW_W) + (304 - startX)];
+  const overlayCells = requireOverlayCells(out);
+  const inViewSpill = overlayCells[((342 - startY) * VIEW_W) + (304 - startX)];
   assert.equal(inViewSpill.length > 0, true, "right fringe left-spill should land in-view");
   assert.equal(inViewSpill[0].tileId, 0x21f, "right fringe left-spill tile mismatch");
   assert.equal(inViewSpill[0].sourceType, "spill-left", "right fringe should record spill-left source type");
@@ -370,7 +395,8 @@ function runBottomFringeSpillFixture() {
   // Source anchor is outside view (y=345), but +1 source-window should still
   // process it so the up spill (y=344) lands in-view.
   assert.equal(out.overlayCount, 1, "bottom fringe source should be processed via +1 window");
-  const inViewSpill = out.overlayCells[((344 - startY) * VIEW_W) + (302 - startX)];
+  const overlayCells = requireOverlayCells(out);
+  const inViewSpill = overlayCells[((344 - startY) * VIEW_W) + (302 - startX)];
   assert.equal(inViewSpill.length > 0, true, "bottom fringe up-spill should land in-view");
   assert.equal(inViewSpill[0].tileId, 0x23f, "bottom fringe up-spill tile mismatch");
   assert.equal(inViewSpill[0].sourceType, "spill-up", "bottom fringe should record spill-up source type");
@@ -405,7 +431,8 @@ function runSameCellStreamDeterminismFixture() {
     hasWallTerrain() { return false; }
   });
 
-  const list = out.overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
+  const overlayCells = requireOverlayCells(out);
+  const list = overlayCells[((341 - startY) * VIEW_W) + (301 - startX)];
   assert.equal(list.length, 2, "same-cell stream fixture should produce two overlays");
   // Deterministic expectation with current canonical stream + insertion model:
   // later stream entries unshift to head, earlier entries remain at tail.
