@@ -46,6 +46,10 @@ function memoryStorage(seed: Record<string, string> = {}): PreferenceStorageRunt
   };
 }
 
+type PreferenceTestListener = {
+  current?: () => void;
+};
+
 assert.equal(normalizeChoicePreferenceRuntime("b", "a", ["a", "b"]), "b");
 assert.equal(normalizeChoicePreferenceRuntime("c", "a", ["a", "b"]), "a");
 assert.equal(normalizeChoicePreferenceRuntime("legacy", "fit", ["fit", "4"], { legacy: "4" }), "4");
@@ -149,12 +153,12 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
 {
   const storage = memoryStorage({ grid: "on" });
   const applied: boolean[] = [];
-  let listener: (() => void) | null = null;
+  const listener: PreferenceTestListener = {};
   const select = {
     value: "off",
     addEventListener(type: "change", fn: () => void) {
       assert.equal(type, "change");
-      listener = fn;
+      listener.current = fn;
     }
   };
   assert.deepEqual(initBooleanTogglePreferenceRuntime({
@@ -170,7 +174,8 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
   });
   assert.deepEqual(applied, [true]);
   select.value = "off";
-  listener?.();
+  assert(listener.current, "toggle listener should be bound");
+  listener.current();
   assert.deepEqual(applied, [true, false]);
 }
 {
@@ -214,12 +219,12 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
 {
   const storage = memoryStorage({ scale: "native" });
   const applied: string[] = [];
-  let listener: (() => void) | null = null;
+  const listener: PreferenceTestListener = {};
   const select = {
     value: "fit",
     addEventListener(type: "change", fn: () => void) {
       assert.equal(type, "change");
-      listener = fn;
+      listener.current = fn;
     }
   };
   assert.deepEqual(initChoicePreferenceRuntime({
@@ -236,10 +241,11 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
   });
   assert.deepEqual(applied, ["4"]);
   select.value = "bad";
-  listener?.();
+  assert(listener.current, "choice listener should be bound");
+  listener.current();
   assert.deepEqual(applied, ["4", "fit"]);
   select.value = "4";
-  listener?.();
+  listener.current();
   assert.deepEqual(applied, ["4", "fit", "4"]);
 }
 {
@@ -263,20 +269,20 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
     movement: "ghost"
   });
   const calls: string[] = [];
-  let gridListener: (() => void) | null = null;
-  let movementListener: (() => void) | null = null;
+  const gridListener: PreferenceTestListener = {};
+  const movementListener: PreferenceTestListener = {};
   const gridSelect = {
     value: "off",
     addEventListener(type: "change", fn: () => void) {
       assert.equal(type, "change");
-      gridListener = fn;
+      gridListener.current = fn;
     }
   };
   const movementSelect = {
     value: "avatar",
     addEventListener(type: "change", fn: () => void) {
       assert.equal(type, "change");
-      movementListener = fn;
+      movementListener.current = fn;
     }
   };
   assert.deepEqual(initPreferenceControlsRuntime({
@@ -307,9 +313,11 @@ assert.deepEqual(booleanTogglePreferenceModelRuntime(0), {
   });
   assert.deepEqual(calls, ["grid:on", "movement:ghost"]);
   gridSelect.value = "off";
-  gridListener?.();
+  assert(gridListener.current, "grid listener should be bound");
+  gridListener.current();
   movementSelect.value = "avatar";
-  movementListener?.();
+  assert(movementListener.current, "movement listener should be bound");
+  movementListener.current();
   assert.deepEqual(calls, ["grid:on", "movement:ghost", "grid:off", "movement:avatar"]);
 }
 assert.deepEqual(animationModePreferenceModelRuntime("freeze", 123), {
