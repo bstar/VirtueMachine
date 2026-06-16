@@ -69,6 +69,22 @@ async function jsonFetch(baseUrl, route, init = {}) {
   return { status: res.status, body };
 }
 
+function jsonRequestInit(method, headers, body) {
+  return {
+    method,
+    headers: { "content-type": "application/json", ...(headers || {}) },
+    body: JSON.stringify(body)
+  };
+}
+
+function jsonPost(headers, body) {
+  return jsonRequestInit("POST", headers, body);
+}
+
+function jsonPut(headers, body) {
+  return jsonRequestInit("PUT", headers, body);
+}
+
 function coordUseOfStatus(status) {
   return (Number(status) & OBJ_COORD_USE_MASK) >>> 0;
 }
@@ -202,11 +218,10 @@ async function main() {
     assert.deepEqual(runtimeContract.body?.runtime_contract?.profiles, ["canonical_plus", "canonical_strict"]);
     assert.equal(runtimeContract.body?.runtime_contract?.extension_header_format, "comma-separated ids or 'none'");
 
-    const login = await jsonFetch(baseUrl, "/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "avatar", password: "quest123" })
-    });
+    const login = await jsonFetch(baseUrl, "/api/auth/login", jsonPost(null, {
+      username: "avatar",
+      password: "quest123"
+    }));
     assert.equal(login.status, 200);
     assert.ok(login.body?.token);
     const token = login.body.token;
@@ -222,11 +237,10 @@ async function main() {
       ...runtimeHeaders
     };
 
-    const badLogin = await jsonFetch(baseUrl, "/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "avatar", password: "wrong" })
-    });
+    const badLogin = await jsonFetch(baseUrl, "/api/auth/login", jsonPost(null, {
+      username: "avatar",
+      password: "wrong"
+    }));
     assert.equal(badLogin.status, 401);
 
     const recoveredUnverified = await jsonFetch(baseUrl, "/api/auth/recover-password?username=avatar&email=avatar@example.com", {
@@ -234,13 +248,9 @@ async function main() {
     });
     assert.equal(recoveredUnverified.status, 403);
 
-    const setEmail = await jsonFetch(baseUrl, "/api/auth/set-email", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        email: "avatar@example.com"
-      })
-    });
+    const setEmail = await jsonFetch(baseUrl, "/api/auth/set-email", jsonPost(authHeaders, {
+      email: "avatar@example.com"
+    }));
     assert.equal(setEmail.status, 200);
     assert.equal(setEmail.body?.user?.email, "avatar@example.com");
     assert.equal(setEmail.body?.user?.email_verified, false);
@@ -366,93 +376,69 @@ async function main() {
     const actorY = Number(targets[0].y) | 0;
     const actorZ = Number(targets[0].z) | 0;
 
-    const aliasCharacter = await jsonFetch(baseUrl, "/api/characters", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        name: "AccountAliasDrop"
-      })
-    });
+    const aliasCharacter = await jsonFetch(baseUrl, "/api/characters", jsonPost(authHeaders, {
+      name: "AccountAliasDrop"
+    }));
     assert.equal(aliasCharacter.status, 201);
     const aliasCharacterId = String(aliasCharacter.body?.character_id || "");
     assert.ok(aliasCharacterId, "account alias drop test needs a real character id");
 
-    const aliasTake = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        verb: "take",
-        target_key: accountAliasTargetKey,
-        actor_id: aliasCharacterId,
-        actor_x: Number(targets[2].x) | 0,
-        actor_y: Number(targets[2].y) | 0,
-        actor_z: Number(targets[2].z) | 0
-      })
-    });
+    const aliasTake = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+      verb: "take",
+      target_key: accountAliasTargetKey,
+      actor_id: aliasCharacterId,
+      actor_x: Number(targets[2].x) | 0,
+      actor_y: Number(targets[2].y) | 0,
+      actor_z: Number(targets[2].z) | 0
+    }));
     assert.equal(aliasTake.status, 200);
     const aliasHeldKey = String(aliasTake.body?.target?.object_key || "");
     assert.ok(aliasHeldKey && aliasHeldKey !== accountAliasTargetKey, "alias take should create a held clone");
     assert.equal(String(aliasTake.body?.target?.holder_id || ""), aliasCharacterId);
 
-    const aliasDropViaAccountId = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        verb: "drop",
-        target_key: aliasHeldKey,
-        actor_id: accountUserId,
-        actor_x: Number(targets[2].x) | 0,
-        actor_y: Number(targets[2].y) | 0,
-        actor_z: Number(targets[2].z) | 0
-      })
-    });
+    const aliasDropViaAccountId = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+      verb: "drop",
+      target_key: aliasHeldKey,
+      actor_id: accountUserId,
+      actor_x: Number(targets[2].x) | 0,
+      actor_y: Number(targets[2].y) | 0,
+      actor_z: Number(targets[2].z) | 0
+    }));
     assert.equal(aliasDropViaAccountId.status, 200);
     assert.equal(coordUseOfStatus(aliasDropViaAccountId.body?.target?.status), OBJ_COORD_USE_LOCXYZ);
     assert.equal(String(aliasDropViaAccountId.body?.target?.holder_kind || ""), "none");
 
     async function runInteractionLifecycle() {
       let carriedKey = targetKey;
-      const blockedDropWorldObject = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "drop",
-          target_key: targetKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const blockedDropWorldObject = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "drop",
+        target_key: targetKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(blockedDropWorldObject.status, 409);
       assert.equal(String(blockedDropWorldObject.body?.error?.code || ""), "object_not_held");
 
-      const missingActorTake = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "take",
-          target_key: targetKey,
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const missingActorTake = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "take",
+        target_key: targetKey,
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(missingActorTake.status, 400);
       assert.equal(String(missingActorTake.body?.error?.code || ""), "bad_actor_id");
 
-      const take = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "take",
-          target_key: targetKey,
-          actor_id: "contract-avatar",
-          actor_x: actorX,
-          actor_y: actorY,
-          actor_z: actorZ
-        })
-      });
+      const take = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "take",
+        target_key: targetKey,
+        actor_id: "contract-avatar",
+        actor_x: actorX,
+        actor_y: actorY,
+        actor_z: actorZ
+      }));
       assert.equal(take.status, 200);
       assert.equal(coordUseOfStatus(take.body?.target?.status), OBJ_COORD_USE_INVEN);
       assert.equal(String(take.body?.target?.holder_kind || ""), "npc");
@@ -498,15 +484,11 @@ async function main() {
         "taken baseline source object must be advertised as hidden in world-object metadata"
       );
 
-      const equip = await jsonFetch(baseUrl, "/api/world/objects/interact", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          verb: "equip",
-          target_key: carriedKey,
-          actor_id: "contract-avatar"
-        })
-      });
+      const equip = await jsonFetch(baseUrl, "/api/world/objects/interact", jsonPost(authHeaders, {
+        verb: "equip",
+        target_key: carriedKey,
+        actor_id: "contract-avatar"
+      }));
       assert.equal(equip.status, 200);
       assert.equal(coordUseOfStatus(equip.body?.target?.status), OBJ_COORD_USE_EQUIP);
 
