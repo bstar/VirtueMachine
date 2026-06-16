@@ -21,6 +21,9 @@
     "modern/client-web/ui/boot_intro_runtime.ts",
     "modern/client-web/ui/character_panel_runtime.ts",
     "modern/client-web/ui/cursor_runtime.ts",
+    "modern/client-web/ui/dom_runtime.ts",
+    "modern/client-web/ui/hover_report_runtime.ts",
+    "modern/client-web/ui/input_runtime.ts",
     "modern/client-web/ui/inventory_paperdoll_layout_runtime.ts",
     "modern/client-web/ui/message_log_runtime.ts",
     "modern/client-web/ui/panel_scope_runtime.ts",
@@ -30,6 +33,10 @@
     "modern/client-web/ui/status_text_runtime.ts",
     "modern/client-web/ui/hotkey_runtime.ts",
     "modern/client-web/tests/ui_hotkey_runtime_test.ts",
+    "modern/client-web/tests/ui_dom_runtime_test.ts",
+    "modern/client-web/tests/ui_hover_report_runtime_test.ts",
+    "modern/client-web/tests/ui_input_runtime_test.ts",
+    "modern/client-web/tests/ui_message_log_runtime_test.ts",
     "modern/client-web/error_runtime.ts",
     "modern/common/**/*.ts"
   ]
