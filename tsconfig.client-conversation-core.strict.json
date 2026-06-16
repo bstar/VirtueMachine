@@ -26,7 +26,13 @@
     "modern/client-web/conversation/session_runtime.ts",
     "modern/client-web/conversation/text_runtime.ts",
     "modern/client-web/conversation/vm_runtime.ts",
+    "modern/client-web/tests/conversation_archive_loader_runtime_test.ts",
+    "modern/client-web/tests/conversation_authoritative_runtime_test.ts",
+    "modern/client-web/tests/conversation_dialog_runtime_test.ts",
+    "modern/client-web/tests/conversation_no_notimplemented_test.ts",
+    "modern/client-web/tests/conversation_session_runtime_test.ts",
     "modern/client-web/tests/conversation_transcript_alignment_test.ts",
+    "modern/client-web/tests/conversation_vm_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

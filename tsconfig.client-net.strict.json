@@ -35,6 +35,7 @@
     "modern/client-web/tests/net_status_runtime_test.ts",
     "modern/client-web/tests/net_world_interaction_runtime_test.ts",
     "modern/client-web/tests/net_world_runtime_test.ts",
+    "modern/client-web/tests/world_object_projection_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

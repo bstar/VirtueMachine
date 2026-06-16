@@ -22,6 +22,9 @@
     "modern/client-web/gameplay/mechanics_capability_runtime.ts",
     "modern/client-web/gameplay/verb_capability_runtime.ts",
     "modern/client-web/tests/legacy_verb_runtime_test.ts",
+    "modern/client-web/tests/special_interaction_runtime_test.ts",
+    "modern/client-web/tests/u6_object_footprint_common_test.ts",
+    "modern/client-web/tests/u6_object_policy_common_test.ts",
     "modern/client-web/tests/ui_mechanics_capability_runtime_test.ts",
     "modern/client-web/tests/ui_verb_capability_runtime_test.ts",
     "modern/common/**/*.ts"
