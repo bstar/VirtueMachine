@@ -34,6 +34,10 @@ import {
   shouldShowInGameServerBrokenRuntime
 } from "../net/status_runtime.ts";
 
+type NetStatusTestCallback = {
+  current?: () => void;
+};
+
 assert.equal(backgroundFailureMessageRuntime(null), "");
 assert.equal(backgroundFailureMessageRuntime(new Error("offline")), "offline");
 assert.equal(backgroundFailureMessageRuntime({ message: "timeout" }), "timeout");
@@ -563,7 +567,7 @@ function fakeButton(): HTMLButtonElement {
     }
   } as HTMLElement;
   const cleared: Array<number | ReturnType<typeof setTimeout>> = [];
-  let callback: (() => void) | null = null;
+  const callback: NetStatusTestCallback = {};
   let storedTimer: number | ReturnType<typeof setTimeout> | null = 7;
   pulseNetIndicatorRuntime({
     indicator,
@@ -574,7 +578,7 @@ function fakeButton(): HTMLButtonElement {
     },
     setTimeoutFn: (fn, timeoutMs) => {
       assert.equal(timeoutMs, 25);
-      callback = fn;
+      callback.current = fn;
       return 42;
     },
     setTimer: (timer) => {
@@ -584,8 +588,8 @@ function fakeButton(): HTMLButtonElement {
   assert.deepEqual(cleared, [7]);
   assert.equal(classes.has("is-active"), true);
   assert.equal(storedTimer, 42);
-  assert.ok(callback);
-  callback?.();
+  assert.ok(callback.current);
+  callback.current();
   assert.equal(classes.has("is-active"), false);
   assert.equal(storedTimer, null);
 }

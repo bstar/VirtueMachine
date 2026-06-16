@@ -31,7 +31,10 @@
     "modern/client-web/tests/net_profile_runtime_test.ts",
     "modern/client-web/tests/net_request_runtime_test.ts",
     "modern/client-web/tests/net_runtime_profile_config_runtime_test.ts",
+    "modern/client-web/tests/net_snapshot_runtime_test.ts",
+    "modern/client-web/tests/net_status_runtime_test.ts",
     "modern/client-web/tests/net_world_interaction_runtime_test.ts",
+    "modern/client-web/tests/net_world_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

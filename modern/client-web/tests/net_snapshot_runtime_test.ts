@@ -20,6 +20,10 @@ import {
   snapshotSavedTickRuntime
 } from "../net/snapshot_runtime.ts";
 
+type NetSnapshotTestListener = {
+  current?: () => void;
+};
+
 const sim: SimSnapshotRuntime = {
   tick: 10,
   rngState: 1,
@@ -92,7 +96,7 @@ assert.deepEqual(remoteSnapshotLoadFailureRuntime("missing"), {
 });
 
 {
-  let listener: (() => void) | null = null;
+  const listener: NetSnapshotTestListener = {};
   const diags: string[] = [];
   const statuses: string[] = [];
   let sessionStatUpdates = 0;
@@ -100,7 +104,7 @@ assert.deepEqual(remoteSnapshotLoadFailureRuntime("missing"), {
     button: {
       addEventListener(type: "click", fn: () => void) {
         assert.equal(type, "click");
-        listener = fn;
+        listener.current = fn;
       }
     },
     run: async () => ({ snapshot_meta: { saved_tick: 99 } }),
@@ -110,7 +114,8 @@ assert.deepEqual(remoteSnapshotLoadFailureRuntime("missing"), {
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "remote snapshot load listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(sessionStatUpdates, 1);
   assert.deepEqual(statuses, []);
@@ -118,14 +123,14 @@ assert.deepEqual(remoteSnapshotLoadFailureRuntime("missing"), {
 }
 
 {
-  let listener: (() => void) | null = null;
+  const listener: NetSnapshotTestListener = {};
   const diags: string[] = [];
   const statuses: string[] = [];
   let sessionStatUpdates = 0;
   assert.equal(bindRemoteSnapshotButtonRuntime({
     button: {
       addEventListener(_type: "click", fn: () => void) {
-        listener = fn;
+        listener.current = fn;
       }
     },
     run: async () => {
@@ -137,7 +142,8 @@ assert.deepEqual(remoteSnapshotLoadFailureRuntime("missing"), {
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "remote snapshot save listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(sessionStatUpdates, 0);
   assert.deepEqual(statuses, ["error:Save failed: Error: offline"]);
@@ -295,19 +301,21 @@ assert.equal(shouldAutosaveSnapshotRuntime({
 }
 
 {
-  let applied: SimSnapshotRuntime | null = null;
+  const applied: {
+    current?: SimSnapshotRuntime;
+  } = {};
   const out = await performNetLoadSnapshot({
     ensureAuth: async () => {},
     isAuthenticated: () => true,
     request: async () => ({ snapshot_base64: encoded, snapshot_meta: { saved_tick: 10 } }),
     snapshotRoute: () => "/snapshot",
     decodeSnapshot: decodeSimSnapshotBase64Runtime,
-    applyLoadedSim: (loaded) => { applied = loaded; },
+    applyLoadedSim: (loaded) => { applied.current = loaded; },
     resetBackgroundFailures: () => {},
     setStatus: () => {}
   });
   assert.equal(snapshotSavedTickRuntime(out), 10);
-  assert.equal(applied?.tick, 10);
+  assert.equal(applied.current?.tick, 10);
 }
 
 console.log("net_snapshot_runtime_test: ok");

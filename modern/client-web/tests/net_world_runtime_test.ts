@@ -47,8 +47,13 @@ import {
   sourceObjectKeyFromTakeResponseRuntime,
   takeProjectionFromResponseRuntime,
   runCriticalMaintenanceRuntime,
-  worldInventorySourcesFromJsonRuntime
+  worldInventorySourcesFromJsonRuntime,
+  type WorldRuntimeInventoryObject
 } from "../net/world_runtime.ts";
+
+type NetWorldTestListener = {
+  current?: () => void;
+};
 
 assert.equal(serverObjectKeyForWorldObjectRuntime({ object_key: " direct " }), "direct");
 assert.equal(serverObjectKeyForWorldObjectRuntime({ objectKey: "camel" }), "camel");
@@ -913,7 +918,7 @@ assert.equal(takeProjectionFromResponseRuntime({
 {
   const sim = {
     inventory: {},
-    inventoryObjects: [],
+    inventoryObjects: [] as WorldRuntimeInventoryObject[],
     inventoryTiles: {},
     removedObjectAtTick: {},
     removedObjectKeys: {},
@@ -1140,7 +1145,7 @@ assert.deepEqual(introPhaseUpdateFailureRuntime("Login required"), {
   statusText: "Intro phase update failed: Login required"
 });
 {
-  let listener: (() => void) | null = null;
+  const listener: NetWorldTestListener = {};
   const statuses: string[] = [];
   const diags: string[] = [];
   const requested: string[] = [];
@@ -1149,7 +1154,7 @@ assert.deepEqual(introPhaseUpdateFailureRuntime("Login required"), {
     button: {
       addEventListener(type: "click", fn: () => void) {
         assert.equal(type, "click");
-        listener = fn;
+        listener.current = fn;
       }
     },
     currentPhase: () => currentPhase,
@@ -1163,20 +1168,21 @@ assert.deepEqual(introPhaseUpdateFailureRuntime("Login required"), {
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "intro phase listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(requested, ["pre_intro"]);
   assert.deepEqual(statuses, ["online:Intro phase: pre_intro"]);
   assert.deepEqual(diags, ["diag ok:Intro phase set to pre_intro."]);
 }
 {
-  let listener: (() => void) | null = null;
+  const listener: NetWorldTestListener = {};
   const statuses: string[] = [];
   const diags: string[] = [];
   assert.equal(bindIntroPhaseButtonRuntime({
     button: {
       addEventListener(_type: "click", fn: () => void) {
-        listener = fn;
+        listener.current = fn;
       }
     },
     currentPhase: () => "post_intro",
@@ -1189,7 +1195,8 @@ assert.deepEqual(introPhaseUpdateFailureRuntime("Login required"), {
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "unauthenticated intro phase listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(statuses, ["error:Intro phase update failed: Login required"]);
   assert.deepEqual(diags, ["diag warn:Intro phase update failed: Login required"]);
@@ -1328,7 +1335,7 @@ assert.deepEqual(criticalMaintenanceDiagRuntime("warn", "Failed."), {
   diagText: "Failed."
 });
 {
-  let listener: (() => void) | null = null;
+  const listener: NetWorldTestListener = {};
   let runCount = 0;
   const statuses: string[] = [];
   const diags: string[] = [];
@@ -1336,7 +1343,7 @@ assert.deepEqual(criticalMaintenanceDiagRuntime("warn", "Failed."), {
     button: {
       addEventListener(type: "click", fn: () => void) {
         assert.equal(type, "click");
-        listener = fn;
+        listener.current = fn;
       }
     },
     run: async () => {
@@ -1346,20 +1353,21 @@ assert.deepEqual(criticalMaintenanceDiagRuntime("warn", "Failed."), {
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "critical maintenance listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(runCount, 1);
   assert.deepEqual(statuses, []);
   assert.deepEqual(diags, []);
 }
 {
-  let listener: (() => void) | null = null;
+  const listener: NetWorldTestListener = {};
   const statuses: string[] = [];
   const diags: string[] = [];
   assert.equal(bindCriticalMaintenanceButtonRuntime({
     button: {
       addEventListener(_type: "click", fn: () => void) {
-        listener = fn;
+        listener.current = fn;
       }
     },
     run: async () => {
@@ -1369,7 +1377,8 @@ assert.deepEqual(criticalMaintenanceDiagRuntime("warn", "Failed."), {
     setStatus: (level, text) => statuses.push(`${level}:${text}`),
     setDiag: (diag) => diags.push(`${diag.diagClass}:${diag.diagText}`)
   }), true);
-  listener?.();
+  assert(listener.current, "failing critical maintenance listener should be bound");
+  listener.current();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(statuses, ["error:Maintenance failed: offline"]);
   assert.deepEqual(diags, ["diag warn:Critical maintenance failed: offline"]);
