@@ -29,6 +29,8 @@
     "modern/client-web/ui/legacy_text_runtime.ts",
     "modern/client-web/ui/legacy_view_tile_runtime.ts",
     "modern/client-web/ui/startup_runtime.ts",
+    "modern/client-web/tests/target_cursor_runtime_test.ts",
+    "modern/client-web/tests/ui_target_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }
