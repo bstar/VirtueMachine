@@ -30,6 +30,7 @@ import type {
 import type { U6MapRuntime as U6MapRuntimeType } from "./world_map_runtime.ts";
 import type { WorldObject, WorldObjectState } from "./world_object_types.ts";
 import type { ConversationSessionMapRuntime } from "./conversation_runtime_types.ts";
+import type { WorldObjectInteractionVerb, WorldRouteInteractionVerb } from "../common/world_interaction_contract.ts";
 
 const http = require("node:http");
 const fs = require("node:fs");
@@ -45,6 +46,10 @@ const {
   coordUseOfStatus,
   applyCanonicalWorldInteractionCommand
 } = require("./world_interaction_bridge.ts");
+const {
+  normalizeWorldRouteInteractionVerbRuntime,
+  worldObjectInteractionVerbListRuntime
+} = require("../common/world_interaction_contract.ts");
 const { analyzeContainmentChainViaSimCore, analyzeContainmentChainsBatchViaSimCore } = require("./world_assoc_chain_bridge.ts");
 const { selectWorldObjectsViaSimCore } = require("./world_objects_query_bridge.ts");
 const { U6MapRuntime } = require("./world_map_runtime.ts");
@@ -311,9 +316,9 @@ function resolveHeldWorldObjectActorIdRuntime(args: {
   state: ServerState;
   target: WorldObject;
   userId: string;
-  verb: string;
+  verb: WorldRouteInteractionVerb;
 }): string {
-  const verb = String(args.verb || "");
+  const verb = args.verb;
   const actorId = String(args.actorId || "").trim();
   if (actorId !== String(args.userId || "").trim()) {
     return actorId;
@@ -1089,7 +1094,11 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return;
     }
     const body = bodyResult.body;
-    const verb = String(body && body.verb || "").trim().toLowerCase();
+    const verb = normalizeWorldRouteInteractionVerbRuntime(body && body.verb);
+    if (!verb) {
+      sendError(res, 400, "bad_verb", `verb must be one of: ${worldObjectInteractionVerbListRuntime()}, talk`);
+      return;
+    }
     const targetKey = String(body && body.target_key || "").trim();
     const containerKey = String(body && body.container_key || "").trim();
     const bodyActorId = String(body && body.actor_id || "").trim();
@@ -1249,7 +1258,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       respawn = takeClone.respawn;
     } else {
       Object.assign(target, applied.patch || {});
-      applySpawnedObjectLifecycleForInteractionRuntime(target, verb, Date.now());
+      applySpawnedObjectLifecycleForInteractionRuntime(target, verb as WorldObjectInteractionVerb, Date.now());
       persistPatchedObject(state, target);
     }
     const event = recordWorldInteractionEventRuntime(state, {

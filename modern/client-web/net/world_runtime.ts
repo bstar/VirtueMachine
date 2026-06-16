@@ -6,6 +6,7 @@ import {
   type SimInventoryRuntimeState
 } from "../sim/inventory_runtime.ts";
 import { isU6InventoryStackableObjectType } from "../../common/u6_object_constants.ts";
+import type { WorldObjectInteractionVerb } from "../../common/world_interaction_contract.ts";
 import { netJsonPostInitRuntime } from "./request_runtime.ts";
 import type { NetStatusLevel, NetStatusSetter } from "./status_runtime.ts";
 
@@ -954,7 +955,7 @@ export async function requestTakeWorldObjectRuntime(
     throw new Error("target object has no authoritative key");
   }
   const out = await request("/api/world/objects/interact", netJsonPostInitRuntime({
-    verb: "take",
+    verb: "take" satisfies WorldObjectInteractionVerb,
     target_key: targetKey,
     actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
     actor_x: Number(args.actorX) | 0,
@@ -982,7 +983,7 @@ export async function requestDropWorldObjectRuntime(
     throw new Error("inventory object has no authoritative key");
   }
   const out = await request("/api/world/objects/interact", netJsonPostInitRuntime({
-    verb: "drop",
+    verb: "drop" satisfies WorldObjectInteractionVerb,
     target_key: targetKey,
     actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
     actor_x: Number(args.actorX) | 0,

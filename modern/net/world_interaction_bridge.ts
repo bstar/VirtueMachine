@@ -10,6 +10,11 @@ const {
   OBJ_COORD_USE_LOCXYZ,
   coordUseOfStatus
 } = require("../common/u6_object_constants.ts");
+const {
+  normalizeWorldObjectInteractionVerbRuntime,
+  worldObjectInteractionVerbListRuntime
+} = require("../common/world_interaction_contract.ts");
+import type { WorldObjectInteractionVerb } from "../common/world_interaction_contract.ts";
 
 type InteractionHolderKind = "none" | "object" | "npc";
 
@@ -119,7 +124,13 @@ function parseBridgeOutput(stdout: unknown): InteractionBridgeParsed | null {
 
 function mapBridgeCode(code: unknown): InteractionBridgeErrorDetails {
   const n = Number(code) | 0;
-  if (n === -1) return { http: 400, code: "bad_verb", message: "verb must be one of: take, drop, put, equip" };
+  if (n === -1) {
+    return {
+      http: 400,
+      code: "bad_verb",
+      message: `verb must be one of: ${worldObjectInteractionVerbListRuntime()}`
+    };
+  }
   if (n === -4) return { http: 409, code: "interaction_container_cycle", message: "container cycle blocked interaction" };
   if (n === -3) return { http: 409, code: "interaction_container_blocked", message: "container/assoc chain blocked interaction" };
   if (n === -2) return { http: 409, code: "interaction_blocked", message: "interaction blocked by canonical rules" };
@@ -127,7 +138,10 @@ function mapBridgeCode(code: unknown): InteractionBridgeErrorDetails {
 }
 
 function invokeSimCoreBridge(input: InteractionBridgeInput | null | undefined): InteractionBridgeInvokeResult {
-  const verb = String(input?.verb || "").trim().toLowerCase();
+  const verb = normalizeWorldObjectInteractionVerbRuntime(input?.verb);
+  if (!verb) {
+    return { ok: false, ...mapBridgeCode(-1) };
+  }
   const target = input?.target || {};
   const actorId = String(input?.actorId || "");
   const ownerMatches = String(target.holder_kind || "") === "npc" && String(target.holder_id || "") === actorId ? 1 : 0;
@@ -162,13 +176,16 @@ function invokeSimCoreBridge(input: InteractionBridgeInput | null | undefined): 
 }
 
 function applyCanonicalWorldInteractionCommand(input: InteractionBridgeInput | null | undefined) {
-  const verb = String(input?.verb || "").trim().toLowerCase();
+  const verb = normalizeWorldObjectInteractionVerbRuntime(input?.verb);
   const target = input?.target || null;
   const container = input?.container || null;
   const actorId = String(input?.actorId || "").trim();
   const actorPos = input?.actorPos || { x: 0, y: 0, z: 0 };
   if (!target || !actorId) {
     return { ok: false, code: "bad_input", http: 400, message: "target and actor are required" };
+  }
+  if (!verb) {
+    return { ok: false, ...mapBridgeCode(-1) };
   }
 
   const call = invokeSimCoreBridge(input);
@@ -201,19 +218,20 @@ function applyCanonicalWorldInteractionCommand(input: InteractionBridgeInput | n
     holder_kind: String(canonical.holder_kind || "none")
   };
 
-  if (verb === "take") {
+  const action: WorldObjectInteractionVerb = verb;
+  if (action === "take") {
     patch.holder_id = actorId;
     patch.holder_key = "";
     patch.x = Number(actorPos.x) | 0;
     patch.y = Number(actorPos.y) | 0;
     patch.z = Number(actorPos.z) | 0;
-  } else if (verb === "drop") {
+  } else if (action === "drop") {
     patch.holder_id = "";
     patch.holder_key = "";
     patch.x = Number(actorPos.x) | 0;
     patch.y = Number(actorPos.y) | 0;
     patch.z = Number(actorPos.z) | 0;
-  } else if (verb === "put") {
+  } else if (action === "put") {
     patch.holder_id = String(container?.object_key || "");
     patch.holder_key = String(container?.object_key || "");
     patch.x = Number(container?.x) | 0;

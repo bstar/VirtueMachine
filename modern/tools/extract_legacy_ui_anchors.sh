@@ -16,7 +16,7 @@ emit_section() {
   local matches
   matches="$(rg -n "$pattern" "$SRC_DIR" -S || true)"
   if [[ -n "$matches" ]]; then
-    awk -v root="$ROOT_DIR/" 'NR <= 80 { sub(root, ""); print }' <<<"$matches"
+    awk -v root="$ROOT_DIR/" 'NR <= 160 { sub(root, ""); print }' <<<"$matches"
   else
     true
   fi

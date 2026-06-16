@@ -5,6 +5,10 @@ import {
   normalizeRuntimeProfile,
   parseRuntimeExtensionsHeader
 } from "../common/runtime_contract.ts";
+import {
+  normalizeWorldRouteInteractionVerbRuntime,
+  type WorldRouteInteractionVerb
+} from "../common/world_interaction_contract.ts";
 
 export type WorldClockRuntime = {
   date_d: number;
@@ -27,7 +31,7 @@ export type WorldInteractionEventRuntime = {
   seq: number;
   status: number;
   target_key: string;
-  verb: string;
+  verb: WorldRouteInteractionVerb | "";
   x: number;
   y: number;
   z: number;
@@ -796,7 +800,7 @@ export function normalizeWorldInteractionEventRuntime(raw: unknown, seq: number)
   const event = asWorldInteractionEventSourceRuntime(raw);
   return {
     seq: Number(seq || event.seq) | 0,
-    verb: String(event.verb || ""),
+    verb: normalizeWorldRouteInteractionVerbRuntime(event.verb) || "",
     actor_id: String(event.actor_id || ""),
     target_key: String(event.target_key || ""),
     container_key: String(event.container_key || ""),

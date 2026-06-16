@@ -3,6 +3,10 @@ import {
   coordUseOfStatus,
   isU6PortableObjectTypeRuntime
 } from "../common/u6_object_constants.ts";
+import {
+  normalizeWorldObjectInteractionVerbRuntime,
+  type WorldObjectInteractionVerb
+} from "../common/world_interaction_contract.ts";
 
 export const DEFAULT_PICKUP_RESPAWN_MS = 10 * 60 * 1000;
 export const DEFAULT_DROPPED_CLONE_DESPAWN_MS = 10 * 60 * 1000;
@@ -274,7 +278,7 @@ export function applyBaselineTakeCloneRuntime(
 
 export function applySpawnedObjectLifecycleForInteractionRuntime(
   target: WorldObject,
-  verb: unknown,
+  verb: WorldObjectInteractionVerb | unknown,
   nowMs: number
 ): SpawnedObjectLifecycleMutationRuntime {
   if (!String(target.source_kind || "").startsWith("spawned")) {
@@ -284,7 +288,7 @@ export function applySpawnedObjectLifecycleForInteractionRuntime(
       despawn_at_ms: Number(target.despawn_at_ms) > 0 ? Math.floor(Number(target.despawn_at_ms)) : 0
     };
   }
-  const action = String(verb || "");
+  const action = normalizeWorldObjectInteractionVerbRuntime(verb);
   const beforeDropped = Number(target.dropped_at_ms) > 0 ? Math.floor(Number(target.dropped_at_ms)) : 0;
   const beforeDespawn = Number(target.despawn_at_ms) > 0 ? Math.floor(Number(target.despawn_at_ms)) : 0;
   if (action === "drop") {
