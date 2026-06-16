@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   advanceWorldClockMinuteRuntime,
   buildPresenceHeartbeatRowRuntime,
+  characterSnapshotRouteIdRuntime,
   clampIntRuntime,
   computeSnapshotHashRuntime,
   criticalMaintenancePayloadRuntime,
@@ -33,6 +34,7 @@ import {
   runtimeContractFromHeadersRuntime,
   runtimeContractPayloadRuntime,
   runtimeContractSpecRuntime,
+  serverRouteAuthRequirementRuntime,
   serverHealthPayloadRuntime,
   snapshotSaveRuntime,
   validateCriticalPolicyBodyRuntime,
@@ -70,6 +72,20 @@ assert.deepEqual(runtimeContractFromHeadersRuntime(null), {
   profile: "canonical_strict",
   extensions: []
 });
+assert.equal(serverRouteAuthRequirementRuntime({ method: "OPTIONS", pathname: "/anything" }), "preflight");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "GET", pathname: "/health" }), "public");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "GET", pathname: "/api/runtime/contract" }), "public");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "POST", pathname: "/api/auth/login" }), "public");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "GET", pathname: "/api/auth/recover-password" }), "public");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "POST", pathname: "/api/auth/recover-password" }), "authenticated");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "POST", pathname: "/api/auth/set-email" }), "authenticated");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "GET", pathname: "/api/world/clock" }), "authenticated");
+assert.equal(serverRouteAuthRequirementRuntime({ method: "GET", pathname: "/missing" }), "authenticated");
+assert.equal(serverRouteAuthRequirementRuntime({ method: " get ", pathname: " /health " }), "public");
+assert.equal(characterSnapshotRouteIdRuntime("/api/characters/abc-123-def/snapshot"), "abc-123-def");
+assert.equal(characterSnapshotRouteIdRuntime("/api/characters/ABCDEF/snapshot"), "ABCDEF");
+assert.equal(characterSnapshotRouteIdRuntime("/api/characters/not-a-uuid!/snapshot"), null);
+assert.equal(characterSnapshotRouteIdRuntime("/api/characters/abc-123-def/snapshot/extra"), null);
 {
   const spec = runtimeContractSpecRuntime();
   assert.equal(spec.default_profile, "canonical_strict");

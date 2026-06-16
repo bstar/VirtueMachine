@@ -116,6 +116,7 @@ const {
 const {
   advanceWorldClockMinuteRuntime,
   buildPresenceHeartbeatRowRuntime,
+  characterSnapshotRouteIdRuntime,
   computeSnapshotHashRuntime,
   criticalMaintenancePayloadRuntime,
   criticalPolicyPayloadRuntime,
@@ -139,6 +140,7 @@ const {
   prunePresenceRowsRuntime,
   runtimeContractFromHeadersRuntime,
   runtimeContractPayloadRuntime,
+  serverRouteAuthRequirementRuntime,
   serverHealthPayloadRuntime,
   runCriticalItemMaintenanceRuntime,
   snapshotSaveRuntime,
@@ -618,12 +620,15 @@ prunePresence(state);
 persistState(state);
 
 const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
-  if (req.method === "OPTIONS") {
+  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  const routeAuth = serverRouteAuthRequirementRuntime({
+    method: req.method,
+    pathname: url.pathname
+  });
+  if (routeAuth === "preflight") {
     sendCorsPreflightRuntime(res);
     return;
   }
-
-  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   if (req.method === "GET" && url.pathname === "/health") {
     updateAuthoritativeClock(state);
@@ -828,7 +833,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     return;
   }
 
-  const user = requireUser(state, req, res);
+  const user = routeAuth === "authenticated" ? requireUser(state, req, res) : null;
   if (!user) {
     return;
   }
@@ -1377,9 +1382,8 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     return;
   }
 
-  const snapshotMatch = url.pathname.match(/^\/api\/characters\/([0-9a-fA-F-]+)\/snapshot$/);
-  if (snapshotMatch) {
-    const characterId = snapshotMatch[1];
+  const characterId = characterSnapshotRouteIdRuntime(url.pathname);
+  if (characterId) {
     const character = state.characters.find((c) => c.character_id === characterId && c.user_id === user.user_id);
     if (!character) {
       sendError(res, 404, "character_not_found", "character not found");

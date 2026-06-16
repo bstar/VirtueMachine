@@ -94,6 +94,8 @@ export type ServerHealthPayloadRuntime = {
   world_objects: unknown;
 };
 
+export type ServerRouteAuthRequirementRuntime = "authenticated" | "preflight" | "public";
+
 export type CriticalMaintenancePayloadRuntime = {
   events: unknown[];
 };
@@ -197,6 +199,32 @@ export function runtimeContractPayloadRuntime(): RuntimeContractPayloadRuntime {
   return {
     runtime_contract: runtimeContractSpecRuntime()
   };
+}
+
+export function serverRouteAuthRequirementRuntime(args: {
+  method?: unknown;
+  pathname?: unknown;
+}): ServerRouteAuthRequirementRuntime {
+  const method = String(args.method || "").trim().toUpperCase();
+  const pathname = String(args.pathname || "/").trim() || "/";
+  if (method === "OPTIONS") {
+    return "preflight";
+  }
+  if (method === "GET" && (pathname === "/health" || pathname === "/api/runtime/contract")) {
+    return "public";
+  }
+  if (method === "POST" && pathname === "/api/auth/login") {
+    return "public";
+  }
+  if (method === "GET" && pathname === "/api/auth/recover-password") {
+    return "public";
+  }
+  return "authenticated";
+}
+
+export function characterSnapshotRouteIdRuntime(pathname: unknown): string | null {
+  const match = String(pathname || "").match(/^\/api\/characters\/([0-9a-fA-F-]+)\/snapshot$/);
+  return match ? match[1] : null;
 }
 
 type WorldInteractionEventSourceRuntime = {
