@@ -30,9 +30,12 @@ Use these when hover reports indicate source/insertion ordering anomalies.
 
 ## CI Gate
 
-- `npm test`: top-level quality gate (`typecheck`, broad TypeScript unit tests, net contract wrapper)
+- `npm test`: top-level quality gate (`typecheck`, type-safety lint gates, broad TypeScript unit tests, UI fixture drift, legacy UI anchors, net contract wrapper)
 - `npm run typecheck`: TypeScript project checks only
+- `npm run lint:types`: explicit-`any` ban plus production escape-hatch ban for `as unknown as`, TypeScript suppressions, and eslint disable comments
 - `npm run test:ts`: broad Node test runner over client-web and net TypeScript tests
+- `npm run test:fixtures`: UI probe fixture drift check
+- `npm run test:legacy-ui`: canonical legacy UI anchor check
 - `npm run test:net-contracts`: net/sim-core bridge contract wrapper
 - `npm run test:ci-required`: heavier CI gate wrapper for sim-core, parity, strict contracts, and focused client tools
 - `npm run smoke:browser:movement`: optional Chrome/Chromium smoke against the local dev stack; validates the live `__vmGetUiProbe().canonical_runtime.movement` surface, drives repeated movement when a session starts, and requires active walk presentation plus landed position changes in strict mode

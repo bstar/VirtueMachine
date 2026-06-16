@@ -54,7 +54,7 @@ bun run release:check
 Notes:
 
 - `typecheck` runs broad app/net/test TypeScript checks plus strict checks for the release/probe tooling lane.
-- `test` runs the project quality gate: typecheck, broad TypeScript tests, and net contracts.
+- `test` runs the project quality gate: typecheck, type-safety lint gates, broad TypeScript tests, UI fixture drift, legacy UI anchors, and net contracts.
 - `test:ci-required` runs the heavier CI wrapper for sim-core, parity, strict contracts, and focused client checks.
 - `smoke:browser:movement` is an optional live-browser probe for the local dev stack; it skips when Chrome/Chromium or the web client is unavailable, and strict mode requires active walk presentation plus repeated landed movement.
 - `release:check` runs `test`, `test:ci-required`, and strict browser movement smoke when a local web/net stack is already running. Use `./modern/tools/release_check.sh --browser-smoke` after starting `dev_stack.sh` to require browser coverage.
