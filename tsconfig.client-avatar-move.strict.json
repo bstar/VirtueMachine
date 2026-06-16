@@ -21,6 +21,7 @@
     "modern/client-web/sim/avatar_move_runtime.ts",
     "modern/client-web/sim/furniture_pose_runtime.ts",
     "modern/client-web/sim/sim_utils_runtime.ts",
+    "modern/client-web/tests/avatar_move_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

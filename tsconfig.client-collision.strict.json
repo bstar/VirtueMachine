@@ -23,6 +23,9 @@
     "modern/client-web/sim/map_runtime.ts",
     "modern/client-web/sim/object_footprint_runtime.ts",
     "modern/client-web/sim/object_types_runtime.ts",
+    "modern/client-web/tests/collision_runtime_test.ts",
+    "modern/client-web/tests/door_runtime_test.ts",
+    "modern/client-web/tests/object_footprint_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }

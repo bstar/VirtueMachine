@@ -25,6 +25,7 @@
     "modern/client-web/sim/range_runtime.ts",
     "modern/client-web/sim/sim_utils_runtime.ts",
     "modern/client-web/sim/time_runtime.ts",
+    "modern/client-web/tests/inventory_runtime_test.ts",
     "modern/common/**/*.ts"
   ]
 }
