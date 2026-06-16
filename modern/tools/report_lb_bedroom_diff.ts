@@ -1,16 +1,66 @@
 #!/usr/bin/env bun
 "use strict";
 
-const fs = require("node:fs");
-const path = require("node:path");
+const fs: typeof import("node:fs") = require("node:fs");
+const path: typeof import("node:path") = require("node:path");
 
 const EXPECTED = [
   { name: "clock", object_key: "a12i096", type: 0x09f, frame: 1, x: 300, y: 350, z: 0 },
   { name: "mirror", object_key: "a12i0ae", type: 0x07b, frame: 0, x: 301, y: 350, z: 0 },
   { name: "stool", object_key: "a12i0ce", type: 0x0fc, frame: 2, x: 301, y: 352, z: 0 }
-];
+] as const;
 
-function parseArgs(argv) {
+type DiffConfig = {
+  api: string;
+  pass: string;
+  radius: number;
+  user: string;
+  x: number;
+  y: number;
+  z: number;
+};
+
+type ExpectedObject = typeof EXPECTED[number];
+
+type ActualObject = {
+  frame?: unknown;
+  object_key?: unknown;
+  tile_id?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type JsonObject = Record<string, unknown>;
+
+type DiffRow =
+  | {
+      expected: ExpectedObject;
+      found: false;
+      name: string;
+    }
+  | {
+      actual: {
+        frame: number;
+        object_key: string;
+        tile_id: number;
+        type: number;
+        x: number;
+        y: number;
+        z: number;
+      };
+      delta: {
+        dx: number;
+        dy: number;
+        dz: number;
+      };
+      expected: ExpectedObject;
+      found: true;
+      name: string;
+    };
+
+function parseArgs(argv: readonly string[]): DiffConfig {
   const out = {
     api: "http://127.0.0.1:8081",
     user: "avatar",
@@ -34,29 +84,30 @@ function parseArgs(argv) {
   return out;
 }
 
-async function jsonFetch(url, opts) {
+async function jsonFetch(url: string, opts: RequestInit): Promise<JsonObject | null> {
   const res = await fetch(url, opts);
   const text = await res.text();
-  const body = text.trim() ? JSON.parse(text) : null;
+  const body = text.trim() ? JSON.parse(text) as JsonObject : null;
   if (!res.ok) {
-    const msg = body && body.error && body.error.message ? body.error.message : `${res.status} ${res.statusText}`;
+    const error = body?.error as { message?: unknown } | undefined;
+    const msg = error?.message ? String(error.message) : `${res.status} ${res.statusText}`;
     throw new Error(`${url}: ${msg}`);
   }
   return body;
 }
 
-function scoreDistance(a, b) {
-  return Math.abs((a.x | 0) - (b.x | 0)) + Math.abs((a.y | 0) - (b.y | 0)) + (Math.abs((a.z | 0) - (b.z | 0)) * 1000);
+function scoreDistance(a: ActualObject, b: ExpectedObject): number {
+  return Math.abs((Number(a.x) | 0) - (b.x | 0)) + Math.abs((Number(a.y) | 0) - (b.y | 0)) + (Math.abs((Number(a.z) | 0) - (b.z | 0)) * 1000);
 }
 
-function findBestActual(objects, expected) {
+function findBestActual(objects: readonly ActualObject[], expected: ExpectedObject): ActualObject | null {
   if (expected && expected.object_key) {
     const exact = objects.find((o) => String(o.object_key || "").toLowerCase() === String(expected.object_key).toLowerCase());
     if (exact) {
       return exact;
     }
   }
-  const candidates = objects.filter((o) => ((o.type | 0) === (expected.type | 0)) && ((o.frame | 0) === (expected.frame | 0)));
+  const candidates = objects.filter((o) => ((Number(o.type) | 0) === (expected.type | 0)) && ((Number(o.frame) | 0) === (expected.frame | 0)));
   if (!candidates.length) {
     return null;
   }
@@ -72,7 +123,7 @@ function findBestActual(objects, expected) {
   return best;
 }
 
-async function main() {
+async function main(): Promise<void> {
   const cfg = parseArgs(process.argv);
   const apiBase = cfg.api.replace(/\/+$/, "");
   const auth = await jsonFetch(`${apiBase}/api/auth/login`, {
@@ -85,19 +136,19 @@ async function main() {
     `${apiBase}/api/world/objects?x=${encodeURIComponent(cfg.x)}&y=${encodeURIComponent(cfg.y)}&z=${encodeURIComponent(cfg.z)}&radius=${encodeURIComponent(cfg.radius)}&limit=2000&projection=footprint&include_footprint=1`,
     {
       method: "GET",
-      headers: { authorization: `Bearer ${auth.token}` }
+      headers: { authorization: `Bearer ${String(auth?.token || "")}` }
     }
   );
 
-  const objects = Array.isArray(out && out.objects) ? out.objects : [];
+  const objects = Array.isArray(out?.objects) ? out.objects as ActualObject[] : [];
   const report = {
     kind: "VirtueMachineLBBedroomDiff",
     at: new Date().toISOString(),
     api_base: apiBase,
     query: { x: cfg.x, y: cfg.y, z: cfg.z, radius: cfg.radius },
-    meta: out && out.meta ? out.meta : null,
+    meta: out?.meta || null,
     expected: EXPECTED,
-    diffs: []
+    diffs: [] as DiffRow[]
   };
 
   for (const exp of EXPECTED) {
@@ -147,6 +198,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  process.stderr.write(`Error: ${String(err && err.message ? err.message : err)}\n`);
+  process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });

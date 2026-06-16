@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 "use strict";
 
-const fs = require("node:fs");
-const path = require("node:path");
+const fs: typeof import("node:fs") = require("node:fs");
+const path: typeof import("node:path") = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const PRISTINE_ROOT = path.join(ROOT, "modern", "assets", "pristine");
@@ -15,9 +15,27 @@ const PATCHES = [
   { object_key: "a12i0fe", x: 298, y: 355, z: 0, frame: 2, note: "table corner swap" },
   { object_key: "a12i100", x: 297, y: 355, z: 0, frame: 0, note: "table corner swap" },
   { object_key: "a12i116", x: 301, y: 357, z: 0, note: "plant down one cell" }
-];
+] as const;
 
-function parseArgs(argv) {
+type ProfileArgs = {
+  from: string;
+  to: string;
+};
+
+type ObjectKeyParts = {
+  area: number;
+  index: number;
+};
+
+type CoordBytes = [number, number, number];
+
+type AppliedPatch = typeof PATCHES[number] & {
+  file: string;
+  source_area: number;
+  source_index: number;
+};
+
+function parseArgs(argv: readonly string[]): ProfileArgs {
   const out = {
     from: "baseline_a",
     to: "lb-bedroom-test"
@@ -31,7 +49,7 @@ function parseArgs(argv) {
   return out;
 }
 
-function copyDir(src, dst) {
+function copyDir(src: string, dst: string): void {
   fs.mkdirSync(dst, { recursive: true });
   for (const ent of fs.readdirSync(src, { withFileTypes: true })) {
     const s = path.join(src, ent.name);
@@ -44,7 +62,7 @@ function copyDir(src, dst) {
   }
 }
 
-function packCoord(x, y, z) {
+function packCoord(x: number, y: number, z: number): CoordBytes {
   const xx = x & 0x3ff;
   const yy = y & 0x3ff;
   const zz = z & 0x0f;
@@ -54,7 +72,7 @@ function packCoord(x, y, z) {
   return [b0 & 0xff, b1 & 0xff, b2 & 0xff];
 }
 
-function parseObjectKey(k) {
+function parseObjectKey(k: unknown): ObjectKeyParts {
   const m = /^a([0-9a-f]{2})i([0-9a-f]{3})$/i.exec(String(k || ""));
   if (!m) {
     throw new Error(`invalid object key: ${k}`);
@@ -65,13 +83,13 @@ function parseObjectKey(k) {
   };
 }
 
-function areaToObjblkName(area) {
+function areaToObjblkName(area: number): string {
   const ax = area & 0x07;
   const ay = (area >> 3) & 0x07;
   return `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
 }
 
-function patchObjblkRecord(filePath, index, x, y, z, frame = null) {
+function patchObjblkRecord(filePath: string, index: number, x: number, y: number, z: number, frame: number | null = null): void {
   const buf = fs.readFileSync(filePath);
   const count = buf[0] | (buf[1] << 8);
   if (index < 0 || index >= count) {
@@ -82,7 +100,7 @@ function patchObjblkRecord(filePath, index, x, y, z, frame = null) {
   buf[off + 1] = b0;
   buf[off + 2] = b1;
   buf[off + 3] = b2;
-  if (Number.isInteger(frame) && frame >= 0 && frame <= 0x3f) {
+  if (frame != null && Number.isInteger(frame) && frame >= 0 && frame <= 0x3f) {
     const shapeType = buf[off + 4] | (buf[off + 5] << 8);
     const type = shapeType & 0x03ff;
     const nextShapeType = type | ((frame & 0x3f) << 10);
@@ -92,7 +110,7 @@ function patchObjblkRecord(filePath, index, x, y, z, frame = null) {
   fs.writeFileSync(filePath, buf);
 }
 
-function main() {
+function main(): void {
   const cfg = parseArgs(process.argv);
   const srcDir = path.join(PRISTINE_ROOT, "profiles", cfg.from, "savegame");
   const dstDir = path.join(PRISTINE_ROOT, "profiles", cfg.to, "savegame");
@@ -105,12 +123,12 @@ function main() {
   }
   copyDir(srcDir, dstDir);
 
-  const applied = [];
+  const applied: AppliedPatch[] = [];
   for (const p of PATCHES) {
     const parsed = parseObjectKey(p.object_key);
     const fileName = areaToObjblkName(parsed.area);
     const filePath = path.join(dstDir, fileName);
-    patchObjblkRecord(filePath, parsed.index, p.x, p.y, p.z, p.frame ?? null);
+    patchObjblkRecord(filePath, parsed.index, p.x, p.y, p.z, "frame" in p ? p.frame : null);
     applied.push({
       ...p,
       file: fileName,

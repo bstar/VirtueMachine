@@ -1,10 +1,35 @@
 #!/usr/bin/env bun
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
+const fs: typeof import("fs") = require("fs");
+const path: typeof import("path") = require("path");
 
-function decompressU6Lzw(bytes) {
+type TableCandidate =
+  | null
+  | {
+      count: number;
+      first: number | undefined;
+      last: number | undefined;
+      type: "u32_offsets_after_8";
+    }
+  | {
+      count: number;
+      monotonic: false;
+      sample: number[];
+      type: "u32_offsets_after_8";
+    };
+
+type ShpInspection = {
+  compressedTargetU32: number | null;
+  decodedBytes: number;
+  file: string;
+  headerU32_0: number | null;
+  headerU32_1: number | null;
+  sourceBytes: number;
+  tableCandidate: TableCandidate;
+};
+
+function decompressU6Lzw(bytes: Buffer): Buffer {
   if (!bytes || bytes.length < 4) {
     return bytes;
   }
@@ -20,13 +45,13 @@ function decompressU6Lzw(bytes) {
   let nextCode = 258;
   const CLEAR = 256;
   const END = 257;
-  const table = new Array(4096);
+  const table: Array<Buffer | undefined> = new Array(4096);
   for (let i = 0; i < 256; i += 1) {
     table[i] = Buffer.from([i]);
   }
-  let prev = null;
+  let prev: Buffer | null = null;
 
-  function readCode(n) {
+  function readCode(n: number): number {
     let v = 0;
     for (let i = 0; i < n; i += 1) {
       const bi = (bitPos + i) >> 3;
@@ -82,8 +107,8 @@ function decompressU6Lzw(bytes) {
   return out.subarray(0, outPos);
 }
 
-function readU32List(buf, off, count) {
-  const out = [];
+function readU32List(buf: Buffer, off: number, count: number): number[] {
+  const out: number[] = [];
   for (let i = 0; i < count; i += 1) {
     const p = off + (i * 4);
     if ((p + 4) > buf.length) {
@@ -94,7 +119,7 @@ function readU32List(buf, off, count) {
   return out;
 }
 
-function monotonicOffsets(arr, max) {
+function monotonicOffsets(arr: readonly number[], max: number): boolean {
   let prev = -1;
   for (const v of arr) {
     if (v <= 0 || v >= max || v <= prev) {
@@ -105,10 +130,10 @@ function monotonicOffsets(arr, max) {
   return arr.length > 0;
 }
 
-function inspectFile(filePath) {
+function inspectFile(filePath: string): ShpInspection {
   const src = fs.readFileSync(filePath);
   const dec = decompressU6Lzw(src);
-  const info = {
+  const info: ShpInspection = {
     file: filePath,
     sourceBytes: src.length,
     compressedTargetU32: src.length >= 4 ? src.readUInt32LE(0) : null,
@@ -143,13 +168,13 @@ function inspectFile(filePath) {
   return info;
 }
 
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
   if (!args.length) {
     console.error("Usage: inspect_shp.ts <file> [file...]");
     process.exit(2);
   }
-  const results = [];
+  const results: ShpInspection[] = [];
   for (const input of args) {
     const filePath = path.resolve(input);
     results.push(inspectFile(filePath));

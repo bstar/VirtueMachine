@@ -1,14 +1,21 @@
 #!/usr/bin/env bun
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
+const fs: typeof import("fs") = require("fs");
+const path: typeof import("path") = require("path");
 
 const AREA_SIDE = 8;
 const AREA_COUNT = AREA_SIDE * AREA_SIDE;
 const MAX_OBJBLK_RECORDS = 0x0c00;
 
-function decompressU6Lzw(bytes) {
+type ObjblkSegment = {
+  blk: Buffer;
+  preferredArea: number;
+  preferredCount: number;
+  seg: number;
+};
+
+function decompressU6Lzw(bytes: Buffer): Buffer {
   if (!bytes || bytes.length < 4) {
     return bytes;
   }
@@ -24,13 +31,13 @@ function decompressU6Lzw(bytes) {
   let nextCode = 258;
   const CLEAR = 256;
   const END = 257;
-  const table = new Array(4096);
+  const table: Array<Buffer | undefined> = new Array(4096);
   for (let i = 0; i < 256; i += 1) {
     table[i] = Buffer.from([i]);
   }
-  let prev = null;
+  let prev: Buffer | null = null;
 
-  function readCode(n) {
+  function readCode(n: number): number {
     let v = 0;
     for (let i = 0; i < n; i += 1) {
       const bi = (bitPos + i) >> 3;
@@ -86,17 +93,17 @@ function decompressU6Lzw(bytes) {
   return out.subarray(0, outPos);
 }
 
-function areaName(areaId) {
+function areaName(areaId: number): string {
   const ax = areaId & 7;
   const ay = (areaId >> 3) & 7;
   return `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
 }
 
-function usage() {
+function usage(): void {
   console.error("Usage: extract_lzobjblk_savegame.ts <lzobjblk_path> <out_dir>");
 }
 
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
   if (args.length !== 2) {
     usage();
@@ -111,7 +118,7 @@ function main() {
     fs.mkdirSync(outDir, { recursive: true });
   }
 
-  const segments = [];
+  const segments: ObjblkSegment[] = [];
   let off = 0;
   for (let seg = 0; seg < AREA_COUNT; seg += 1) {
     if ((off + 2) > dec.length) {
@@ -126,7 +133,7 @@ function main() {
       throw new Error(`segment ${seg} overruns decoded stream (len=${len}, off=${off}, size=${dec.length})`);
     }
     const blk = dec.subarray(off, off + len);
-    const areaCounts = new Map();
+    const areaCounts = new Map<number, number>();
     for (let i = 0; i < count; i += 1) {
       const ro = off + 2 + (i * 8);
       const status = dec[ro + 0] & 0xff;
@@ -192,7 +199,11 @@ function main() {
     if (remainingAreas.length === 0) {
       throw new Error("internal error: no area ids left for unassigned segments");
     }
-    assignedAreaBySeg[s.seg] = remainingAreas.shift();
+    const aid = remainingAreas.shift();
+    if (aid == null) {
+      throw new Error("internal error: missing shifted area id");
+    }
+    assignedAreaBySeg[s.seg] = aid;
   }
 
   for (const s of segments) {

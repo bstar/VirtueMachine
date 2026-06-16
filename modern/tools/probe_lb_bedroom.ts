@@ -1,9 +1,37 @@
 #!/usr/bin/env bun
 "use strict";
 
-const fs = require("node:fs");
+const fs: typeof import("node:fs") = require("node:fs");
+const path: typeof import("node:path") = require("node:path");
 
-function parseArgs(argv) {
+type ProbeConfig = {
+  base: string;
+  out: string;
+  pass: string;
+  radius: number;
+  user: string;
+  x: number;
+  y: number;
+  z: number;
+};
+
+type ProbeWorldObject = {
+  footprint?: Array<{ x?: unknown; y?: unknown; z?: unknown }>;
+  frame?: unknown;
+  object_key?: unknown;
+  source_area?: unknown;
+  source_index?: unknown;
+  source_kind?: unknown;
+  tile_id?: unknown;
+  type?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type JsonObject = Record<string, unknown>;
+
+function parseArgs(argv: readonly string[]): ProbeConfig {
   const out = {
     base: "http://127.0.0.1:8081",
     user: "avatar",
@@ -29,28 +57,29 @@ function parseArgs(argv) {
   return out;
 }
 
-async function jsonFetch(url, init = {}) {
+async function jsonFetch(url: string, init: RequestInit = {}): Promise<JsonObject | null> {
   const res = await fetch(url, init);
   const text = await res.text();
-  const body = text.trim() ? JSON.parse(text) : null;
+  const body = text.trim() ? JSON.parse(text) as JsonObject : null;
   if (!res.ok) {
-    const msg = body && body.error && body.error.message ? body.error.message : `${res.status} ${res.statusText}`;
+    const error = body?.error as { message?: unknown } | undefined;
+    const msg = error?.message ? String(error.message) : `${res.status} ${res.statusText}`;
     throw new Error(`${url}: ${msg}`);
   }
   return body;
 }
 
-function stableSort(objects) {
+function stableSort(objects: readonly ProbeWorldObject[]): ProbeWorldObject[] {
   return [...objects].sort((a, b) => {
-    if ((a.y | 0) !== (b.y | 0)) return (a.y | 0) - (b.y | 0);
-    if ((a.x | 0) !== (b.x | 0)) return (a.x | 0) - (b.x | 0);
-    if ((a.z | 0) !== (b.z | 0)) return (a.z | 0) - (b.z | 0);
-    if ((a.type | 0) !== (b.type | 0)) return (a.type | 0) - (b.type | 0);
+    if ((Number(a.y) | 0) !== (Number(b.y) | 0)) return (Number(a.y) | 0) - (Number(b.y) | 0);
+    if ((Number(a.x) | 0) !== (Number(b.x) | 0)) return (Number(a.x) | 0) - (Number(b.x) | 0);
+    if ((Number(a.z) | 0) !== (Number(b.z) | 0)) return (Number(a.z) | 0) - (Number(b.z) | 0);
+    if ((Number(a.type) | 0) !== (Number(b.type) | 0)) return (Number(a.type) | 0) - (Number(b.type) | 0);
     return String(a.object_key || "").localeCompare(String(b.object_key || ""));
   });
 }
 
-async function main() {
+async function main(): Promise<void> {
   const cfg = parseArgs(process.argv);
   const base = cfg.base.replace(/\/+$/, "");
   const login = await jsonFetch(`${base}/api/auth/login`, {
@@ -58,7 +87,7 @@ async function main() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username: cfg.user, password: cfg.pass })
   });
-  const token = String(login && login.token || "");
+  const token = String(login?.token || "");
   if (!token) {
     throw new Error("login did not return token");
   }
@@ -77,7 +106,7 @@ async function main() {
     headers: { authorization: `Bearer ${token}` }
   });
 
-  const objects = stableSort(Array.isArray(world && world.objects) ? world.objects : []).map((o) => ({
+  const objects = stableSort(Array.isArray(world?.objects) ? world.objects as ProbeWorldObject[] : []).map((o) => ({
     object_key: String(o.object_key || ""),
     source_kind: String(o.source_kind || ""),
     source_area: Number(o.source_area) >>> 0,
@@ -103,18 +132,18 @@ async function main() {
       radius: cfg.radius | 0,
       projection: "footprint"
     },
-    meta: world && world.meta ? world.meta : null,
+    meta: world?.meta || null,
     count: objects.length,
     objects
   };
 
-  fs.mkdirSync(require("node:path").dirname(cfg.out), { recursive: true });
+  fs.mkdirSync(path.dirname(cfg.out), { recursive: true });
   fs.writeFileSync(cfg.out, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   process.stdout.write(`Wrote ${objects.length} objects to ${cfg.out}\n`);
 }
 
 main().catch((err) => {
-  process.stderr.write(`${err && err.stack ? err.stack : err}\n`);
+  process.stderr.write(`${err instanceof Error && err.stack ? err.stack : String(err)}\n`);
   process.exit(1);
 });

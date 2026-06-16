@@ -1,14 +1,40 @@
 #!/usr/bin/env bun
 "use strict";
 
-const fs = require("node:fs");
-const path = require("node:path");
+const fs: typeof import("node:fs") = require("node:fs");
+const path: typeof import("node:path") = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const PRISTINE_ROOT = path.join(ROOT, "modern", "assets", "pristine");
 
-function parseArgs(argv) {
-  const out = {
+type PatchProfileArgs = {
+  from: string;
+  sets: string[];
+  to: string;
+};
+
+type ObjectKeyParts = {
+  area: number;
+  index: number;
+};
+
+type CoordBytes = [number, number, number];
+
+type SetEntry = {
+  object_key: string;
+  x: number;
+  y: number;
+  z: number;
+};
+
+type AppliedSetEntry = SetEntry & {
+  file: string;
+  source_area: number;
+  source_index: number;
+};
+
+function parseArgs(argv: readonly string[]): PatchProfileArgs {
+  const out: PatchProfileArgs = {
     from: "",
     to: "",
     sets: []
@@ -26,7 +52,7 @@ function parseArgs(argv) {
   return out;
 }
 
-function copyDir(src, dst) {
+function copyDir(src: string, dst: string): void {
   fs.mkdirSync(dst, { recursive: true });
   for (const ent of fs.readdirSync(src, { withFileTypes: true })) {
     const s = path.join(src, ent.name);
@@ -39,7 +65,7 @@ function copyDir(src, dst) {
   }
 }
 
-function parseObjectKey(k) {
+function parseObjectKey(k: unknown): ObjectKeyParts {
   const m = /^a([0-9a-f]{2})i([0-9a-f]{3})$/i.exec(String(k || ""));
   if (!m) {
     throw new Error(`invalid object key: ${k}`);
@@ -50,13 +76,13 @@ function parseObjectKey(k) {
   };
 }
 
-function areaToObjblkName(area) {
+function areaToObjblkName(area: number): string {
   const ax = area & 0x07;
   const ay = (area >> 3) & 0x07;
   return `objblk${String.fromCharCode(97 + ax)}${String.fromCharCode(97 + ay)}`;
 }
 
-function packCoord(x, y, z) {
+function packCoord(x: number, y: number, z: number): CoordBytes {
   const xx = x & 0x3ff;
   const yy = y & 0x3ff;
   const zz = z & 0x0f;
@@ -66,7 +92,7 @@ function packCoord(x, y, z) {
   return [b0 & 0xff, b1 & 0xff, b2 & 0xff];
 }
 
-function patchObjblkRecord(filePath, index, x, y, z) {
+function patchObjblkRecord(filePath: string, index: number, x: number, y: number, z: number): void {
   const buf = fs.readFileSync(filePath);
   const count = buf[0] | (buf[1] << 8);
   if (index < 0 || index >= count) {
@@ -80,7 +106,7 @@ function patchObjblkRecord(filePath, index, x, y, z) {
   fs.writeFileSync(filePath, buf);
 }
 
-function parseSetEntry(raw) {
+function parseSetEntry(raw: unknown): SetEntry {
   const m = /^([a-z0-9]+):(-?\d+),(-?\d+),(-?\d+)$/i.exec(String(raw || "").trim());
   if (!m) {
     throw new Error(`invalid --set entry: ${raw}`);
@@ -93,7 +119,7 @@ function parseSetEntry(raw) {
   };
 }
 
-function main() {
+function main(): void {
   const cfg = parseArgs(process.argv);
   const srcDir = path.join(PRISTINE_ROOT, "profiles", cfg.from, "savegame");
   const dstRoot = path.join(PRISTINE_ROOT, "profiles", cfg.to);
@@ -106,7 +132,7 @@ function main() {
   }
   copyDir(srcDir, dstDir);
 
-  const applied = [];
+  const applied: AppliedSetEntry[] = [];
   for (const s of cfg.sets.map(parseSetEntry)) {
     const parsed = parseObjectKey(s.object_key);
     const fileName = areaToObjblkName(parsed.area);

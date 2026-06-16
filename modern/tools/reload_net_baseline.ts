@@ -7,7 +7,15 @@ const DEFAULTS = {
   pass: "boob"
 };
 
-function parseArgs(argv) {
+type ReloadConfig = typeof DEFAULTS;
+
+type JsonObject = Record<string, unknown>;
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function parseArgs(argv: readonly string[]): ReloadConfig {
   const out = { ...DEFAULTS };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
@@ -19,18 +27,19 @@ function parseArgs(argv) {
   return out;
 }
 
-async function jsonFetch(url, opts) {
+async function jsonFetch(url: string, opts: RequestInit): Promise<JsonObject | null> {
   const res = await fetch(url, opts);
   const text = await res.text();
-  const body = text.trim() ? JSON.parse(text) : null;
+  const body = text.trim() ? JSON.parse(text) as JsonObject : null;
   if (!res.ok) {
-    const msg = body && body.error && body.error.message ? body.error.message : `${res.status} ${res.statusText}`;
+    const error = body?.error as { message?: unknown } | undefined;
+    const msg = error?.message ? String(error.message) : `${res.status} ${res.statusText}`;
     throw new Error(msg);
   }
   return body;
 }
 
-async function main() {
+async function main(): Promise<void> {
   const cfg = parseArgs(process.argv);
   const base = cfg.api.replace(/\/+$/, "");
   const auth = await jsonFetch(`${base}/api/auth/login`, {
@@ -38,14 +47,15 @@ async function main() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username: cfg.user, password: cfg.pass })
   });
-  if (!auth || !auth.token) {
+  const token = String(auth?.token || "");
+  if (!token) {
     throw new Error("login succeeded but token missing");
   }
   const out = await jsonFetch(`${base}/api/world/objects/reload-baseline`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${auth.token}`
+      authorization: `Bearer ${token}`
     },
     body: "{}"
   });
@@ -54,11 +64,11 @@ async function main() {
     api_base: base,
     user: cfg.user,
     ok: true,
-    meta: out && out.meta ? out.meta : null
+    meta: out?.meta || null
   }, null, 2)}\n`);
 }
 
 main().catch((err) => {
-  process.stderr.write(`Error: ${String(err && err.message ? err.message : err)}\n`);
+  process.stderr.write(`Error: ${errorMessage(err)}\n`);
   process.exit(1);
 });
