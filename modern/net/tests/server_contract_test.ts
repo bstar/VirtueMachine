@@ -198,7 +198,7 @@ async function main() {
 
   let stderr = "";
   let stdout = "";
-  let child = null;
+  let child: ReturnType<typeof spawn> | null = null;
 
   async function startServer() {
     const next = spawn(process.execPath, [SERVER_TS], {
@@ -397,8 +397,8 @@ async function main() {
     });
     assert.equal(limitRunA.status, 200);
     assert.equal(limitRunB.status, 200);
-    const keysA = (limitRunA.body?.objects || []).map((o) => String(o.object_key || ""));
-    const keysB = (limitRunB.body?.objects || []).map((o) => String(o.object_key || ""));
+    const keysA = (limitRunA.body?.objects || []).map((o: ContractWorldObjectRow) => String(o.object_key || ""));
+    const keysB = (limitRunB.body?.objects || []).map((o: ContractWorldObjectRow) => String(o.object_key || ""));
     assert.deepEqual(keysA, keysB, "limited world object query must be deterministic across repeated calls");
 
     const lifecycleObjects = await jsonFetch(baseUrl, "/api/world/objects?x=300&y=353&z=0&radius=12&limit=4096", {
@@ -526,7 +526,7 @@ async function main() {
         "taken baseline source object must be absent from world queries until respawn"
       );
       assert.ok(
-        (afterTakeObjects.body?.meta?.hidden_objects || []).some((row) => String(row?.object_key || "") === targetKey),
+        (afterTakeObjects.body?.meta?.hidden_objects || []).some((row: ContractWorldObjectRow) => String(row?.object_key || "") === targetKey),
         "taken baseline source object must be advertised as hidden in world-object metadata"
       );
 
@@ -1003,6 +1003,8 @@ async function main() {
       headers: { authorization: `Bearer ${token}`, ...runtimeHeaders }
     });
     assert.equal(clock2.status, 200);
+    assert.ok(clock1.body);
+    assert.ok(clock2.body);
     assert.ok(clock2.body.tick >= clock1.body.tick);
     assert.ok(Array.isArray(clock2.body?.npc_states));
     assert.ok(clock2.body.npc_states.length > 3);
