@@ -1,3 +1,5 @@
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
+
 export type RemotePresencePlayer = object & {
   facing_dx?: unknown;
   facing_dy?: unknown;
@@ -154,11 +156,7 @@ export async function performPresenceHeartbeat(
   if (!deps.isAuthenticated() || !deps.isSessionStarted()) {
     return;
   }
-  await deps.request("/api/world/presence/heartbeat", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload)
-  }, true);
+  await deps.request("/api/world/presence/heartbeat", netJsonPostInitRuntime(payload), true);
   deps.resetBackgroundFailures();
 }
 
@@ -169,11 +167,7 @@ export async function performPresenceLeave(
   if (!deps.isAuthenticated()) {
     return;
   }
-  await deps.request("/api/world/presence/leave", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId })
-  }, true);
+  await deps.request("/api/world/presence/leave", netJsonPostInitRuntime({ session_id: sessionId }), true);
   deps.resetBackgroundFailures();
 }
 

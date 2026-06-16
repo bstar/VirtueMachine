@@ -1,3 +1,4 @@
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
 import type { SimSnapshotRuntime } from "./snapshot_codec_runtime.ts";
 
 export interface NetLoginPayload {
@@ -164,11 +165,7 @@ export async function performNetLoginFlow(
     throw new Error("Username and password are required");
   }
   deps.setApiBase(apiBase);
-  const login = await deps.request("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password })
-  }, false);
+  const login = await deps.request("/api/auth/login", netJsonPostInitRuntime({ username, password }), false);
   deps.applyLogin(login, username);
   await deps.ensureCharacter();
 

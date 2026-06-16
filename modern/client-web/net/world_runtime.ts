@@ -6,6 +6,7 @@ import {
   type SimInventoryRuntimeState
 } from "../sim/inventory_runtime.ts";
 import { isU6InventoryStackableObjectType } from "../../common/u6_object_constants.ts";
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
 
 export type WorldRuntimeRequest = (
   route: string,
@@ -951,18 +952,14 @@ export async function requestTakeWorldObjectRuntime(
   if (!targetKey) {
     throw new Error("target object has no authoritative key");
   }
-  const out = await request("/api/world/objects/interact", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      verb: "take",
-      target_key: targetKey,
-      actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
-      actor_x: Number(args.actorX) | 0,
-      actor_y: Number(args.actorY) | 0,
-      actor_z: Number(args.actorZ) | 0
-    })
-  }, true);
+  const out = await request("/api/world/objects/interact", netJsonPostInitRuntime({
+    verb: "take",
+    target_key: targetKey,
+    actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
+    actor_x: Number(args.actorX) | 0,
+    actor_y: Number(args.actorY) | 0,
+    actor_z: Number(args.actorZ) | 0
+  }), true);
   return out && typeof out === "object" ? out : null;
 }
 
@@ -983,21 +980,17 @@ export async function requestDropWorldObjectRuntime(
   if (!targetKey) {
     throw new Error("inventory object has no authoritative key");
   }
-  const out = await request("/api/world/objects/interact", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      verb: "drop",
-      target_key: targetKey,
-      actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
-      actor_x: Number(args.actorX) | 0,
-      actor_y: Number(args.actorY) | 0,
-      actor_z: Number(args.actorZ) | 0,
-      drop_x: Number(args.dropX ?? args.actorX) | 0,
-      drop_y: Number(args.dropY ?? args.actorY) | 0,
-      drop_z: Number(args.dropZ ?? args.actorZ) | 0
-    })
-  }, true);
+  const out = await request("/api/world/objects/interact", netJsonPostInitRuntime({
+    verb: "drop",
+    target_key: targetKey,
+    actor_id: requiredWorldObjectActorIdRuntime(args.actorId),
+    actor_x: Number(args.actorX) | 0,
+    actor_y: Number(args.actorY) | 0,
+    actor_z: Number(args.actorZ) | 0,
+    drop_x: Number(args.dropX ?? args.actorX) | 0,
+    drop_y: Number(args.dropY ?? args.actorY) | 0,
+    drop_z: Number(args.dropZ ?? args.actorZ) | 0
+  }), true);
   return out && typeof out === "object" ? out : null;
 }
 
@@ -1084,11 +1077,8 @@ export async function setIntroPhaseRuntime(
 ): Promise<{ out: WorldRuntimeJson | null; phase: "pre_intro" | "post_intro" }> {
   const requested = normalizeIntroPhaseRuntime(phase);
   const out = await request("/api/world/intro-state", {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      phase: requested
-    })
+    ...netJsonPostInitRuntime({ phase: requested }),
+    method: "PUT"
   }, true);
   const rawPhase = out?.intro_state?.phase;
   return {
@@ -1122,11 +1112,7 @@ export async function requestCriticalMaintenance(
   },
   request: WorldRuntimeRequest
 ): Promise<CriticalMaintenanceEvent[]> {
-  const out = await request("/api/world/critical-items/maintenance", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload)
-  }, true);
+  const out = await request("/api/world/critical-items/maintenance", netJsonPostInitRuntime(payload), true);
   return Array.isArray(out?.events) ? out.events as CriticalMaintenanceEvent[] : [];
 }
 

@@ -1,3 +1,5 @@
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
+
 export interface NetAccountUserPayload {
   username?: unknown;
   email?: unknown;
@@ -50,11 +52,7 @@ export async function performNetSetEmail(
     throw new Error("Recovery email is required");
   }
   deps.setStatus("sync", "Saving recovery email...");
-  const out = await deps.request("/api/auth/set-email", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email })
-  }, true);
+  const out = await deps.request("/api/auth/set-email", netJsonPostInitRuntime({ email }), true);
   const nextEmail = netAccountEmailRuntime(out, email);
   const verified = netAccountEmailVerifiedRuntime(out);
   deps.applyEmail(nextEmail, verified);
@@ -69,11 +67,7 @@ export async function performNetSendEmailVerification(deps: NetAccountCommonDeps
     await deps.ensureAuth();
   }
   deps.setStatus("sync", "Sending verification email...");
-  const out = await deps.request("/api/auth/send-email-verification", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({})
-  }, true);
+  const out = await deps.request("/api/auth/send-email-verification", netJsonPostInitRuntime({}), true);
   deps.setStatus("online", "Verification code sent to recovery email");
   return out;
 }
@@ -94,11 +88,7 @@ export async function performNetVerifyEmail(
     throw new Error("Verification code is required");
   }
   deps.setStatus("sync", "Verifying recovery email...");
-  const out = await deps.request("/api/auth/verify-email", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code })
-  }, true);
+  const out = await deps.request("/api/auth/verify-email", netJsonPostInitRuntime({ code }), true);
   const nextEmail = netAccountEmailRuntime(out, deps.currentEmail());
   const verified = netAccountEmailVerifiedRuntime(out);
   deps.applyEmail(nextEmail, verified);
@@ -161,14 +151,10 @@ export async function performNetChangePassword(
     throw new Error("New password must be different");
   }
   deps.setStatus("sync", "Updating account password...");
-  const out = await deps.request("/api/auth/change-password", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      old_password: oldPassword,
-      new_password: newPassword
-    })
-  }, true);
+  const out = await deps.request("/api/auth/change-password", netJsonPostInitRuntime({
+    old_password: oldPassword,
+    new_password: newPassword
+  }), true);
   deps.onPasswordChanged(newPassword);
   deps.persistPassword(newPassword);
   deps.onProfileUpdated();

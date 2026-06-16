@@ -1,3 +1,5 @@
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
+
 export type CharacterPayload = object & {
   character_id?: unknown;
   name?: unknown;
@@ -45,11 +47,7 @@ export async function performNetEnsureCharacter(
     (c) => String(c?.name || "").toLowerCase() === desiredName.toLowerCase()
   );
   if (!pick) {
-    const created = await request("/api/characters", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: desiredName })
-    }, true);
+    const created = await request("/api/characters", netJsonPostInitRuntime({ name: desiredName }), true);
     pick = created && typeof created === "object" ? created : {};
   }
   return {

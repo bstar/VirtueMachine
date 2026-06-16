@@ -1,3 +1,4 @@
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
 import type { WorldRuntimeJson, WorldRuntimeRequest } from "./world_runtime.ts";
 
 export type AuthoritativeConversationActorRuntime = {
@@ -37,19 +38,15 @@ export async function requestStartAuthoritativeConversationRuntime(
   args: AuthoritativeConversationStartArgsRuntime,
   request: WorldRuntimeRequest
 ): Promise<AuthoritativeConversationStartPayloadRuntime | null> {
-  return request("/api/world/objects/interact", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      verb: "talk",
-      npc_id: Number(args.actor?.id) | 0,
-      actor_id: String(args.actorId || "Avatar"),
-      actor_x: Number(args.actorX) | 0,
-      actor_y: Number(args.actorY) | 0,
-      actor_z: Number(args.actorZ) | 0,
-      player_name: String(args.playerName || "Avatar")
-    })
-  }, true) as Promise<AuthoritativeConversationStartPayloadRuntime | null>;
+  return request("/api/world/objects/interact", netJsonPostInitRuntime({
+    verb: "talk",
+    npc_id: Number(args.actor?.id) | 0,
+    actor_id: String(args.actorId || "Avatar"),
+    actor_x: Number(args.actorX) | 0,
+    actor_y: Number(args.actorY) | 0,
+    actor_z: Number(args.actorZ) | 0,
+    player_name: String(args.playerName || "Avatar")
+  }), true) as Promise<AuthoritativeConversationStartPayloadRuntime | null>;
 }
 
 export async function requestReplyAuthoritativeConversationRuntime(
@@ -59,12 +56,8 @@ export async function requestReplyAuthoritativeConversationRuntime(
   },
   request: WorldRuntimeRequest
 ): Promise<AuthoritativeConversationReplyPayloadRuntime | null> {
-  return request("/api/world/conversation/respond", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      session_id: String(args.sessionId || ""),
-      typed: String(args.typed || "")
-    })
-  }, true) as Promise<AuthoritativeConversationReplyPayloadRuntime | null>;
+  return request("/api/world/conversation/respond", netJsonPostInitRuntime({
+    session_id: String(args.sessionId || ""),
+    typed: String(args.typed || "")
+  }), true) as Promise<AuthoritativeConversationReplyPayloadRuntime | null>;
 }

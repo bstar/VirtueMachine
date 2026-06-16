@@ -35,6 +35,14 @@ export function managedNetRequestOptionsRuntime(options: {
 export type NetJsonValue = null | boolean | number | string | NetJsonValue[] | { [key: string]: NetJsonValue };
 export type NetJsonBody = { [key: string]: NetJsonValue };
 
+export function netJsonPostInitRuntime(body: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  };
+}
+
 function netJsonObjectRuntime(value: NetJsonValue | undefined): NetJsonBody | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as NetJsonBody

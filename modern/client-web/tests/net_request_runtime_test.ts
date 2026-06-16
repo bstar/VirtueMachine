@@ -4,6 +4,7 @@ import {
   managedNetRequestOptionsRuntime,
   netJsonRequest,
   netErrorMessageRuntime,
+  netJsonPostInitRuntime,
   performManagedNetRequest,
   type NetJsonBody
 } from "../net/request_runtime.ts";
@@ -19,6 +20,11 @@ assert.deepEqual(buildRuntimeContractHeaders({
   "content-type": "application/json",
   "x-vm-runtime-extensions": "quest_system",
   "x-vm-runtime-profile": "canonical_plus"
+});
+assert.deepEqual(netJsonPostInitRuntime({ ok: true, count: 2 }), {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: "{\"ok\":true,\"count\":2}"
 });
 assert.equal(netErrorMessageRuntime({ error: { message: "bad request" } }), "bad request");
 assert.equal(netErrorMessageRuntime({ error: { message: 3 } }), "");

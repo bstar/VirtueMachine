@@ -1,3 +1,4 @@
+import { netJsonPostInitRuntime } from "./request_runtime.ts";
 import type { SimSnapshotRuntime } from "./snapshot_codec_runtime.ts";
 
 export interface SnapshotRuntimePayload {
@@ -161,14 +162,13 @@ export async function performNetSaveSnapshot(deps: SnapshotSaveDeps): Promise<Sn
   const savedTick = deps.currentTick() >>> 0;
   const route = typeof deps.snapshotRoute === "function" ? deps.snapshotRoute() : "/api/world/snapshot";
   const out = await deps.request(route || "/api/world/snapshot", {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
+    ...netJsonPostInitRuntime({
       schema_version: 1,
       sim_core_version: "client-web-js",
       saved_tick: savedTick,
       snapshot_base64: deps.encodeSnapshot()
-    })
+    }),
+    method: "PUT"
   }, true);
   deps.resetBackgroundFailures();
   const tickOut = snapshotSavedTickRuntime(out);
