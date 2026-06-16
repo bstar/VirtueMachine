@@ -11,21 +11,73 @@ const {
   coordUseOfStatus
 } = require("../common/u6_object_constants.ts");
 
-function holderKindCode(name) {
+type InteractionHolderKind = "none" | "object" | "npc";
+
+type InteractionBridgeTarget = {
+  holder_id?: unknown;
+  holder_kind?: unknown;
+  object_key?: unknown;
+  status?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type InteractionBridgePosition = {
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type InteractionBridgeInput = {
+  actorId?: unknown;
+  actorPos?: InteractionBridgePosition | null;
+  chainAccessible?: unknown;
+  container?: InteractionBridgeTarget | null;
+  containerCycle?: unknown;
+  target?: InteractionBridgeTarget | null;
+  verb?: unknown;
+};
+
+type InteractionBridgeParsed = {
+  code: number;
+  holder_kind: InteractionHolderKind;
+  status: number;
+};
+
+type InteractionBridgeFailure = {
+  ok: false;
+  code: string;
+  http?: number;
+  message: string;
+};
+
+type InteractionBridgeErrorDetails = {
+  code: string;
+  http: number;
+  message: string;
+};
+
+type InteractionBridgeInvokeResult = InteractionBridgeFailure | {
+  ok: true;
+  parsed: InteractionBridgeParsed;
+};
+
+function holderKindCode(name: unknown): number {
   const v = String(name || "").toLowerCase();
   if (v === "object") return 1;
   if (v === "npc") return 2;
   return 0;
 }
 
-function holderKindName(code) {
+function holderKindName(code: unknown): InteractionHolderKind {
   const k = Number(code) | 0;
   if (k === 1) return "object";
   if (k === 2) return "npc";
   return "none";
 }
 
-function bridgeBinPath() {
+function bridgeBinPath(): string {
   if (process.env.VM_SIM_CORE_INTERACT_BIN) {
     return String(process.env.VM_SIM_CORE_INTERACT_BIN);
   }
@@ -34,7 +86,7 @@ function bridgeBinPath() {
 
 const BRIDGE_REQUIRED = String(process.env.VM_SIM_CORE_INTERACT_REQUIRED || "on").trim().toLowerCase() !== "off";
 
-function assertBridgeReady() {
+function assertBridgeReady(): string | null {
   const bin = bridgeBinPath();
   try {
     fs.accessSync(bin, fs.constants.X_OK);
@@ -52,7 +104,7 @@ function assertBridgeReady() {
 
 const BRIDGE_BIN = assertBridgeReady();
 
-function parseBridgeOutput(stdout) {
+function parseBridgeOutput(stdout: unknown): InteractionBridgeParsed | null {
   const text = String(stdout || "").trim();
   const m = /^code=(-?\d+)\s+status=(\d+)\s+holder_kind=(none|object|npc)$/i.exec(text);
   if (!m) {
@@ -61,19 +113,20 @@ function parseBridgeOutput(stdout) {
   return {
     code: Number(m[1]) | 0,
     status: Number(m[2]) & 0xff,
-    holder_kind: String(m[3]).toLowerCase()
+    holder_kind: holderKindName(holderKindCode(m[3]))
   };
 }
 
-function mapBridgeCode(code) {
-  if ((code | 0) === -1) return { http: 400, code: "bad_verb", message: "verb must be one of: take, drop, put, equip" };
-  if ((code | 0) === -4) return { http: 409, code: "interaction_container_cycle", message: "container cycle blocked interaction" };
-  if ((code | 0) === -3) return { http: 409, code: "interaction_container_blocked", message: "container/assoc chain blocked interaction" };
-  if ((code | 0) === -2) return { http: 409, code: "interaction_blocked", message: "interaction blocked by canonical rules" };
+function mapBridgeCode(code: unknown): InteractionBridgeErrorDetails {
+  const n = Number(code) | 0;
+  if (n === -1) return { http: 400, code: "bad_verb", message: "verb must be one of: take, drop, put, equip" };
+  if (n === -4) return { http: 409, code: "interaction_container_cycle", message: "container cycle blocked interaction" };
+  if (n === -3) return { http: 409, code: "interaction_container_blocked", message: "container/assoc chain blocked interaction" };
+  if (n === -2) return { http: 409, code: "interaction_blocked", message: "interaction blocked by canonical rules" };
   return { http: 500, code: "interaction_failed", message: "canonical interaction bridge failed" };
 }
 
-function invokeSimCoreBridge(input) {
+function invokeSimCoreBridge(input: InteractionBridgeInput | null | undefined): InteractionBridgeInvokeResult {
   const verb = String(input?.verb || "").trim().toLowerCase();
   const target = input?.target || {};
   const actorId = String(input?.actorId || "");
@@ -108,7 +161,7 @@ function invokeSimCoreBridge(input) {
   return { ok: true, parsed };
 }
 
-function applyCanonicalWorldInteractionCommand(input) {
+function applyCanonicalWorldInteractionCommand(input: InteractionBridgeInput | null | undefined) {
   const verb = String(input?.verb || "").trim().toLowerCase();
   const target = input?.target || null;
   const container = input?.container || null;
@@ -119,7 +172,7 @@ function applyCanonicalWorldInteractionCommand(input) {
   }
 
   const call = invokeSimCoreBridge(input);
-  if (!call.ok) {
+  if (call.ok !== true) {
     return {
       ok: false,
       http: Number(call.http) || 500,
@@ -151,15 +204,15 @@ function applyCanonicalWorldInteractionCommand(input) {
   if (verb === "take") {
     patch.holder_id = actorId;
     patch.holder_key = "";
-    patch.x = actorPos.x | 0;
-    patch.y = actorPos.y | 0;
-    patch.z = actorPos.z | 0;
+    patch.x = Number(actorPos.x) | 0;
+    patch.y = Number(actorPos.y) | 0;
+    patch.z = Number(actorPos.z) | 0;
   } else if (verb === "drop") {
     patch.holder_id = "";
     patch.holder_key = "";
-    patch.x = actorPos.x | 0;
-    patch.y = actorPos.y | 0;
-    patch.z = actorPos.z | 0;
+    patch.x = Number(actorPos.x) | 0;
+    patch.y = Number(actorPos.y) | 0;
+    patch.z = Number(actorPos.z) | 0;
   } else if (verb === "put") {
     patch.holder_id = String(container?.object_key || "");
     patch.holder_key = String(container?.object_key || "");

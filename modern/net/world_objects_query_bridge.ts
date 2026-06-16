@@ -4,7 +4,32 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-function queryBinPath() {
+type WorldQueryObject = {
+  object_key?: unknown;
+  source_area?: unknown;
+  source_index?: unknown;
+  status?: unknown;
+  tile_id?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+type WorldQueryInput = {
+  hasX?: unknown;
+  hasY?: unknown;
+  hasZ?: unknown;
+  limit?: unknown;
+  objects?: unknown;
+  projection?: unknown;
+  radius?: unknown;
+  tileFlags?: ArrayLike<unknown> | null;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+};
+
+function queryBinPath(): string {
   if (process.env.VM_SIM_CORE_WORLD_QUERY_BIN) {
     return String(process.env.VM_SIM_CORE_WORLD_QUERY_BIN);
   }
@@ -13,7 +38,7 @@ function queryBinPath() {
 
 const QUERY_REQUIRED = String(process.env.VM_SIM_CORE_WORLD_QUERY_REQUIRED || "on").trim().toLowerCase() !== "off";
 
-function assertQueryBridgeReady() {
+function assertQueryBridgeReady(): string | null {
   const bin = queryBinPath();
   try {
     fs.accessSync(bin, fs.constants.X_OK);
@@ -31,7 +56,7 @@ function assertQueryBridgeReady() {
 
 const QUERY_BIN = assertQueryBridgeReady();
 
-function objectArg(obj, tileFlags, queryKey) {
+function objectArg(obj: WorldQueryObject, tileFlags: ArrayLike<unknown> | null, queryKey: unknown): string {
   const key = String(queryKey || "");
   const status = Number(obj?.status) & 0xff;
   const tileId = Number(obj?.tile_id) & 0xffff;
@@ -49,7 +74,7 @@ function objectArg(obj, tileFlags, queryKey) {
   ].join(":");
 }
 
-function parseKeysOutput(stdout) {
+function parseKeysOutput(stdout: unknown): string[] | null {
   const text = String(stdout || "").trim();
   const m = /^keys=(.*)$/i.exec(text);
   if (!m) {
@@ -62,13 +87,13 @@ function parseKeysOutput(stdout) {
   return csv.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-function selectWorldObjectsViaSimCore(input) {
-  const objects = Array.isArray(input?.objects) ? input.objects : [];
+function selectWorldObjectsViaSimCore(input: WorldQueryInput | null | undefined) {
+  const objects = Array.isArray(input?.objects) ? input.objects as WorldQueryObject[] : [];
   const tileFlags = input?.tileFlags || null;
   if (!QUERY_BIN) {
     return { ok: false, code: "world_query_bridge_unavailable", message: "sim-core world query bridge unavailable" };
   }
-  const queryKeyToObjectKey = new Map();
+  const queryKeyToObjectKey = new Map<string, string>();
   const args = [
     input?.hasX ? "1" : "0",
     String(Number(input?.x) | 0),

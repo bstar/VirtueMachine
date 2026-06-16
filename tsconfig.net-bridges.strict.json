@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "moduleDetection": "force",
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "modern/net/world_assoc_chain_bridge.ts",
+    "modern/net/world_interaction_bridge.ts",
+    "modern/net/world_objects_query_bridge.ts",
+    "modern/common/u6_object_constants.ts"
+  ]
+}
