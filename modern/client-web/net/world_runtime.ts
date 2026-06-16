@@ -178,6 +178,15 @@ export type WorldRuntimeInventoryDisplayEntry = {
   type: number;
 };
 
+export type WorldRuntimeInventoryIdentity = {
+  frame: number;
+  inventory_key: string;
+  stackable: boolean;
+  tile_hex?: string;
+  tile_id?: number;
+  type: number;
+};
+
 export type WorldRuntimeInventoryProjection = {
   inventory: Record<string, number>;
   inventoryObjects: WorldRuntimeInventoryObject[];
@@ -241,17 +250,45 @@ function normalizeInventoryAmountRuntime(amount: unknown): number {
   return Number.isFinite(n) ? Math.max(0, Math.min(0xffff, Math.floor(n))) : 0;
 }
 
+function tileHexFromRuntimeTile(tileId: number): string | undefined {
+  return Number.isFinite(tileId) && tileId > 0
+    ? `0x${(tileId & 0xffff).toString(16).padStart(3, "0")}`
+    : undefined;
+}
+
+export function inventoryIdentityFromServerObjectRuntime(
+  obj: Pick<WorldRuntimeInventorySource, "frame" | "inventory_key" | "tile_id" | "type"> | null | undefined
+): WorldRuntimeInventoryIdentity | null {
+  const typeRaw = Number(obj?.type);
+  const frameRaw = Number(obj?.frame);
+  if (!Number.isFinite(typeRaw) || !Number.isFinite(frameRaw)) {
+    return null;
+  }
+  const type = Number(typeRaw) & 0x3ff;
+  const frame = Number(frameRaw) & 0x3f;
+  const inventoryKey = String(obj?.inventory_key || inventoryKeyForObjectRuntime({ type, frame }));
+  const tileRaw = Number(obj?.tile_id);
+  const tileId = Number.isFinite(tileRaw) ? Number(tileRaw) & 0xffff : undefined;
+  return {
+    frame,
+    inventory_key: inventoryKey,
+    stackable: isU6InventoryStackableObjectType(type, frame),
+    tile_hex: tileId === undefined ? undefined : tileHexFromRuntimeTile(tileId),
+    tile_id: tileId,
+    type
+  };
+}
+
 export function inventoryProjectionFromServerObjectsRuntime(
   objects: readonly WorldRuntimeInventorySource[] | null | undefined
 ): Record<string, number> {
   const next: Record<string, number> = {};
   for (const obj of objects || []) {
-    const type = Number(obj.type);
-    const frame = Number(obj.frame);
-    if (!Number.isFinite(type) || !Number.isFinite(frame)) {
+    const identity = inventoryIdentityFromServerObjectRuntime(obj);
+    if (!identity) {
       continue;
     }
-    const key = inventoryKeyForObjectRuntime({ type, frame });
+    const key = identity.inventory_key;
     next[key] = ((Number(next[key]) >>> 0) + inventoryProjectionCountForObjectRuntime(obj)) >>> 0;
   }
   return next;
@@ -262,14 +299,11 @@ export function inventoryTileProjectionFromServerObjectsRuntime(
 ): Record<string, number> {
   const next: Record<string, number> = {};
   for (const obj of objects || []) {
-    const type = Number(obj.type);
-    const frame = Number(obj.frame);
-    const tileId = Number(obj.tile_id);
-    if (!Number.isFinite(type) || !Number.isFinite(frame) || !Number.isFinite(tileId)) {
+    const identity = inventoryIdentityFromServerObjectRuntime(obj);
+    if (!identity || identity.tile_id === undefined) {
       continue;
     }
-    const key = inventoryKeyForObjectRuntime({ type, frame });
-    next[key] = Number(tileId) & 0xffff;
+    next[identity.inventory_key] = identity.tile_id;
   }
   return next;
 }
@@ -386,12 +420,6 @@ export function inventoryObjectsFromServerObjectsRuntime(
   return out;
 }
 
-function tileHexFromRuntimeTile(tileId: number): string | undefined {
-  return Number.isFinite(tileId) && tileId > 0
-    ? `0x${(tileId & 0xffff).toString(16).padStart(3, "0")}`
-    : undefined;
-}
-
 export function inventoryDisplayEntriesFromObjectsRuntime(
   objects: readonly WorldRuntimeInventoryObject[] | null | undefined,
   limit = 12
@@ -403,41 +431,40 @@ export function inventoryDisplayEntriesFromObjectsRuntime(
     if (max > 0 && out.length >= max) {
       break;
     }
-    const type = Number(obj.type) & 0x3ff;
-    const frame = Number(obj.frame) & 0x3f;
-    const inventoryKey = String(obj.inventory_key || inventoryKeyForObjectRuntime({ type, frame }));
-    const tileId = Number(obj.tile_id) & 0xffff;
-    const stackable = isU6InventoryStackableObjectType(type, frame);
+    const identity = inventoryIdentityFromServerObjectRuntime(obj);
+    if (!identity) {
+      continue;
+    }
     const count = inventoryProjectionCountForObjectRuntime(obj);
-    if (stackable) {
-      const existingIndex = stackIndexByKey.get(inventoryKey);
+    if (identity.stackable) {
+      const existingIndex = stackIndexByKey.get(identity.inventory_key);
       if (existingIndex !== undefined) {
         out[existingIndex].count = (Number(out[existingIndex].count) + count) >>> 0;
         continue;
       }
-      stackIndexByKey.set(inventoryKey, out.length);
+      stackIndexByKey.set(identity.inventory_key, out.length);
       out.push({
         count,
-        frame,
-        inventory_key: inventoryKey,
-        key: inventoryKey,
+        frame: identity.frame,
+        inventory_key: identity.inventory_key,
+        key: identity.inventory_key,
         stackable: true,
-        tile_hex: tileHexFromRuntimeTile(tileId),
-        tile_id: tileId,
-        type
+        tile_hex: identity.tile_hex,
+        tile_id: identity.tile_id,
+        type: identity.type
       });
       continue;
     }
     out.push({
       count: 1,
-      frame,
-      inventory_key: inventoryKey,
-      key: String(obj.object_key || inventoryKey),
+      frame: identity.frame,
+      inventory_key: identity.inventory_key,
+      key: String(obj.object_key || identity.inventory_key),
       object_key: String(obj.object_key || ""),
       stackable: false,
-      tile_hex: tileHexFromRuntimeTile(tileId),
-      tile_id: tileId,
-      type
+      tile_hex: identity.tile_hex,
+      tile_id: identity.tile_id,
+      type: identity.type
     });
   }
   return out;

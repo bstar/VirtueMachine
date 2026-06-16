@@ -21,6 +21,7 @@ import {
   inventoryCountMapForDropValidationRuntime,
   inventoryDisplayEntriesFromObjectsRuntime,
   inventorySyncFailureDiagRuntime,
+  inventoryIdentityFromServerObjectRuntime,
   inventoryItemFromTakeResponseRuntime,
   isHiddenWorldObjectKeyRuntime,
   inventoryObjectForDropSelectionRuntime,
@@ -58,6 +59,34 @@ assert.equal(serverObjectKeyForWorldObjectRuntime(null), "");
 assert.equal(requiredWorldObjectActorIdRuntime(" avatar-1 "), "avatar-1");
 assert.throws(() => requiredWorldObjectActorIdRuntime(""), /requires a character id/);
 assert.throws(() => requiredWorldObjectActorIdRuntime(null), /requires a character id/);
+
+assert.deepEqual(inventoryIdentityFromServerObjectRuntime({
+  frame: 0,
+  tile_id: 0x500,
+  type: 0x120
+}), {
+  frame: 0,
+  inventory_key: "0x120:0x00",
+  stackable: false,
+  tile_hex: "0x500",
+  tile_id: 0x500,
+  type: 0x120
+});
+assert.deepEqual(inventoryIdentityFromServerObjectRuntime({
+  frame: 0,
+  inventory_key: "server:key",
+  tile_id: 0,
+  type: 0x05a
+}), {
+  frame: 0,
+  inventory_key: "server:key",
+  stackable: true,
+  tile_hex: undefined,
+  tile_id: 0,
+  type: 0x05a
+});
+assert.equal(inventoryIdentityFromServerObjectRuntime({ frame: "bad", type: 0x120 }), null);
+assert.equal(inventoryIdentityFromServerObjectRuntime(null), null);
 
 const hiddenKeys = new Set(["a1ai228"]);
 const isHiddenForLayerTest = (key: string): boolean => hiddenKeys.has(key);
@@ -121,6 +150,17 @@ assert.deepEqual(inventoryProjectionFromServerObjectsRuntime([
   "0x120:0x00": 2,
   "0x05a:0x00": 5,
   "0x05a:0x01": 1
+});
+assert.deepEqual(inventoryProjectionFromServerObjectsRuntime([
+  { type: 0x120, frame: 0, inventory_key: "server:cup:a", amount: 1 },
+  { type: 0x120, frame: 0, inventory_key: "server:cup:a", amount: 1 }
+]), {
+  "server:cup:a": 2
+});
+assert.deepEqual(inventoryTileProjectionFromServerObjectsRuntime([
+  { type: 0x120, frame: 0, inventory_key: "server:cup:a", tile_id: 0x500 }
+]), {
+  "server:cup:a": 0x500
 });
 assert.deepEqual(inventoryTileProjectionFromServerObjectsRuntime(decodedInventorySources), {
   "0x123:0x00": 0x345,
