@@ -17,6 +17,7 @@
     ]
   },
   "include": [
-    "modern/common/**/*.ts"
+    "modern/common/**/*.ts",
+    "modern/common/tests/runtime_contract_test.ts"
   ]
 }
