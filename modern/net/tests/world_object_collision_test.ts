@@ -66,6 +66,7 @@ assert.equal(canNpcStepInto(state, { to_x: 30, to_y: 40, to_z: 0 }), false);
 assert.equal(canNpcStepInto(state, { to_x: 31, to_y: 40, to_z: 0 }), true);
 assert.equal(canNpcStepInto(state, { to_x: 50, to_y: 60, to_z: 0 }), false, "NPCs must not walk over tables");
 
+assert.ok(state.worldObjects?.terrainType);
 state.worldObjects.terrainType[0x001] = 0x04;
 assert.equal(canNpcStepInto(state, { to_x: 31, to_y: 40, to_z: 0 }), false);
 
