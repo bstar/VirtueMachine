@@ -44,6 +44,30 @@ export type LegacyViewportFramePlacementRuntime = {
   y: number;
 };
 
+export type LegacyViewportCompositionDrawRuntime = {
+  destH: number;
+  destW: number;
+  destX: number;
+  destY: number;
+  sourceH: number;
+  sourceW: number;
+  sourceX: number;
+  sourceY: number;
+};
+
+export type LegacyViewportCompositionPlanRuntime =
+  | { kind: "skip" }
+  | {
+    composeH: number;
+    composeW: number;
+    framePlacements: LegacyViewportFramePlacementRuntime[];
+    kind: "render";
+    sourceToCompose: LegacyViewportCompositionDrawRuntime;
+    viewportCrop: LegacyViewportCompositionDrawRuntime;
+    viewportH: number;
+    viewportW: number;
+  };
+
 export type LegacyHudBackdropRenderPlanRuntime =
   | { kind: "skip" }
   | {
@@ -102,6 +126,45 @@ export function legacyViewportFramePlacementsRuntime(args: {
     );
   }
   return placements;
+}
+
+export function legacyViewportCompositionPlanRuntime(args: {
+  canvasAvailable: boolean;
+  frameTiles: LegacyViewportFrameTilesRuntime;
+  legacyFramePreviewEnabled: boolean;
+  viewportCanvasAvailable: boolean;
+}): LegacyViewportCompositionPlanRuntime {
+  if (!args.legacyFramePreviewEnabled || !args.canvasAvailable || !args.viewportCanvasAvailable) {
+    return { kind: "skip" };
+  }
+  return {
+    composeH: 176,
+    composeW: 176,
+    framePlacements: legacyViewportFramePlacementsRuntime({ tiles: args.frameTiles }),
+    kind: "render",
+    sourceToCompose: {
+      destH: 176,
+      destW: 176,
+      destX: 0,
+      destY: 0,
+      sourceH: 704,
+      sourceW: 704,
+      sourceX: 0,
+      sourceY: 0
+    },
+    viewportCrop: {
+      destH: 160,
+      destW: 160,
+      destX: 0,
+      destY: 0,
+      sourceH: 160,
+      sourceW: 160,
+      sourceX: 8,
+      sourceY: 8
+    },
+    viewportH: 160,
+    viewportW: 160
+  };
 }
 
 export function buildLegacyViewContextRuntime(args: {

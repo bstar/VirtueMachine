@@ -4,6 +4,7 @@ import {
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
   legacyHudBackdropRenderPlanRuntime,
+  legacyViewportCompositionPlanRuntime,
   legacyViewportFramePlacementsRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
@@ -119,6 +120,60 @@ assert.deepEqual(legacyViewportFramePlacementsRuntime({
   { tileId: 0x1b6, x: 0, y: 8 },
   { tileId: 0x1b7, x: 16, y: 8 }
 ]);
+
+assert.deepEqual(legacyViewportCompositionPlanRuntime({
+  canvasAvailable: true,
+  frameTiles,
+  legacyFramePreviewEnabled: false,
+  viewportCanvasAvailable: true
+}), { kind: "skip" });
+assert.deepEqual(legacyViewportCompositionPlanRuntime({
+  canvasAvailable: false,
+  frameTiles,
+  legacyFramePreviewEnabled: true,
+  viewportCanvasAvailable: true
+}), { kind: "skip" });
+assert.deepEqual(legacyViewportCompositionPlanRuntime({
+  canvasAvailable: true,
+  frameTiles,
+  legacyFramePreviewEnabled: true,
+  viewportCanvasAvailable: false
+}), { kind: "skip" });
+
+{
+  const plan = legacyViewportCompositionPlanRuntime({
+    canvasAvailable: true,
+    frameTiles,
+    legacyFramePreviewEnabled: true,
+    viewportCanvasAvailable: true
+  });
+  assert.equal(plan.kind, "render");
+  assert.equal(plan.composeW, 176);
+  assert.equal(plan.composeH, 176);
+  assert.equal(plan.viewportW, 160);
+  assert.equal(plan.viewportH, 160);
+  assert.deepEqual(plan.sourceToCompose, {
+    destH: 176,
+    destW: 176,
+    destX: 0,
+    destY: 0,
+    sourceH: 704,
+    sourceW: 704,
+    sourceX: 0,
+    sourceY: 0
+  });
+  assert.deepEqual(plan.viewportCrop, {
+    destH: 160,
+    destW: 160,
+    destX: 0,
+    destY: 0,
+    sourceH: 160,
+    sourceW: 160,
+    sourceX: 8,
+    sourceY: 8
+  });
+  assert.deepEqual(plan.framePlacements, legacyViewportFramePlacementsRuntime({ tiles: frameTiles }));
+}
 
 assert.equal(applyLegacyCornerVariantRuntime(0x0c0, 10, 20, 0, deps({
   terrainOf: () => 0xf6

@@ -560,7 +560,7 @@ import {
   buildBaseTileBuffersRuntime,
   buildLegacyViewContextRuntime,
   legacyHudBackdropRenderPlanRuntime,
-  legacyViewportFramePlacementsRuntime,
+  legacyViewportCompositionPlanRuntime,
   shouldBlackoutTileRuntime,
   stableCornerVariantRuntime,
   type LegacyViewContextRuntime
@@ -704,7 +704,8 @@ import {
   buildStatusPanelTextRuntime,
   formatLedgerEntryCountRuntime,
   normalizeDiagKindPresentationRuntime,
-  drawServerStatusOverlayRuntime
+  drawServerStatusOverlayRuntime,
+  serverStatusOverlaySurfacePlansRuntime
 } from "./ui/status_text_runtime.ts";
 
 const TICK_MS = 100;
@@ -2871,44 +2872,34 @@ function drawInGameServerStatusOverlay(): void {
     return;
   }
   const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
-  if (enabled && legacyBackdropCanvas) {
-    const bg = legacyBackdropCanvas.getContext("2d");
-    if (bg) {
-      bg.imageSmoothingEnabled = false;
-      const scale = Math.max(1, Math.floor((legacyBackdropCanvas.width | 0) / 320));
-      drawServerStatusOverlayRuntime({
-        canvas: bg,
-        color: overlay.color,
-        drawText: drawU6MainText,
-        scale,
-        text: overlay.text
-      });
+  const plans = serverStatusOverlaySurfacePlansRuntime({
+    canvasW: canvas?.width,
+    hasLegacyBackdropCanvas: !!legacyBackdropCanvas,
+    hasLegacyViewportCanvas: !!legacyViewportCanvas,
+    hasMainCanvas: !!canvas,
+    hasMainContext: !!ctx,
+    legacyBackdropW: legacyBackdropCanvas?.width,
+    legacyFramePreviewEnabled: enabled,
+    viewportOffsetX: LEGACY_UI_MAP_RECT.x,
+    viewportOffsetY: LEGACY_UI_MAP_RECT.y
+  });
+  for (const plan of plans) {
+    const g = plan.kind === "legacy_backdrop"
+      ? legacyBackdropCanvas?.getContext("2d")
+      : plan.kind === "legacy_viewport"
+        ? legacyViewportCanvas?.getContext("2d")
+        : ctx;
+    if (!g) {
+      continue;
     }
-    if (legacyViewportCanvas) {
-      const vg = legacyViewportCanvas.getContext("2d");
-      if (vg) {
-        vg.imageSmoothingEnabled = false;
-        drawServerStatusOverlayRuntime({
-          canvas: vg,
-          color: overlay.color,
-          drawText: drawU6MainText,
-          offsetX: LEGACY_UI_MAP_RECT.x,
-          offsetY: LEGACY_UI_MAP_RECT.y,
-          scale: 1,
-          text: overlay.text
-        });
-      }
-    }
-    return;
-  }
-  if (ctx && canvas) {
-    ctx.imageSmoothingEnabled = false;
-    const scale = Math.max(1, Math.floor((canvas.width | 0) / 320));
+    g.imageSmoothingEnabled = false;
     drawServerStatusOverlayRuntime({
-      canvas: ctx,
+      canvas: g,
       color: overlay.color,
       drawText: drawU6MainText,
-      scale,
+      offsetX: plan.offsetX,
+      offsetY: plan.offsetY,
+      scale: plan.scale,
       text: overlay.text
     });
   }
@@ -3597,28 +3588,47 @@ function drawCustomCursorLayer(): void {
 
 function composeLegacyViewportFromModernGrid(): void {
   const compositionState = state as LegacyCompositionStateView;
-  if (!legacyViewportCanvas || !canvas) {
-    return;
-  }
   const enabled = document.documentElement.getAttribute("data-legacy-frame-preview") === "on";
-  if (!enabled) {
+  const plan = legacyViewportCompositionPlanRuntime({
+    canvasAvailable: !!canvas,
+    frameTiles: LEGACY_FRAME_TILES,
+    legacyFramePreviewEnabled: enabled,
+    viewportCanvasAvailable: !!legacyViewportCanvas
+  });
+  if (plan.kind === "skip" || !legacyViewportCanvas || !canvas) {
     return;
   }
 
   if (!compositionState.legacyComposeCanvas) {
     compositionState.legacyComposeCanvas = document.createElement("canvas");
-    compositionState.legacyComposeCanvas.width = 176;
-    compositionState.legacyComposeCanvas.height = 176;
+    compositionState.legacyComposeCanvas.width = plan.composeW;
+    compositionState.legacyComposeCanvas.height = plan.composeH;
   }
   const compose = compositionState.legacyComposeCanvas;
+  if (compose.width !== plan.composeW) {
+    compose.width = plan.composeW;
+  }
+  if (compose.height !== plan.composeH) {
+    compose.height = plan.composeH;
+  }
   const cctx = compose.getContext("2d");
   if (!cctx) {
     return;
   }
   cctx.imageSmoothingEnabled = false;
-  cctx.clearRect(0, 0, 176, 176);
+  cctx.clearRect(0, 0, plan.composeW, plan.composeH);
   /* 704 -> 176 is exact /4, keeping tile edge parity intact before crop. */
-  cctx.drawImage(canvas, 0, 0, 704, 704, 0, 0, 176, 176);
+  cctx.drawImage(
+    canvas,
+    plan.sourceToCompose.sourceX,
+    plan.sourceToCompose.sourceY,
+    plan.sourceToCompose.sourceW,
+    plan.sourceToCompose.sourceH,
+    plan.sourceToCompose.destX,
+    plan.sourceToCompose.destY,
+    plan.sourceToCompose.destW,
+    plan.sourceToCompose.destH
+  );
 
   if (compositionState.tileSet) {
     const drawFrameTile = (tileId: number, x: number, y: number): void => {
@@ -3633,21 +3643,31 @@ function composeLegacyViewportFromModernGrid(): void {
       }
     };
 
-    for (const placement of legacyViewportFramePlacementsRuntime({ tiles: LEGACY_FRAME_TILES })) {
+    for (const placement of plan.framePlacements) {
       drawFrameTile(placement.tileId, placement.x, placement.y);
     }
   }
 
-  legacyViewportCanvas.width = 160;
-  legacyViewportCanvas.height = 160;
+  legacyViewportCanvas.width = plan.viewportW;
+  legacyViewportCanvas.height = plan.viewportH;
   const lv = legacyViewportCanvas.getContext("2d");
   if (!lv) {
     return;
   }
   lv.imageSmoothingEnabled = false;
-  lv.clearRect(0, 0, 160, 160);
+  lv.clearRect(0, 0, plan.viewportW, plan.viewportH);
   /* Legacy map cutout sits at 8,8 with 160x160 size. */
-  lv.drawImage(compose, 8, 8, 160, 160, 0, 0, 160, 160);
+  lv.drawImage(
+    compose,
+    plan.viewportCrop.sourceX,
+    plan.viewportCrop.sourceY,
+    plan.viewportCrop.sourceW,
+    plan.viewportCrop.sourceH,
+    plan.viewportCrop.destX,
+    plan.viewportCrop.destY,
+    plan.viewportCrop.destW,
+    plan.viewportCrop.destH
+  );
 }
 
 function initRuntimeProfileConfig(): void {

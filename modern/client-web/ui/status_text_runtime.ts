@@ -88,6 +88,13 @@ export type ServerStatusOverlayLayoutRuntime = {
   textY: number;
 };
 
+export type ServerStatusOverlaySurfacePlanRuntime = {
+  kind: "legacy_backdrop" | "legacy_viewport" | "main";
+  offsetX?: number;
+  offsetY?: number;
+  scale: number;
+};
+
 export type ServerStatusOverlayCanvasRuntime = {
   fillStyle: string | CanvasGradient | CanvasPattern;
   font: string;
@@ -158,6 +165,41 @@ export function drawServerStatusOverlayRuntime(args: {
   );
   args.drawText(args.canvas, layout.text, layout.textX, layout.textY, layout.drawScale, args.color);
   return layout;
+}
+
+export function serverStatusOverlaySurfacePlansRuntime(args: {
+  canvasW?: unknown;
+  hasMainCanvas: boolean;
+  hasMainContext: boolean;
+  hasLegacyBackdropCanvas: boolean;
+  hasLegacyViewportCanvas: boolean;
+  legacyBackdropW?: unknown;
+  legacyFramePreviewEnabled: boolean;
+  viewportOffsetX?: unknown;
+  viewportOffsetY?: unknown;
+}): ServerStatusOverlaySurfacePlanRuntime[] {
+  if (args.legacyFramePreviewEnabled && args.hasLegacyBackdropCanvas) {
+    const scale = Math.max(1, Math.floor((Number(args.legacyBackdropW) | 0) / 320));
+    const plans: ServerStatusOverlaySurfacePlanRuntime[] = [
+      { kind: "legacy_backdrop", scale }
+    ];
+    if (args.hasLegacyViewportCanvas) {
+      plans.push({
+        kind: "legacy_viewport",
+        offsetX: Number(args.viewportOffsetX ?? 0) | 0,
+        offsetY: Number(args.viewportOffsetY ?? 0) | 0,
+        scale: 1
+      });
+    }
+    return plans;
+  }
+  if (!args.hasMainCanvas || !args.hasMainContext) {
+    return [];
+  }
+  return [{
+    kind: "main",
+    scale: Math.max(1, Math.floor((Number(args.canvasW) | 0) / 320))
+  }];
 }
 
 export function normalizeDiagKindPresentationRuntime(

@@ -21,7 +21,8 @@ import {
   formatSimLoopStateRuntime,
   formatTopTimeOfDayRuntime,
   normalizeDiagKindPresentationRuntime,
-  serverStatusOverlayLayoutRuntime
+  serverStatusOverlayLayoutRuntime,
+  serverStatusOverlaySurfacePlansRuntime
 } from "../ui/status_text_runtime.ts";
 
 const sampleStatusText = {
@@ -172,6 +173,51 @@ assert.equal(serverStatusOverlayLayoutRuntime({
   scale: 0,
   text: "X"
 }).drawScale, 1);
+
+assert.deepEqual(serverStatusOverlaySurfacePlansRuntime({
+  canvasW: 640,
+  hasLegacyBackdropCanvas: false,
+  hasLegacyViewportCanvas: false,
+  hasMainCanvas: true,
+  hasMainContext: true,
+  legacyFramePreviewEnabled: false
+}), [{ kind: "main", scale: 2 }]);
+assert.deepEqual(serverStatusOverlaySurfacePlansRuntime({
+  canvasW: 0,
+  hasLegacyBackdropCanvas: false,
+  hasLegacyViewportCanvas: false,
+  hasMainCanvas: true,
+  hasMainContext: true,
+  legacyFramePreviewEnabled: false
+}), [{ kind: "main", scale: 1 }]);
+assert.deepEqual(serverStatusOverlaySurfacePlansRuntime({
+  hasLegacyBackdropCanvas: false,
+  hasLegacyViewportCanvas: false,
+  hasMainCanvas: true,
+  hasMainContext: false,
+  legacyFramePreviewEnabled: false
+}), []);
+assert.deepEqual(serverStatusOverlaySurfacePlansRuntime({
+  hasLegacyBackdropCanvas: true,
+  hasLegacyViewportCanvas: true,
+  hasMainCanvas: true,
+  hasMainContext: true,
+  legacyBackdropW: 960,
+  legacyFramePreviewEnabled: true,
+  viewportOffsetX: 12,
+  viewportOffsetY: 34
+}), [
+  { kind: "legacy_backdrop", scale: 3 },
+  { kind: "legacy_viewport", offsetX: 12, offsetY: 34, scale: 1 }
+]);
+assert.deepEqual(serverStatusOverlaySurfacePlansRuntime({
+  hasLegacyBackdropCanvas: true,
+  hasLegacyViewportCanvas: false,
+  hasMainCanvas: true,
+  hasMainContext: true,
+  legacyBackdropW: 0,
+  legacyFramePreviewEnabled: true
+}), [{ kind: "legacy_backdrop", scale: 1 }]);
 {
   const calls: string[] = [];
   const canvas = {
