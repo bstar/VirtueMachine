@@ -165,6 +165,11 @@ import {
   performManagedNetRequest,
   type NetJsonBody
 } from "./net/request_runtime.ts";
+import {
+  requestReplyAuthoritativeConversationRuntime,
+  requestStartAuthoritativeConversationRuntime,
+  type AuthoritativeConversationStartPayloadRuntime
+} from "./net/conversation_runtime.ts";
 import { applyNetLoginState, clearNetSessionState } from "./net/session_runtime.ts";
 import {
   bindRemoteSnapshotButtonRuntime,
@@ -809,17 +814,7 @@ type LegacyConversationVmOverrides = {
   greeting?: unknown;
   objNum?: unknown;
 };
-type AuthoritativeConversationPayload = {
-  conversation_session?: {
-    desc?: unknown;
-    next_pc?: unknown;
-    npc_id?: unknown;
-    opening_lines?: unknown;
-    session_id?: unknown;
-    stop_opcode?: unknown;
-    target_name?: unknown;
-  };
-};
+type AuthoritativeConversationPayload = AuthoritativeConversationStartPayloadRuntime;
 type LegacyConversationStateView = {
   converseArchiveA: Uint8Array | null;
   converseArchiveB: Uint8Array | null;
@@ -4406,19 +4401,14 @@ function startAuthoritativeConversationFromPayload(
 
 async function netStartConversation(actor: LegacyTalkActor, tx: number, ty: number, tz: number) {
   const tileId = ((Number(actor?.baseTile) | 0) + (Number(actor?.frame) | 0)) & 0xffff;
-  const out = await netRequest("/api/world/objects/interact", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      verb: "talk",
-      npc_id: Number(actor?.id) | 0,
-      actor_id: String(state.net.characterId || state.net.userId || "Avatar"),
-      actor_x: state.sim.world.map_x | 0,
-      actor_y: state.sim.world.map_y | 0,
-      actor_z: state.sim.world.map_z | 0,
-      player_name: String(state.net.characterName || "Avatar")
-    })
-  }, true);
+  const out = await requestStartAuthoritativeConversationRuntime({
+    actor,
+    actorId: state.net.characterId || state.net.userId || "Avatar",
+    actorX: state.sim.world.map_x,
+    actorY: state.sim.world.map_y,
+    actorZ: state.sim.world.map_z,
+    playerName: state.net.characterName || "Avatar"
+  }, netRequest);
   const payload = out as AuthoritativeConversationPayload;
   startAuthoritativeConversationFromPayload(payload.conversation_session || {}, actor, tileId);
   const diag = legacyTalkAuthoritativeStartedPresentationRuntime({
@@ -4431,15 +4421,10 @@ async function netStartConversation(actor: LegacyTalkActor, tx: number, ty: numb
 }
 
 async function netReplyConversation(typed: unknown) {
-  const out = await netRequest("/api/world/conversation/respond", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      session_id: String(state.legacyConversationSessionId || ""),
-      typed: String(typed || "")
-    })
-  }, true);
-  return out;
+  return requestReplyAuthoritativeConversationRuntime({
+    sessionId: state.legacyConversationSessionId,
+    typed
+  }, netRequest);
 }
 
 function setAccountModalOpen(open: boolean): void {
